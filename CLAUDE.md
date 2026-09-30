@@ -32,6 +32,7 @@ ProcesaBPM: SaaS multi-tenant de gestión de procesos, extraído del sistema de 
   - qué cambia y por qué;
   - cómo se probó;
   - las decisiones que el usuario debe confirmar.
+- **Revisión automática:** cada PR (no borrador) lo revisa otro agente (`.github/workflows/claude-review.yml`) contra estas reglas y deja comentarios en línea y un veredicto. Atiende sus comentarios bloqueantes con nuevos commits en la misma rama antes de pedir el merge.
 - **El agente no mergea a `main`:** el usuario revisa y aprueba el PR. Merge con **squash**, y se borra la rama.
 - Si `main` avanzó mientras tanto: `git rebase origin/main` en la rama (no merges de main hacia la rama) y volver a correr las pruebas.
 - Un PR = un tema. Si aparece otro problema, va en otra rama/PR.
