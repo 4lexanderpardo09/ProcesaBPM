@@ -21,8 +21,26 @@ if [ ! -x /usr/lib/postgresql/18/bin/postgres ]; then
   $SUDO apt-get update -y || echo "WARNING: apt-get update had errors; continuing" >&2
   $SUDO apt-get install -y postgresql-18
 fi
-$SUDO pg_ctlcluster 18 main start 2>/dev/null || true
-as_postgres "psql -q -c \"ALTER USER postgres PASSWORD 'postgres';\""
+# Images may ship another PostgreSQL (e.g. 16) whose cluster owns port 5432, and packages
+# cannot start services without systemd. Make cluster 18/main the one on 5432 and start it.
+PG_PORT=5432
+for cluster in $(pg_lsclusters -h 2>/dev/null | awk '$1 != "18" { print $1 "/" $2 }'); do
+  $SUDO pg_ctlcluster "${cluster%/*}" "${cluster#*/}" stop 2>/dev/null || true
+  $SUDO pg_conftool "${cluster%/*}" "${cluster#*/}" set port 5499 2>/dev/null || true
+done
+if ! pg_lsclusters -h 2>/dev/null | awk '$1 == "18" && $2 == "main"' | grep -q .; then
+  $SUDO pg_createcluster 18 main --port "$PG_PORT"
+fi
+$SUDO pg_conftool 18 main set port "$PG_PORT"
+if pg_lsclusters -h | awk '$1 == "18" && $2 == "main" && $4 == "online"' | grep -q .; then
+  $SUDO pg_ctlcluster 18 main restart
+else
+  $SUDO pg_ctlcluster 18 main start
+fi
+for _ in $(seq 1 30); do pg_isready -q -h localhost -p "$PG_PORT" && break; sleep 1; done
+pg_isready -h localhost -p "$PG_PORT"
+as_postgres "psql -q -p $PG_PORT -c \"ALTER USER postgres PASSWORD 'postgres';\""
+pg_lsclusters
 
 # --- Node + pnpm -----------------------------------------------------------------------
 node_major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
