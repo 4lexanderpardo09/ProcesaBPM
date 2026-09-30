@@ -22,6 +22,20 @@ ProcesaBPM: SaaS multi-tenant de gestión de procesos, extraído del sistema de 
 - **Todo con tests:** unit tests para la lógica (servicios, motor de flujos, SLA, fórmulas, validaciones) **y** pruebas grandes, es decir de integración contra PostgreSQL/Redis/MinIO reales en contenedores y E2E del API y del frontend. Ninguna funcionalidad se da por terminada sin sus tests pasando. Siempre hay un test de fuga entre tenants.
 - **Buenas prácticas y clean code:** nombres claros, funciones pequeñas con una sola responsabilidad, sin duplicación, capas separadas (controller → service → repository), dependencias explícitas, errores tipados, sin código muerto ni comentarios obvios, y SOLID donde aporte.
 
+## Flujo de trabajo con git (obligatorio)
+- **Nunca se trabaja ni se hace push directo a `main`.** `main` siempre compila y tiene todas las pruebas en verde.
+- **Una rama por funcionalidad o corrección**, creada desde `main` actualizado y de vida corta (idealmente menos de 2–3 días de trabajo):
+  - `feat/<modulo>-<descripcion>` (p. ej. `feat/api-auth-login`, `feat/web-workflow-builder-canvas`)
+  - `fix/<descripcion>`, `refactor/<descripcion>`, `docs/<descripcion>`, `test/<descripcion>`, `chore/<descripcion>`
+- **Commits pequeños en inglés con Conventional Commits:** `feat(tickets): close ticket with pending signatures check`. Cada commit compila.
+- **Al terminar:** `pnpm test` y `pnpm typecheck` en verde, documentación actualizada (`docs/`), push de la rama y **Pull Request hacia `main`** con:
+  - qué cambia y por qué;
+  - cómo se probó;
+  - las decisiones que el usuario debe confirmar.
+- **El agente no mergea a `main`:** el usuario revisa y aprueba el PR. Merge con **squash**, y se borra la rama.
+- Si `main` avanzó mientras tanto: `git rebase origin/main` en la rama (no merges de main hacia la rama) y volver a correr las pruebas.
+- Un PR = un tema. Si aparece otro problema, va en otra rama/PR.
+
 ## Estructura y comandos
 - **Organización de carpetas y capas de `apps/api`, `apps/web` y `packages/shared`: `docs/arquitectura.md`** (léelo antes de crear código nuevo).
 - Monorepo pnpm: `packages/db` (**terminado**: esquema Prisma, 3 migraciones, semilla, 109 pruebas). Siguen `apps/api`, `apps/web` y `packages/shared`.
