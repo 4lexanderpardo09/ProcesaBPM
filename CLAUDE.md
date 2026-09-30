@@ -45,6 +45,7 @@ ProcesaBPM: SaaS multi-tenant de gestión de procesos, extraído del sistema de 
 - Cambiar el esquema: sigue la lista de `docs/base-de-datos.md` §11 (RLS con `app_enable_tenant_rls`, índice por FK, pruebas, cero diferencias con Prisma).
 - Desde `packages/db`: `pnpm test` (Vitest + Testcontainers, PostgreSQL 18 real; requiere Docker), `pnpm typecheck`, `pnpm validate`, `pnpm generate`, `pnpm migrate:deploy`, `pnpm seed`.
 - En las pruebas, `sqlStateOf(() => operación)` recibe una función (nunca una promesa ya iniciada).
+- **Al iniciar una sesión en la nube**, antes de cualquier otra cosa: `pnpm install --frozen-lockfile && pnpm --filter @procesabpm/db generate` (el script del entorno solo instala PostgreSQL 18 y pnpm, porque corre antes de que el repo esté disponible). Si PostgreSQL no responde: `sudo pg_ctlcluster 18 main start` (o sin `sudo` si eres root).
 - **En Claude Code en la nube (sin Docker):** el entorno ejecuta `scripts/cloud-setup.sh` y define `TEST_DATABASE_URL`; `pnpm test` usa entonces el PostgreSQL 18 local. Si `TEST_DATABASE_URL` no está definida, las pruebas intentan Docker.
 - pnpm 11 con `minimumReleaseAge`: no desactivarlo; las excepciones quedan en `pnpm-workspace.yaml`.
 
