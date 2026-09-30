@@ -7,6 +7,9 @@ import type { BusinessMinutesInput, DueDateInput } from './types.js';
 const MS_PER_MINUTE = 60_000;
 /** Upper bound of local days to scan; a calendar with working time always resolves far sooner. */
 const MAX_SCAN_DAYS = 3660;
+const MS_PER_DAY = 86_400_000;
+/** Margin of two days so that daylight saving shifts never leave the end of a range unscanned. */
+const MAX_RANGE_MS = (MAX_SCAN_DAYS - 2) * MS_PER_DAY;
 
 function toMs(date: Date, label: string): number {
   const ms = date.getTime();
@@ -71,7 +74,8 @@ function assertPositive(amount: number): void {
  * - `BUSINESS_HOURS`: consumes working time only, skipping holidays and the paused periods.
  * - `BUSINESS_DAYS`: end of the working day that is `amount` business days after the day on which
  *   the clock effectively starts (a start outside working hours begins at the next slot); business
- *   minutes spent in pauses extend that deadline.
+ *   minutes spent in pauses extend that deadline by exactly those business minutes, so with pauses
+ *   the due date no longer falls at the end of the working day (decided).
  */
 export function calculateDueDate(input: DueDateInput): Date {
   assertPositive(input.amount);
@@ -102,6 +106,7 @@ export function businessMinutesBetween(input: BusinessMinutesInput): number {
   const startMs = toMs(input.start, 'start');
   const endMs = toMs(input.end, 'end');
   if (endMs < startMs) throw new InvalidDurationError('The end must not be before the start');
+  if (endMs - startMs > MAX_RANGE_MS) throw new InvalidDurationError('The range exceeds the scan horizon of the calendar');
   const calendar = CompiledCalendar.from(input.calendar);
   return Math.floor(sumBusinessMs(calendar, startMs, endMs, normalizePauses(input.pauses)) / MS_PER_MINUTE);
 }

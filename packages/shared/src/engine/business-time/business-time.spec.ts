@@ -187,6 +187,14 @@ describe('businessMinutesBetween', () => {
     expect(businessMinutesBetween({ start, end, calendar: bogota })).toBe(0);
   });
 
+  it('rejects a range longer than the scan horizon instead of truncating it', () => {
+    expect(() => between('2026-01-05T09:00', '2037-01-05T09:00')).toThrow(InvalidDurationError);
+  });
+
+  it('counts a range of several years', () => {
+    expect(between('2026-01-05T00:00', '2028-01-05T00:00')).toBeGreaterThan(200_000);
+  });
+
   it('rejects a range that ends before it starts', () => {
     expect(() => between('2026-01-05T10:00', '2026-01-05T09:00')).toThrow(InvalidDurationError);
   });
