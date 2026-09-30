@@ -8,8 +8,7 @@ import {
   PermissionDeniedError,
 } from './domain-error.js';
 
-const SQL_STATE_PATTERN = /^[0-9A-Z]{5}$/;
-const MAX_CAUSE_DEPTH = 5;
+const MAX_CAUSE_DEPTH = 8;
 
 type DomainErrorFactory = (message: string, cause: unknown) => DomainError;
 
@@ -22,23 +21,31 @@ const FACTORY_BY_SQL_STATE: Readonly<Record<string, DomainErrorFactory>> = {
   '42501': (message, cause) => new PermissionDeniedError(message, { cause }),
 };
 
-function readSqlState(candidate: unknown): string | undefined {
-  if (typeof candidate !== 'object' || candidate === null) return undefined;
-  const { code, meta } = candidate as { code?: unknown; meta?: { code?: unknown } };
-  for (const value of [meta?.code, code]) {
-    if (typeof value === 'string' && SQL_STATE_PATTERN.test(value)) return value;
-  }
-  return undefined;
+interface ErrorShape {
+  code?: unknown;
+  originalCode?: unknown;
+  cause?: unknown;
+  meta?: { code?: unknown; driverAdapterError?: { cause?: ErrorShape } };
 }
 
-/** Finds the PostgreSQL SQLSTATE in an error or in its `cause` chain. */
+function candidateCodes(node: ErrorShape): unknown[] {
+  const adapterCause = node.meta?.driverAdapterError?.cause;
+  return [node.meta?.code, node.code, node.originalCode, adapterCause?.originalCode, adapterCause?.code];
+}
+
+/**
+ * Walks an error and its `cause` chain and returns the first code that maps to a domain error.
+ * Wrapper codes (Prisma `P2002`, `ECONNRESET`…) are skipped, and so are SQLSTATEs without a
+ * mapping (such as `P0001`), so a wrapped rule violation is still found.
+ */
 export function extractSqlState(error: unknown): string | undefined {
   let current: unknown = error;
   for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
-    const sqlState = readSqlState(current);
-    if (sqlState !== undefined) return sqlState;
     if (typeof current !== 'object' || current === null) return undefined;
-    current = (current as { cause?: unknown }).cause;
+    const node = current as ErrorShape;
+    const mapped = candidateCodes(node).find((code): code is string => typeof code === 'string' && code in FACTORY_BY_SQL_STATE);
+    if (mapped !== undefined) return mapped;
+    current = node.cause;
   }
   return undefined;
 }
