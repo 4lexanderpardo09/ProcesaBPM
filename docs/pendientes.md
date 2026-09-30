@@ -6,6 +6,14 @@ Actualizado: 2026-09-30. Las decisiones tomadas están en [analisis.md §0.1](an
 - **Base de datos completa** (2026-09-30): 89 tablas, RLS en 82, 252 FK compuestas e indexadas, 59 CHECK, 34 triggers de reglas de negocio, funciones de autenticación y retención, semilla del catálogo (planes aprobados, permisos, festivos) y **109 pruebas en verde**. La revisión de integridad ([revision-bd.md](revision-bd.md)) está aplicada completa. Referencia: [base-de-datos.md](base-de-datos.md).
 - Decisiones tomadas por defecto, que falta confirmar con el negocio: aprobadores distintos por empresa, regla de autoaprobación y reapertura como visita nueva (base-de-datos.md §13.2).
 
+- **`packages/shared`, primera parte** (2026-09-30): `engine/business-time` (vencimiento en horas o días hábiles y minutos hábiles, con calendario, franjas, festivos, zona horaria y pausas), `engine/conditions` (condiciones AND de transiciones) y `errors` (errores tipados + mapeo de SQLSTATE), con 130 pruebas unitarias.
+- Reglas tomadas por defecto en `shared`, que falta confirmar con el negocio:
+  - Días de la semana `0 = domingo … 6 = sábado` en `calendar_working_hours.weekday` (la BD solo exige 0–6).
+  - SLA en días hábiles: el día de inicio es el día 0 y vence al final del N-ésimo día hábil siguiente; un inicio fuera de horario arranca en la siguiente franja (viernes 19:00 con 1 día → martes al final de la jornada).
+  - En días hábiles, el tiempo hábil pausado corre el vencimiento.
+  - Condiciones: un campo vacío o ausente solo cumple `not_equals`; textos sin distinguir mayúsculas ni espacios; números en texto se comparan como números; fechas `YYYY-MM-DD` por día y fechas con hora por instante.
+  - Falta la resolución de SQLSTATE que entrega Prisma: hoy se lee `code`, `cause` y `meta.code`; se ajusta con la prueba de concepto de §1.3.
+
 ## 1. Para poder empezar a construir
 
 ### 1.1 Alcance de la primera versión (MVP): **por definir juntos**

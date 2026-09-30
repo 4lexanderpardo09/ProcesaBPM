@@ -11,7 +11,7 @@ ProcesaBPM/
 │   └── web/              # React + Vite: la aplicación del cliente
 ├── packages/
 │   ├── db/               # ✅ hecho: Prisma, migraciones, semilla, pruebas de BD
-│   └── shared/           # código compartido front/back: esquemas zod, tipos y lógica de dominio pura
+│   └── shared/           # 🚧 en curso: lógica de dominio pura (engine/business-time, engine/conditions, errors); falta contracts, workflow, formulas, calculators, permissions
 ├── docs/                 # documentación (español)
 ├── scripts/              # cloud-setup.sh y utilidades
 ├── docker-compose.yml    # desarrollo: postgres 18, minio, redis, mailpit
@@ -30,7 +30,7 @@ packages/shared/src/
 │   ├── formulas/         #   motor de fórmulas (SUMA, DIAS_HABILES, SI…) y campo tabla
 │   └── calculators/      #   calculadoras integradas (alimentación, saldo de viáticos)
 ├── permissions/          # acciones y sujetos CASL (tipos compartidos)
-└── errors/               # códigos de error de dominio que entienden front y back
+└── errors/               # ✅ errores de dominio tipados y mapeo de SQLSTATE de la BD (23001, 23514, 23503, 23505, 23P01, 42501)
 ```
 Todo lo que se calcula en ambos lados (el SLA que ve el usuario, las fórmulas del formulario) vive **una sola vez** aquí. Así se evita lo que pasaba en el sistema viejo con `table-field.util.ts` ↔ `tableField.ts`, duplicados a mano. Pruebas: solo unitarias (`*.spec.ts`), con tablas de casos.
 
@@ -145,7 +145,7 @@ Reglas:
 | Base de datos | Vitest + Testcontainers / `TEST_DATABASE_URL` | `packages/db/test` ✅ |
 
 ## 6. Orden de construcción sugerido
-1. `packages/shared` (contratos base + `business-time` + `conditions` con sus pruebas).
+1. `packages/shared` (contratos base + `business-time` + `conditions` con sus pruebas). **Hecho:** `business-time`, `conditions` y `errors` (130 pruebas unitarias); faltan los contratos zod.
 2. `apps/api`: `infrastructure/database` (contexto de tenant + prueba del bug de Prisma #30374), `common/` (errores, guards), `auth` y `platform`.
 3. `identity`, `organization`, `approvals`, `catalog`.
 4. `workflows` + `apps/web/features/workflow-builder`.
