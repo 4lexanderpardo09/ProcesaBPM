@@ -138,7 +138,7 @@ erDiagram
 | `companies` | Empresas del tenant (1..N, una por defecto), con país, moneda, zona horaria y calendario. |
 | `departments`, `positions` | Áreas y cargos. El cargo sirve para **asignar trabajo**, no para aprobar. |
 | `site_levels`, `sites` | Sedes en árbol con niveles nombrados por el cliente (reemplaza regional/zona). |
-| `calendars`, `calendar_working_hours`, `calendar_holidays` | Calendario laboral: franjas por día (sin solapes) y festivos. |
+| `calendars`, `calendar_working_hours`, `calendar_holidays` | Calendario laboral: franjas por día (sin solapes) y festivos. `calendar_working_hours.weekday`: **0 = domingo … 6 = sábado** (igual que `Date#getDay()` de JS y `EXTRACT(DOW …)` de PostgreSQL). |
 | `approval_group_types`, `approval_groups`, `approval_group_approvers`, `approval_group_members`, `delegations` | Aprobación explícita: "X (y sus suplentes, en orden) aprueba a Y, Z"; grupos por tipo y opcionalmente por empresa; delegaciones por fechas. |
 
 ### 5.3 Catálogo y motor de flujos
