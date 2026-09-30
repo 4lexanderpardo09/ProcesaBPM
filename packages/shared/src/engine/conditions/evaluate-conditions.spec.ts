@@ -64,6 +64,19 @@ describe('evaluateCondition', () => {
     expect(evaluateCondition({ field: 'missing', op: 'equals', value: 'x' }, {})).toBe(false);
   });
 
+  it('does not read thousands separators as a number', () => {
+    expect(evaluateCondition({ field: 'f', op: 'gt', value: 1_000_000 }, { f: '1.500.000' })).toBe(false);
+  });
+
+  it.each([
+    ['date_before', '2026-01-10', '2026-01-10T00:00:01Z', true],
+    ['date_on_or_before', '2026-01-10', '2026-01-10T00:00:00Z', true],
+    ['date_after', '2026-01-10T00:00:01Z', '2026-01-10', true],
+    ['date_before', '2026-01-10T00:00:00Z', '2026-01-10', false],
+  ] as const)('takes a day as midnight UTC when compared with a date-time (%s %s %s)', (op, actual, expected, result) => {
+    expect(evaluateCondition({ field: 'f', op, value: expected }, { f: actual })).toBe(result);
+  });
+
   it('compares Date instances', () => {
     const condition: Condition = { field: 'f', op: 'date_after', value: '2026-01-01' };
     expect(evaluateCondition(condition, { f: new Date('2026-06-01T00:00:00Z') })).toBe(true);

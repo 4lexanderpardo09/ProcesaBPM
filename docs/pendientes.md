@@ -10,7 +10,7 @@ Actualizado: 2026-09-30. Las decisiones tomadas están en [analisis.md §0.1](an
 - **Reglas de `shared` decididas** (2026-09-30):
   - Días de la semana `0 = domingo … 6 = sábado` en `calendar_working_hours.weekday`.
   - SLA en días hábiles: el día de inicio es el día 0 y vence al final de la jornada del N-ésimo día hábil siguiente; un inicio fuera de horario arranca en la siguiente franja.
-  - El tiempo hábil pausado corre el vencimiento.
+  - Las pausas corren el vencimiento en minutos hábiles exactos (en días hábiles, el vencimiento deja de caer al final de la jornada).
   - Condiciones: un campo vacío o ausente solo cumple `not_equals`; textos sin distinguir mayúsculas ni espacios; números escritos como texto se comparan como números; `YYYY-MM-DD` se compara por día y fecha con hora por instante.
   - `mapDatabaseError` queda como está (lee `code`, `cause` y `meta.code`); se ajusta en la prueba de concepto de Prisma (§1.3). zod se agrega al crear `contracts/`.
 

@@ -84,6 +84,10 @@ function assertValidCondition(condition: Condition): void {
 }
 
 /**
+ * Numeric and currency values are stored normalized as JSON numbers: a text such as `1.500.000`
+ * (thousands separators) is not read as a number; the server normalizes it when it saves the value.
+ * In dates, when one side is `YYYY-MM-DD` and the other has a time, the day is taken as midnight UTC.
+ *
  * A missing or blank field only satisfies `not_equals`; every other operator is false,
  * so an unanswered field never routes a ticket through a branch by accident.
  */

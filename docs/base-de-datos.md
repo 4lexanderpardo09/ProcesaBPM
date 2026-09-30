@@ -296,6 +296,7 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
     - **autoaprobación:** si el creador es el aprobador, se pasa al siguiente de la lista y, si no hay, sube un nivel;
     - `approval_level = n` significa el aprobador del aprobador, repetido n veces.
 13. **Valores de campos:** incluir `workflow_version_id` (el del ticket). Al corregir un valor, registrar `FIELDS_UPDATED` con antes y después.
+    Los valores numéricos y de moneda se guardan normalizados como número JSON (sin separadores de miles como `1.500.000`): el servidor normaliza al guardar, y el evaluador de condiciones no interpreta esos textos como número. En las condiciones de fecha, si un lado es `YYYY-MM-DD` y el otro trae hora, el día se toma como medianoche UTC.
 14. **Archivos:** subir a `PENDING` (reservando cuota en `tenant_usage`) y confirmar en la transacción del negocio. Nunca sobrescribir: cada PDF nuevo es otra fila de `ticket_documents` con `version + 1` y la anterior pasa a `is_current = false`.
 15. **Purga de tenant:** solo el servicio de plataforma, con `purge_tenant()`. Borrar los objetos del bucket (`tenants/{id}/`) es un job aparte.
 
