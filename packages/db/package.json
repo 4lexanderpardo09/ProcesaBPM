@@ -1,0 +1,28 @@
+{
+  "name": "@procesabpm/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "prisma validate",
+    "generate": "prisma generate",
+    "migrate:deploy": "prisma migrate deploy",
+    "seed": "tsx src/seed/run.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "12.2.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1",
+    "prisma": "7.10.0",
+    "tsx": "4.21.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

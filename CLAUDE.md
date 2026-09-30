@@ -1,0 +1,40 @@
+# CLAUDE.md
+
+Guía para Claude Code en este repositorio.
+
+## Qué es
+ProcesaBPM: SaaS multi-tenant de gestión de procesos, extraído del sistema de Electrocréditos (`~/dev/mesa-de-ayuda`, solo como referencia; no se migran sus datos ni se copia su esquema). Todavía está en fase de definición.
+
+**Antes de diseñar o programar, lee `docs/analisis.md` §0.1 (decisiones) y `docs/pendientes.md`.** Si una decisión nueva cambia algo, actualiza ambos documentos.
+
+## Decisiones clave (resumen; el detalle está en docs/analisis.md)
+- **Tenancy:** PostgreSQL, una BD compartida, `tenant_id` en todas las tablas de negocio + RLS (`FORCE`, rol de app sin `BYPASSRLS`), tenant fijado con `set_config('app.tenant_id', …, true)` dentro de la transacción. `tenant_id` al inicio de PKs/UNIQUE/índices y FKs compuestas. IDs UUIDv7. Catálogo de tenants con `db_cluster` para poder mover un tenant a su propia BD (§11).
+- Cada tenant tiene 1..N **empresas** (una por defecto). Un **usuario global** puede tener membresía en varios tenants.
+- **Stack:** NestJS + Prisma (verificar el fix del issue #30374 antes de fijar la versión) · React + Vite + **React Flow** · Redis/BullMQ · storage S3-compatible (MinIO en dev) · imágenes Docker (`api`, `worker`, `web`, `migrate`).
+- **Flujos:** constructor visual al estilo del de Truora (§13), con versiones borrador/publicada inmutables y bloques de condición automática.
+- **Aprobaciones:** grupos de aprobación explícitos ("X aprueba a Y, Z"), con tipo (un grupo por tipo por usuario), suplentes, delegaciones y multinivel. Sin organigrama por cargo (§10).
+- **SLA:** horas o días hábiles con calendario (franjas, festivos, zona horaria) por empresa. En días vence al final de la jornada. Una novedad pausa el reloj; la reasignación y los bucles lo reinician. Los reportes miden al responsable y el paso total (§8).
+- **Archivos:** tabla `archivo` + vínculos, clave de storage inmutable, nunca sobrescribir (versiones), 4 MB por archivo / 15 archivos y 20 MB por envío, PDF/imágenes/Office/ZIP (sin SVG), sin antivirus por ahora, se guardan siempre, cuota por plan con 5 % de gracia (§7).
+- **PDF:** diseñador de formatos + PDF subido con coordenadas y/o campos AcroForm.
+
+## Reglas obligatorias (pedidas por el usuario, 2026-09-30)
+- **Todo lo que se construye va en inglés:** base de datos (tablas, columnas, enums, políticas, funciones), código (nombres de variables, clases, archivos, rutas de API), comentarios de código, tests y mensajes de commit. Solo quedan en español los textos que ve el usuario final (vía i18n) y los documentos de `docs/`.
+- **Todo con tests:** unit tests para la lógica (servicios, motor de flujos, SLA, fórmulas, validaciones) **y** pruebas grandes, es decir de integración contra PostgreSQL/Redis/MinIO reales en contenedores y E2E del API y del frontend. Ninguna funcionalidad se da por terminada sin sus tests pasando. Siempre hay un test de fuga entre tenants.
+- **Buenas prácticas y clean code:** nombres claros, funciones pequeñas con una sola responsabilidad, sin duplicación, capas separadas (controller → service → repository), dependencias explícitas, errores tipados, sin código muerto ni comentarios obvios, y SOLID donde aporte.
+
+## Estructura y comandos
+- **Organización de carpetas y capas de `apps/api`, `apps/web` y `packages/shared`: `docs/arquitectura.md`** (léelo antes de crear código nuevo).
+- Monorepo pnpm: `packages/db` (**terminado**: esquema Prisma, 3 migraciones, semilla, 109 pruebas). Siguen `apps/api`, `apps/web` y `packages/shared`.
+- **Antes de tocar datos o escribir el API, lee `docs/base-de-datos.md`**, sobre todo §8 "Contrato para el API": contexto por transacción, columnas sensibles de `users` (Prisma `omit`), funciones `auth_*`, secuencia de creación y avance de tickets, y reglas de aprobadores.
+- La BD impone reglas de negocio (versiones publicadas inmutables, máquina de estados del ticket, coherencia ticket ↔ versión, historial de solo inserción). No las dupliques ni las evites en el API; traduce sus códigos de error (§7).
+- Cambiar el esquema: sigue la lista de `docs/base-de-datos.md` §11 (RLS con `app_enable_tenant_rls`, índice por FK, pruebas, cero diferencias con Prisma).
+- Desde `packages/db`: `pnpm test` (Vitest + Testcontainers, PostgreSQL 18 real; requiere Docker), `pnpm typecheck`, `pnpm validate`, `pnpm generate`, `pnpm migrate:deploy`, `pnpm seed`.
+- En las pruebas, `sqlStateOf(() => operación)` recibe una función (nunca una promesa ya iniciada).
+- **En Claude Code en la nube (sin Docker):** el entorno ejecuta `scripts/cloud-setup.sh` y define `TEST_DATABASE_URL`; `pnpm test` usa entonces el PostgreSQL 18 local. Si `TEST_DATABASE_URL` no está definida, las pruebas intentan Docker.
+- pnpm 11 con `minimumReleaseAge`: no desactivarlo; las excepciones quedan en `pnpm-workspace.yaml`.
+
+## Convenciones
+- Idioma: ver las reglas obligatorias de arriba (identificadores en inglés; UI y documentos en español).
+- TypeScript estricto, sin `any`. Validación con zod compartida en `packages/shared`.
+- Autorización deny-by-default y por registro (CASL con condiciones). Nunca SQL interpolado.
+- Nada de estado en disco local ni efectos externos (archivos, correos, PDFs) dentro de transacciones de BD: usar outbox + worker.
