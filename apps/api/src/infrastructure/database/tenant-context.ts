@@ -1,7 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable } from '@nestjs/common';
-import { InvalidTenantContextError, MissingTenantContextError } from '@procesabpm/shared';
-import { isUuid } from './uuid.js';
+import { InvalidTenantContextError, isUuid, MissingTenantContextError } from '@procesabpm/shared';
 
 export interface TenantScope {
   readonly tenantId: string;

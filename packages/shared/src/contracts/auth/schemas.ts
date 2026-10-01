@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { uuidSchema } from '../ids.js';
 import { newPasswordSchema, PASSWORD_MAX_LENGTH } from './password.js';
 
 const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
@@ -14,7 +15,7 @@ export const loginRequestSchema = z.object({
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
 export const organizationSchema = z.object({
-  tenantId: z.uuid(),
+  tenantId: uuidSchema,
   slug: z.string(),
   name: z.string(),
   membershipStatus: membershipStatusSchema,
@@ -29,7 +30,7 @@ export const loginResponseSchema = z.object({
 });
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 
-export const selectTenantRequestSchema = z.object({ tenantId: z.uuid() });
+export const selectTenantRequestSchema = z.object({ tenantId: uuidSchema });
 export type SelectTenantRequest = z.infer<typeof selectTenantRequestSchema>;
 
 /** Answer of `select-tenant` and `refresh`; the refresh token travels in an httpOnly cookie. */
@@ -49,19 +50,22 @@ export const passwordResetConfirmSchema = z.object({
 });
 export type PasswordResetConfirm = z.infer<typeof passwordResetConfirmSchema>;
 
-/** The password is optional because an existing user keeps theirs; a new user must send one. */
+/**
+ * A new user must send a password; a user who already has one must not (an invitation never changes
+ * an existing password: the database rejects it).
+ */
 export const acceptInvitationRequestSchema = z.object({
   token: oneTimeTokenSchema,
   password: newPasswordSchema.optional(),
 });
 export type AcceptInvitationRequest = z.infer<typeof acceptInvitationRequestSchema>;
 
-export const acceptInvitationResponseSchema = z.object({ tenantId: z.uuid() });
+export const acceptInvitationResponseSchema = z.object({ tenantId: uuidSchema });
 export type AcceptInvitationResponse = z.infer<typeof acceptInvitationResponseSchema>;
 
 export const meResponseSchema = z.object({
   user: z.object({
-    id: z.uuid(),
+    id: uuidSchema,
     email: z.string(),
     firstName: z.string(),
     lastName: z.string(),
@@ -71,11 +75,11 @@ export const meResponseSchema = z.object({
     emailVerifiedAt: z.iso.datetime().nullable(),
   }),
   membership: z.object({
-    tenantId: z.uuid(),
+    tenantId: uuidSchema,
     status: z.literal('ACTIVE'),
     isOwner: z.boolean(),
-    role: z.object({ id: z.uuid(), name: z.string(), isAdmin: z.boolean() }),
-    companies: z.array(z.object({ id: z.uuid(), name: z.string(), isDefault: z.boolean() })),
+    role: z.object({ id: uuidSchema, name: z.string(), isAdmin: z.boolean() }),
+    companies: z.array(z.object({ id: uuidSchema, name: z.string(), isDefault: z.boolean() })),
   }),
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
@@ -83,10 +87,10 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
 /** Claims of the access token. */
 export const accessTokenClaimsSchema = z.object({
   /** User id. */
-  sub: z.uuid(),
+  sub: uuidSchema,
   /** Tenant id. */
-  tid: z.uuid(),
+  tid: uuidSchema,
   /** Session id (row of `refresh_sessions`). */
-  sid: z.uuid(),
+  sid: uuidSchema,
 });
 export type AccessTokenClaims = z.infer<typeof accessTokenClaimsSchema>;

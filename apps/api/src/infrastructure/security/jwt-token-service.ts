@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AccessTokenClaims, accessTokenClaimsSchema, UnauthenticatedError } from '@procesabpm/shared';
+import { type AccessTokenClaims, accessTokenClaimsSchema, UnauthenticatedError, uuidSchema } from '@procesabpm/shared';
 import { jwtVerify, SignJWT } from 'jose';
 import { z } from 'zod';
 import type { AppConfig } from '../../config/app-config.js';
@@ -20,7 +20,7 @@ export interface IssuedToken {
   readonly expiresIn: number;
 }
 
-const selectionClaimsSchema = z.object({ sub: z.uuid() });
+const selectionClaimsSchema = z.object({ sub: uuidSchema });
 
 /**
  * Signs and verifies the two short-lived JWTs. They use different audiences, so a selection

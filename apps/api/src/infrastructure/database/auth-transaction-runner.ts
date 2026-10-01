@@ -1,11 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@procesabpm/db';
-import { InvalidTenantContextError } from '@procesabpm/shared';
+import { InvalidTenantContextError, isUuid } from '@procesabpm/shared';
 import type { AppConfig } from '../../config/app-config.js';
 import { APP_CONFIG } from '../../config/tokens.js';
 import { applyDatabaseScope, type DatabaseScope } from './database-scope.js';
 import { PrismaService } from './prisma.service.js';
-import { isUuid } from './uuid.js';
 
 export type AuthTransaction = Prisma.TransactionClient;
 
