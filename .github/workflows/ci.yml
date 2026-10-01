@@ -39,4 +39,4 @@ jobs:
 
       # Integration tests start PostgreSQL 18 with Testcontainers (Docker is available on GitHub runners).
       - name: Tests
-        run: pnpm -r test
+        run: pnpm test

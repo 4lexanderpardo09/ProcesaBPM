@@ -7,7 +7,7 @@
 ```
 ProcesaBPM/
 ├── apps/
-│   ├── api/              # NestJS: API HTTP + worker (misma imagen, dos entradas)
+│   ├── api/              # 🚧 NestJS: API HTTP + worker. Hecho: config, database (tenant), common (errores, logger, health). Faltan los módulos de §3.1
 │   └── web/              # React + Vite: la aplicación del cliente
 ├── packages/
 │   ├── db/               # ✅ hecho: Prisma, migraciones, semilla, pruebas de BD
@@ -146,8 +146,15 @@ Reglas:
 
 ## 6. Orden de construcción sugerido
 1. `packages/shared` (contratos base + `business-time` + `conditions` con sus pruebas). **Hecho:** `business-time`, `conditions` y `errors` (130 pruebas unitarias); faltan los contratos zod.
-2. `apps/api`: `infrastructure/database` (contexto de tenant + prueba del bug de Prisma #30374), `common/` (errores, guards), `auth` y `platform`.
+2. `apps/api`: `infrastructure/database` (contexto de tenant + prueba del bug de Prisma #30374), `common/` (errores, guards), `auth` y `platform`. **Hecho:** `config/`, `infrastructure/database`, filtro de errores, logger y `/health`·`/ready`; faltan los guards, `auth` y `platform`.
 3. `identity`, `organization`, `approvals`, `catalog`.
 4. `workflows` + `apps/web/features/workflow-builder`.
 5. `engine`, `tickets`, `sla`, `files`: el corazón del producto.
 6. `documents`, `notifications`, `reports`; luego lo de la v2 (`exports`, `webhooks`…).
+
+## 7. Cómo se accede a los datos en `apps/api` (hecho)
+- `TenantContext` guarda `{ tenantId, userId }` en un `AsyncLocalStorage`; lo fija la capa de autenticación (todavía no existe) al inicio de cada petición o job.
+- Todo acceso a datos de un tenant pasa por `TenantTransactionRunner.withTenantTransaction(work)`: abre una transacción, fija `app.tenant_id` y `app.user_id` como locales a la transacción, verifica que la BD los confirmó y ejecuta `work`. Sin contexto lanza `MissingTenantContextError` y no consulta nada.
+- `DatabaseModule` **no exporta** `PrismaService` (el cliente del rol `app_runtime`, con `omit` de las columnas sensibles de `users`): los repositorios solo reciben el `tx` del runner.
+- `PlatformPrismaService` (rol `app_platform`, ignora RLS) se exporta aparte y solo lo inyectan los servicios de plataforma.
+- Pruebas: unitarias en `src/**/*.spec.ts` (proyecto `unit` de Vitest) y de integración y E2E contra PostgreSQL real en `test/integration/*.test.ts` (proyecto `integration`), con la BD de `packages/db` (`@procesabpm/db/testing`) en una base propia (`procesabpm_api_test`). `pnpm test` en la raíz corre los paquetes de uno en uno.

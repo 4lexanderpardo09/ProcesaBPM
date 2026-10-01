@@ -6,6 +6,8 @@ Actualizado: 2026-09-30. Las decisiones tomadas están en [analisis.md §0.1](an
 - **Base de datos completa** (2026-09-30): 89 tablas, RLS en 82, 252 FK compuestas e indexadas, 59 CHECK, 34 triggers de reglas de negocio, funciones de autenticación y retención, semilla del catálogo (planes aprobados, permisos, festivos) y **109 pruebas en verde**. La revisión de integridad ([revision-bd.md](revision-bd.md)) está aplicada completa. Referencia: [base-de-datos.md](base-de-datos.md).
 - Decisiones tomadas por defecto, que falta confirmar con el negocio: aprobadores distintos por empresa, regla de autoaprobación y reapertura como visita nueva (base-de-datos.md §13.2).
 
+- **Base de `apps/api`** (2026-10-01): NestJS 11 con entradas HTTP y worker, configuración validada con zod, acceso a datos por tenant (`TenantContext` + `TenantTransactionRunner`, cliente de plataforma aparte, `omit` de columnas sensibles de `users`), filtro global de errores (SQLSTATE → HTTP), logger JSON con `tenant_id` y `request_id`, `/health` y `/ready`, y la prueba de concepto de #30374. Sin auth, módulos de negocio ni frontend todavía.
+- Decisiones tomadas por defecto en `apps/api`, que falta confirmar: las cinco variables de entorno son obligatorias (sin valores por defecto); mapeo HTTP de §8.5: 23001 → 409, 23514 → 422, 23503 → 422, 23505 → 409, 23P01 → 409, 42501 → 403; los mensajes de la BD nunca se devuelven al cliente (solo el código); un contexto de tenant ausente o no confirmado responde 500 genérico.
 - **`packages/shared`, primera parte** (2026-09-30): `engine/business-time` (vencimiento en horas o días hábiles y minutos hábiles, con calendario, franjas, festivos, zona horaria y pausas), `engine/conditions` (condiciones AND de transiciones) y `errors` (errores tipados + mapeo de SQLSTATE), con 130 pruebas unitarias.
 - **Reglas de `shared` decididas** (2026-09-30):
   - Días de la semana `0 = domingo … 6 = sábado` en `calendar_working_hours.weekday`.
@@ -46,8 +48,8 @@ Ya se creó la raíz del monorepo (`package.json`, `pnpm-workspace.yaml`, `tscon
 - `docker-compose` de desarrollo: PostgreSQL 18, MinIO, Redis y Mailpit.
 
 ### 1.3 Verificación técnica antes de escribir código
-- [ ] Issue de Prisma [#30374](https://github.com/prisma/orm/issues/30374) (respuestas cruzadas después de un error de la BD dentro de una transacción interactiva con `@prisma/adapter-pg`): **sigue abierto en 7.10.0** (revisado 2026-09-30; la 8.0 está en RC). Antes de construir el API: reproducirlo en 7.10 y 8.0-RC y, si sigue, aplicar la mitigación (descartar la conexión ante un error de BD dentro de la transacción) o no usar transacciones interactivas para las operaciones con RLS.
-- [ ] Prueba de concepto de RLS con Prisma: extensión de cliente + `set_config('app.tenant_id', …, true)` detrás de PgBouncer en modo transacción, con un test de fuga entre dos tenants.
+- [x] Issue de Prisma [#30374](https://github.com/prisma/orm/issues/30374): **no se reproduce en 7.10.0** (2026-10-01); se fija la versión exacta 7.10.0, la prueba de concepto queda en el CI y el runner de transacciones verifica el contexto fijado. Detalle y regla para subir de versión en [base-de-datos.md §13.3](base-de-datos.md). No hay 8.0 RC en npm (solo `8.1.0-dev.*`).
+- [x] Prueba de concepto de RLS con Prisma: `TenantTransactionRunner` (`set_config(..., true)` en la transacción) con pruebas de fuga entre dos tenants en paralelo, por HTTP y contra PostgreSQL real. **Pendiente:** repetirla detrás de PgBouncer en modo transacción cuando exista el despliegue.
 
 ## 2. Funciones con propuesta por defecto (confirmar sobre la marcha)
 | Tema | Propuesta |

@@ -23,6 +23,12 @@
     "vitest": "5.0.3"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./test/support/global-setup.ts",
+    "./testing/database": "./test/support/database.ts",
+    "./testing/fixtures": "./test/support/fixtures.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "7.10.0"
   }
 }
