@@ -22,6 +22,20 @@ ProcesaBPM: SaaS multi-tenant de gestión de procesos, extraído del sistema de 
 - **Todo con tests:** unit tests para la lógica (servicios, motor de flujos, SLA, fórmulas, validaciones) **y** pruebas grandes, es decir de integración contra PostgreSQL/Redis/MinIO reales en contenedores y E2E del API y del frontend. Ninguna funcionalidad se da por terminada sin sus tests pasando. Siempre hay un test de fuga entre tenants.
 - **Buenas prácticas y clean code:** nombres claros, funciones pequeñas con una sola responsabilidad, sin duplicación, capas separadas (controller → service → repository), dependencias explícitas, errores tipados, sin código muerto ni comentarios obvios, y SOLID donde aporte.
 
+## Uso de modelos (obligatorio)
+- La sesión que construye puede correr con **Sonnet**. Para las **partes críticas**, delega en un subagente con **Opus** (herramienta Agent con `model: "opus"`):
+  - el diseño de la solución antes de programar;
+  - el código o la revisión final, cuando un error sale caro.
+- **Partes críticas:**
+  - autenticación, sesiones, tokens y secretos;
+  - autorización y permisos (CASL);
+  - aislamiento entre tenants y acceso a datos;
+  - cambios de esquema o migraciones de la BD;
+  - motor de flujos (`engine`) y cálculo de SLA;
+  - cuota y manejo de archivos.
+- **Lo demás va con Sonnet,** sin subagentes: catálogos y CRUD de administración, pantallas, reportes, documentación y pruebas de casos ya diseñados.
+- En el PR, indica qué partes se hicieron o revisaron con Opus.
+
 ## Flujo de trabajo con git (obligatorio)
 - **Nunca se trabaja ni se hace push directo a `main`.** `main` siempre compila y tiene todas las pruebas en verde.
 - **En Claude Code en la nube:** cada sesión trabaja y sube a su rama asignada `claude/<nombre>`, una sesión por funcionalidad. Las ramas `feat/...` quedan para el trabajo local. Todo lo demás del flujo se mantiene (PR hacia `main`, sin mergear, squash al aprobar).
