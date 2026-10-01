@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connectTestDatabase, SqlState, sqlStateOf, type TestDatabase } from './support/database.js';
@@ -108,9 +109,9 @@ describe('data integrity', () => {
     it('reject user uploads larger than 4 MB but accept system files of any size', async () => {
       const insertFile = (origin: 'USER' | 'SYSTEM', sizeBytes: number) =>
         db.platform.query(
-          `INSERT INTO stored_files (tenant_id, storage_key, original_name, mime_type, size_bytes, sha256, origin)
-           VALUES ($1, gen_random_uuid()::text, 'file.pdf', 'application/pdf', $2, $3, $4)`,
-          [tenantA.tenantId, sizeBytes, HEX_SHA256, origin],
+          `INSERT INTO stored_files (tenant_id, id, storage_key, original_name, mime_type, size_bytes, sha256, origin)
+           VALUES ($1::uuid, $5::uuid, 'tenants/' || $1::text || '/2026/10/' || $5, 'file.pdf', 'application/pdf', $2, $3, $4)`,
+          [tenantA.tenantId, sizeBytes, HEX_SHA256, origin, randomUUID()],
         );
 
       await expect(insertFile('USER', FOUR_MEGABYTES)).resolves.toBeDefined();
@@ -120,9 +121,9 @@ describe('data integrity', () => {
 
     it('reject a file hash that is not a hexadecimal SHA-256', async () => {
       const badHash = () => db.platform.query(
-        `INSERT INTO stored_files (tenant_id, storage_key, original_name, mime_type, size_bytes, sha256, origin)
-         VALUES ($1, gen_random_uuid()::text, 'a.pdf', 'application/pdf', 1, $2, 'USER')`,
-        [tenantA.tenantId, 'z'.repeat(64)],
+        `INSERT INTO stored_files (tenant_id, id, storage_key, original_name, mime_type, size_bytes, sha256, origin)
+         VALUES ($1::uuid, $3::uuid, 'tenants/' || $1::text || '/2026/10/' || $3, 'a.pdf', 'application/pdf', 1, $2, 'USER')`,
+        [tenantA.tenantId, 'z'.repeat(64), randomUUID()],
       );
 
       expect(await sqlStateOf(badHash)).toBe(SqlState.checkViolation);
