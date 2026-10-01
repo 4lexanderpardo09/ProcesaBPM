@@ -58,7 +58,7 @@ export class CloseTicketService {
       });
       const diversion = diversionEdge(document, submission.amounts, step.id);
       assertMayClose(step, diversion !== undefined && !(await this.writes.hasVisited(tx, tenantId, ticket.id, diversion.toStepId)));
-      const closing = await this.sla.closeVisit(tx, tenantId, company, visit, current.clocks, at, null);
+      const closing = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, null);
       const events: EventPlan[] = [
         ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { changes: submission.changes } } satisfies EventPlan]),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { ...warning } })),

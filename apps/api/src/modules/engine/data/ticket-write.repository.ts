@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import type { IncidentPeriod } from '../../sla/domain/pause-math.js';
 import type { AssigneePlan, ClockPlan, ClosedClock, ClosedVisit, EventPlan, FieldWrite, VisitPlan } from '../domain/plan.js';
 
 export interface LockedTicket {
@@ -32,6 +33,10 @@ export interface OpenClockRow {
   readonly startedAt: Date;
   readonly dueAt: Date | null;
   readonly calendarId: string | null;
+  readonly slaValue: number | null;
+  readonly slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' | null;
+  readonly pausedAt: Date | null;
+  readonly pausedMinutes: number;
 }
 
 export interface NewTicket {
@@ -107,7 +112,7 @@ export class TicketWriteRepository {
   }
 
   findOpenClocks(tx: TenantTransaction, tenantId: string, visitId: string): Promise<OpenClockRow[]> {
-    return tx.ticketSlaClock.findMany({ where: { tenantId, visitId, completedAt: null }, select: { id: true, responsibleId: true, startedAt: true, dueAt: true, calendarId: true }, orderBy: { id: 'asc' } });
+    return tx.ticketSlaClock.findMany({ where: { tenantId, visitId, completedAt: null }, select: { id: true, responsibleId: true, startedAt: true, dueAt: true, calendarId: true, slaValue: true, slaUnit: true, pausedAt: true, pausedMinutes: true }, orderBy: { id: 'asc' } });
   }
 
   findAssignees(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<Array<{ userId: string; type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'INCIDENT' }>> {
@@ -122,6 +127,11 @@ export class TicketWriteRepository {
   /** Whether the ticket already left the step before (the extra approval is not asked twice). */
   async hasVisited(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<boolean> {
     return (await tx.ticketStepVisit.count({ where: { tenantId, ticketId, stepId, exitedAt: { not: null } } })) > 0;
+  }
+
+  /** Every incident of the ticket, as the periods its clocks stood still. */
+  async findIncidentPeriods(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<IncidentPeriod[]> {
+    return tx.ticketIncident.findMany({ where: { tenantId, ticketId }, select: { openedAt: true, resolvedAt: true }, orderBy: { openedAt: 'asc' } });
   }
 
   /** Stored values keyed by field id. */

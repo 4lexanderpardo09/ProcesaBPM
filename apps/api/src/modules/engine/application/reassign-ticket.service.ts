@@ -42,7 +42,7 @@ export class ReassignTicketService {
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, visit.calendarId, at);
       const opened = openSla({ value: visit.slaValue, unit: visit.slaUnit }, calendar?.calendar ?? null, at);
-      const closedClocks = await this.sla.closeClocks(tx, tenantId, company, visit, current.clocks, at);
+      const closedClocks = await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, current.clocks, at);
 
       const visitPlan: VisitPlan = { stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt, sla: { value: visit.slaValue, unit: visit.slaUnit }, calendarId: visit.calendarId, dueAt: visit.dueAt };
       await this.writes.closeClocks(tx, tenantId, at, closedClocks);

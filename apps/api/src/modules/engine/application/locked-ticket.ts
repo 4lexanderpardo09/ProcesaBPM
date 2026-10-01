@@ -3,7 +3,7 @@ import { InvalidStateError, NotFoundError, PermissionDeniedError, StaleTicketErr
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type LockedTicket, type OpenClockRow, type OpenVisitRow, TicketWriteRepository } from '../data/ticket-write.repository.js';
 
-export type TicketAction = 'transition' | 'reassign' | 'close';
+export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen';
 
 /** Who acts on a ticket and what they are allowed to see: the HTTP layer builds it from the CASL ability. */
 export interface TicketActor {
@@ -14,11 +14,17 @@ export interface TicketActor {
   readonly canRead: (tx: TenantTransaction, ticketId: string) => Promise<boolean>;
 }
 
-export interface TicketInProgress {
+export interface LockedForAction {
+  readonly ticket: LockedTicket;
+  readonly assignees: ReadonlyArray<{ readonly userId: string; readonly type: string }>;
+  /** How the caller is assigned to the ticket, if at all. */
+  readonly ownType: string | undefined;
+}
+
+export interface TicketInProgress extends LockedForAction {
   readonly ticket: LockedTicket;
   readonly visit: OpenVisitRow;
   readonly clocks: readonly OpenClockRow[];
-  readonly assignees: ReadonlyArray<{ readonly userId: string; readonly type: string }>;
   readonly actorIsAssignee: boolean;
   readonly actorIsPoolMember: boolean;
 }
@@ -32,24 +38,42 @@ export interface TicketInProgress {
 export class LockedTicketLoader {
   constructor(@Inject(TicketWriteRepository) private readonly writes: TicketWriteRepository) {}
 
-  async load(tx: TenantTransaction, tenantId: string, ticketId: string, visitId: string, actor: TicketActor): Promise<TicketInProgress> {
+  /**
+   * Step 1: lock the ticket row and make sure the caller may know it exists. Anyone assigned to it, in any way
+   * (holder, pool, parallel signer, incident assignee), may; so may whoever the ability lets read it.
+   */
+  async lockForAction(tx: TenantTransaction, tenantId: string, ticketId: string, actor: TicketActor): Promise<LockedForAction> {
     const ticket = await this.writes.lockTicket(tx, tenantId, ticketId);
     if (ticket === undefined) throw new NotFoundError();
     const assignees = await this.writes.findAssignees(tx, tenantId, ticketId);
-    const own = assignees.find((assignee) => assignee.userId === actor.userId && (assignee.type === 'PRIMARY' || assignee.type === 'POOL'));
+    const own = assignees.find((assignee) => assignee.userId === actor.userId);
     if (own === undefined && !(await actor.canRead(tx, ticketId))) throw new NotFoundError();
+    return { ticket, assignees, ownType: own?.type };
+  }
+
+  /** Step 2: the ticket must be open and the caller must have seen its current visit (otherwise someone moved it first). */
+  async requireOpenVisit(tx: TenantTransaction, tenantId: string, locked: LockedForAction, visitId: string): Promise<TicketInProgress> {
+    const { ticket, assignees, ownType } = locked;
     if (ticket.status !== 'OPEN') throw new TicketNotOpenError(ticket.status);
-    const visit = await this.writes.findOpenVisit(tx, tenantId, ticketId);
+    const visit = await this.writes.findOpenVisit(tx, tenantId, ticket.id);
     if (visit === null) throw new InvalidStateError('The ticket has no open step');
     if (visit.id !== visitId) throw new StaleTicketError();
+    // "Holds the step" means PRIMARY or POOL: signers and incident assignees have their own paths.
+    const holds = ownType === 'PRIMARY' || ownType === 'POOL';
     return {
       ticket,
       visit,
       clocks: await this.writes.findOpenClocks(tx, tenantId, visit.id),
       assignees,
-      actorIsAssignee: own !== undefined,
-      actorIsPoolMember: own?.type === 'POOL',
+      ownType,
+      actorIsAssignee: holds,
+      actorIsPoolMember: ownType === 'POOL',
     };
+  }
+
+  /** Both steps: what every action on an open step starts with. */
+  async load(tx: TenantTransaction, tenantId: string, ticketId: string, visitId: string, actor: TicketActor): Promise<TicketInProgress> {
+    return this.requireOpenVisit(tx, tenantId, await this.lockForAction(tx, tenantId, ticketId, actor), visitId);
   }
 
   /**
