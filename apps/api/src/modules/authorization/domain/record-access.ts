@@ -43,5 +43,7 @@ export function accessibleWhere(ability: AppAbility, actions: string | readonly 
   const list = typeof actions === 'string' ? [actions] : actions;
   const filters = list.filter((action) => ability.can(action, subjectType)).map((action) => accessibleBy(ability, action).ofType(subjectType as never) as Record<string, unknown>);
   if (filters.length === 0) return { ...MATCH_NOTHING };
+  // An action granted without conditions means every record: `OR: [{...}, {}]` must not be left to the database, which would not read it that way.
+  if (filters.some((filter) => Object.keys(filter).length === 0)) return {};
   return filters.length === 1 ? filters[0]! : { OR: filters };
 }

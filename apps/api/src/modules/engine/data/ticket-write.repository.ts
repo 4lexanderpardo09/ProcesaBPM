@@ -25,6 +25,7 @@ export interface OpenVisitRow {
   readonly slaValue: number | null;
   readonly slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' | null;
   readonly calendarId: string | null;
+  readonly pausedMinutes: number;
 }
 
 export interface OpenClockRow {
@@ -37,6 +38,16 @@ export interface OpenClockRow {
   readonly slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' | null;
   readonly pausedAt: Date | null;
   readonly pausedMinutes: number;
+}
+
+export interface IncidentRow {
+  readonly id: string;
+  readonly stepId: string;
+  readonly createdById: string;
+  readonly assignedToId: string;
+  readonly status: 'OPEN' | 'RESOLVED';
+  readonly previousAssigneeIds: string[];
+  readonly openedAt: Date;
 }
 
 export interface NewTicket {
@@ -107,7 +118,7 @@ export class TicketWriteRepository {
   async findOpenVisit(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<OpenVisitRow | null> {
     return tx.ticketStepVisit.findFirst({
       where: { tenantId, ticketId, exitedAt: null },
-      select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, slaValue: true, slaUnit: true, calendarId: true },
+      select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, slaValue: true, slaUnit: true, calendarId: true, pausedMinutes: true },
     });
   }
 
@@ -132,6 +143,47 @@ export class TicketWriteRepository {
   /** Every incident of the ticket, as the periods its clocks stood still. */
   async findIncidentPeriods(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<IncidentPeriod[]> {
     return tx.ticketIncident.findMany({ where: { tenantId, ticketId }, select: { openedAt: true, resolvedAt: true }, orderBy: { openedAt: 'asc' } });
+  }
+
+  /** The clocks of the visit that are running stand still from `at`. */
+  async pauseClocks(tx: TenantTransaction, tenantId: string, visitId: string, at: Date): Promise<void> {
+    await tx.ticketSlaClock.updateMany({ where: { tenantId, visitId, completedAt: null, pausedAt: null }, data: { pausedAt: at } });
+  }
+
+  /** A paused clock runs again with the due date and the paused minutes the resume math gave it. */
+  async resumeClock(tx: TenantTransaction, tenantId: string, clockId: string, resumed: { pausedMinutes: number; dueAt: Date | null }): Promise<void> {
+    await tx.ticketSlaClock.updateMany({ where: { tenantId, id: clockId, completedAt: null }, data: { pausedAt: null, pausedMinutes: resumed.pausedMinutes, dueAt: resumed.dueAt } });
+  }
+
+  async updateVisitPause(tx: TenantTransaction, tenantId: string, visitId: string, resumed: { pausedMinutes: number; dueAt: Date | null }): Promise<void> {
+    await tx.ticketStepVisit.updateMany({ where: { tenantId, id: visitId, exitedAt: null }, data: { pausedMinutes: resumed.pausedMinutes, dueAt: resumed.dueAt } });
+  }
+
+  async insertIncident(tx: TenantTransaction, tenantId: string, ticketId: string, incident: { stepId: string; createdById: string; assignedToId: string; description: string; previousAssigneeIds: readonly string[]; openedAt: Date }): Promise<string> {
+    const created = await tx.ticketIncident.create({
+      data: { tenantId, ticketId, stepId: incident.stepId, createdById: incident.createdById, assignedToId: incident.assignedToId, description: incident.description, previousAssigneeIds: [...incident.previousAssigneeIds], openedAt: incident.openedAt },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  findIncident(tx: TenantTransaction, tenantId: string, ticketId: string, incidentId: string): Promise<IncidentRow | null> {
+    return tx.ticketIncident.findFirst({ where: { tenantId, ticketId, id: incidentId }, select: { id: true, stepId: true, createdById: true, assignedToId: true, status: true, previousAssigneeIds: true, openedAt: true } });
+  }
+
+  /** One UPDATE: the check that ties `resolved_at` to the status is immediate. */
+  async resolveIncident(tx: TenantTransaction, tenantId: string, incidentId: string, resolvedAt: Date, resolution: string): Promise<void> {
+    await tx.ticketIncident.updateMany({ where: { tenantId, id: incidentId, status: 'OPEN' }, data: { status: 'RESOLVED', resolvedAt, resolution } });
+  }
+
+  async setTicketStatus(tx: TenantTransaction, tenantId: string, ticketId: string, status: 'OPEN' | 'PAUSED'): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status } });
+  }
+
+  /** People with a pending parallel task in the step and loop. */
+  async pendingSignerIds(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<Set<string>> {
+    const rows = await tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId, loop, status: 'PENDING' }, select: { userId: true } });
+    return new Set(rows.map((row) => row.userId));
   }
 
   /** Stored values keyed by field id. */

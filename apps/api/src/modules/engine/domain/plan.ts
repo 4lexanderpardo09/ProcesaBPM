@@ -20,9 +20,11 @@ export interface ClockPlan {
   readonly dueAt: Date | null;
 }
 
+export type AssigneeKind = 'PRIMARY' | 'POOL' | 'PARALLEL' | 'INCIDENT';
+
 export interface AssigneePlan {
   readonly userId: string;
-  readonly type: 'PRIMARY' | 'POOL';
+  readonly type: AssigneeKind;
 }
 
 /** Work for the outbox; the applier adds the id of the event it belongs to (`eventId`) to the payload. */
@@ -31,7 +33,7 @@ export interface OutboxIntent {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
-export type EventType = 'CREATED' | 'TRANSITIONED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED';
+export type EventType = 'CREATED' | 'TRANSITIONED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED' | 'INCIDENT_OPENED' | 'INCIDENT_RESOLVED' | 'REOPENED' | 'PARALLEL_TASK_COMPLETED' | 'SYSTEM';
 
 export interface EventPlan {
   readonly type: EventType;

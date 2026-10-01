@@ -45,6 +45,8 @@ export const ERROR_CODES = {
   closeNotAllowed: 'CLOSE_NOT_ALLOWED',
   staleTicket: 'STALE_TICKET',
   closeRequired: 'CLOSE_REQUIRED',
+  incidentNotOpen: 'INCIDENT_NOT_OPEN',
+  assigneeRequired: 'ASSIGNEE_REQUIRED',
   extraApprovalRequired: 'EXTRA_APPROVAL_REQUIRED',
 } as const;
 
@@ -360,5 +362,19 @@ export class CloseRequiredError extends DomainError {
 export class ExtraApprovalRequiredError extends DomainError {
   constructor() {
     super(ERROR_CODES.extraApprovalRequired, 'An amount exceeds its cap: the extra approval is required before the ticket can close');
+  }
+}
+
+/** The incident was already resolved (or never was one of this ticket's open ones). */
+export class IncidentNotOpenError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.incidentNotOpen, 'The incident is not open');
+  }
+}
+
+/** Nobody who held the step can take it back: the caller must name who gets it. */
+export class AssigneeRequiredError extends DomainError {
+  constructor(droppedAssigneeIds: readonly string[]) {
+    super(ERROR_CODES.assigneeRequired, 'None of the previous assignees can take the ticket back: choose who gets it', { details: { droppedAssigneeIds } });
   }
 }

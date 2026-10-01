@@ -51,6 +51,8 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.closeNotAllowed]: { status: 422, message: 'The current step does not allow closing the ticket' },
   [ERROR_CODES.closeRequired]: { status: 422, message: 'This step can only be left by closing the ticket' },
   [ERROR_CODES.extraApprovalRequired]: { status: 422, message: 'The extra approval is required before the ticket can close' },
+  [ERROR_CODES.incidentNotOpen]: { status: 409, message: 'The incident is not open' },
+  [ERROR_CODES.assigneeRequired]: { status: 422, message: 'Choose who gets the ticket back' },
   [ERROR_CODES.staleTicket]: { status: 409, message: 'The ticket changed: reload it' },
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },

@@ -40,6 +40,7 @@ const toDetail = (row: DetailRow): TicketDetailResponse => {
     currentLoop: row.currentLoop,
     closedById: row.closedById,
     openVisit: visit === undefined ? null : { id: visit.id, stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt.toISOString(), dueAt: visit.dueAt?.toISOString() ?? null },
+    openIncident: row.incidents[0] === undefined ? null : { id: row.incidents[0].id, assignedToId: row.incidents[0].assignedToId, createdById: row.incidents[0].createdById, openedAt: row.incidents[0].openedAt.toISOString(), descriptionHtml: row.incidents[0].description },
     assignees: row.assignees.map((assignee) => ({ userId: assignee.userId, type: assignee.type, assignedAt: assignee.assignedAt.toISOString() })),
     values: Object.fromEntries(row.fieldValues.map((entry) => [entry.field.code, entry.value])),
   };

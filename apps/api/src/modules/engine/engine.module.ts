@@ -5,6 +5,8 @@ import { ArrivalPlanner } from './application/arrival-planner.js';
 import { AssignmentResolver } from './application/assignment-resolver.js';
 import { CloseTicketService } from './application/close-ticket.service.js';
 import { CreateTicketService } from './application/create-ticket.service.js';
+import { OpenIncidentService } from './application/open-incident.service.js';
+import { ResolveIncidentService } from './application/resolve-incident.service.js';
 import { LockedTicketLoader } from './application/locked-ticket.js';
 import { ReassignTicketService } from './application/reassign-ticket.service.js';
 import { SubmissionValidator } from './application/submission-validator.js';
@@ -36,7 +38,9 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     ReassignTicketService,
     TakeTicketService,
     CloseTicketService,
+    OpenIncidentService,
+    ResolveIncidentService,
   ],
-  exports: [CreateTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService],
+  exports: [CreateTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService],
 })
 export class EngineModule {}
