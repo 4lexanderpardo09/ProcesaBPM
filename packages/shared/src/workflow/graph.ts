@@ -3,6 +3,8 @@ import { type StepType } from './constants.js';
 export interface GraphNode {
   readonly id: string;
   readonly type: StepType;
+  /** A block a ticket ends in without an END (a step whose `close_rule` is REQUIRED): it counts as an end. */
+  readonly terminal?: boolean;
 }
 
 export interface GraphEdge {
@@ -60,9 +62,9 @@ export class WorkflowGraph {
     return this.walk(this.starts, (id) => this.exitsOf(id));
   }
 
-  /** Blocks from which an END can be reached. */
+  /** Blocks from which an END (or a terminal block) can be reached. */
   canReachEnd(): Set<string> {
-    return this.walk(this.ends, (id) => this.inn.get(id) ?? []);
+    return this.walk([...this.ends, ...this.nodes.filter((node) => node.terminal === true).map((node) => node.id)], (id) => this.inn.get(id) ?? []);
   }
 
   /** Blocks that can reach `id` (itself included). */

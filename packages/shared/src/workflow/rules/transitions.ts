@@ -40,7 +40,10 @@ export function checkTransitions({ doc, stepById, transitionsFrom, problems }: R
       if (of('DEFAULT') === 0) problems.error('CONDITION_WITHOUT_DEFAULT', at);
       if (of('CONDITION') === 0) problems.warning('CONDITION_WITHOUT_BRANCHES', at);
     }
-    if (PEOPLE_STEP_TYPES.has(step.type)) {
+    if (step.closeRule === 'REQUIRED') {
+      // The step can only be left by closing the ticket: any other exit would be dead.
+      if (exits.some((exit) => exit.type === 'DECISION' || exit.type === 'SYSTEM_ONLY')) problems.error('CLOSE_REQUIRED_WITH_EXITS', at);
+    } else if (PEOPLE_STEP_TYPES.has(step.type)) {
       if (of('DECISION') === 0) problems.error('PEOPLE_BLOCK_WITHOUT_DECISION', at);
       else if (step.type === 'DECISION' && of('DECISION') === 1) problems.warning('DECISION_BLOCK_SINGLE_EXIT', at);
     }
