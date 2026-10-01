@@ -11,6 +11,12 @@ export interface Principal {
   readonly roleId: string;
   /** An inactive role grants nothing. */
   readonly roleActive: boolean;
+  /** An active admin role means full access (`manage all`): the admin role is the single source of truth. */
+  readonly roleIsAdmin: boolean;
+  /** The owner of the tenant has full access whatever their role says. */
+  readonly isOwner: boolean;
+  /** Bumped by the database on any change of the role's permissions; the cache is keyed by it. */
+  readonly permissionsVersion: number;
   readonly membership: { readonly departmentId: string | null; readonly siteId: string | null };
 }
 

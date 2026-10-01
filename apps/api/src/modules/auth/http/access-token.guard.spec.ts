@@ -31,7 +31,7 @@ class PublicController {
 
 function setup(authorization?: string) {
   const verifyAccessToken = vi.fn().mockResolvedValue(claims);
-  const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, departmentId: null, siteId: null };
+  const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null };
   const verify = vi.fn().mockResolvedValue(access);
   const guard = new AccessTokenGuard(
     { verifyAccessToken } as unknown as JwtTokenService,
@@ -91,6 +91,9 @@ describe('AccessTokenGuard', () => {
       sessionId: claims.sid,
       roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae',
       roleActive: true,
+      roleIsAdmin: true,
+      isOwner: false,
+      permissionsVersion: 7,
       membership: { departmentId: null, siteId: null },
     });
   });

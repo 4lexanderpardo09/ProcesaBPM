@@ -11,6 +11,9 @@ const principal: Principal = {
   sessionId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ad',
   roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae',
   roleActive: true,
+  roleIsAdmin: false,
+  isOwner: false,
+  permissionsVersion: 0,
   membership: { departmentId: null, siteId: null },
 };
 

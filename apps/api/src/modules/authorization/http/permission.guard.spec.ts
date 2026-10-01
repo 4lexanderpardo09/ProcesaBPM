@@ -15,6 +15,9 @@ const principal: Principal = {
   sessionId: 's1',
   roleId: 'r1',
   roleActive: true,
+  roleIsAdmin: false,
+  isOwner: false,
+  permissionsVersion: 0,
   membership: { departmentId: null, siteId: null },
 };
 
