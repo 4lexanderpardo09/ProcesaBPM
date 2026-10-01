@@ -7,7 +7,7 @@ const WORKER_FUNCTIONS = [
   'claim_outbox_events(10)',
   'claim_platform_outbox_events(10)',
   `complete_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 1)`,
-  `fail_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 1, 'x', NULL)`,
+  `fail_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 1, 'x', NULL, 10)`,
 ];
 
 describe('platform outbox and the worker role', () => {
@@ -149,7 +149,27 @@ describe('platform outbox and the worker role', () => {
       await claim(1000, '5 minutes', 1);
       await db.owner.query(`UPDATE platform_outbox_events SET available_at = now() - interval '1 second' WHERE id = $1`, [id]);
       expect((await claim(1000, '5 minutes', 1)).map((row) => row.id)).not.toContain(id);
-      expect(await eventRow(id)).toMatchObject({ status: 'FAILED', last_error: expect.stringContaining('maximum') });
+      const failed = await eventRow(id);
+      expect(failed).toMatchObject({ status: 'FAILED', last_error: expect.stringContaining('maximum') });
+      expect(failed.payload).not.toHaveProperty('token');
+    });
+
+    it('a retry requested on the last allowed attempt ends the event in FAILED (it could never be claimed again), without the token', async () => {
+      const id = await enqueue({ userId: 'u', token: 'last-attempt-secret' });
+      const { attempts } = (await claim(1000, '5 minutes', 1)).find((row) => row.id === id)!;
+      const retryAt = new Date(Date.now() + 60_000).toISOString();
+      const { rows } = await db.worker.query<{ ok: boolean }>('SELECT fail_platform_outbox_event($1, $2, $3, $4, $5) AS ok', [id, attempts, 'smtp down', retryAt, 1]);
+      expect(rows[0]!.ok).toBe(true);
+      const failed = await eventRow(id);
+      expect(failed.status).toBe('FAILED');
+      expect(failed.payload).not.toHaveProperty('token');
+    });
+
+    it('a retry before the last attempt keeps the token for the next try', async () => {
+      const id = await enqueue({ userId: 'u', token: 'keep-me' });
+      const { attempts } = (await claim(1000)).find((row) => row.id === id)!;
+      await db.worker.query('SELECT fail_platform_outbox_event($1, $2, $3, $4, $5)', [id, attempts, 'smtp down', new Date(Date.now() + 60_000).toISOString(), 10]);
+      expect(await eventRow(id)).toMatchObject({ status: 'PENDING', payload: { token: 'keep-me' } });
     });
 
     it('complete marks the event DONE and removes the token from the payload', async () => {
@@ -191,6 +211,15 @@ describe('platform outbox and the worker role', () => {
   });
 
   describe('retention', () => {
+    it('purge deletes old FAILED events too (they have no processing date: the creation date counts)', async () => {
+      const [oldFailed, recentFailed] = [await enqueue(), await enqueue()];
+      await db.owner.query(`UPDATE platform_outbox_events SET status = 'FAILED', created_at = now() - interval '10 days' WHERE id = $1`, [oldFailed]);
+      await db.owner.query(`UPDATE platform_outbox_events SET status = 'FAILED' WHERE id = $1`, [recentFailed]);
+      await db.platform.query(`SELECT purge_processed_platform_outbox_events('7 days')`);
+      const remaining = await db.owner.query<{ id: string }>('SELECT id FROM platform_outbox_events WHERE id = ANY($1)', [[oldFailed, recentFailed]]);
+      expect(remaining.rows.map((row) => row.id)).toEqual([recentFailed]);
+    });
+
     it('purge deletes only old DONE events and only app_platform can run it', async () => {
       const [oldDone, recentDone, pending] = [await enqueue(), await enqueue(), await enqueue()];
       await db.owner.query(`UPDATE platform_outbox_events SET status = 'DONE', processed_at = now() - interval '10 days' WHERE id = $1`, [oldDone]);
@@ -206,6 +235,25 @@ describe('platform outbox and the worker role', () => {
   });
 
   describe('privileges', () => {
+    it('app_platform, the BYPASSRLS login of the API, cannot read the outbox or its tokens', async () => {
+      await enqueue({ userId: 'u', token: 'must-not-leak' });
+      for (const table of PLATFORM_TABLES) {
+        expect(await sqlStateOf(() => db.platform.query(`SELECT * FROM ${table}`))).toBe(SqlState.insufficientPrivilege);
+      }
+      // It owns (and can read) the tenant outbox, so only the platform outbox functions are closed to it.
+      for (const call of [`claim_platform_outbox_events(10)`, `enqueue_platform_event('email.password_reset', '{}')`]) {
+        expect(await sqlStateOf(() => db.platform.query(`SELECT * FROM ${call}`))).toBe(SqlState.insufficientPrivilege);
+      }
+    });
+
+    it('a temporary table cannot shadow the whitelist inside enqueue_platform_event', async () => {
+      const attack = () =>
+        withoutContext(db.runtime, async (client) => {
+          await client.query(`CREATE TEMP TABLE platform_event_types (type text, description text)`);
+        });
+      expect(await sqlStateOf(attack)).toBe(SqlState.insufficientPrivilege);
+    });
+
     it('app_worker has exactly the table and column privileges of app_runtime', async () => {
       const { rows } = await db.owner.query<{ object: string }>(`
         SELECT c.relname || '.' || p.privilege AS object

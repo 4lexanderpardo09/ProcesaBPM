@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { connectTestDatabase, type TestDatabase } from './support/database.js';
+import { connectTestDatabase, SqlState, sqlStateOf, type TestDatabase } from './support/database.js';
 
 /**
  * Guards for future migrations: they fail as soon as a new table or foreign key
@@ -76,15 +76,49 @@ describe('schema conventions', () => {
     expect(rows.map((row) => row.table_name)).toEqual([]);
   });
 
-  it('runs every SECURITY DEFINER function as app_platform with a fixed search_path', async () => {
+  it('runs every SECURITY DEFINER function as a platform owner with a fixed search_path', async () => {
+    // app_platform owns the general ones; app_outbox_owner owns those that touch the platform outbox, so
+    // that the BYPASSRLS login of app_platform cannot read the tokens in it. pg_temp may only come last.
     const { rows } = await db.owner.query<{ fn: string }>(`
       SELECT p.proname AS fn FROM pg_proc p
       WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef
-        AND (pg_get_userbyid(p.proowner) <> 'app_platform'
-             OR NOT coalesce(p.proconfig::text[] @> ARRAY['search_path=public'], false))
+        AND (pg_get_userbyid(p.proowner) NOT IN ('app_platform', 'app_outbox_owner')
+             OR NOT coalesce(p.proconfig::text[] && ARRAY['search_path=public', 'search_path=public, pg_temp'], false))
     `);
 
     expect(rows.map((row) => row.fn)).toEqual([]);
+  });
+
+  it('only app_outbox_owner owns the functions that touch the platform outbox', async () => {
+    const { rows } = await db.owner.query<{ fn: string }>(`
+      SELECT p.proname AS fn FROM pg_proc p
+      WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND pg_get_userbyid(p.proowner) = 'app_outbox_owner'
+      ORDER BY 1
+    `);
+
+    expect(rows.map((row) => row.fn)).toEqual([
+      'claim_platform_outbox_events',
+      'complete_platform_outbox_event',
+      'enqueue_platform_event',
+      'fail_platform_outbox_event',
+      'purge_processed_platform_outbox_events',
+    ]);
+  });
+
+  it('ends the search_path of the new SECURITY DEFINER functions with pg_temp (temp tables cannot shadow real ones)', async () => {
+    const { rows } = await db.owner.query<{ fn: string }>(`
+      SELECT p.proname AS fn FROM pg_proc p
+      WHERE p.pronamespace = 'public'::regnamespace AND pg_get_userbyid(p.proowner) = 'app_outbox_owner'
+        AND NOT coalesce(p.proconfig::text[] @> ARRAY['search_path=public, pg_temp'], false)
+    `);
+
+    expect(rows.map((row) => row.fn)).toEqual([]);
+  });
+
+  it('does not let the application roles create temporary tables', async () => {
+    for (const pool of [db.runtime, db.platform, db.worker]) {
+      expect(await sqlStateOf(() => pool.query('CREATE TEMP TABLE shadow (id int)'))).toBe(SqlState.insufficientPrivilege);
+    }
   });
 
   it('gives the application roles no privilege on the platform-only tables', async () => {
@@ -104,9 +138,21 @@ describe('schema conventions', () => {
     expect(rows.map((row) => row.grant)).toEqual([]);
   });
 
+  it('gives app_platform (a BYPASSRLS login) no privilege on the platform outbox, so it cannot read the reset tokens', async () => {
+    const { rows } = await db.owner.query<{ grant: string }>(`
+      SELECT p.privilege || ' on ' || c.relname AS grant
+      FROM pg_class c
+      CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) AS p(privilege)
+      WHERE c.relnamespace = 'public'::regnamespace AND c.relname IN ('platform_outbox_events', 'platform_event_types')
+        AND has_table_privilege('app_platform', c.oid, p.privilege)
+    `);
+
+    expect(rows.map((row) => row.grant)).toEqual([]);
+  });
+
   it('keeps the application roles without BYPASSRLS', async () => {
     const { rows } = await db.owner.query<{ rolname: string }>(
-      `SELECT rolname FROM pg_roles WHERE rolname IN ('app_runtime', 'app_worker') AND rolbypassrls`,
+      `SELECT rolname FROM pg_roles WHERE rolname IN ('app_runtime', 'app_worker', 'app_outbox_owner') AND rolbypassrls`,
     );
 
     expect(rows).toEqual([]);

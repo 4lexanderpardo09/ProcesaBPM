@@ -6,6 +6,11 @@
 --     fails events, through SECURITY DEFINER functions.
 --   * app_worker: NOLOGIN, no BYPASSRLS. It inherits app_runtime's table privileges (one source of
 --     truth) and is the only role that may claim outbox events of any kind.
+--   * app_outbox_owner: NOLOGIN owner of the platform outbox tables and of the functions that touch
+--     them. app_platform (BYPASSRLS, whose login the API and platform jobs hold) gets NO privilege on
+--     them, otherwise anyone holding that login could read the clear reset tokens.
+--   * TEMP is revoked from PUBLIC: a temporary table shadows a real one inside a SECURITY DEFINER
+--     function unless search_path ends with pg_temp (new functions do that; this protects the old ones).
 
 DO $$
 BEGIN
@@ -18,6 +23,21 @@ $$;
 -- Same table privileges as app_runtime by inheritance, without being able to SET ROLE into it.
 GRANT app_runtime TO app_worker WITH INHERIT TRUE, SET FALSE;
 GRANT USAGE ON SCHEMA public TO app_worker;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_outbox_owner') THEN
+    CREATE ROLE app_outbox_owner NOLOGIN NOBYPASSRLS;
+  END IF;
+END
+$$;
+GRANT USAGE ON SCHEMA public TO app_outbox_owner;
+
+DO $$
+BEGIN
+  EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database());
+END
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Whitelist of platform event types (add a row to allow a new type).
@@ -48,16 +68,19 @@ CREATE INDEX platform_outbox_events_type_idx ON platform_outbox_events (type);
 -- A claimed event (PROCESSING) keeps its lease expiry in available_at, so it is also "due" when the lease ends.
 CREATE INDEX platform_outbox_events_due ON platform_outbox_events (available_at) WHERE status IN ('PENDING', 'PROCESSING');
 
--- Default privileges give every new table to app_runtime: take them away explicitly.
-REVOKE ALL ON platform_outbox_events, platform_event_types FROM PUBLIC, app_runtime, app_worker;
+-- Default privileges give every new table to app_runtime and app_platform: take them away explicitly.
+-- The owner role keeps its implicit rights; the SECURITY DEFINER functions below run as it.
+ALTER TABLE platform_event_types OWNER TO app_outbox_owner;
+ALTER TABLE platform_outbox_events OWNER TO app_outbox_owner;
+REVOKE ALL ON platform_outbox_events, platform_event_types FROM PUBLIC, app_runtime, app_worker, app_platform;
 
 -- ---------------------------------------------------------------------------
--- Functions (SECURITY DEFINER, owner app_platform, fixed search_path)
+-- Functions (SECURITY DEFINER, owner app_outbox_owner, search_path ending in pg_temp)
 -- ---------------------------------------------------------------------------
 
 -- The API's only door: a whitelisted type and a small JSON object. No tenant or user context needed.
 CREATE FUNCTION enqueue_platform_event(p_type text, p_payload jsonb) RETURNS uuid
-  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
   DECLARE
     v_id uuid;
@@ -78,11 +101,11 @@ CREATE FUNCTION claim_platform_outbox_events(
   p_lease interval DEFAULT interval '5 minutes',
   p_max_attempts integer DEFAULT 10
 ) RETURNS SETOF platform_outbox_events
-  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
   BEGIN
     UPDATE platform_outbox_events
-    SET status = 'FAILED', last_error = 'lease expired after the maximum number of attempts'
+    SET status = 'FAILED', last_error = 'lease expired after the maximum number of attempts', payload = payload - 'token'
     WHERE status = 'PROCESSING' AND available_at <= now() AND attempts >= p_max_attempts;
 
     RETURN QUERY
@@ -101,7 +124,7 @@ CREATE FUNCTION claim_platform_outbox_events(
 
 -- Marks the event as done and removes secrets from the payload. False when the claim is stale.
 CREATE FUNCTION complete_platform_outbox_event(p_id uuid, p_attempt integer) RETURNS boolean
-  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public
+  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
     WITH updated AS (
       UPDATE platform_outbox_events
@@ -112,17 +135,25 @@ CREATE FUNCTION complete_platform_outbox_event(p_id uuid, p_attempt integer) RET
     SELECT EXISTS (SELECT 1 FROM updated)
   $$;
 
--- Gives the event back for a retry at p_retry_at, or marks it FAILED when p_retry_at is NULL.
-CREATE FUNCTION fail_platform_outbox_event(p_id uuid, p_attempt integer, p_error text, p_retry_at timestamptz)
-  RETURNS boolean
-  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public
+-- Gives the event back for a retry at p_retry_at, or marks it FAILED when p_retry_at is NULL or when
+-- this was the last allowed attempt (an event that can never be claimed again must not stay PENDING).
+-- A terminal FAILED removes the token from the payload.
+CREATE FUNCTION fail_platform_outbox_event(
+  p_id uuid,
+  p_attempt integer,
+  p_error text,
+  p_retry_at timestamptz,
+  p_max_attempts integer DEFAULT 10
+) RETURNS boolean
+  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
     WITH updated AS (
       UPDATE platform_outbox_events
-      SET status = CASE WHEN p_retry_at IS NULL THEN 'FAILED'::outbox_status ELSE 'PENDING'::outbox_status END,
-          available_at = coalesce(p_retry_at, available_at),
+      SET status = CASE WHEN p_retry_at IS NULL OR p_attempt >= p_max_attempts
+                        THEN 'FAILED'::outbox_status ELSE 'PENDING'::outbox_status END,
+          available_at = CASE WHEN p_retry_at IS NULL OR p_attempt >= p_max_attempts THEN available_at ELSE p_retry_at END,
           last_error = left(p_error, 2000),
-          payload = CASE WHEN p_retry_at IS NULL THEN payload - 'token' ELSE payload END
+          payload = CASE WHEN p_retry_at IS NULL OR p_attempt >= p_max_attempts THEN payload - 'token' ELSE payload END
       WHERE id = p_id AND status = 'PROCESSING' AND attempts = p_attempt
       RETURNING 1
     )
@@ -130,26 +161,30 @@ CREATE FUNCTION fail_platform_outbox_event(p_id uuid, p_attempt integer, p_error
   $$;
 
 -- Retention: sibling of purge_processed_outbox_events (same signature style, platform table).
+-- DONE events by their processing date; FAILED ones (which have none) by their creation date.
 CREATE FUNCTION purge_processed_platform_outbox_events(p_older_than interval) RETURNS bigint
-  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public
+  LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
     WITH deleted AS (
-      DELETE FROM platform_outbox_events WHERE status = 'DONE' AND processed_at < now() - p_older_than RETURNING 1
+      DELETE FROM platform_outbox_events
+      WHERE (status = 'DONE' AND processed_at < now() - p_older_than)
+         OR (status = 'FAILED' AND created_at < now() - p_older_than)
+      RETURNING 1
     )
     SELECT count(*) FROM deleted
   $$;
 
-ALTER FUNCTION enqueue_platform_event(text, jsonb) OWNER TO app_platform;
-ALTER FUNCTION claim_platform_outbox_events(integer, interval, integer) OWNER TO app_platform;
-ALTER FUNCTION complete_platform_outbox_event(uuid, integer) OWNER TO app_platform;
-ALTER FUNCTION fail_platform_outbox_event(uuid, integer, text, timestamptz) OWNER TO app_platform;
-ALTER FUNCTION purge_processed_platform_outbox_events(interval) OWNER TO app_platform;
+ALTER FUNCTION enqueue_platform_event(text, jsonb) OWNER TO app_outbox_owner;
+ALTER FUNCTION claim_platform_outbox_events(integer, interval, integer) OWNER TO app_outbox_owner;
+ALTER FUNCTION complete_platform_outbox_event(uuid, integer) OWNER TO app_outbox_owner;
+ALTER FUNCTION fail_platform_outbox_event(uuid, integer, text, timestamptz, integer) OWNER TO app_outbox_owner;
+ALTER FUNCTION purge_processed_platform_outbox_events(interval) OWNER TO app_outbox_owner;
 
 REVOKE ALL ON FUNCTION
   enqueue_platform_event(text, jsonb),
   claim_platform_outbox_events(integer, interval, integer),
   complete_platform_outbox_event(uuid, integer),
-  fail_platform_outbox_event(uuid, integer, text, timestamptz),
+  fail_platform_outbox_event(uuid, integer, text, timestamptz, integer),
   purge_processed_platform_outbox_events(interval),
   claim_outbox_events(integer)
   FROM PUBLIC, app_runtime;
@@ -162,7 +197,8 @@ GRANT EXECUTE ON FUNCTION
   claim_outbox_events(integer),
   claim_platform_outbox_events(integer, interval, integer),
   complete_platform_outbox_event(uuid, integer),
-  fail_platform_outbox_event(uuid, integer, text, timestamptz)
+  fail_platform_outbox_event(uuid, integer, text, timestamptz, integer)
   TO app_worker;
 
+-- Retention is run by a platform job, which can call the purge but cannot read the table.
 GRANT EXECUTE ON FUNCTION purge_processed_platform_outbox_events(interval) TO app_platform;
