@@ -41,11 +41,9 @@ export class TicketQueryRepository {
 
   async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }) {
     const where = { AND: [{ tenantId, deletedAt: null }, ...filters] } as never;
-    const [rows, total] = await Promise.all([
-      tx.ticket.findMany({ where, select: SUMMARY, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], ...window }),
-      tx.ticket.count({ where }),
-    ]);
-    return { rows, total };
+    // One query after another: an interactive transaction has a single connection.
+    const rows = await tx.ticket.findMany({ where, select: SUMMARY, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], ...window });
+    return { rows, total: await tx.ticket.count({ where }) };
   }
 
   /** Whether the access filter lets the caller see the ticket. */

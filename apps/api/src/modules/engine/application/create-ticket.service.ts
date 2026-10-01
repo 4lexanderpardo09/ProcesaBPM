@@ -173,10 +173,8 @@ export class CreateTicketService {
 
   private async assertInitiator(tx: TenantTransaction, tenantId: string, start: StepDocument, requester: MemberRow, company: CompanyRow): Promise<void> {
     if (start.initiators.length === 0) return;
-    const [groupIds, siteAncestry] = await Promise.all([
-      this.people.activeGroupIdsOf(tx, tenantId, requester.userId),
-      requester.siteId === null ? Promise.resolve([]) : this.people.siteAncestry(tx, tenantId, requester.siteId),
-    ]);
+    const groupIds = await this.people.activeGroupIdsOf(tx, tenantId, requester.userId);
+    const siteAncestry = requester.siteId === null ? [] : await this.people.siteAncestry(tx, tenantId, requester.siteId);
     const allowed = isAllowedInitiator(start.initiators, {
       userId: requester.userId,
       positionId: requester.positionId,
