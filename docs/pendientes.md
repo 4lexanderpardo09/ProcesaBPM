@@ -48,7 +48,7 @@ Ya se creó la raíz del monorepo (`package.json`, `pnpm-workspace.yaml`, `tscon
 - `docker-compose` de desarrollo: PostgreSQL 18, MinIO, Redis y Mailpit.
 
 ### 1.3 Verificación técnica antes de escribir código
-- [x] Issue de Prisma [#30374](https://github.com/prisma/orm/issues/30374): **no se reproduce en 7.10.0** (2026-10-01); se fija la versión exacta 7.10.0, la prueba de concepto queda en el CI y el runner de transacciones verifica el contexto fijado. Detalle y regla para subir de versión en [base-de-datos.md §13.3](base-de-datos.md). No hay 8.0 RC en npm (solo `8.1.0-dev.*`).
+- [x] Issue de Prisma [#30374](https://github.com/prisma/orm/issues/30374): **no se reproduce en 7.10.0** (2026-10-01); se fija la versión exacta 7.10.0, la prueba de concepto queda en el CI y el runner de transacciones verifica el contexto fijado. Detalle y regla para subir de versión en [base-de-datos.md §13.3](base-de-datos.md). El 8.0 RC solo existe para el CLI (`prisma@8.0.0-rc.19`); el cliente y el adaptador no tienen versión 8.0.x en npm (solo `8.1.0-dev.*`), así que la prueba contra el 8.0 queda pendiente hasta que salga el 8.0 estable.
 - [x] Prueba de concepto de RLS con Prisma: `TenantTransactionRunner` (`set_config(..., true)` en la transacción) con pruebas de fuga entre dos tenants en paralelo, por HTTP y contra PostgreSQL real. **Pendiente:** repetirla detrás de PgBouncer en modo transacción cuando exista el despliegue.
 
 ## 2. Funciones con propuesta por defecto (confirmar sobre la marcha)
