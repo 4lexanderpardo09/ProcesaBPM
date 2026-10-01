@@ -1,3 +1,4 @@
+import type { WorkflowValidation } from '../workflow/problems.js';
 import type { ApproverNotFound } from '../contracts/approvals/types.js';
 
 export const ERROR_CODES = {
@@ -26,6 +27,7 @@ export const ERROR_CODES = {
   tenantNotFound: 'TENANT_NOT_FOUND',
   notFound: 'NOT_FOUND',
   approverNotFound: 'APPROVER_NOT_FOUND',
+  workflowNotPublishable: 'WORKFLOW_NOT_PUBLISHABLE',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -208,5 +210,12 @@ export class NotFoundError extends DomainError {
 export class ApproverNotFoundError extends DomainError {
   constructor(readonly outcome: ApproverNotFound) {
     super(ERROR_CODES.approverNotFound, `No approver found (${outcome.reason}) at level ${outcome.level}`, { details: outcome });
+  }
+}
+
+/** The draft has validation errors; nothing was published. `details` carries the whole list. */
+export class WorkflowNotPublishableError extends DomainError {
+  constructor(readonly validation: WorkflowValidation) {
+    super(ERROR_CODES.workflowNotPublishable, 'The workflow has errors and cannot be published', { details: validation });
   }
 }
