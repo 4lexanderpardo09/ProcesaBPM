@@ -86,4 +86,29 @@ describe('schema conventions', () => {
 
     expect(rows.map((row) => row.fn)).toEqual([]);
   });
+
+  it('gives the application roles no privilege on the platform-only tables', async () => {
+    const platformOnly = ['platform_admins', 'user_tokens', 'platform_outbox_events', 'platform_event_types'];
+    const { rows } = await db.owner.query<{ grant: string }>(
+      `
+      SELECT r.rolname || ' on ' || c.relname AS grant
+      FROM pg_class c
+      CROSS JOIN (VALUES ('app_runtime'), ('app_worker')) AS r(rolname)
+      CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) AS p(privilege)
+      WHERE c.relnamespace = 'public'::regnamespace AND c.relname = ANY($1)
+        AND has_table_privilege(r.rolname, c.oid, p.privilege)
+      `,
+      [platformOnly],
+    );
+
+    expect(rows.map((row) => row.grant)).toEqual([]);
+  });
+
+  it('keeps the application roles without BYPASSRLS', async () => {
+    const { rows } = await db.owner.query<{ rolname: string }>(
+      `SELECT rolname FROM pg_roles WHERE rolname IN ('app_runtime', 'app_worker') AND rolbypassrls`,
+    );
+
+    expect(rows).toEqual([]);
+  });
 });
