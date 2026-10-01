@@ -6,6 +6,14 @@ Actualizado: 2026-09-30. Las decisiones tomadas están en [analisis.md §0.1](an
 - **Base de datos completa** (2026-09-30): 89 tablas, RLS en 82, 252 FK compuestas e indexadas, 59 CHECK, 34 triggers de reglas de negocio, funciones de autenticación y retención, semilla del catálogo (planes aprobados, permisos, festivos) y **109 pruebas en verde**. La revisión de integridad ([revision-bd.md](revision-bd.md)) está aplicada completa. Referencia: [base-de-datos.md](base-de-datos.md).
 - Decisiones tomadas por defecto, que falta confirmar con el negocio: aprobadores distintos por empresa, regla de autoaprobación y reapertura como visita nueva (base-de-datos.md §13.2).
 
+- **`packages/shared`, primera parte** (2026-09-30): `engine/business-time` (vencimiento en horas o días hábiles y minutos hábiles, con calendario, franjas, festivos, zona horaria y pausas), `engine/conditions` (condiciones AND de transiciones) y `errors` (errores tipados + mapeo de SQLSTATE), con 130 pruebas unitarias.
+- **Reglas de `shared` decididas** (2026-09-30):
+  - Días de la semana `0 = domingo … 6 = sábado` en `calendar_working_hours.weekday`.
+  - SLA en días hábiles: el día de inicio es el día 0 y vence al final de la jornada del N-ésimo día hábil siguiente; un inicio fuera de horario arranca en la siguiente franja.
+  - Las pausas corren el vencimiento en minutos hábiles exactos (en días hábiles, el vencimiento deja de caer al final de la jornada).
+  - Condiciones: un campo vacío o ausente solo cumple `not_equals`; textos sin distinguir mayúsculas ni espacios; números escritos como texto se comparan como números; `YYYY-MM-DD` se compara por día y fecha con hora por instante.
+  - `mapDatabaseError` queda como está (lee `code`, `cause` y `meta.code`); se ajusta en la prueba de concepto de Prisma (§1.3). zod se agrega al crear `contracts/`.
+
 ## 1. Para poder empezar a construir
 
 ### 1.1 Alcance de la primera versión (MVP): **por definir juntos**

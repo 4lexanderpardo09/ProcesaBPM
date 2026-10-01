@@ -24,6 +24,7 @@ ProcesaBPM: SaaS multi-tenant de gestión de procesos, extraído del sistema de 
 
 ## Flujo de trabajo con git (obligatorio)
 - **Nunca se trabaja ni se hace push directo a `main`.** `main` siempre compila y tiene todas las pruebas en verde.
+- **En Claude Code en la nube:** cada sesión trabaja y sube a su rama asignada `claude/<nombre>`, una sesión por funcionalidad. Las ramas `feat/...` quedan para el trabajo local. Todo lo demás del flujo se mantiene (PR hacia `main`, sin mergear, squash al aprobar).
 - **Una rama por funcionalidad o corrección**, creada desde `main` actualizado y de vida corta (idealmente menos de 2–3 días de trabajo):
   - `feat/<modulo>-<descripcion>` (p. ej. `feat/api-auth-login`, `feat/web-workflow-builder-canvas`)
   - `fix/<descripcion>`, `refactor/<descripcion>`, `docs/<descripcion>`, `test/<descripcion>`, `chore/<descripcion>`
