@@ -34,6 +34,7 @@ export class TicketMutationApplier {
       openVisitId = await this.writes.insertVisit(tx, tenantId, ticket.id, visit);
       await this.writes.insertClocks(tx, tenantId, ticket, openVisitId, visit, clocks);
       await this.writes.insertAssignees(tx, tenantId, ticket.id, at, assignees);
+      if (mutation.arrival.parallelTasks.length > 0) await this.writes.insertParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop, mutation.arrival.parallelTasks);
     }
     if (mutation.ticket.kind === 'current') await this.writes.moveTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
     else if (mutation.ticket.kind === 'reopened') await this.writes.reopenTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);

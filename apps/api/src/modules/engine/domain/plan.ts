@@ -65,6 +65,8 @@ export interface ArrivalPlan {
   readonly visit: VisitPlan;
   readonly clocks: readonly ClockPlan[];
   readonly assignees: readonly AssigneePlan[];
+  /** People who each have a signature to give in a PARALLEL step (one `ticket_parallel_tasks` row each). */
+  readonly parallelTasks: readonly string[];
 }
 
 export interface FieldWrite {

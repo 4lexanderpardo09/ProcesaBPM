@@ -5,6 +5,7 @@ import { ArrivalPlanner } from './application/arrival-planner.js';
 import { AssignmentResolver } from './application/assignment-resolver.js';
 import { CloseTicketService } from './application/close-ticket.service.js';
 import { CreateTicketService } from './application/create-ticket.service.js';
+import { ParallelTaskService } from './application/parallel-task.service.js';
 import { ReopenTicketService } from './application/reopen-ticket.service.js';
 import { OpenIncidentService } from './application/open-incident.service.js';
 import { ResolveIncidentService } from './application/resolve-incident.service.js';
@@ -42,7 +43,8 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     OpenIncidentService,
     ResolveIncidentService,
     ReopenTicketService,
+    ParallelTaskService,
   ],
-  exports: [CreateTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService],
+  exports: [CreateTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService],
 })
 export class EngineModule {}

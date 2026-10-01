@@ -18,7 +18,7 @@ export function findEngineSupportProblems(doc: WorkflowVersionDocument): Workflo
     const at = { stepId: step.id };
     if (step.type === 'WAIT') error('NOT_IMPLEMENTED_WAIT_BLOCK', at);
     if (step.type === 'CALCULATOR') error('NOT_IMPLEMENTED_CALCULATOR_BLOCK', at);
-    if (step.assignmentMode === 'PARALLEL' || step.assignmentMode === 'RANDOM_DISPATCH') error('NOT_IMPLEMENTED_ASSIGNMENT_MODE', { ...at, params: { mode: step.assignmentMode } });
+    if (step.assignmentMode === 'RANDOM_DISPATCH') error('NOT_IMPLEMENTED_ASSIGNMENT_MODE', { ...at, params: { mode: step.assignmentMode } });
     if (step.deadlineType === 'CUTOFF') error('NOT_IMPLEMENTED_CUTOFF_DEADLINE', at);
   }
   for (const field of doc.fields) {

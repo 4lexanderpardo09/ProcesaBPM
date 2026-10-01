@@ -36,7 +36,8 @@ export const transitionTicketRequestSchema = z.object({
 });
 export type TransitionTicketRequest = z.infer<typeof transitionTicketRequestSchema>;
 
-export const reassignTicketRequestSchema = z.object({ toUserId: uuidSchema, visitId: uuidSchema, comment });
+/** On a PARALLEL step `fromUserId` says whose pending signature moves to `toUserId`. */
+export const reassignTicketRequestSchema = z.object({ toUserId: uuidSchema, visitId: uuidSchema, comment, fromUserId: uuidSchema.optional() });
 export type ReassignTicketRequest = z.infer<typeof reassignTicketRequestSchema>;
 
 export const takeTicketRequestSchema = z.object({ visitId: uuidSchema });
@@ -65,6 +66,10 @@ export const reopenTicketRequestSchema = z.object({
   description: z.string().trim().min(1).max(5000),
 });
 export type ReopenTicketRequest = z.infer<typeof reopenTicketRequestSchema>;
+
+/** Signing or rejecting one's own pending signature of a PARALLEL step; `assigneeId` is for a manual-selection step that follows. */
+export const parallelTaskActionRequestSchema = z.object({ visitId: uuidSchema, comment, assigneeId: uuidSchema.optional() });
+export type ParallelTaskActionRequest = z.infer<typeof parallelTaskActionRequestSchema>;
 
 export const listTicketsQuerySchema = pageQuerySchema.pick({ page: true, pageSize: true }).extend({
   view: z.enum(TICKET_VIEWS).default('assigned'),
@@ -105,6 +110,8 @@ export interface TicketDetailResponse extends TicketSummaryResponse {
   readonly openVisit: { readonly id: string; readonly stepId: string; readonly loop: number; readonly enteredAt: string; readonly dueAt: string | null } | null;
   readonly assignees: readonly TicketAssigneeResponse[];
   /** The incident that pauses the ticket, if any. */
+  /** The signatures of the current parallel step (empty on any other step). */
+  readonly parallelTasks: ReadonlyArray<{ readonly id: string; readonly userId: string; readonly status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'CANCELLED'; readonly completedAt: string | null }>;
   readonly openIncident: { readonly id: string; readonly assignedToId: string; readonly createdById: string; readonly openedAt: string; readonly descriptionHtml: string } | null;
   readonly values: Readonly<Record<string, unknown>>;
 }

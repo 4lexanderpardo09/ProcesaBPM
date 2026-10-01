@@ -34,7 +34,7 @@ describe('events of an arrival', () => {
       hops,
       step: step({ id: 'task' }),
       assigneeType: 'POOL',
-      plan: { visit: { stepId: 'task', loop: 2, enteredAt: new Date(), sla: { value: null, unit: null }, calendarId: null, dueAt: null }, clocks: [], assignees: [{ userId: 'a', type: 'POOL' }, { userId: 'b', type: 'POOL' }] },
+      plan: { visit: { stepId: 'task', loop: 2, enteredAt: new Date(), sla: { value: null, unit: null }, calendarId: null, dueAt: null }, clocks: [], assignees: [{ userId: 'a', type: 'POOL' }, { userId: 'b', type: 'POOL' }], parallelTasks: [] },
     };
     const events = arrivalEvents(arrival, 'actor', 1);
     expect(events.map((event) => event.type)).toEqual(['TRANSITIONED', 'TRANSITIONED', 'ASSIGNED', 'ASSIGNED']);

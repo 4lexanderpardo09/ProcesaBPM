@@ -46,6 +46,9 @@ export const ERROR_CODES = {
   staleTicket: 'STALE_TICKET',
   closeRequired: 'CLOSE_REQUIRED',
   incidentNotOpen: 'INCIDENT_NOT_OPEN',
+  parallelTaskNotPending: 'PARALLEL_TASK_NOT_PENDING',
+  rejectionNotAllowed: 'REJECTION_NOT_ALLOWED',
+  commentRequired: 'COMMENT_REQUIRED',
   ticketNotClosed: 'TICKET_NOT_CLOSED',
   invalidReopenStep: 'INVALID_REOPEN_STEP',
   invalidErrorType: 'INVALID_ERROR_TYPE',
@@ -399,5 +402,24 @@ export class InvalidReopenStepError extends DomainError {
 export class InvalidErrorTypeError extends DomainError {
   constructor() {
     super(ERROR_CODES.invalidErrorType, 'Choose an active error type meant for reopening');
+  }
+}
+
+export class ParallelTaskNotPendingError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.parallelTaskNotPending, 'The signature was already given, rejected or cancelled');
+  }
+}
+
+/** The parallel step has no "rejected" way out, so nobody can reject it. */
+export class RejectionNotAllowedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.rejectionNotAllowed, 'This step has no way out for a rejection');
+  }
+}
+
+export class CommentRequiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.commentRequired, 'A comment is required');
   }
 }

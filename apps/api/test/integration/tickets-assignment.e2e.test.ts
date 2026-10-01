@@ -332,7 +332,7 @@ describe('assignment, pool, reassignment', () => {
       // Published versions are immutable: simulate an old one by flipping a step the way an earlier engine allowed it.
       await db.owner.query(`ALTER TABLE steps DISABLE TRIGGER USER`);
       try {
-        await db.owner.query(`UPDATE steps SET assignment_mode = 'PARALLEL', type = 'TASK' WHERE id = $1`, [flow.step.task]);
+        await db.owner.query(`UPDATE steps SET assignment_mode = 'RANDOM_DISPATCH', dispatch_interval_min = 5 WHERE id = $1`, [flow.step.task]);
       } finally {
         await db.owner.query(`ALTER TABLE steps ENABLE TRIGGER USER`);
       }

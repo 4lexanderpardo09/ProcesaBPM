@@ -10,6 +10,8 @@ import {
   resolveIncidentRequestSchema,
   createTicketRequestSchema,
   type ListTicketsQuery,
+  type ParallelTaskActionRequest,
+  parallelTaskActionRequestSchema,
   type ReopenTicketRequest,
   reopenTicketRequestSchema,
   listTicketsQuerySchema,
@@ -30,6 +32,7 @@ import { RequireAnyPermission, RequirePermission } from '../../../common/auth/ro
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
+import { ParallelTaskService } from '../../engine/application/parallel-task.service.js';
 import { ReopenTicketService } from '../../engine/application/reopen-ticket.service.js';
 import { OpenIncidentService } from '../../engine/application/open-incident.service.js';
 import { ResolveIncidentService } from '../../engine/application/resolve-incident.service.js';
@@ -51,6 +54,7 @@ export class TicketsController {
     @Inject(ReassignTicketService) private readonly reassignment: ReassignTicketService,
     @Inject(TakeTicketService) private readonly taking: TakeTicketService,
     @Inject(CloseTicketService) private readonly closing: CloseTicketService,
+    @Inject(ParallelTaskService) private readonly parallelTasks: ParallelTaskService,
     @Inject(ReopenTicketService) private readonly reopening: ReopenTicketService,
     @Inject(OpenIncidentService) private readonly incidentOpening: OpenIncidentService,
     @Inject(ResolveIncidentService) private readonly incidentResolution: ResolveIncidentService,
@@ -133,6 +137,21 @@ export class TicketsController {
   @HttpCode(HttpStatus.OK)
   reopen(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(reopenTicketRequestSchema)) body: ReopenTicketRequest): Promise<TicketMutationResponse> {
     return this.reopening.reopen(this.actor(principal, ability), id, body);
+  }
+
+  /** Being the named signer is the authorization (checked against the signatures of the step); the permission only gets you to the route. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Post(':id/parallel-tasks/sign')
+  @HttpCode(HttpStatus.OK)
+  signParallelTask(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(parallelTaskActionRequestSchema)) body: ParallelTaskActionRequest): Promise<TicketMutationResponse> {
+    return this.parallelTasks.sign(this.actor(principal, ability), id, body);
+  }
+
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Post(':id/parallel-tasks/reject')
+  @HttpCode(HttpStatus.OK)
+  rejectParallelTask(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(parallelTaskActionRequestSchema)) body: ParallelTaskActionRequest): Promise<TicketMutationResponse> {
+    return this.parallelTasks.reject(this.actor(principal, ability), id, body);
   }
 
   private actor(principal: Principal, ability: AppAbility) {

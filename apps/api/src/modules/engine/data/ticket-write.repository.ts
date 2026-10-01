@@ -42,6 +42,12 @@ export interface OpenClockRow {
   readonly pausedMinutes: number;
 }
 
+export interface ParallelTaskRow {
+  readonly id: string;
+  readonly userId: string;
+  readonly status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'CANCELLED';
+}
+
 export interface IncidentRow {
   readonly id: string;
   readonly stepId: string;
@@ -167,6 +173,30 @@ export class TicketWriteRepository {
     return created.id;
   }
 
+  async insertParallelTasks(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number, userIds: readonly string[]): Promise<void> {
+    await tx.ticketParallelTask.createMany({ data: userIds.map((userId) => ({ tenantId, ticketId, stepId, loop, userId })) });
+  }
+
+  findParallelTasks(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<ParallelTaskRow[]> {
+    return tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId, loop }, select: { id: true, userId: true, status: true }, orderBy: { id: 'asc' } });
+  }
+
+  /** The task leaves PENDING: a database trigger then removes the signer's PARALLEL assignee row. */
+  async completeParallelTask(tx: TenantTransaction, tenantId: string, taskId: string, status: 'SIGNED' | 'REJECTED' | 'CANCELLED', completedAt: Date, comment: string | null): Promise<void> {
+    await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { status, completedAt, comment } });
+  }
+
+  async moveParallelTask(tx: TenantTransaction, tenantId: string, taskId: string, toUserId: string): Promise<void> {
+    await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { userId: toUserId } });
+  }
+
+  /** How many tickets each person holds right now (to spread positions' signatures). */
+  async assignmentLoads(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, number>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await tx.ticketAssignee.groupBy({ by: ['userId'], where: { tenantId, userId: { in: [...userIds] } }, _count: { _all: true } });
+    return new Map(rows.map((row) => [row.userId, row._count._all]));
+  }
+
   /** The clocks of the visit that are running stand still from `at`. */
   async pauseClocks(tx: TenantTransaction, tenantId: string, visitId: string, at: Date): Promise<void> {
     await tx.ticketSlaClock.updateMany({ where: { tenantId, visitId, completedAt: null, pausedAt: null }, data: { pausedAt: at } });
@@ -245,8 +275,8 @@ export class TicketWriteRepository {
     return (await tx.ticketEvent.count({ where: { tenantId, ticketId, assigneeId: userId, type: { in: ['ASSIGNED', 'REASSIGNED'] } } })) > 0;
   }
 
-  async deleteAssignees(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<void> {
-    await tx.ticketAssignee.deleteMany({ where: { tenantId, ticketId } });
+  async deleteAssignees(tx: TenantTransaction, tenantId: string, ticketId: string, userId?: string): Promise<void> {
+    await tx.ticketAssignee.deleteMany({ where: { tenantId, ticketId, ...(userId === undefined ? {} : { userId }) } });
   }
 
   async insertAssignees(tx: TenantTransaction, tenantId: string, ticketId: string, assignedAt: Date, assignees: readonly AssigneePlan[]): Promise<void> {

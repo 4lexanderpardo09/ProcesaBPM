@@ -35,6 +35,8 @@ export interface StepSpec {
   readonly extra?: Record<string, unknown>;
   readonly candidates?: ReadonlyArray<Record<string, unknown>>;
   readonly initiators?: ReadonlyArray<Record<string, unknown>>;
+  /** Signers of a PARALLEL step. */
+  readonly signers?: ReadonlyArray<Record<string, unknown>>;
   readonly slaOverrides?: ReadonlyArray<{ companyId: string; slaValue: number; slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' }>;
 }
 export interface TransitionSpec {
@@ -114,6 +116,7 @@ export async function publishVersion(admin: ApiClient, workflowId: string, versi
 
   for (const step of spec.steps) {
     if (step.candidates !== undefined) await admin.put(`${base}/steps/${id(step.key)}/candidates`, { candidates: step.candidates }).expect(200);
+    if (step.signers !== undefined) await admin.put(`${base}/steps/${id(step.key)}/signers`, { signers: step.signers }).expect(200);
     if (step.initiators !== undefined) await admin.put(`${base}/steps/${id(step.key)}/initiators`, { initiators: step.initiators }).expect(200);
     if (step.slaOverrides !== undefined) await admin.put(`${base}/steps/${id(step.key)}/sla-overrides`, { overrides: step.slaOverrides }).expect(200);
   }

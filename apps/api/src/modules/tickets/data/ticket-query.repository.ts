@@ -29,6 +29,7 @@ const DETAIL = {
   closedById: true,
   assignees: { select: { userId: true, type: true, assignedAt: true }, orderBy: { userId: 'asc' } },
   stepVisits: { where: { exitedAt: null }, select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true }, take: 1 },
+  parallelTasks: { select: { id: true, userId: true, status: true, completedAt: true, stepId: true, loop: true }, orderBy: { id: 'asc' } },
   incidents: { where: { status: 'OPEN' }, select: { id: true, assignedToId: true, createdById: true, openedAt: true, description: true }, take: 1 },
   fieldValues: { select: { value: true, field: { select: { code: true } } } },
 } as const;

@@ -32,7 +32,7 @@ export interface ArrivalRequest {
 
 export type Arrival =
   | { readonly kind: 'END'; readonly hops: readonly RouteHop[]; readonly endStepId: string }
-  | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly plan: ArrivalPlan; readonly assigneeType: 'PRIMARY' | 'POOL' };
+  | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly plan: ArrivalPlan; readonly assigneeType: 'PRIMARY' | 'POOL' | 'PARALLEL' };
 
 const SIDE_EFFECT_OUTBOX: Readonly<Record<string, string>> = { DOCUMENT: 'block.document', NOTIFICATION: 'block.notification', WEBHOOK: 'block.webhook', EXPORT: 'block.export' };
 
@@ -67,6 +67,11 @@ export class ArrivalPlanner {
     @Inject(TicketWriteRepository) private readonly tickets: TicketWriteRepository,
   ) {}
 
+  private async signers(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
+    const userIds = await this.resolver.signersFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, at: request.at });
+    return { type: 'PARALLEL' as const, userIds };
+  }
+
   private async decide(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
     const candidates = await this.resolver.candidatesFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, at: request.at });
     return decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: request.chosenAssigneeId });
@@ -80,7 +85,8 @@ export class ArrivalPlanner {
     const previousLoops = request.ticketId === null ? [] : await this.tickets.loopsOf(tx, request.tenantId, request.ticketId, step.id);
     const loop = request.ignoreMaxLoops === true ? nextReopenLoop(previousLoops) : nextLoop(previousLoops, step.maxLoops, step.id);
     const sla = openSla(slaTermsOf(step, request.companyId), request.calendar?.calendar ?? null, request.at);
-    const decision = request.holders !== undefined && request.holders.length > 0 ? ({ type: 'PRIMARY', userIds: request.holders } as const) : await this.decide(tx, request, step);
+    const decision: { type: 'PRIMARY' | 'POOL' | 'PARALLEL'; userIds: readonly string[] } =
+      request.holders !== undefined && request.holders.length > 0 ? { type: 'PRIMARY', userIds: request.holders } : step.assignmentMode === 'PARALLEL' ? await this.signers(tx, request, step) : await this.decide(tx, request, step);
 
     const clockBase = { startedAt: request.at, sla: { value: sla.value, unit: sla.unit }, calendarId: request.calendar?.id ?? null, dueAt: sla.dueAt };
     const clocks: ClockPlan[] = decision.type === 'POOL' ? [{ ...clockBase, responsibleId: null }] : decision.userIds.map((userId) => ({ ...clockBase, responsibleId: userId }));
@@ -93,6 +99,7 @@ export class ArrivalPlanner {
         visit: { stepId: step.id, loop, enteredAt: request.at, sla: { value: sla.value, unit: sla.unit }, calendarId: request.calendar?.id ?? null, dueAt: sla.dueAt },
         clocks,
         assignees: decision.userIds.map((userId) => ({ userId, type: decision.type })),
+        parallelTasks: decision.type === 'PARALLEL' ? decision.userIds : [],
       },
     };
   }
