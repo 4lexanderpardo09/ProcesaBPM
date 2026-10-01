@@ -33,6 +33,10 @@ describe('decideAssignees', () => {
   });
 
   it('fails without candidates', () => expect(() => run({ candidates: [] })).toThrow(NoAssigneeCandidatesError));
-  it.each(['PARALLEL', 'RANDOM_DISPATCH'] as const)('%s is not implemented', (mode) => expect(() => run({ mode })).toThrow(NotImplementedError));
+  it('PARALLEL steps resolve signers elsewhere: the candidate policy refuses them', () => expect(() => run({ mode: 'PARALLEL' })).toThrow(NotImplementedError));
+  it('RANDOM_DISPATCH leaves the ticket waiting, but only if there is somebody to hand it to', () => {
+    expect(run({ mode: 'RANDOM_DISPATCH' })).toEqual({ type: 'DISPATCH', userIds: [] });
+    expect(() => run({ mode: 'RANDOM_DISPATCH', candidates: [] })).toThrow(NoAssigneeCandidatesError);
+  });
   it('NONE has no assignees', () => expect(() => run({ mode: 'NONE' })).toThrow(InvalidStateError));
 });

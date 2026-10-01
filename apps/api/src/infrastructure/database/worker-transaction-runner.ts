@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@procesabpm/db';
+import { InvalidTenantContextError, isUuid } from '@procesabpm/shared';
 import type { AppConfig } from '../../config/app-config.js';
 import { APP_CONFIG } from '../../config/tokens.js';
 import { applyDatabaseScope } from './database-scope.js';
@@ -19,6 +20,21 @@ export class WorkerTransactionRunner {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
+
+  /**
+   * One tenant's data from a job that has no user: `app.tenant_id` is that tenant (RLS applies as for any request) and
+   * `app.user_id` is explicitly empty. The tenant comes from a worker function that read it from the tenant's own rows.
+   */
+  withTenant<T>(tenantId: string, work: (tx: WorkerTransaction) => Promise<T>): Promise<T> {
+    if (!isUuid(tenantId)) return Promise.reject(new InvalidTenantContextError());
+    return this.prisma.$transaction(
+      async (tx) => {
+        await applyDatabaseScope(tx, { tenantId, userId: '' });
+        return work(tx);
+      },
+      { timeout: this.config.DB_TX_TIMEOUT_MS, maxWait: this.config.DB_TX_MAX_WAIT_MS },
+    );
+  }
 
   withoutTenant<T>(work: (tx: WorkerTransaction) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(

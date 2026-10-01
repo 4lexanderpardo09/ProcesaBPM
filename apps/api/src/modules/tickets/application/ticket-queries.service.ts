@@ -40,6 +40,7 @@ const toDetail = (row: DetailRow): TicketDetailResponse => {
     currentLoop: row.currentLoop,
     closedById: row.closedById,
     openVisit: visit === undefined ? null : { id: visit.id, stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt.toISOString(), dueAt: visit.dueAt?.toISOString() ?? null },
+    awaitingDispatch: row.status === 'OPEN' && row.assignees.length === 0,
     parallelTasks: row.parallelTasks.filter((task) => task.stepId === row.currentStepId && task.loop === row.currentLoop).map((task) => ({ id: task.id, userId: task.userId, status: task.status, completedAt: task.completedAt?.toISOString() ?? null })),
     openIncident: row.incidents[0] === undefined ? null : { id: row.incidents[0].id, assignedToId: row.incidents[0].assignedToId, createdById: row.incidents[0].createdById, openedAt: row.incidents[0].openedAt.toISOString(), descriptionHtml: row.incidents[0].description },
     assignees: row.assignees.map((assignee) => ({ userId: assignee.userId, type: assignee.type, assignedAt: assignee.assignedAt.toISOString() })),

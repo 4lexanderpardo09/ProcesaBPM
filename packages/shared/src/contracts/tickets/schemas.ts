@@ -110,6 +110,8 @@ export interface TicketDetailResponse extends TicketSummaryResponse {
   readonly openVisit: { readonly id: string; readonly stepId: string; readonly loop: number; readonly enteredAt: string; readonly dueAt: string | null } | null;
   readonly assignees: readonly TicketAssigneeResponse[];
   /** The incident that pauses the ticket, if any. */
+  /** Open and with nobody holding it: it waits for the dispatch worker to hand it to someone. */
+  readonly awaitingDispatch: boolean;
   /** The signatures of the current parallel step (empty on any other step). */
   readonly parallelTasks: ReadonlyArray<{ readonly id: string; readonly userId: string; readonly status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'CANCELLED'; readonly completedAt: string | null }>;
   readonly openIncident: { readonly id: string; readonly assignedToId: string; readonly createdById: string; readonly openedAt: string; readonly descriptionHtml: string } | null;

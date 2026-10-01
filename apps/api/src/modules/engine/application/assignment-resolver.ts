@@ -83,7 +83,8 @@ export class AssignmentResolver {
         return this.single(tx, ticket, ticket.creatorId);
       case 'APPROVER':
         return this.single(tx, ticket, await this.approverOf(tx, step, ticket));
-      case 'POOL': {
+      case 'POOL':
+      case 'RANDOM_DISPATCH': {
         const positions = [...participantIds(step, 'POSITION'), ...(step.positionId === null ? [] : [step.positionId])];
         return [
           ...(await this.candidates.byUsers(tx, tenantId, participantIds(step, 'USER'))),
