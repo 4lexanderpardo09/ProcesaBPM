@@ -1,0 +1,27 @@
+import { inject } from 'vitest';
+import { afterAll, beforeAll } from 'vitest';
+
+const VARIABLES = ['NODE_ENV', 'PORT', 'LOG_LEVEL', 'DATABASE_URL', 'PLATFORM_DATABASE_URL'] as const;
+
+/** Points the application configuration at the test database for the duration of a test file. */
+export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[number], string>> = {}): void {
+  const original = Object.fromEntries(VARIABLES.map((name) => [name, process.env[name]]));
+
+  beforeAll(() => {
+    Object.assign(process.env, {
+      NODE_ENV: 'test',
+      PORT: '3000',
+      LOG_LEVEL: 'error',
+      DATABASE_URL: inject('runtimeUrl'),
+      PLATFORM_DATABASE_URL: inject('platformUrl'),
+      ...overrides,
+    });
+  });
+
+  afterAll(() => {
+    for (const name of VARIABLES) {
+      if (original[name] === undefined) delete process.env[name];
+      else process.env[name] = original[name];
+    }
+  });
+}
