@@ -9,7 +9,7 @@ import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 
 @Module({
-  imports: [ConfigModule, LoggingModule, BackgroundModule, DatabaseModule, HealthModule, AuthModule],
+  imports: [ConfigModule.forEntry('api'), LoggingModule, BackgroundModule, DatabaseModule, HealthModule, AuthModule],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

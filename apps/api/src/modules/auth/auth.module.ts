@@ -15,7 +15,7 @@ import { SessionService } from './application/session.service.js';
 import { TenantAccessService } from './application/tenant-access.service.js';
 import { TenantSelectionService } from './application/tenant-selection.service.js';
 import { CredentialsRepository } from './data/credentials.repository.js';
-import { OutboxRepository } from './data/outbox.repository.js';
+import { PlatformOutboxRepository } from './data/platform-outbox.repository.js';
 import { ProfileRepository } from './data/profile.repository.js';
 import { SessionRepository } from './data/session.repository.js';
 import { TenantAccessRepository } from './data/tenant-access.repository.js';
@@ -35,7 +35,7 @@ import { AuthController } from './http/auth.controller.js';
     SessionRepository,
     TenantAccessRepository,
     ProfileRepository,
-    OutboxRepository,
+    PlatformOutboxRepository,
     TenantAccessService,
     SessionService,
     LoginService,

@@ -9,6 +9,7 @@ const valid = {
   PLATFORM_DATABASE_URL: 'postgres://platform:secret@localhost:5432/procesabpm',
   JWT_SECRET: 'a-test-secret-of-at-least-32-bytes!!',
 };
+const workerUrl = 'postgresql://worker:secret@localhost:5432/procesabpm';
 
 describe('loadConfig', () => {
   it('parses a complete environment and fills the documented defaults', () => {
@@ -38,6 +39,34 @@ describe('loadConfig', () => {
     expect(error.problems).toEqual([expect.stringContaining('TRUST_PROXY')]);
   });
 
+  describe('entry points', () => {
+    it('the API needs DATABASE_URL and ignores WORKER_DATABASE_URL', () => {
+      const { DATABASE_URL: _removed, ...withoutUrl } = valid;
+      expect(catchError(() => loadConfig(withoutUrl)).problems).toEqual(['DATABASE_URL is required']);
+      expect(loadConfig({ ...valid, WORKER_DATABASE_URL: workerUrl }).DATABASE_URL).toBe(valid.DATABASE_URL);
+    });
+
+    it('the worker connects with WORKER_DATABASE_URL, never with the API login', () => {
+      const config = loadConfig({ ...valid, WORKER_DATABASE_URL: workerUrl }, 'worker');
+      expect(config.DATABASE_URL).toBe(workerUrl);
+      expect(config).not.toHaveProperty('WORKER_DATABASE_URL');
+    });
+
+    it('the worker refuses to start without WORKER_DATABASE_URL, even if DATABASE_URL is set', () => {
+      expect(catchError(() => loadConfig(valid, 'worker')).problems).toEqual(['WORKER_DATABASE_URL is required']);
+    });
+
+    it('the worker does not need DATABASE_URL', () => {
+      const { DATABASE_URL: _removed, ...withoutUrl } = valid;
+      expect(loadConfig({ ...withoutUrl, WORKER_DATABASE_URL: workerUrl }, 'worker').DATABASE_URL).toBe(workerUrl);
+    });
+
+    it('rejects a worker URL that is not PostgreSQL', () => {
+      const error = catchError(() => loadConfig({ ...valid, WORKER_DATABASE_URL: 'mysql://x/y' }, 'worker'));
+      expect(error.problems).toEqual([expect.stringContaining('WORKER_DATABASE_URL')]);
+    });
+  });
+
   it('reads the database tuning variables', () => {
     const config = loadConfig({ ...valid, DB_TX_TIMEOUT_MS: '20000', DB_TX_MAX_WAIT_MS: '1000', DB_POOL_MAX: '25' });
     expect(config).toMatchObject({ DB_TX_TIMEOUT_MS: 20_000, DB_TX_MAX_WAIT_MS: 1_000, DB_POOL_MAX: 25 });
@@ -57,7 +86,7 @@ describe('loadConfig', () => {
     expect(error.problems[0]).toContain(variable);
   });
 
-  it.each(Object.keys(valid))('refuses to start without %s', (variable) => {
+  it.each(Object.keys(valid).filter((name) => name !== 'DATABASE_URL'))('refuses to start without %s', (variable) => {
     const env: Record<string, string | undefined> = { ...valid, [variable]: undefined };
     expect(() => loadConfig(env)).toThrow(new ConfigError([`${variable} is required`]));
   });
