@@ -28,5 +28,6 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.mfaNotImplemented]: { status: 501, message: 'Multi-factor authentication is not available yet' },
   [ERROR_CODES.rateLimited]: { status: 429, message: 'Too many requests' },
   [ERROR_CODES.validationFailed]: { status: 400, message: 'The request is not valid' },
+  [ERROR_CODES.missingCatalogPermission]: INTERNAL,
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },
 };

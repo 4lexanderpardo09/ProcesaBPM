@@ -18,6 +18,7 @@ export const ERROR_CODES = {
   rateLimited: 'RATE_LIMITED',
   validationFailed: 'VALIDATION_FAILED',
   tenantSuspended: 'TENANT_SUSPENDED',
+  missingCatalogPermission: 'MISSING_CATALOG_PERMISSION',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -160,5 +161,12 @@ export class ValidationFailedError extends DomainError {
 export class TenantSuspendedError extends DomainError {
   constructor() {
     super(ERROR_CODES.tenantSuspended, 'The organization is suspended');
+  }
+}
+
+/** A role template names a permission that is not in the catalog: a deployment problem, not the caller's. */
+export class MissingCatalogPermissionError extends DomainError {
+  constructor(readonly missing: readonly string[]) {
+    super(ERROR_CODES.missingCatalogPermission, `The permission catalog lacks: ${missing.join(', ')}`);
   }
 }
