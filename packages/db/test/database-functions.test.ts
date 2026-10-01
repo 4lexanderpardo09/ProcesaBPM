@@ -67,7 +67,7 @@ describe('database functions', () => {
   });
 
   describe('claim_outbox_events', () => {
-    it('claims pending events across tenants without handing the same event to two workers', async () => {
+    it('lets the worker role claim pending events across tenants without handing the same event to two workers', async () => {
       for (const { tenantId } of [tenantA, tenantB]) {
         await db.platform.query(
           `INSERT INTO outbox_events (tenant_id, type, payload)
@@ -77,7 +77,7 @@ describe('database functions', () => {
       }
 
       const claimBatch = () =>
-        withoutContext(db.runtime, async (client) => {
+        withoutContext(db.worker, async (client) => {
           const { rows } = await client.query<{ id: string; tenant_id: string }>('SELECT id, tenant_id FROM claim_outbox_events(4)');
           return rows;
         });

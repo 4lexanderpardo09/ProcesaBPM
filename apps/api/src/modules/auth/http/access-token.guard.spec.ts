@@ -1,9 +1,9 @@
 import type { ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { UnauthenticatedError } from '@procesabpm/shared';
+import { PermissionDeniedError, UnauthenticatedError } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedRequest } from '../../../common/auth/principal.js';
 import { Public } from '../../../common/auth/public.decorator.js';
+import { RequirePermission } from '../../../common/auth/route-access.js';
 import type { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import type { TenantAccessService } from '../application/tenant-access.service.js';
 import { AccessTokenGuard } from './access-token.guard.js';
@@ -18,13 +18,22 @@ class Routes {
   protectedRoute(): void {}
   @Public()
   publicRoute(): void {}
+  @Public()
+  @RequirePermission('read', 'Company')
+  conflictingRoute(): void {}
+}
+
+@Public()
+class PublicController {
+  @RequirePermission('read', 'Company')
+  protectedByMethod(): void {}
 }
 
 function setup(authorization?: string) {
   const verifyAccessToken = vi.fn().mockResolvedValue(claims);
-  const verify = vi.fn().mockResolvedValue(undefined);
+  const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, departmentId: null, siteId: null };
+  const verify = vi.fn().mockResolvedValue(access);
   const guard = new AccessTokenGuard(
-    new Reflector(),
     { verifyAccessToken } as unknown as JwtTokenService,
     { verify } as unknown as TenantAccessService,
   );
@@ -36,7 +45,14 @@ function setup(authorization?: string) {
       getClass: () => Routes,
       switchToHttp: () => ({ getRequest: () => request }),
     }) as unknown as ExecutionContext;
-  return { guard, request, context, verifyAccessToken, verify };
+  const conflictContext = () =>
+    ({
+      getType: () => 'http',
+      getHandler: () => PublicController.prototype.protectedByMethod,
+      getClass: () => PublicController,
+      switchToHttp: () => ({ getRequest: () => request }),
+    }) as unknown as ExecutionContext;
+  return { guard, request, context, conflictContext, verifyAccessToken, verify };
 }
 
 describe('AccessTokenGuard', () => {
@@ -44,6 +60,19 @@ describe('AccessTokenGuard', () => {
     const { guard, context, verifyAccessToken } = setup();
     await expect(guard.canActivate(context('publicRoute'))).resolves.toBe(true);
     expect(verifyAccessToken).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a route that is public and requires a permission', 'conflictingRoute'],
+  ] as const)('refuses %s instead of picking one', async (_label, handler) => {
+    const { guard, context, verifyAccessToken } = setup();
+    await expect(guard.canActivate(context(handler))).rejects.toBeInstanceOf(PermissionDeniedError);
+    expect(verifyAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('a class-level @Public never overrides a permission declared on the method', async () => {
+    const { guard, conflictContext } = setup();
+    await expect(guard.canActivate(conflictContext())).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it('denies a protected route without a token', async () => {
@@ -56,7 +85,14 @@ describe('AccessTokenGuard', () => {
     await expect(guard.canActivate(context('protectedRoute'))).resolves.toBe(true);
     expect(verifyAccessToken).toHaveBeenCalledWith('a.b.c');
     expect(verify).toHaveBeenCalledWith({ userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid });
-    expect(request.principal).toEqual({ userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid });
+    expect(request.principal).toEqual({
+      userId: claims.sub,
+      tenantId: claims.tid,
+      sessionId: claims.sid,
+      roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae',
+      roleActive: true,
+      membership: { departmentId: null, siteId: null },
+    });
   });
 
   it('does not set the principal when the database check fails', async () => {

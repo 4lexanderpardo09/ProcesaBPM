@@ -10,6 +10,7 @@ import { sha256Hex } from '../../src/infrastructure/security/token-utils.js';
 import { bearer, logIn, REFRESH_COOKIE_NAME, refreshCookieOf, refreshSetCookieOf, signIn } from '../support/auth-helpers.js';
 import { addMembership, inviteUser, seedUser, type TestUser } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
+import { grantEverything } from '../support/permission-fixtures.js';
 import { TenantProbeController } from '../support/test-controllers.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 
@@ -40,6 +41,7 @@ describe('sessions', () => {
   beforeAll(async () => {
     db = connectTestDatabase();
     [tenantA, tenantB] = [await seedTenant(db.platform), await seedTenant(db.platform)];
+    await Promise.all([grantEverything(db, tenantA), grantEverything(db, tenantB)]);
     ({ app } = await createTestApp({ controllers: [TenantProbeController] }));
   });
 

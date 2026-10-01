@@ -7,6 +7,8 @@ import type { AppConfig } from '../../src/config/app-config.js';
 import { APP_CONFIG } from '../../src/config/tokens.js';
 import { configureHttpApp } from '../../src/http-app.js';
 import { RATE_LIMITER, type RateLimiter } from '../../src/infrastructure/security/rate-limiter.js';
+import { SUBJECT_REGISTRY } from '../../src/modules/authorization/application/ability.service.js';
+import { testRegistry } from './test-subjects.js';
 
 export interface TestApp {
   readonly app: INestApplication;
@@ -27,7 +29,10 @@ export async function createTestApp({ controllers = [], rateLimiting = false }: 
   const logLines: string[] = [];
   let builder = Test.createTestingModule({ imports: [AppModule], controllers })
     .overrideProvider(LOG_WRITER)
-    .useValue((line: string) => logLines.push(line));
+    .useValue((line: string) => logLines.push(line))
+    // The fake subject stands in for the tickets module, which registers its own later.
+    .overrideProvider(SUBJECT_REGISTRY)
+    .useValue(testRegistry());
   if (!rateLimiting) builder = builder.overrideProvider(RATE_LIMITER).useValue(unlimited);
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();

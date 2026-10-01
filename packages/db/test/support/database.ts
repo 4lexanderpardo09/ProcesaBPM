@@ -11,6 +11,8 @@ export interface TestDatabase {
   runtime: pg.Pool;
   /** Connects as a member of `app_platform`: bypasses RLS, like provisioning jobs. */
   platform: pg.Pool;
+  /** Connects as a member of `app_worker`: RLS applies; it is the only role that claims outbox events. */
+  worker: pg.Pool;
   /** Connects as the schema owner (superuser in tests). */
   owner: pg.Pool;
   close(): Promise<void>;
@@ -19,14 +21,16 @@ export interface TestDatabase {
 export function connectTestDatabase(): TestDatabase {
   const runtime = new pg.Pool({ connectionString: inject('runtimeUrl'), max: 4 });
   const platform = new pg.Pool({ connectionString: inject('platformUrl'), max: 4 });
+  const worker = new pg.Pool({ connectionString: inject('workerUrl'), max: 4 });
   const owner = new pg.Pool({ connectionString: inject('ownerUrl'), max: 2 });
 
   return {
     runtime,
     platform,
+    worker,
     owner,
     async close() {
-      await Promise.all([runtime.end(), platform.end(), owner.end()]);
+      await Promise.all([runtime.end(), platform.end(), worker.end(), owner.end()]);
     },
   };
 }

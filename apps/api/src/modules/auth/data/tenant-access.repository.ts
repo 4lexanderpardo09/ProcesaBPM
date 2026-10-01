@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface TenantAccess {
+  readonly membership:
+    | { readonly roleId: string; readonly roleActive: boolean; readonly departmentId: string | null; readonly siteId: string | null }
+    | undefined;
   readonly userStatus: 'ACTIVE' | 'LOCKED' | 'DISABLED' | undefined;
   readonly membershipStatus: 'INVITED' | 'ACTIVE' | 'INACTIVE' | undefined;
   readonly tenantStatus: 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'DELETED' | undefined;
@@ -19,11 +22,19 @@ export class TenantAccessRepository {
   async findAccess(tx: TenantTransaction, tenantId: string, userId: string): Promise<TenantAccess> {
     const membership = await tx.membership.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
-      select: { status: true },
+      select: { status: true, roleId: true, departmentId: true, siteId: true, role: { select: { isActive: true } } },
     });
     const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { status: true } });
     const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true } });
-    return { userStatus: user?.status, membershipStatus: membership?.status, tenantStatus: tenant?.status };
+    return {
+      userStatus: user?.status,
+      membershipStatus: membership?.status,
+      tenantStatus: tenant?.status,
+      membership:
+        membership === null
+          ? undefined
+          : { roleId: membership.roleId, roleActive: membership.role.isActive, departmentId: membership.departmentId, siteId: membership.siteId },
+    };
   }
 
   async findSession(tx: TenantTransaction, sessionId: string): Promise<SessionState | undefined> {

@@ -11,9 +11,17 @@ export interface TestUser {
 }
 
 /** An active member of the tenant with a known password. */
-export async function seedUser(db: TestDatabase, tenant: SeededTenant, password = TEST_PASSWORD): Promise<TestUser> {
+export async function seedUser(
+  db: TestDatabase,
+  tenant: SeededTenant,
+  password = TEST_PASSWORD,
+  options: { roleId?: string; departmentId?: string } = {},
+): Promise<TestUser> {
   const userId = await seedMember(db.platform, tenant);
   await setPassword(db, userId, password);
+  if (options.roleId !== undefined) {
+    await db.platform.query('UPDATE memberships SET role_id = $1 WHERE tenant_id = $2 AND user_id = $3', [options.roleId, tenant.tenantId, userId]);
+  }
   return { userId, email: await emailOf(db, userId), password };
 }
 

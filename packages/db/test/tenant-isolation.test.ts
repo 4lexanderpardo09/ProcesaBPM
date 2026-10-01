@@ -9,6 +9,8 @@ const GLOBAL_TABLES = new Set([
   'permissions',
   'plans',
   'platform_admins',
+  'platform_event_types',
+  'platform_outbox_events',
   'platform_announcements',
 ]);
 

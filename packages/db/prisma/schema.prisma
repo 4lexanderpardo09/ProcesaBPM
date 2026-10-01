@@ -2464,6 +2464,35 @@ model OutboxEvent {
   @@map("outbox_events")
 }
 
+/// Types of platform events the API may enqueue (whitelist checked by enqueue_platform_event).
+model PlatformEventType {
+  type        String @id
+  description String
+
+  events PlatformOutboxEvent[]
+
+  @@map("platform_event_types")
+}
+
+/// Outbox of events that belong to no tenant (e.g. the password reset e-mail). No access for
+/// app_runtime or app_worker: only the SECURITY DEFINER functions touch it.
+model PlatformOutboxEvent {
+  id          String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  type        String
+  payload     Json
+  status      OutboxStatus @default(PENDING)
+  attempts    Int          @default(0)
+  availableAt DateTime     @default(now()) @map("available_at") @db.Timestamptz(3)
+  processedAt DateTime?    @map("processed_at") @db.Timestamptz(3)
+  lastError   String?      @map("last_error")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  eventType PlatformEventType @relation(fields: [type], references: [type], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([type])
+  @@map("platform_outbox_events")
+}
+
 model Webhook {
   tenantId        String   @map("tenant_id") @db.Uuid
   id              String   @default(dbgenerated("uuidv7()")) @db.Uuid

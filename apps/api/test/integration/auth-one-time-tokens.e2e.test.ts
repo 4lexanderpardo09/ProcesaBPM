@@ -15,7 +15,6 @@ useTestEnvironment();
 const NEW_PASSWORD = 'a brand new passphrase';
 
 interface ResetEmail {
-  tenantId: string;
   payload: { userId: string; email: string; token: string; expiresAt: string };
 }
 
@@ -35,13 +34,14 @@ describe('one-time tokens', () => {
     http().post('/auth/password-reset/confirm').send({ token, newPassword });
   const login = (email: string, password: string) => http().post('/auth/login').send({ email, password });
 
+  /** The platform outbox is not readable by the API's role: read it as the schema owner. */
   async function resetEmails(userId: string): Promise<ResetEmail[]> {
-    const { rows } = await db.platform.query<{ tenant_id: string; payload: ResetEmail['payload'] }>(
-      `SELECT tenant_id, payload FROM outbox_events
+    const { rows } = await db.owner.query<{ payload: ResetEmail['payload'] }>(
+      `SELECT payload FROM platform_outbox_events
        WHERE type = 'email.password_reset' AND payload ->> 'userId' = $1 ORDER BY created_at`,
       [userId],
     );
-    return rows.map((row) => ({ tenantId: row.tenant_id, payload: row.payload }));
+    return rows.map((row) => ({ payload: row.payload }));
   }
 
   async function resetTokenFor(user: TestUser): Promise<string> {
@@ -62,10 +62,10 @@ describe('one-time tokens', () => {
 
   describe('POST /auth/password-reset/request', () => {
     it('answers 202 with no body for an unknown e-mail and queues nothing', async () => {
-      const { rows: before } = await db.platform.query(`SELECT count(*)::int AS n FROM outbox_events WHERE type = 'email.password_reset'`);
+      const { rows: before } = await db.owner.query(`SELECT count(*)::int AS n FROM platform_outbox_events`);
       const response = await requestReset(`nobody-${Date.now()}@example.com`);
       expect(response.text).toBe('');
-      const { rows: after } = await db.platform.query(`SELECT count(*)::int AS n FROM outbox_events WHERE type = 'email.password_reset'`);
+      const { rows: after } = await db.owner.query(`SELECT count(*)::int AS n FROM platform_outbox_events`);
       expect(after[0].n).toBe(before[0].n);
     });
 
@@ -75,7 +75,7 @@ describe('one-time tokens', () => {
       expect(response.text).toBe('');
 
       const [email] = await resetEmails(user.userId);
-      expect(email).toMatchObject({ tenantId: tenant.tenantId, payload: { userId: user.userId, email: user.email } });
+      expect(email).toMatchObject({ payload: { userId: user.userId, email: user.email } });
       expect(email!.payload.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
       const { rows } = await db.platform.query<{ token_hash: string; type: string; expires_at: Date }>(
@@ -84,6 +84,23 @@ describe('one-time tokens', () => {
       );
       expect(rows).toEqual([{ token_hash: sha256Hex(email!.payload.token), type: 'PASSWORD_RESET', expires_at: expect.any(Date) }]);
       expect((rows[0]!.expires_at.getTime() - Date.now()) / 60_000).toBeCloseTo(30, 0);
+    });
+
+    it('queues the e-mail even when the user belongs to no organization', async () => {
+      const user = await seedUser(db, tenant);
+      await db.platform.query('DELETE FROM memberships WHERE user_id = $1', [user.userId]);
+      await requestReset(user.email);
+      const [email] = await resetEmails(user.userId);
+      expect(email!.payload.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      await confirmReset(email!.payload.token).expect(204);
+    });
+
+    it('the token and the event are written together, and the API role cannot read the outbox', async () => {
+      const user = await seedUser(db, tenant);
+      await requestReset(user.email);
+      const { rows } = await db.platform.query('SELECT 1 FROM user_tokens WHERE user_id = $1', [user.userId]);
+      expect(rows).toHaveLength(1);
+      await expect(db.runtime.query('SELECT * FROM platform_outbox_events')).rejects.toMatchObject({ code: '42501' });
     });
 
     it('does nothing for a disabled account, with the same answer', async () => {

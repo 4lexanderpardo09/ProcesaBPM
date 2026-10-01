@@ -6,6 +6,7 @@ import { applyMigrations } from './apply-migrations.js';
 
 export const RUNTIME_LOGIN = { user: 'test_runtime', password: 'runtime' } as const;
 export const PLATFORM_LOGIN = { user: 'test_platform', password: 'platform' } as const;
+export const WORKER_LOGIN = { user: 'test_worker', password: 'worker' } as const;
 
 /** Database created (and recreated on every run) when an external server is used. */
 export const DEFAULT_TEST_DATABASE = 'procesabpm_test';
@@ -15,6 +16,7 @@ declare module 'vitest' {
     ownerUrl: string;
     runtimeUrl: string;
     platformUrl: string;
+    workerUrl: string;
   }
 }
 
@@ -49,6 +51,7 @@ export async function setupTestDatabase(project: TestProject, databaseName: stri
   project.provide('ownerUrl', ownerUrl);
   project.provide('runtimeUrl', withCredentials(ownerUrl, RUNTIME_LOGIN));
   project.provide('platformUrl', withCredentials(ownerUrl, PLATFORM_LOGIN));
+  project.provide('workerUrl', withCredentials(ownerUrl, WORKER_LOGIN));
 }
 
 export async function teardown(): Promise<void> {
@@ -84,6 +87,7 @@ async function createLoginRoles(owner: pg.Client): Promise<void> {
   for (const [login, appRole] of [
     [RUNTIME_LOGIN, 'app_runtime'],
     [PLATFORM_LOGIN, 'app_platform'],
+    [WORKER_LOGIN, 'app_worker'],
   ] as const) {
     const { rowCount } = await owner.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [login.user]);
     if (!rowCount) {

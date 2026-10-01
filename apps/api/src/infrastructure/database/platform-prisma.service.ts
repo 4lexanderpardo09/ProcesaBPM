@@ -11,6 +11,7 @@ import { APP_CONFIG } from '../../config/tokens.js';
 @Injectable()
 export class PlatformPrismaService extends PrismaClient implements OnModuleDestroy {
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
+    if (config.PLATFORM_DATABASE_URL === undefined) throw new Error('PLATFORM_DATABASE_URL is required by the platform services');
     super({ adapter: new PrismaPg({ connectionString: config.PLATFORM_DATABASE_URL }) });
   }
 
