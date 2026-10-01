@@ -4,6 +4,7 @@ import { DatabaseHealthService } from './database-health.service.js';
 import { PrismaService } from './prisma.service.js';
 import { TenantContext } from './tenant-context.js';
 import { TenantTransactionRunner } from './tenant-transaction-runner.js';
+import { WorkerTransactionRunner } from './worker-transaction-runner.js';
 
 /**
  * `PrismaService` is deliberately not exported: tenant data goes through `TenantTransactionRunner`,
@@ -12,7 +13,7 @@ import { TenantTransactionRunner } from './tenant-transaction-runner.js';
  */
 @Global()
 @Module({
-  providers: [PrismaService, TenantContext, TenantTransactionRunner, AuthTransactionRunner, DatabaseHealthService],
-  exports: [TenantContext, TenantTransactionRunner, AuthTransactionRunner, DatabaseHealthService],
+  providers: [PrismaService, TenantContext, TenantTransactionRunner, AuthTransactionRunner, WorkerTransactionRunner, DatabaseHealthService],
+  exports: [TenantContext, TenantTransactionRunner, AuthTransactionRunner, WorkerTransactionRunner, DatabaseHealthService],
 })
 export class DatabaseModule {}

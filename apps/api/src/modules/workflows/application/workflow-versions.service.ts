@@ -3,7 +3,6 @@ import {
   type CreateVersionRequest,
   NotFoundError,
   remapVersionDocument,
-  validateWorkflowGraph,
   type VersionDetailResponse,
   type VersionSummary,
 } from '@procesabpm/shared';
@@ -12,6 +11,7 @@ import { type TenantTransaction, TenantTransactionRunner } from '../../../infras
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
 import { WorkflowRepository } from '../data/workflow.repository.js';
 import { DraftLock } from './draft-lock.js';
+import { validateDocument } from './reference-validator.js';
 import { toVersionSummary } from './version-summary.js';
 
 /** Versions of a workflow: copy into a new draft, read the whole version, delete a draft. */
@@ -72,7 +72,7 @@ export class WorkflowVersionsService {
       workflow: { id: workflow.id, name: workflow.name, subcategoryId: workflow.subcategoryId },
       version: toVersionSummary(version),
       document,
-      validation: version.status === 'DRAFT' ? validateWorkflowGraph(document) : null,
+      validation: version.status === 'DRAFT' ? validateDocument(document) : null,
     };
   }
 

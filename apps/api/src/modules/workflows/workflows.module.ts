@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ReferenceValidator } from './application/reference-validator.js';
 import { DraftEditorService } from './application/draft-editor.service.js';
 import { DraftLock } from './application/draft-lock.js';
+import { PublishedVersionReader } from './application/published-version-reader.js';
 import { WorkflowGraphService } from './application/workflow-graph.service.js';
 import { WorkflowLinksService } from './application/workflow-links.service.js';
 import { WorkflowPublicationService } from './application/workflow-publication.service.js';
@@ -34,6 +35,8 @@ import { WorkflowsController } from './http/workflows.controller.js';
     WorkflowPublicationService,
     DraftEditorService,
     WorkflowLinksService,
+    PublishedVersionReader,
   ],
+  exports: [PublishedVersionReader],
 })
 export class WorkflowsModule {}

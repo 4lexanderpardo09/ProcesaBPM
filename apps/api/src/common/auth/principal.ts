@@ -17,7 +17,7 @@ export interface Principal {
   readonly isOwner: boolean;
   /** Bumped by the database on any change of the role's permissions; the cache is keyed by it. */
   readonly permissionsVersion: number;
-  readonly membership: { readonly departmentId: string | null; readonly siteId: string | null };
+  readonly membership: { readonly departmentId: string | null; readonly siteId: string | null; readonly positionId: string | null };
 }
 
 /** A platform administrator acting on tenants: no tenant, no CASL ability. */

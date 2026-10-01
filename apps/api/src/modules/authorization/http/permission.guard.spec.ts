@@ -18,7 +18,7 @@ const principal: Principal = {
   roleIsAdmin: false,
   isOwner: false,
   permissionsVersion: 0,
-  membership: { departmentId: null, siteId: null },
+  membership: { departmentId: null, siteId: null, positionId: null },
 };
 
 class Routes {

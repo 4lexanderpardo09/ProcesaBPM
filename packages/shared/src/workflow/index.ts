@@ -8,3 +8,4 @@ export * from './references.js';
 export * from './remap.js';
 export * from './transition-condition.js';
 export * from './validate-workflow-graph.js';
+export * from './engine-support.js';

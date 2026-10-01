@@ -17,13 +17,14 @@ export interface VersionRow {
   readonly number: number;
   readonly status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   readonly notes: string | null;
+  readonly revision: number;
   readonly publishedAt: Date | null;
   readonly publishedById: string | null;
   readonly createdAt: Date;
 }
 
 const WORKFLOW = { id: true, subcategoryId: true, name: true, isActive: true, createdAt: true } as const;
-const VERSION = { id: true, workflowId: true, number: true, status: true, notes: true, publishedAt: true, publishedById: true, createdAt: true } as const;
+const VERSION = { id: true, workflowId: true, number: true, status: true, notes: true, revision: true, publishedAt: true, publishedById: true, createdAt: true } as const;
 
 /**
  * Workflows and the headers of their versions. The lock queries serialize the writers: a publish takes the
@@ -75,12 +76,18 @@ export class WorkflowRepository {
    * takes `FOR SHARE`, which publishing (an update of the status) must wait for; whoever rewrites or deletes
    * the draft takes `FOR UPDATE`.
    */
-  async lockVersion(tx: TenantTransaction, tenantId: string, workflowId: string, versionId: string, mode: 'SHARE' | 'UPDATE'): Promise<VersionRow['status'] | undefined> {
+  async lockVersion(tx: TenantTransaction, tenantId: string, workflowId: string, versionId: string, mode: 'SHARE' | 'UPDATE'): Promise<{ status: VersionRow['status']; revision: number } | undefined> {
+    type Locked = Array<{ status: VersionRow['status']; revision: number }>;
     const rows =
       mode === 'SHARE'
-        ? await tx.$queryRaw<Array<{ status: VersionRow['status'] }>>`SELECT status::text AS status FROM workflow_versions WHERE tenant_id = ${tenantId}::uuid AND workflow_id = ${workflowId}::uuid AND id = ${versionId}::uuid FOR SHARE`
-        : await tx.$queryRaw<Array<{ status: VersionRow['status'] }>>`SELECT status::text AS status FROM workflow_versions WHERE tenant_id = ${tenantId}::uuid AND workflow_id = ${workflowId}::uuid AND id = ${versionId}::uuid FOR UPDATE`;
-    return rows[0]?.status;
+        ? await tx.$queryRaw<Locked>`SELECT status::text AS status, revision FROM workflow_versions WHERE tenant_id = ${tenantId}::uuid AND workflow_id = ${workflowId}::uuid AND id = ${versionId}::uuid FOR SHARE`
+        : await tx.$queryRaw<Locked>`SELECT status::text AS status, revision FROM workflow_versions WHERE tenant_id = ${tenantId}::uuid AND workflow_id = ${workflowId}::uuid AND id = ${versionId}::uuid FOR UPDATE`;
+    return rows[0];
+  }
+
+  async bumpRevision(tx: TenantTransaction, tenantId: string, versionId: string): Promise<number> {
+    const bumped = await tx.workflowVersion.update({ where: { tenantId_id: { tenantId, id: versionId } }, data: { revision: { increment: 1 } }, select: { revision: true } });
+    return bumped.revision;
   }
 
   async nextVersionNumber(tx: TenantTransaction, tenantId: string, workflowId: string): Promise<number> {

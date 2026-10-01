@@ -4,11 +4,11 @@ import {
   InvalidStateError,
   NotFoundError,
   parseBlockConfig,
+  StaleRevisionError,
   type SaveGraphRequest,
   type SaveGraphResponse,
   type StepDocument,
   type TransitionDocument,
-  validateWorkflowGraph,
   type WorkflowValidation,
 } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -17,7 +17,7 @@ import { VersionDocumentRepository } from '../data/version-document.repository.j
 import { WorkflowRepository } from '../data/workflow.repository.js';
 import { countNewRefs, resolveReferences } from '../domain/graph-ids.js';
 import { DraftLock } from './draft-lock.js';
-import { ReferenceValidator, withProblems } from './reference-validator.js';
+import { ReferenceValidator, validateDocument, withProblems } from './reference-validator.js';
 
 type StepRow = Omit<StepDocument, 'candidates' | 'initiators' | 'slaOverrides' | 'signers' | 'files'>;
 
@@ -43,7 +43,8 @@ export class WorkflowGraphService {
   save(workflowId: string, versionId: string, request: SaveGraphRequest): Promise<SaveGraphResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.tenantId;
-      await this.draftLock.acquire(tx, tenantId, workflowId, versionId, 'UPDATE');
+      const { revision } = await this.draftLock.acquire(tx, tenantId, workflowId, versionId, 'UPDATE');
+      if (request.revision !== undefined && request.revision !== revision) throw new StaleRevisionError(revision);
 
       const existingSteps = new Set((await this.documents.stepIdsOf(tx, tenantId, versionId)).map((row) => row.id));
       const existingTransitions = new Set((await this.documents.transitionIdsOf(tx, tenantId, versionId)).map((row) => row.id));
@@ -76,9 +77,10 @@ export class WorkflowGraphService {
 
       const document = await this.documents.load(tx, tenantId, versionId);
       return {
+        revision: await this.workflows.bumpRevision(tx, tenantId, versionId),
         idMap: Object.fromEntries([...stepIds, ...transitionIds].filter(([ref, id]) => ref !== id)),
         document,
-        validation: validateWorkflowGraph(document),
+        validation: validateDocument(document),
       };
     });
   }
@@ -87,7 +89,7 @@ export class WorkflowGraphService {
     return this.runner.withTenantTransaction(async (tx) => {
       if ((await this.workflows.findVersion(tx, this.tenantId, workflowId, versionId)) === null) throw new NotFoundError();
       const document = await this.documents.load(tx, this.tenantId, versionId);
-      return withProblems(validateWorkflowGraph(document), await this.references.check(tx, this.tenantId, workflowId, document));
+      return withProblems(validateDocument(document), await this.references.check(tx, this.tenantId, workflowId, document));
     });
   }
 

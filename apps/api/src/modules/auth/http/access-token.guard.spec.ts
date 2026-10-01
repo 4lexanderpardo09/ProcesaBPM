@@ -34,7 +34,7 @@ class PublicController {
 
 function setup(authorization?: string) {
   const verifyAccessToken = vi.fn().mockResolvedValue(claims);
-  const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null };
+  const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null, positionId: null };
   const verify = vi.fn().mockResolvedValue(access);
   const verifyPlatformToken = vi.fn().mockResolvedValue({ sub: claims.sub, sid: claims.sid });
   const verifyPlatformSession = vi.fn().mockResolvedValue(undefined);
@@ -100,7 +100,7 @@ describe('AccessTokenGuard', () => {
       roleIsAdmin: true,
       isOwner: false,
       permissionsVersion: 7,
-      membership: { departmentId: null, siteId: null },
+      membership: { departmentId: null, siteId: null, positionId: null },
     });
   });
 

@@ -1293,6 +1293,8 @@ model WorkflowVersion {
   notes         String?
   publishedAt   DateTime?             @map("published_at") @db.Timestamptz(3)
   publishedById String?               @map("published_by_id") @db.Uuid
+  /// Bumped by every save of the canvas: optimistic concurrency (a stale save is refused).
+  revision      Int                   @default(0)
   createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1587,8 +1589,8 @@ model AmountRule {
 
   tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   version      WorkflowVersion @relation(fields: [tenantId, versionId], references: [tenantId, id], onDelete: Cascade)
-  step         Step?           @relation("AmountRuleStep", fields: [tenantId, stepId], references: [tenantId, id], onDelete: NoAction)
-  approvalStep Step?           @relation("AmountRuleApprovalStep", fields: [tenantId, approvalStepId], references: [tenantId, id], onDelete: NoAction)
+  step         Step?           @relation("AmountRuleStep", fields: [tenantId, versionId, stepId], references: [tenantId, versionId, id], onDelete: NoAction)
+  approvalStep Step?           @relation("AmountRuleApprovalStep", fields: [tenantId, versionId, approvalStepId], references: [tenantId, versionId, id], onDelete: NoAction)
   position     Position?       @relation(fields: [tenantId, positionId], references: [tenantId, id], onDelete: NoAction)
   company      Company?        @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: NoAction)
   currency     Currency        @relation(fields: [currencyCode], references: [code])
@@ -1596,10 +1598,10 @@ model AmountRule {
   @@id([tenantId, id])
   @@index([tenantId, versionId])
   @@index([currencyCode])
-  @@index([tenantId, approvalStepId])
+  @@index([tenantId, versionId, approvalStepId])
   @@index([tenantId, companyId])
   @@index([tenantId, positionId])
-  @@index([tenantId, stepId])
+  @@index([tenantId, versionId, stepId])
   @@map("amount_rules")
 }
 

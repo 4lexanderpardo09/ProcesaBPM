@@ -4,14 +4,13 @@ import {
   NotFoundError,
   type PublishVersionRequest,
   type PublishVersionResponse,
-  validateWorkflowGraph,
   WorkflowNotPublishableError,
 } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
 import { WorkflowRepository } from '../data/workflow.repository.js';
-import { ReferenceValidator, withProblems } from './reference-validator.js';
+import { ReferenceValidator, validateDocument, withProblems } from './reference-validator.js';
 import { toVersionSummary } from './version-summary.js';
 
 /** Publishes a draft: validate, archive the published version and publish the draft, all or nothing. */
@@ -35,12 +34,12 @@ export class WorkflowPublicationService {
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.tenantId;
       if (!(await this.workflows.lockWorkflow(tx, tenantId, workflowId))) throw new NotFoundError();
-      const status = await this.workflows.lockVersion(tx, tenantId, workflowId, versionId, 'UPDATE');
-      if (status === undefined) throw new NotFoundError();
-      if (status !== 'DRAFT') throw new ImmutableDataError(`The version is ${status.toLowerCase()}: only a draft is published`);
+      const locked = await this.workflows.lockVersion(tx, tenantId, workflowId, versionId, 'UPDATE');
+      if (locked === undefined) throw new NotFoundError();
+      if (locked.status !== 'DRAFT') throw new ImmutableDataError(`The version is ${locked.status.toLowerCase()}: only a draft is published`);
 
       const document = await this.documents.load(tx, tenantId, versionId);
-      const validation = withProblems(validateWorkflowGraph(document), await this.references.check(tx, tenantId, workflowId, document));
+      const validation = withProblems(validateDocument(document), await this.references.check(tx, tenantId, workflowId, document));
       if (validation.errors.length > 0) throw new WorkflowNotPublishableError(validation);
 
       await this.workflows.archivePublished(tx, tenantId, workflowId);

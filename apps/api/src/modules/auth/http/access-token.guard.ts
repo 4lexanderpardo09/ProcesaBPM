@@ -47,7 +47,7 @@ export class AccessTokenGuard implements CanActivate {
       roleIsAdmin: access.roleIsAdmin,
       isOwner: access.isOwner,
       permissionsVersion: access.permissionsVersion,
-      membership: { departmentId: access.departmentId, siteId: access.siteId },
+      membership: { departmentId: access.departmentId, siteId: access.siteId, positionId: access.positionId },
     };
     return true;
   }

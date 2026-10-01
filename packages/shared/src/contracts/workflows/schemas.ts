@@ -45,6 +45,8 @@ export interface VersionSummary {
   readonly number: number;
   readonly status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   readonly notes: string | null;
+  /** Bumped by every save of the canvas. */
+  readonly revision: number;
   readonly publishedAt: string | null;
   readonly publishedById: string | null;
   readonly createdAt: string;
@@ -128,6 +130,8 @@ export type TransitionGraphInput = z.infer<typeof transitionGraphInputSchema>;
 /** The whole canvas: the blocks and transitions replace the ones of the draft in one transaction. */
 export const saveGraphRequestSchema = z
   .object({
+    /** The revision the canvas was read at: when given and no longer current, the save is refused (409). */
+    revision: z.number().int().min(0).optional(),
     steps: z.array(stepGraphInputSchema).max(MAX_STEPS_PER_VERSION),
     transitions: z.array(transitionGraphInputSchema).max(MAX_TRANSITIONS_PER_VERSION),
   })
@@ -141,6 +145,8 @@ export const saveGraphRequestSchema = z
 export type SaveGraphRequest = z.infer<typeof saveGraphRequestSchema>;
 
 export interface SaveGraphResponse {
+  /** The revision after this save. */
+  readonly revision: number;
   /** The id given to each `new:` reference. */
   readonly idMap: Readonly<Record<string, string>>;
   readonly document: WorkflowVersionDocument;
