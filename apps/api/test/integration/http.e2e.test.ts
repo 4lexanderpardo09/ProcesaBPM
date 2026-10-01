@@ -4,6 +4,7 @@ import { seedDraftWorkflow, seedTenant, type SeededTenant } from '@procesabpm/db
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, emailOf, setPassword, signIn } from '../support/auth-helpers.js';
+import { grantEverything } from '../support/permission-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { TenantProbeController } from '../support/test-controllers.js';
 import { useTestEnvironment } from '../support/test-environment.js';
@@ -23,7 +24,10 @@ describe('HTTP API', () => {
     db = connectTestDatabase();
     [tenantA, tenantB] = [await seedTenant(db.platform), await seedTenant(db.platform)];
     ({ app, logLines } = await createTestApp({ controllers: [TenantProbeController] }));
-    for (const tenant of [tenantA, tenantB]) await setPassword(db, tenant.userId);
+    for (const tenant of [tenantA, tenantB]) {
+      await setPassword(db, tenant.userId);
+      await grantEverything(db, tenant);
+    }
     tokenA = (await signIn(app, await emailOf(db, tenantA.userId), tenantA.tenantId)).accessToken;
     tokenB = (await signIn(app, await emailOf(db, tenantB.userId), tenantB.tenantId)).accessToken;
   });
