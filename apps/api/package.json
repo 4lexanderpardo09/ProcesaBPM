@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1140.0",
+    "@aws-sdk/s3-request-presigner": "3.1140.0",
     "@casl/ability": "7.0.1",
     "@casl/prisma": "2.0.2",
     "@nestjs/common": "11.2.7",
