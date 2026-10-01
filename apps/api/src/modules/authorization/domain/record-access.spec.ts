@@ -84,6 +84,11 @@ describe('record access', () => {
       });
     });
 
+    it('an action granted without conditions means every record, whatever the other actions say', () => {
+      const ability = abilityOf(rule('read_own'), rule('read_all'));
+      expect(accessibleWhere(ability, ['read_own', 'read_all'], TEST_SUBJECT)).toEqual({});
+    });
+
     it('matches nothing, never everything, when the role has no rule for the action', () => {
       const ability = abilityOf(rule('read_own'));
       expect(accessibleWhere(ability, 'read_all', TEST_SUBJECT)).toEqual({ id: { in: [] } });

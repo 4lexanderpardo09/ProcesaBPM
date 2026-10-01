@@ -307,7 +307,7 @@ describe('assignment, pool, reassignment', () => {
   });
 
   describe('features the engine does not run yet', () => {
-    it('refuses to publish a workflow with PARALLEL or RANDOM_DISPATCH steps, WAIT blocks or calculators', async () => {
+    it('refuses to publish a workflow with a WAIT block', async () => {
       const refusals = async (spec: FlowSpec) => {
         const category = (await world.admin.post('/categories', { name: unique('Cat') }).expect(201)).body.id;
         const subcategoryId = (await world.admin.post('/subcategories', { categoryId: category, name: unique('Sub') }).expect(201)).body.id;
@@ -315,6 +315,7 @@ describe('assignment, pool, reassignment', () => {
         const base = `/workflows/${workflow.id}/versions/${workflow.versions[0].id}`;
         await world.admin
           .put(`${base}/graph`, {
+            revision: 0,
             steps: spec.steps.map((step) => ({ id: `new:${step.key}`, type: step.type, name: step.key, ...(step.type === 'TASK' ? { assignmentMode: 'CREATOR' } : {}), ...step.extra })),
             transitions: spec.transitions.map((entry, index) => ({ id: `new:t${index}`, fromStepId: `new:${entry.from}`, toStepId: `new:${entry.to}`, type: entry.type, label: `t${index}` })),
           })
@@ -331,7 +332,7 @@ describe('assignment, pool, reassignment', () => {
       // Published versions are immutable: simulate an old one by flipping a step the way an earlier engine allowed it.
       await db.owner.query(`ALTER TABLE steps DISABLE TRIGGER USER`);
       try {
-        await db.owner.query(`UPDATE steps SET assignment_mode = 'PARALLEL', type = 'TASK' WHERE id = $1`, [flow.step.task]);
+        await db.owner.query(`UPDATE steps SET deadline_type = 'CUTOFF', deadline_field_code = 'DUE', deadline_business_days = 2 WHERE id = $1`, [flow.step.task]);
       } finally {
         await db.owner.query(`ALTER TABLE steps ENABLE TRIGGER USER`);
       }

@@ -49,7 +49,7 @@ export class WorkflowVersionsService {
   /** Only a draft can be deleted: published and archived versions are history that tickets point to. */
   deleteDraft(workflowId: string, versionId: string): Promise<void> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.draftLock.acquire(tx, this.tenantId, workflowId, versionId, 'UPDATE');
+      await this.draftLock.acquire(tx, this.tenantId, workflowId, versionId);
       await this.workflows.deleteVersion(tx, this.tenantId, versionId);
     });
   }

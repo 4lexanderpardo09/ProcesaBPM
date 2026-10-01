@@ -11,6 +11,7 @@ export function checkStructure({ doc, graph, problems, reachable, canFinish, tra
   for (const step of doc.steps) {
     if (hasStart && !reachable.has(step.id)) problems.error('BLOCK_UNREACHABLE', { stepId: step.id });
     if (step.type === 'END') continue;
+    if (step.closeRule === 'REQUIRED') continue;
     if ((transitionsFrom.get(step.id) ?? []).length === 0) problems.error('DEAD_END_BLOCK', { stepId: step.id });
     else if (hasEnd && !canFinish.has(step.id)) problems.error('BLOCK_CANNOT_REACH_END', { stepId: step.id });
   }

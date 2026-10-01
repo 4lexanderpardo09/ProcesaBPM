@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidReferenceError, InvalidTransitionError, plainTextToHtml, type TicketMutationResponse, type TransitionTicketRequest } from '@procesabpm/shared';
+import { InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionTicketRequest } from '@procesabpm/shared';
+import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -8,6 +9,7 @@ import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
+import { assertMayLeaveByDecision } from '../domain/close-policy.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { diversionEdge, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
@@ -49,6 +51,8 @@ export class TransitionTicketService {
       const step = document.steps.find((candidate) => candidate.id === ticket.currentStepId);
       if (chosen === undefined || step === undefined || chosen.fromStepId !== step.id || chosen.type !== 'DECISION') throw new InvalidTransitionError();
 
+      assertMayLeaveByDecision(step);
+
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const actorMember = await this.people.findActiveMember(tx, tenantId, actor.userId);
       const existing = await this.loader.valuesOf(tx, tenantId, ticket.id, document);
@@ -83,9 +87,12 @@ export class TransitionTicketService {
       });
       if (request.assigneeId !== undefined && arrival.kind === 'END') throw new InvalidReferenceError('The ticket ends here: there is nobody to assign');
 
-      const closed = await this.sla.closeVisit(tx, tenantId, company, visit, current.clocks, at, exit.transitionId);
+      // A supervisor moving a parallel step on: the signatures still pending are cancelled with it.
+      const cancelled = step.assignmentMode === 'PARALLEL' ? await this.cancelPendingSignatures(tx, tenantId, ticket.id, step.id, visit.loop, at) : [];
+      const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId);
       const events: EventPlan[] = [
         ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { changes: submission.changes } } satisfies EventPlan]),
+        ...cancelled.map((task): EventPlan => ({ type: 'PARALLEL_TASK_COMPLETED', stepId: step.id, loop: visit.loop, actorId: actor.userId, assigneeId: task.userId, data: { taskId: task.id, status: 'CANCELLED' } })),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { ...warning } })),
         {
           type: 'TRANSITIONED',
@@ -93,8 +100,8 @@ export class TransitionTicketService {
           transitionId: exit.transitionId,
           loop: visit.loop,
           actorId: actor.userId,
-          commentHtml: request.comment === undefined ? null : plainTextToHtml(request.comment),
-          data: { ...(diverted ? { intendedTransitionId: chosen.id, amountRuleId: diversion.ruleId } : {}), ...(current.actorIsPoolMember ? { tookFromPool: true } : {}) },
+          commentHtml: sanitizeOptionalRichText(request.comment),
+          data: { ...(diverted ? { intendedTransitionId: chosen.id, amountRuleId: diversion.ruleId } : {}), ...(current.actorIsPoolMember ? { tookFromPool: true } : {}), ...(cancelled.length > 0 ? { parallelOverride: true, cancelledUserIds: cancelled.map((task) => task.userId) } : {}) },
           outbox: [{ type: 'ticket.transitioned', payload: { fromStepId: step.id, toStepId: exit.toStepId, transitionId: exit.transitionId, actorId: actor.userId } }],
         },
         ...arrivalEvents(arrival, actor.userId, visit.loop),
@@ -107,5 +114,11 @@ export class TransitionTicketService {
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, mutation);
       return { id: ticket.id, number: ticket.number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId: arrival.kind === 'END' ? arrival.endStepId : arrival.step.id, openVisitId };
     });
+  }
+
+  private async cancelPendingSignatures(tx: Parameters<TicketWriteRepository['findParallelTasks']>[0], tenantId: string, ticketId: string, stepId: string, loop: number, at: Date) {
+    const pending = (await this.writes.findParallelTasks(tx, tenantId, ticketId, stepId, loop)).filter((task) => task.status === 'PENDING');
+    for (const task of pending) await this.writes.completeParallelTask(tx, tenantId, task.id, 'CANCELLED', at, null);
+    return pending;
   }
 }

@@ -76,12 +76,13 @@ export class WorkflowRepository {
    * takes `FOR SHARE`, which publishing (an update of the status) must wait for; whoever rewrites or deletes
    * the draft takes `FOR UPDATE`.
    */
-  async lockVersion(tx: TenantTransaction, tenantId: string, workflowId: string, versionId: string, mode: 'SHARE' | 'UPDATE'): Promise<{ status: VersionRow['status']; revision: number } | undefined> {
-    type Locked = Array<{ status: VersionRow['status']; revision: number }>;
-    const rows =
-      mode === 'SHARE'
-        ? await tx.$queryRaw<Locked>`SELECT status::text AS status, revision FROM workflow_versions WHERE tenant_id = ${tenantId}::uuid AND workflow_id = ${workflowId}::uuid AND id = ${versionId}::uuid FOR SHARE`
-        : await tx.$queryRaw<Locked>`SELECT status::text AS status, revision FROM workflow_versions WHERE tenant_id = ${tenantId}::uuid AND workflow_id = ${workflowId}::uuid AND id = ${versionId}::uuid FOR UPDATE`;
+  /**
+   * Locks the version row `FOR UPDATE`, always. Every path that writes a version (edit, save, publish, delete) takes
+   * this first: the immutability triggers read the row `FOR SHARE`, and a transaction that held SHARE and then
+   * updated the row would deadlock with another one doing the same (both are share holders asking for an upgrade).
+   */
+  async lockVersion(tx: TenantTransaction, tenantId: string, workflowId: string, versionId: string): Promise<{ status: VersionRow['status']; revision: number } | undefined> {
+    const rows = await tx.$queryRaw<Array<{ status: VersionRow['status']; revision: number }>>`SELECT status::text AS status, revision FROM workflow_versions WHERE tenant_id = ${tenantId}::uuid AND workflow_id = ${workflowId}::uuid AND id = ${versionId}::uuid FOR UPDATE`;
     return rows[0];
   }
 

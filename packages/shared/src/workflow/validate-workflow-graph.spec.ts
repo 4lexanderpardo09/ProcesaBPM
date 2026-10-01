@@ -388,3 +388,64 @@ describe('validateWorkflowGraph: block config', () => {
     expect(codes(task(true))).toEqual([]);
   });
 });
+
+describe('validateWorkflowGraph: close_rule REQUIRED', () => {
+  /** START -> work -> (finish: END | escalate: a step that can only close). */
+  const required = (exits: ReturnType<typeof next>[] = []) =>
+    version({
+      steps: [step('start', 'START'), step('work', 'TASK'), step('closer', 'TASK', { closeRule: 'REQUIRED' }), step('end', 'END')],
+      transitions: [next('start', 'work'), transition('finish', 'work', 'end', 'DECISION'), transition('escalate', 'work', 'closer', 'DECISION'), ...exits],
+    });
+
+  it('a step that can only close needs no exits and counts as an end', () => {
+    expect(validateWorkflowGraph(required())).toEqual({ errors: [], warnings: [] });
+  });
+
+  it('refuses a REQUIRED step that also has a DECISION or SYSTEM_ONLY exit', () => {
+    expect(codes(required([next('closer', 'end', 'DECISION')]))).toContain('CLOSE_REQUIRED_WITH_EXITS');
+    expect(codes(required([transition('sys', 'closer', 'end', 'SYSTEM_ONLY')]))).toContain('CLOSE_REQUIRED_WITH_EXITS');
+  });
+
+  it('a flow that only ends by closing still needs an END block', () => {
+    const doc = version({ steps: [step('start', 'START'), step('closer', 'TASK', { closeRule: 'REQUIRED' })], transitions: [next('start', 'closer')] });
+    expect(codes(doc)).toContain('NO_END');
+  });
+});
+
+describe('validateWorkflowGraph: PARALLEL and RANDOM_DISPATCH steps', () => {
+  const signer = (signerType: 'USER' | 'APPROVER' | 'CREATOR' | 'STEP_ASSIGNEE', id = signerType) => ({ id, signerType, userId: null, positionId: null, label: null, sortOrder: 0 });
+  const parallel = (overrides: Partial<ReturnType<typeof step>> = {}, parts: Partial<WorkflowVersionDocument> = {}) =>
+    version({
+      steps: [step('start', 'START'), step('sign', 'TASK', { assignmentMode: 'PARALLEL', signers: [signer('CREATOR')], ...overrides }), step('end', 'END')],
+      transitions: [next('start', 'sign'), next('sign', 'end', 'DECISION')],
+      ...parts,
+    });
+
+  it('a well-formed parallel step has no problems', () => expect(validateWorkflowGraph(parallel())).toEqual({ errors: [], warnings: [] }));
+
+  it('needs exactly one DECISION exit and at most one SYSTEM_ONLY exit', () => {
+    const extra = [next('start', 'sign'), next('sign', 'end', 'DECISION')];
+    expect(codes(parallel({}, { transitions: [next('start', 'sign'), transition('a', 'sign', 'end', 'DECISION'), transition('b', 'sign', 'end', 'DECISION')] }))).toContain('PARALLEL_DECISION_EXIT_COUNT');
+    expect(codes(parallel({}, { transitions: [...extra, transition('r1', 'sign', 'end', 'SYSTEM_ONLY'), transition('r2', 'sign', 'end', 'SYSTEM_ONLY')] }))).toContain('PARALLEL_REJECTION_EXIT_COUNT');
+    expect(codes(parallel({}, { transitions: [...extra, transition('r1', 'sign', 'end', 'SYSTEM_ONLY')] }))).not.toContain('PARALLEL_REJECTION_EXIT_COUNT');
+  });
+
+  it('signers capture no fields and no amount rule applies to the step', () => {
+    expect(codes(parallel({}, { fields: [field('f', 'sign', 'NOTE', { capture: 'STEP' })] }))).toContain('PARALLEL_STEP_WITH_FIELDS');
+    expect(codes(parallel({}, { fields: [field('n', 'start', 'AMOUNT', { type: 'NUMBER' })], amountRules: [amountRule('r', 'AMOUNT', { stepId: 'sign' })] }))).toContain('AMOUNT_RULE_ON_PARALLEL_STEP');
+  });
+
+  it('cannot be closed by hand', () => expect(codes(parallel({ closeRule: 'ALLOWED' }))).toContain('PARALLEL_STEP_CLOSE_RULE'));
+
+  it('signer types: STEP_ASSIGNEE is refused and APPROVER needs the group type and level', () => {
+    expect(codes(parallel({ signers: [signer('STEP_ASSIGNEE')] }))).toContain('PARALLEL_SIGNER_TYPE_NOT_ALLOWED');
+    expect(codes(parallel({ signers: [signer('APPROVER')] }))).toContain('PARALLEL_APPROVER_CONFIG_MISSING');
+    expect(codes(parallel({ signers: [signer('APPROVER')], approvalGroupTypeId: 'type', approvalLevel: 1 }))).not.toContain('PARALLEL_APPROVER_CONFIG_MISSING');
+  });
+
+  it('warns about a RANDOM_DISPATCH interval longer than a day', () => {
+    const dispatch = (minutes: number) => withParts({ steps: [step('start', 'START'), step('task', 'TASK', { assignmentMode: 'RANDOM_DISPATCH', dispatchIntervalMin: minutes, positionId: 'p' }), step('end', 'END')] });
+    expect(codes(dispatch(1500), 'warnings')).toContain('RANDOM_DISPATCH_INTERVAL_TOO_LONG');
+    expect(codes(dispatch(60), 'warnings')).not.toContain('RANDOM_DISPATCH_INTERVAL_TOO_LONG');
+  });
+});

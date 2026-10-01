@@ -43,8 +43,8 @@ export class WorkflowGraphService {
   save(workflowId: string, versionId: string, request: SaveGraphRequest): Promise<SaveGraphResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.tenantId;
-      const { revision } = await this.draftLock.acquire(tx, tenantId, workflowId, versionId, 'UPDATE');
-      if (request.revision !== undefined && request.revision !== revision) throw new StaleRevisionError(revision);
+      const { revision } = await this.draftLock.acquire(tx, tenantId, workflowId, versionId);
+      if (request.revision !== revision) throw new StaleRevisionError(revision);
 
       const existingSteps = new Set((await this.documents.stepIdsOf(tx, tenantId, versionId)).map((row) => row.id));
       const existingTransitions = new Set((await this.documents.transitionIdsOf(tx, tenantId, versionId)).map((row) => row.id));

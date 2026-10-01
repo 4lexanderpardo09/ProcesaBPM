@@ -19,8 +19,8 @@ export interface AssignmentInput {
 }
 
 export interface AssigneeDecision {
-  /** `POOL`: everybody listed may take the ticket; the first to act gets it. */
-  readonly type: 'PRIMARY' | 'POOL';
+  /** `POOL`: everybody listed may take the ticket; the first to act gets it. `DISPATCH`: nobody yet, the worker hands it out. */
+  readonly type: 'PRIMARY' | 'POOL' | 'DISPATCH';
   readonly userIds: readonly string[];
 }
 
@@ -33,11 +33,12 @@ const AUTOMATIC_MODES: ReadonlySet<AssignmentMode> = new Set(['CREATOR', 'APPROV
  */
 export function decideAssignees(input: AssignmentInput): AssigneeDecision {
   const { stepId, mode, candidates } = input;
-  if (mode === 'PARALLEL' || mode === 'RANDOM_DISPATCH') throw new NotImplementedError(`${mode} assignment`);
+  if (mode === 'PARALLEL') throw new NotImplementedError(`${mode} assignment: a parallel step resolves its signers, not candidates`);
   if (mode === 'NONE') throw new InvalidStateError('An automatic block has no assignee');
   if (candidates.length === 0) throw new NoAssigneeCandidatesError(stepId, mode);
   const everyone = candidates.map((candidate) => candidate.userId);
 
+  if (mode === 'RANDOM_DISPATCH') return { type: 'DISPATCH', userIds: [] };
   if (AUTOMATIC_MODES.has(mode)) return { type: 'PRIMARY', userIds: [everyone[0]!] };
   if (mode === 'POOL') return { type: 'POOL', userIds: everyone };
   if (input.manualSelection) {

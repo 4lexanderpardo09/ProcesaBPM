@@ -20,9 +20,11 @@ export interface ClockPlan {
   readonly dueAt: Date | null;
 }
 
+export type AssigneeKind = 'PRIMARY' | 'POOL' | 'PARALLEL' | 'INCIDENT';
+
 export interface AssigneePlan {
   readonly userId: string;
-  readonly type: 'PRIMARY' | 'POOL';
+  readonly type: AssigneeKind;
 }
 
 /** Work for the outbox; the applier adds the id of the event it belongs to (`eventId`) to the payload. */
@@ -31,7 +33,7 @@ export interface OutboxIntent {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
-export type EventType = 'CREATED' | 'TRANSITIONED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED';
+export type EventType = 'CREATED' | 'TRANSITIONED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED' | 'INCIDENT_OPENED' | 'INCIDENT_RESOLVED' | 'REOPENED' | 'PARALLEL_TASK_COMPLETED' | 'SYSTEM';
 
 export interface EventPlan {
   readonly type: EventType;
@@ -63,6 +65,8 @@ export interface ArrivalPlan {
   readonly visit: VisitPlan;
   readonly clocks: readonly ClockPlan[];
   readonly assignees: readonly AssigneePlan[];
+  /** People who each have a signature to give in a PARALLEL step (one `ticket_parallel_tasks` row each). */
+  readonly parallelTasks: readonly string[];
 }
 
 export interface FieldWrite {
@@ -82,6 +86,9 @@ export interface TicketMutation {
   readonly closing?: { readonly visit: ClosedVisit; readonly clocks: readonly ClosedClock[] };
   readonly arrival?: ArrivalPlan;
   /** `current` moves the ticket to a people step; `closed` ends it. */
-  readonly ticket: { readonly kind: 'current'; readonly stepId: string; readonly loop: number } | { readonly kind: 'closed'; readonly stepId: string | null };
+  readonly ticket:
+    | { readonly kind: 'current'; readonly stepId: string; readonly loop: number }
+    | { readonly kind: 'closed'; readonly stepId: string | null }
+    | { readonly kind: 'reopened'; readonly stepId: string; readonly loop: number };
   readonly events: readonly EventPlan[];
 }

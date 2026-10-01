@@ -17,7 +17,7 @@ export interface RuleContext {
 
 export function buildContext(doc: WorkflowVersionDocument, problems: ProblemCollector): RuleContext {
   const graph = new WorkflowGraph(
-    doc.steps.map((step) => ({ id: step.id, type: step.type })),
+    doc.steps.map((step) => ({ id: step.id, type: step.type, terminal: step.closeRule === 'REQUIRED' })),
     doc.transitions.map((transition) => ({ from: transition.fromStepId, to: transition.toStepId })),
   );
   const fieldByCode = new Map<string, FieldDocument>();

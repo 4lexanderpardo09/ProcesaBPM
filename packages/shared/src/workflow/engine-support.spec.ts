@@ -7,11 +7,11 @@ const codes = (doc: Parameters<typeof findEngineSupportProblems>[0]) => findEngi
 describe('findEngineSupportProblems', () => {
   it('accepts the minimal flow', () => expect(codes(minimalFlow())).toEqual([]));
 
+  it.each(['PARALLEL', 'RANDOM_DISPATCH'] as const)('accepts %s assignment now', (mode) => expect(codes(version({ steps: [step('t', 'TASK', { assignmentMode: mode })] }))).toEqual([]));
+
   it.each([
     ['a WAIT block', { steps: [step('w', 'WAIT')] }, 'NOT_IMPLEMENTED_WAIT_BLOCK'],
     ['a CALCULATOR block', { steps: [step('c', 'CALCULATOR')] }, 'NOT_IMPLEMENTED_CALCULATOR_BLOCK'],
-    ['PARALLEL assignment', { steps: [step('t', 'TASK', { assignmentMode: 'PARALLEL' })] }, 'NOT_IMPLEMENTED_ASSIGNMENT_MODE'],
-    ['RANDOM_DISPATCH assignment', { steps: [step('t', 'TASK', { assignmentMode: 'RANDOM_DISPATCH' })] }, 'NOT_IMPLEMENTED_ASSIGNMENT_MODE'],
     ['a CUTOFF deadline', { steps: [step('t', 'TASK', { deadlineType: 'CUTOFF' })] }, 'NOT_IMPLEMENTED_CUTOFF_DEADLINE'],
     ['a required FILE field', { fields: [field('f', 's', 'F', { type: 'FILE', isRequired: true })] }, 'NOT_IMPLEMENTED_REQUIRED_FILE_FIELD'],
   ])('rejects %s', (_name, parts, code) => expect(codes(version(parts))).toEqual([code]));

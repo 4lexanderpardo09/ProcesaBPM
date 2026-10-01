@@ -1,5 +1,6 @@
 import { type WorkflowVersionDocument } from './document.js';
 import { ProblemCollector, type WorkflowValidation } from './problems.js';
+import { checkAssignmentModes } from './rules/parallel.js';
 import { checkAmountRules } from './rules/amount-rules.js';
 import { checkConditions } from './rules/conditions.js';
 import { buildContext } from './rules/context.js';
@@ -25,5 +26,6 @@ export function validateWorkflowGraph(doc: WorkflowVersionDocument): WorkflowVal
   checkFields(context);
   checkConditions(context);
   checkAmountRules(context);
+  checkAssignmentModes(context);
   return problems.result();
 }

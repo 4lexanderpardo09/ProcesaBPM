@@ -3,8 +3,17 @@ import {
   type CloseTicketRequest,
   closeTicketRequestSchema,
   type CreateTicketRequest,
+  type IncidentMutationResponse,
+  type OpenIncidentRequest,
+  openIncidentRequestSchema,
+  type ResolveIncidentRequest,
+  resolveIncidentRequestSchema,
   createTicketRequestSchema,
   type ListTicketsQuery,
+  type ParallelTaskActionRequest,
+  parallelTaskActionRequestSchema,
+  type ReopenTicketRequest,
+  reopenTicketRequestSchema,
   listTicketsQuerySchema,
   type Page,
   type ReassignTicketRequest,
@@ -23,6 +32,10 @@ import { RequireAnyPermission, RequirePermission } from '../../../common/auth/ro
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
+import { ParallelTaskService } from '../../engine/application/parallel-task.service.js';
+import { ReopenTicketService } from '../../engine/application/reopen-ticket.service.js';
+import { OpenIncidentService } from '../../engine/application/open-incident.service.js';
+import { ResolveIncidentService } from '../../engine/application/resolve-incident.service.js';
 import { CloseTicketService } from '../../engine/application/close-ticket.service.js';
 import { CreateTicketService } from '../../engine/application/create-ticket.service.js';
 import { ReassignTicketService } from '../../engine/application/reassign-ticket.service.js';
@@ -41,6 +54,10 @@ export class TicketsController {
     @Inject(ReassignTicketService) private readonly reassignment: ReassignTicketService,
     @Inject(TakeTicketService) private readonly taking: TakeTicketService,
     @Inject(CloseTicketService) private readonly closing: CloseTicketService,
+    @Inject(ParallelTaskService) private readonly parallelTasks: ParallelTaskService,
+    @Inject(ReopenTicketService) private readonly reopening: ReopenTicketService,
+    @Inject(OpenIncidentService) private readonly incidentOpening: OpenIncidentService,
+    @Inject(ResolveIncidentService) private readonly incidentResolution: ResolveIncidentService,
   ) {}
 
   @RequireAnyPermission(['create', 'create_for_others'], TICKET_SUBJECT)
@@ -93,6 +110,48 @@ export class TicketsController {
   @HttpCode(HttpStatus.OK)
   close(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(closeTicketRequestSchema)) body: CloseTicketRequest): Promise<TicketMutationResponse> {
     return this.closing.close(this.actor(principal, ability), id, body);
+  }
+
+  @RequirePermission('open_incident', TICKET_SUBJECT)
+  @Post(':id/incidents')
+  openIncident(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(openIncidentRequestSchema)) body: OpenIncidentRequest): Promise<IncidentMutationResponse> {
+    return this.incidentOpening.open(this.actor(principal, ability), id, body);
+  }
+
+  /** Being the person the incident is for is the authorization (checked against the record); the permission only gets you to the route. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Post(':id/incidents/:incidentId/resolve')
+  @HttpCode(HttpStatus.OK)
+  resolveIncident(
+    @CurrentPrincipal() principal: Principal,
+    @CurrentAbility() ability: AppAbility,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('incidentId', ParseUUIDPipe) incidentId: string,
+    @Body(new ZodValidationPipe(resolveIncidentRequestSchema)) body: ResolveIncidentRequest,
+  ): Promise<TicketMutationResponse> {
+    return this.incidentResolution.resolve(this.actor(principal, ability), id, incidentId, body);
+  }
+
+  @RequirePermission('reopen', TICKET_SUBJECT)
+  @Post(':id/reopen')
+  @HttpCode(HttpStatus.OK)
+  reopen(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(reopenTicketRequestSchema)) body: ReopenTicketRequest): Promise<TicketMutationResponse> {
+    return this.reopening.reopen(this.actor(principal, ability), id, body);
+  }
+
+  /** Being the named signer is the authorization (checked against the signatures of the step); the permission only gets you to the route. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Post(':id/parallel-tasks/sign')
+  @HttpCode(HttpStatus.OK)
+  signParallelTask(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(parallelTaskActionRequestSchema)) body: ParallelTaskActionRequest): Promise<TicketMutationResponse> {
+    return this.parallelTasks.sign(this.actor(principal, ability), id, body);
+  }
+
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Post(':id/parallel-tasks/reject')
+  @HttpCode(HttpStatus.OK)
+  rejectParallelTask(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(parallelTaskActionRequestSchema)) body: ParallelTaskActionRequest): Promise<TicketMutationResponse> {
+    return this.parallelTasks.reject(this.actor(principal, ability), id, body);
   }
 
   private actor(principal: Principal, ability: AppAbility) {

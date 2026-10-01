@@ -9,15 +9,6 @@ const json = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJso
 /** Granular writes on the content of a draft. The caller has locked the version and checked it is a draft. */
 @Injectable()
 export class DraftContentRepository {
-  /**
-   * Locks the step row: the replace-the-list edits delete and insert, and two of them at once would each
-   * miss the other's rows and end up merged (READ COMMITTED). Returns false when the step is not in the version.
-   */
-  async lockStep(tx: TenantTransaction, tenantId: string, versionId: string, stepId: string): Promise<boolean> {
-    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM steps WHERE tenant_id = ${tenantId}::uuid AND version_id = ${versionId}::uuid AND id = ${stepId}::uuid FOR UPDATE`;
-    return rows.length > 0;
-  }
-
   async stepBelongs(tx: TenantTransaction, tenantId: string, versionId: string, stepId: string): Promise<boolean> {
     return (await tx.step.count({ where: { tenantId, versionId, id: stepId } })) > 0;
   }

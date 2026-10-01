@@ -44,6 +44,16 @@ export const ERROR_CODES = {
   ticketNotOpen: 'TICKET_NOT_OPEN',
   closeNotAllowed: 'CLOSE_NOT_ALLOWED',
   staleTicket: 'STALE_TICKET',
+  closeRequired: 'CLOSE_REQUIRED',
+  incidentNotOpen: 'INCIDENT_NOT_OPEN',
+  parallelTaskNotPending: 'PARALLEL_TASK_NOT_PENDING',
+  rejectionNotAllowed: 'REJECTION_NOT_ALLOWED',
+  commentRequired: 'COMMENT_REQUIRED',
+  ticketNotClosed: 'TICKET_NOT_CLOSED',
+  invalidReopenStep: 'INVALID_REOPEN_STEP',
+  invalidErrorType: 'INVALID_ERROR_TYPE',
+  assigneeRequired: 'ASSIGNEE_REQUIRED',
+  extraApprovalRequired: 'EXTRA_APPROVAL_REQUIRED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -344,5 +354,72 @@ export class CloseNotAllowedError extends DomainError {
 export class StaleTicketError extends DomainError {
   constructor() {
     super(ERROR_CODES.staleTicket, 'The ticket changed: reload it');
+  }
+}
+
+/** The step can only be left by closing the ticket (`close_rule` REQUIRED). */
+export class CloseRequiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.closeRequired, 'This step can only be left by closing the ticket');
+  }
+}
+
+/** Closing would skip the extra approval a cap on an amount demands. */
+export class ExtraApprovalRequiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.extraApprovalRequired, 'An amount exceeds its cap: the extra approval is required before the ticket can close');
+  }
+}
+
+/** The incident was already resolved (or never was one of this ticket's open ones). */
+export class IncidentNotOpenError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.incidentNotOpen, 'The incident is not open');
+  }
+}
+
+/** Nobody who held the step can take it back: the caller must name who gets it. */
+export class AssigneeRequiredError extends DomainError {
+  constructor(droppedAssigneeIds: readonly string[]) {
+    super(ERROR_CODES.assigneeRequired, 'None of the previous assignees can take the ticket back: choose who gets it', { details: { droppedAssigneeIds } });
+  }
+}
+
+export class TicketNotClosedError extends DomainError {
+  constructor(readonly status: string) {
+    super(ERROR_CODES.ticketNotClosed, 'Only a closed ticket can be reopened', { details: { status } });
+  }
+}
+
+/** The step to reopen into is not one the ticket has been through. */
+export class InvalidReopenStepError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidReopenStep, 'The ticket can only be reopened into a step it has been through');
+  }
+}
+
+/** The error type is not an active reopening type (or the subtype does not belong to it). */
+export class InvalidErrorTypeError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidErrorType, 'Choose an active error type meant for reopening');
+  }
+}
+
+export class ParallelTaskNotPendingError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.parallelTaskNotPending, 'The signature was already given, rejected or cancelled');
+  }
+}
+
+/** The parallel step has no "rejected" way out, so nobody can reject it. */
+export class RejectionNotAllowedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.rejectionNotAllowed, 'This step has no way out for a rejection');
+  }
+}
+
+export class CommentRequiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.commentRequired, 'A comment is required');
   }
 }

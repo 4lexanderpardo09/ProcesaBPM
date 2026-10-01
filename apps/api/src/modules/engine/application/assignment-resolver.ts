@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AssigneeCandidate, type StepDocument } from '@procesabpm/shared';
+import { type AssigneeCandidate, InvalidStateError, NoAssigneeCandidatesError, type StepDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { ApproverResolver } from '../../approvals/application/approver-resolver.service.js';
 import { AssignmentCandidatesRepository, type CandidateRow } from '../data/assignment-candidates.repository.js';
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
+import { TicketWriteRepository } from '../data/ticket-write.repository.js';
+import { pickSignerHolder } from '../domain/parallel-policy.js';
 import { filterBySiteScope } from '../domain/site-scope.js';
 
 export interface AssignmentContext {
@@ -26,11 +28,46 @@ export class AssignmentResolver {
     @Inject(AssignmentCandidatesRepository) private readonly candidates: AssignmentCandidatesRepository,
     @Inject(TicketContextRepository) private readonly context: TicketContextRepository,
     @Inject(ApproverResolver) private readonly approvers: ApproverResolver,
+    @Inject(TicketWriteRepository) private readonly writes: TicketWriteRepository,
   ) {}
 
   async candidatesFor(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext): Promise<AssigneeCandidate[]> {
     const rows = await this.rowsFor(tx, step, ticket);
     return unique(rows).map(({ userId, name }) => ({ userId, name }));
+  }
+
+  /**
+   * The people who each sign a PARALLEL step: every signer row resolves to one person (a position to its least
+   * loaded holder), repeated people count once. A row that resolves to nobody fails the whole arrival.
+   */
+  async signersFor(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext): Promise<string[]> {
+    const people = new Set<string>();
+    for (const signer of [...step.signers].sort((a, b) => a.sortOrder - b.sortOrder)) {
+      const userId = await this.signerUser(tx, step, signer, ticket);
+      if (userId === undefined) throw new NoAssigneeCandidatesError(step.id, 'PARALLEL');
+      people.add(userId);
+    }
+    return [...people];
+  }
+
+  private async signerUser(tx: TenantTransaction, step: StepDocument, signer: StepDocument['signers'][number], ticket: AssignmentContext): Promise<string | undefined> {
+    switch (signer.signerType) {
+      case 'USER':
+        return signer.userId === null ? undefined : (await this.single(tx, ticket, signer.userId))[0]?.userId;
+      case 'CREATOR':
+        return (await this.single(tx, ticket, ticket.creatorId))[0]?.userId;
+      case 'APPROVER':
+        return (await this.single(tx, ticket, await this.approverOf(tx, step, ticket)))[0]?.userId;
+      case 'POSITION': {
+        if (signer.positionId === null) return undefined;
+        const holders = await this.byPosition(tx, [signer.positionId], step, ticket);
+        if (holders.length === 0) return undefined;
+        const ids = holders.map((holder) => holder.userId);
+        return pickSignerHolder(ids, await this.writes.assignmentLoads(tx, ticket.tenantId, ids));
+      }
+      case 'STEP_ASSIGNEE':
+        throw new InvalidStateError('A parallel step cannot have signers that are the step assignee');
+    }
   }
 
   private async rowsFor(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext): Promise<CandidateRow[]> {
@@ -46,7 +83,8 @@ export class AssignmentResolver {
         return this.single(tx, ticket, ticket.creatorId);
       case 'APPROVER':
         return this.single(tx, ticket, await this.approverOf(tx, step, ticket));
-      case 'POOL': {
+      case 'POOL':
+      case 'RANDOM_DISPATCH': {
         const positions = [...participantIds(step, 'POSITION'), ...(step.positionId === null ? [] : [step.positionId])];
         return [
           ...(await this.candidates.byUsers(tx, tenantId, participantIds(step, 'USER'))),

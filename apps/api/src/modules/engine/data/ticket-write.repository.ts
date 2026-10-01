@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import type { IncidentPeriod } from '../../sla/domain/pause-math.js';
 import type { AssigneePlan, ClockPlan, ClosedClock, ClosedVisit, EventPlan, FieldWrite, VisitPlan } from '../domain/plan.js';
 
 export interface LockedTicket {
@@ -13,6 +14,8 @@ export interface LockedTicket {
   readonly companyId: string;
   readonly creatorId: string;
   readonly siteId: string | null;
+  readonly closedById: string | null;
+  readonly closedAt: Date | null;
 }
 
 export interface OpenVisitRow {
@@ -24,6 +27,7 @@ export interface OpenVisitRow {
   readonly slaValue: number | null;
   readonly slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' | null;
   readonly calendarId: string | null;
+  readonly pausedMinutes: number;
 }
 
 export interface OpenClockRow {
@@ -32,6 +36,26 @@ export interface OpenClockRow {
   readonly startedAt: Date;
   readonly dueAt: Date | null;
   readonly calendarId: string | null;
+  readonly slaValue: number | null;
+  readonly slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' | null;
+  readonly pausedAt: Date | null;
+  readonly pausedMinutes: number;
+}
+
+export interface ParallelTaskRow {
+  readonly id: string;
+  readonly userId: string;
+  readonly status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'CANCELLED';
+}
+
+export interface IncidentRow {
+  readonly id: string;
+  readonly stepId: string;
+  readonly createdById: string;
+  readonly assignedToId: string;
+  readonly status: 'OPEN' | 'RESOLVED';
+  readonly previousAssigneeIds: string[];
+  readonly openedAt: Date;
 }
 
 export interface NewTicket {
@@ -61,7 +85,8 @@ export class TicketWriteRepository {
     const rows = await tx.$queryRaw<LockedTicket[]>`
       SELECT id::text AS "id", number, status::text AS "status", workflow_version_id::text AS "workflowVersionId",
              current_step_id::text AS "currentStepId", current_loop AS "currentLoop", company_id::text AS "companyId",
-             creator_id::text AS "creatorId", site_id::text AS "siteId"
+             creator_id::text AS "creatorId", site_id::text AS "siteId",
+             closed_by_id::text AS "closedById", closed_at AS "closedAt"
       FROM tickets
       WHERE tenant_id = ${tenantId}::uuid AND id = ${ticketId}::uuid AND deleted_at IS NULL
       FOR UPDATE`;
@@ -102,12 +127,12 @@ export class TicketWriteRepository {
   async findOpenVisit(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<OpenVisitRow | null> {
     return tx.ticketStepVisit.findFirst({
       where: { tenantId, ticketId, exitedAt: null },
-      select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, slaValue: true, slaUnit: true, calendarId: true },
+      select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, slaValue: true, slaUnit: true, calendarId: true, pausedMinutes: true },
     });
   }
 
   findOpenClocks(tx: TenantTransaction, tenantId: string, visitId: string): Promise<OpenClockRow[]> {
-    return tx.ticketSlaClock.findMany({ where: { tenantId, visitId, completedAt: null }, select: { id: true, responsibleId: true, startedAt: true, dueAt: true, calendarId: true }, orderBy: { id: 'asc' } });
+    return tx.ticketSlaClock.findMany({ where: { tenantId, visitId, completedAt: null }, select: { id: true, responsibleId: true, startedAt: true, dueAt: true, calendarId: true, slaValue: true, slaUnit: true, pausedAt: true, pausedMinutes: true }, orderBy: { id: 'asc' } });
   }
 
   findAssignees(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<Array<{ userId: string; type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'INCIDENT' }>> {
@@ -122,6 +147,100 @@ export class TicketWriteRepository {
   /** Whether the ticket already left the step before (the extra approval is not asked twice). */
   async hasVisited(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<boolean> {
     return (await tx.ticketStepVisit.count({ where: { tenantId, ticketId, stepId, exitedAt: { not: null } } })) > 0;
+  }
+
+  /** Every incident of the ticket, as the periods its clocks stood still. */
+  async findIncidentPeriods(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<IncidentPeriod[]> {
+    return tx.ticketIncident.findMany({ where: { tenantId, ticketId }, select: { openedAt: true, resolvedAt: true }, orderBy: { openedAt: 'asc' } });
+  }
+
+  /** Every visit of the ticket, oldest first. */
+  findVisits(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<Array<{ id: string; stepId: string; loop: number; enteredAt: Date; exitedAt: Date | null }>> {
+    return tx.ticketStepVisit.findMany({ where: { tenantId, ticketId }, select: { id: true, stepId: true, loop: true, enteredAt: true, exitedAt: true }, orderBy: [{ enteredAt: 'asc' }, { id: 'asc' }] });
+  }
+
+  findClocksOfVisit(tx: TenantTransaction, tenantId: string, visitId: string): Promise<Array<{ responsibleId: string | null; completedAt: Date | null }>> {
+    return tx.ticketSlaClock.findMany({ where: { tenantId, visitId }, select: { responsibleId: true, completedAt: true } });
+  }
+
+  /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
+  async reopenTicket(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'OPEN', closedAt: null, closedById: null, forcedClose: false, currentStepId: stepId, currentLoop: loop } });
+  }
+
+  async insertTicketError(tx: TenantTransaction, tenantId: string, ticketId: string, error: { errorTypeId: string; errorSubtypeId: string | null; reporterId: string; responsibleId: string; description: string; isProcessError: boolean; createdAt: Date }): Promise<string> {
+    const created = await tx.ticketError.create({ data: { tenantId, ticketId, ...error }, select: { id: true } });
+    return created.id;
+  }
+
+  async insertParallelTasks(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number, userIds: readonly string[]): Promise<void> {
+    await tx.ticketParallelTask.createMany({ data: userIds.map((userId) => ({ tenantId, ticketId, stepId, loop, userId })) });
+  }
+
+  findParallelTasks(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<ParallelTaskRow[]> {
+    return tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId, loop }, select: { id: true, userId: true, status: true }, orderBy: { id: 'asc' } });
+  }
+
+  /** The task leaves PENDING: a database trigger then removes the signer's PARALLEL assignee row. */
+  async completeParallelTask(tx: TenantTransaction, tenantId: string, taskId: string, status: 'SIGNED' | 'REJECTED' | 'CANCELLED', completedAt: Date, comment: string | null): Promise<void> {
+    await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { status, completedAt, comment } });
+  }
+
+  async moveParallelTask(tx: TenantTransaction, tenantId: string, taskId: string, toUserId: string): Promise<void> {
+    await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { userId: toUserId } });
+  }
+
+  /** How many tickets each person holds right now (to spread positions' signatures). */
+  async assignmentLoads(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, number>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await tx.ticketAssignee.groupBy({ by: ['userId'], where: { tenantId, userId: { in: [...userIds] } }, _count: { _all: true } });
+    return new Map(rows.map((row) => [row.userId, row._count._all]));
+  }
+
+  /** The clocks of the visit that are running stand still from `at`. */
+  async pauseClocks(tx: TenantTransaction, tenantId: string, visitId: string, at: Date): Promise<void> {
+    await tx.ticketSlaClock.updateMany({ where: { tenantId, visitId, completedAt: null, pausedAt: null }, data: { pausedAt: at } });
+  }
+
+  /** A paused clock runs again with the due date and the paused minutes the resume math gave it. */
+  async resumeClock(tx: TenantTransaction, tenantId: string, clockId: string, resumed: { pausedMinutes: number; dueAt: Date | null }): Promise<void> {
+    await tx.ticketSlaClock.updateMany({ where: { tenantId, id: clockId, completedAt: null }, data: { pausedAt: null, pausedMinutes: resumed.pausedMinutes, dueAt: resumed.dueAt } });
+  }
+
+  /** A clock whose responsible is gone goes back to waiting for a dispatch: it keeps running, with nobody's name on it. */
+  async releaseClock(tx: TenantTransaction, tenantId: string, clockId: string): Promise<void> {
+    await tx.ticketSlaClock.updateMany({ where: { tenantId, id: clockId, completedAt: null }, data: { responsibleId: null } });
+  }
+
+  async updateVisitPause(tx: TenantTransaction, tenantId: string, visitId: string, resumed: { pausedMinutes: number; dueAt: Date | null }): Promise<void> {
+    await tx.ticketStepVisit.updateMany({ where: { tenantId, id: visitId, exitedAt: null }, data: { pausedMinutes: resumed.pausedMinutes, dueAt: resumed.dueAt } });
+  }
+
+  async insertIncident(tx: TenantTransaction, tenantId: string, ticketId: string, incident: { stepId: string; createdById: string; assignedToId: string; description: string; previousAssigneeIds: readonly string[]; openedAt: Date }): Promise<string> {
+    const created = await tx.ticketIncident.create({
+      data: { tenantId, ticketId, stepId: incident.stepId, createdById: incident.createdById, assignedToId: incident.assignedToId, description: incident.description, previousAssigneeIds: [...incident.previousAssigneeIds], openedAt: incident.openedAt },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  findIncident(tx: TenantTransaction, tenantId: string, ticketId: string, incidentId: string): Promise<IncidentRow | null> {
+    return tx.ticketIncident.findFirst({ where: { tenantId, ticketId, id: incidentId }, select: { id: true, stepId: true, createdById: true, assignedToId: true, status: true, previousAssigneeIds: true, openedAt: true } });
+  }
+
+  /** One UPDATE: the check that ties `resolved_at` to the status is immediate. */
+  async resolveIncident(tx: TenantTransaction, tenantId: string, incidentId: string, resolvedAt: Date, resolution: string): Promise<void> {
+    await tx.ticketIncident.updateMany({ where: { tenantId, id: incidentId, status: 'OPEN' }, data: { status: 'RESOLVED', resolvedAt, resolution } });
+  }
+
+  async setTicketStatus(tx: TenantTransaction, tenantId: string, ticketId: string, status: 'OPEN' | 'PAUSED'): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status } });
+  }
+
+  /** People with a pending parallel task in the step and loop. */
+  async pendingSignerIds(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<Set<string>> {
+    const rows = await tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId, loop, status: 'PENDING' }, select: { userId: true } });
+    return new Set(rows.map((row) => row.userId));
   }
 
   /** Stored values keyed by field id. */
@@ -161,8 +280,8 @@ export class TicketWriteRepository {
     return (await tx.ticketEvent.count({ where: { tenantId, ticketId, assigneeId: userId, type: { in: ['ASSIGNED', 'REASSIGNED'] } } })) > 0;
   }
 
-  async deleteAssignees(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<void> {
-    await tx.ticketAssignee.deleteMany({ where: { tenantId, ticketId } });
+  async deleteAssignees(tx: TenantTransaction, tenantId: string, ticketId: string, userId?: string): Promise<void> {
+    await tx.ticketAssignee.deleteMany({ where: { tenantId, ticketId, ...(userId === undefined ? {} : { userId }) } });
   }
 
   async insertAssignees(tx: TenantTransaction, tenantId: string, ticketId: string, assignedAt: Date, assignees: readonly AssigneePlan[]): Promise<void> {
