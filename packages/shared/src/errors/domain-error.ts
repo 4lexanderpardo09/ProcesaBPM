@@ -22,6 +22,7 @@ export const ERROR_CODES = {
   platformAccessDenied: 'PLATFORM_ACCESS_DENIED',
   tenantSlugTaken: 'TENANT_SLUG_TAKEN',
   tenantNotFound: 'TENANT_NOT_FOUND',
+  notFound: 'NOT_FOUND',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -190,5 +191,12 @@ export class TenantSlugTakenError extends DomainError {
 export class TenantNotFoundError extends DomainError {
   constructor() {
     super(ERROR_CODES.tenantNotFound, 'The tenant does not exist');
+  }
+}
+
+/** The record does not exist or belongs to another tenant: both answer the same, so existence is never confirmed. */
+export class NotFoundError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.notFound, 'The resource does not exist');
   }
 }
