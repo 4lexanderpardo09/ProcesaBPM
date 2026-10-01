@@ -1,5 +1,12 @@
 import { BadRequestException, type ArgumentsHost } from '@nestjs/common';
-import { InvalidStateError, MissingTenantContextError } from '@procesabpm/shared';
+import {
+  InvalidCredentialsError,
+  InvalidStateError,
+  MfaNotImplementedError,
+  MissingTenantContextError,
+  RateLimitedError,
+  ValidationFailedError,
+} from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../../config/app-config.js';
 import { TenantContext } from '../../infrastructure/database/tenant-context.js';
@@ -22,9 +29,11 @@ function respond(exception: unknown) {
   const filter = new AllExceptionsFilter(logger, requestContext);
   const json = vi.fn();
   const status = vi.fn((_code: number) => ({ json }));
-  const host = { switchToHttp: () => ({ getResponse: () => ({ status }) }) } as unknown as ArgumentsHost;
+  const headers: Record<string, string> = {};
+  const setHeader = (name: string, value: string) => (headers[name] = value);
+  const host = { switchToHttp: () => ({ getResponse: () => ({ status, setHeader }) }) } as unknown as ArgumentsHost;
   requestContext.run({ requestId: 'req-9' }, () => filter.catch(exception, host));
-  return { status: status.mock.calls[0]?.[0], body: json.mock.calls[0]?.[0], logged: lines };
+  return { status: status.mock.calls[0]?.[0], body: json.mock.calls[0]?.[0], logged: lines, headers };
 }
 
 describe('AllExceptionsFilter', () => {
@@ -41,6 +50,31 @@ describe('AllExceptionsFilter', () => {
     expect(response.status).toBe(status);
     expect(response.body).toEqual({ error: { code, message: expect.any(String), requestId: 'req-9' } });
     expect(response.logged).toHaveLength(0);
+  });
+
+  it.each([
+    ['invalid credentials', new InvalidCredentialsError(), 401, 'INVALID_CREDENTIALS'],
+    ['MFA not implemented', new MfaNotImplementedError(), 501, 'MFA_NOT_IMPLEMENTED'],
+  ])('answers %s', (_label, exception, status, code) => {
+    const response = respond(exception);
+    expect(response.status).toBe(status);
+    expect(response.body.error.code).toBe(code);
+    expect(response.logged).toHaveLength(0);
+  });
+
+  it('includes the validation issues', () => {
+    const response = respond(new ValidationFailedError([{ path: 'email', message: 'Invalid email' }]));
+    expect(response.status).toBe(400);
+    expect(response.body.error).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      details: { issues: [{ path: 'email', message: 'Invalid email' }] },
+    });
+  });
+
+  it('tells a rate-limited client when to retry', () => {
+    const response = respond(new RateLimitedError(42));
+    expect(response.status).toBe(429);
+    expect(response.headers['Retry-After']).toBe('42');
   });
 
   it('keeps database and domain messages out of the response', () => {
