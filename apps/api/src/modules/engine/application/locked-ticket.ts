@@ -3,10 +3,13 @@ import { InvalidStateError, NotFoundError, PermissionDeniedError, StaleTicketErr
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type LockedTicket, type OpenClockRow, type OpenVisitRow, TicketWriteRepository } from '../data/ticket-write.repository.js';
 
+export type TicketAction = 'transition' | 'reassign' | 'close';
+
 /** Who acts on a ticket and what they are allowed to see: the HTTP layer builds it from the CASL ability. */
 export interface TicketActor {
   readonly userId: string;
-  readonly canReassign: boolean;
+  /** Whether the ability grants `action` on this very ticket (a stored condition such as `companyId` narrows it). */
+  readonly can: (tx: TenantTransaction, ticketId: string, action: TicketAction) => Promise<boolean>;
   /** Whether the ability lets them read this ticket (creator, assignee, observer or `read_all`). */
   readonly canRead: (tx: TenantTransaction, ticketId: string) => Promise<boolean>;
 }
@@ -49,9 +52,22 @@ export class LockedTicketLoader {
     };
   }
 
-  /** The assignee acts; anyone else needs the `reassign` permission (a supervisor moving the ticket on). */
-  assertMayAct(current: TicketInProgress, actor: TicketActor): void {
-    if (!current.actorIsAssignee && !actor.canReassign) throw new PermissionDeniedError('Only an assignee of the step can act on the ticket');
+  /**
+   * `transition`: the assignee, or a supervisor with `reassign` on this ticket; `close`: the assignee only.
+   * Both need the permission for this very ticket: a type-level check would ignore stored conditions.
+   */
+  async assertMayAct(tx: TenantTransaction, current: TicketInProgress, actor: TicketActor, action: 'transition' | 'close'): Promise<void> {
+    const ticketId = current.ticket.id;
+    const allowed =
+      (await actor.can(tx, ticketId, action)) &&
+      (current.actorIsAssignee || (action === 'transition' && (await actor.can(tx, ticketId, 'reassign'))));
+    if (!allowed) throw new PermissionDeniedError('Not allowed to act on this ticket');
+  }
+
+  /** A pool member who answers without taking the ticket takes it implicitly: the pool clock becomes theirs. */
+  async takeImplicitly(tx: TenantTransaction, tenantId: string, current: TicketInProgress, userId: string): Promise<void> {
+    if (!current.actorIsPoolMember) return;
+    for (const clock of current.clocks.filter((candidate) => candidate.responsibleId === null)) await this.writes.assignClockResponsible(tx, tenantId, clock.id, userId);
   }
 
   /** The values the ticket holds, by field code. */

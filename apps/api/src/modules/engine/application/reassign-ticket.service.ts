@@ -32,7 +32,7 @@ export class ReassignTicketService {
       const at = this.clock.now();
       const current = await this.loader.load(tx, tenantId, ticketId, request.visitId, actor);
       const { ticket, visit } = current;
-      if (!actor.canReassign) throw new PermissionDeniedError('Not allowed to reassign tickets');
+      if (!(await actor.can(tx, ticketId, 'reassign'))) throw new PermissionDeniedError('Not allowed to reassign tickets');
 
       const target = await this.people.findActiveMember(tx, tenantId, request.toUserId);
       const alreadyTheOnlyOne = current.assignees.length === 1 && current.assignees[0]!.userId === request.toUserId && current.assignees[0]!.type === 'PRIMARY';

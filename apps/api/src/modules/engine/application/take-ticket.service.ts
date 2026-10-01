@@ -21,12 +21,14 @@ export class TakeTicketService {
   ) {}
 
   take(actor: TicketActor, ticketId: string, request: TakeTicketRequest): Promise<TicketMutationResponse> {
-    // Whoever lost the race is no longer in the pool: they must hear "someone took it" (409), not "not found".
-    const claimant: TicketActor = { ...actor, canRead: () => Promise.resolve(true) };
     return this.runner.withTenantTransaction(async (tx) => {
       const { tenantId } = this.context.require();
+      // Whoever lost the race is no longer in the pool: someone who was assigned to the ticket hears "someone
+      // took it" (409), everybody else who cannot read it hears "not found".
+      const claimant: TicketActor = { ...actor, canRead: async (inner, id) => (await actor.canRead(inner, id)) || (await this.writes.wasAssigned(inner, tenantId, id, actor.userId)) };
       const at = this.clock.now();
       const current = await this.loader.load(tx, tenantId, ticketId, request.visitId, claimant);
+      if (!(await actor.can(tx, ticketId, 'transition'))) throw new PermissionDeniedError('Not allowed to take this ticket');
       if (!current.actorIsPoolMember) {
         throw current.assignees.some((assignee) => assignee.type === 'PRIMARY') ? new StaleTicketError() : new PermissionDeniedError('The ticket is not in a pool you belong to');
       }

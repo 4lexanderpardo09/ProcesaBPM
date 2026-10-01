@@ -40,7 +40,8 @@ export class TransitionTicketService {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
       const current = await this.loader.load(tx, tenantId, ticketId, request.visitId, actor);
-      this.loader.assertMayAct(current, actor);
+      await this.loader.assertMayAct(tx, current, actor, 'transition');
+      await this.loader.takeImplicitly(tx, tenantId, current, actor.userId);
       const { ticket, visit } = current;
 
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);

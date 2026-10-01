@@ -225,7 +225,7 @@ describe('assignment, pool, reassignment', () => {
     it('someone who is not in the pool cannot take the ticket', async () => {
       const created = await create(flow).expect(201);
       const stranger = await world.member(WORKER_GRANTS);
-      expect((await stranger.client.post(`/tickets/${created.body.id}/take`, { visitId: created.body.openVisitId })).status).toBe(403);
+      expect((await stranger.client.post(`/tickets/${created.body.id}/take`, { visitId: created.body.openVisitId })).status).toBe(404);
     });
 
     it('a member of the pool can answer without taking it first', async () => {
@@ -233,6 +233,8 @@ describe('assignment, pool, reassignment', () => {
       const done = await b.client.post(`/tickets/${created.body.id}/transition`, { transitionId: flow.transition.Done, visitId: created.body.openVisitId });
       expect(done.status).toBe(200);
       expect((await world.events(created.body.id)).find((event) => event.actor_id === b.userId)?.data).toMatchObject({ tookFromPool: true });
+      expect((await world.clocks(created.body.id)).map((clock) => clock.responsible_id)).toEqual([b.userId]);
+      expect((await b.client.get(`/tickets/${created.body.id}`)).status).toBe(200);
     });
 
     it('reassigning closes the previous clock, starts a new one and leaves the visit alone', async () => {

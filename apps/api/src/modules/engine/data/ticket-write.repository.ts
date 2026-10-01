@@ -156,8 +156,13 @@ export class TicketWriteRepository {
     });
   }
 
-  async deleteAssignees(tx: TenantTransaction, tenantId: string, ticketId: string, userIds?: readonly string[]): Promise<void> {
-    await tx.ticketAssignee.deleteMany({ where: { tenantId, ticketId, ...(userIds === undefined ? {} : { userId: { in: [...userIds] } }) } });
+  /** Whether the person was ever assigned to the ticket (its events keep the record). */
+  async wasAssigned(tx: TenantTransaction, tenantId: string, ticketId: string, userId: string): Promise<boolean> {
+    return (await tx.ticketEvent.count({ where: { tenantId, ticketId, assigneeId: userId, type: { in: ['ASSIGNED', 'REASSIGNED'] } } })) > 0;
+  }
+
+  async deleteAssignees(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<void> {
+    await tx.ticketAssignee.deleteMany({ where: { tenantId, ticketId } });
   }
 
   async insertAssignees(tx: TenantTransaction, tenantId: string, ticketId: string, assignedAt: Date, assignees: readonly AssigneePlan[]): Promise<void> {

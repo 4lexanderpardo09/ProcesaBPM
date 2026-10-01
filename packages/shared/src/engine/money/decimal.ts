@@ -18,6 +18,8 @@ export function toScaledInteger(value: number | string): bigint | undefined {
 
 export const decimalPlaces = (value: number | string): number => {
   const text = typeof value === 'number' ? String(value) : value.trim();
+  // Exponent notation (1e-7) hides its decimals: count it as more than any field allows.
+  if (/e/i.test(text)) return DECIMAL_SCALE + 1;
   const dot = text.indexOf('.');
   return dot === -1 ? 0 : text.length - dot - 1;
 };

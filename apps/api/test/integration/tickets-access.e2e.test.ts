@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
-import { type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, simpleFlow, SUPERVISOR_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
+import { type Member, unique, publishFlow, type PublishedFlow, REQUESTER_GRANTS, simpleFlow, SUPERVISOR_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
 
 useTestEnvironment();
 
@@ -165,6 +165,26 @@ describe('reading tickets: per-record authorization, listings, timeline and tena
 
     it('rejects an unknown view', async () => {
       await creator.client.get('/tickets?view=everything').expect(400);
+    });
+  });
+
+  describe('permissions with stored conditions apply to the very ticket', () => {
+    it('reassign, transition and create limited to another company are refused for this company\'s ticket', async () => {
+      const otherCompany = (await world.admin.post('/companies', { name: unique('Other'), countryCode: 'CO' }).expect(201)).body.id as string;
+      const limited = await world.member([
+        { action: 'reassign', subject: 'Ticket', conditions: { companyId: otherCompany } },
+        { action: 'transition', subject: 'Ticket', conditions: { companyId: otherCompany } },
+        { action: 'create', subject: 'Ticket', conditions: { companyId: otherCompany } },
+        grant('read_all'),
+      ]);
+      expect((await limited.client.post(`/tickets/${ticketId}/reassign`, { toUserId: former.userId, visitId })).status).toBe(403);
+      expect((await limited.client.post(`/tickets/${ticketId}/transition`, { transitionId: flow.transition.Done, visitId })).status).toBe(403);
+      expect((await limited.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'x', values: {} })).status).toBe(403);
+    });
+
+    it('the same permission limited to this company works', async () => {
+      const allowed = await world.member([{ action: 'create', subject: 'Ticket', conditions: { companyId: world.tenant.companyId } }]);
+      expect((await allowed.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'x', values: {} })).status).toBe(201);
     });
   });
 

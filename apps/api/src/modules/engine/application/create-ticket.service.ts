@@ -27,8 +27,18 @@ import { TicketMutationApplier } from './ticket-mutation-applier.js';
 
 export interface TicketCreator {
   readonly userId: string;
-  readonly canCreate: boolean;
-  readonly canCreateForOthers: boolean;
+  /** Whether the permission covers a ticket with these attributes (stored conditions may narrow it). */
+  readonly mayCreate: (action: 'create' | 'create_for_others', record: NewTicketRecord) => boolean;
+}
+
+export interface NewTicketRecord {
+  readonly companyId: string;
+  readonly departmentId: string | null;
+  readonly siteId: string | null;
+  readonly subcategoryId: string;
+  readonly workflowId: string;
+  readonly priorityId: string | null;
+  readonly creatorId: string;
 }
 
 /**
@@ -55,8 +65,6 @@ export class CreateTicketService {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
       const requesterId = request.requesterId ?? actor.userId;
-      this.assertMayCreateFor(actor, requesterId);
-
       const requester = await this.people.findActiveMember(tx, tenantId, requesterId);
       if (requester === null) throw new InvalidReferenceError('The requester is not an active member');
       const company = await this.companyOf(tx, tenantId, requester, request.companyId);
@@ -65,6 +73,8 @@ export class CreateTicketService {
       const published = await this.versions.findForSubcategory(tx, tenantId, request.subcategoryId);
       if (published === null) throw new WorkflowNotAvailableError();
       this.assertRunnable(published);
+      const priorityId = request.priorityId ?? subcategory.defaultPriorityId;
+      this.assertMayCreateFor(actor, requesterId, { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId: request.subcategoryId, workflowId: published.workflowId, priorityId, creatorId: requester.userId });
       const start = this.startStep(published, request.startStepId);
       await this.assertInitiator(tx, tenantId, start, requester, company);
 
@@ -102,7 +112,7 @@ export class CreateTicketService {
         workflowId: published.workflowId,
         workflowVersionId: published.versionId,
         subcategoryId: request.subcategoryId,
-        priorityId: request.priorityId ?? subcategory.defaultPriorityId,
+        priorityId,
         companyId: company.id,
         departmentId: requester.departmentId,
         siteId: requester.siteId,
@@ -143,9 +153,8 @@ export class CreateTicketService {
       : { at, actorId, fieldWrites, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
   }
 
-  private assertMayCreateFor(actor: TicketCreator, requesterId: string): void {
-    const allowed = requesterId === actor.userId ? actor.canCreate : actor.canCreateForOthers;
-    if (!allowed) throw new PermissionDeniedError('Not allowed to create tickets for this person');
+  private assertMayCreateFor(actor: TicketCreator, requesterId: string, record: NewTicketRecord): void {
+    if (!actor.mayCreate(requesterId === actor.userId ? 'create' : 'create_for_others', record)) throw new PermissionDeniedError('Not allowed to create tickets for this person');
   }
 
   /** One of the requester's companies: the chosen one, or their only one. */

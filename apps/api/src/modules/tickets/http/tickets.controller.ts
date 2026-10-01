@@ -21,7 +21,6 @@ import {
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { RequireAnyPermission, RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
-import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
 import { CloseTicketService } from '../../engine/application/close-ticket.service.js';
@@ -29,16 +28,13 @@ import { CreateTicketService } from '../../engine/application/create-ticket.serv
 import { ReassignTicketService } from '../../engine/application/reassign-ticket.service.js';
 import { TakeTicketService } from '../../engine/application/take-ticket.service.js';
 import { TransitionTicketService } from '../../engine/application/transition-ticket.service.js';
-import { ticketActorOf } from '../application/ticket-access.js';
+import { ticketCreatorOf } from '../application/ticket-access.js';
 import { TicketQueriesService } from '../application/ticket-queries.service.js';
-import { TicketQueryRepository } from '../data/ticket-query.repository.js';
 import { TICKET_READ_ACTIONS, TICKET_SUBJECT } from '../domain/ticket-subject.js';
 
 @Controller('tickets')
 export class TicketsController {
   constructor(
-    @Inject(TenantContext) private readonly context: TenantContext,
-    @Inject(TicketQueryRepository) private readonly queryRepository: TicketQueryRepository,
     @Inject(TicketQueriesService) private readonly queries: TicketQueriesService,
     @Inject(CreateTicketService) private readonly creation: CreateTicketService,
     @Inject(TransitionTicketService) private readonly transitions: TransitionTicketService,
@@ -50,7 +46,7 @@ export class TicketsController {
   @RequireAnyPermission(['create', 'create_for_others'], TICKET_SUBJECT)
   @Post()
   create(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Body(new ZodValidationPipe(createTicketRequestSchema)) body: CreateTicketRequest): Promise<TicketMutationResponse> {
-    return this.creation.create({ userId: principal.userId, canCreate: ability.can('create', TICKET_SUBJECT), canCreateForOthers: ability.can('create_for_others', TICKET_SUBJECT) }, body);
+    return this.creation.create(ticketCreatorOf(principal, ability), body);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
@@ -61,8 +57,8 @@ export class TicketsController {
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
   @Get(':id')
-  get(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketDetailResponse> {
-    return this.queries.get(principal, ability, id);
+  get(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketDetailResponse> {
+    return this.queries.get(ability, id);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
@@ -100,6 +96,6 @@ export class TicketsController {
   }
 
   private actor(principal: Principal, ability: AppAbility) {
-    return ticketActorOf(principal, ability, this.context.require().tenantId, this.queryRepository);
+    return this.queries.actorFor(principal, ability);
   }
 }

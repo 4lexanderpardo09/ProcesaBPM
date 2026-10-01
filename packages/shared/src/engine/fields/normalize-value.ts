@@ -63,7 +63,7 @@ function normalizeSelectValue(raw: unknown, config: Config, dataSource: Record<s
   const value = raw.trim();
   const options = optionValues(config);
   if (options !== undefined) return options.includes(value) ? good(value) : bad('NOT_AN_OPTION');
-  if (dataSource?.kind === 'PRESET') return good(value, [{ kind: 'PRESET', value, config: { preset: dataSource.preset } }]);
+  if (dataSource?.kind === 'PRESET') return UUID.test(value) ? good(value, [{ kind: 'PRESET', value, config: { preset: dataSource.preset } }]) : bad('INVALID_TYPE');
   if (dataSource?.kind === 'DATASET') return good(value, [{ kind: 'DATASET', value, config: { datasetId: dataSource.datasetId, column: dataSource.column } }]);
   return bad('NOT_AN_OPTION');
 }

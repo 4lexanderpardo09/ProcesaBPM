@@ -6,8 +6,9 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { TicketQueryRepository, type Where } from '../data/ticket-query.repository.js';
-import { assignedTo, createdBy, observedBy } from '../domain/ticket-subject.js';
-import { readableTickets } from './ticket-access.js';
+import { createdBy, observedBy } from '../domain/ticket-subject.js';
+import type { TicketActor } from '../../engine/application/locked-ticket.js';
+import { readableTickets, ticketActorOf } from './ticket-access.js';
 
 type SummaryRow = Awaited<ReturnType<TicketQueryRepository['list']>>['rows'][number];
 type DetailRow = NonNullable<Awaited<ReturnType<TicketQueryRepository['findDetail']>>>;
@@ -53,12 +54,17 @@ export class TicketQueriesService {
     @Inject(TicketQueryRepository) private readonly tickets: TicketQueryRepository,
   ) {}
 
-  get(principal: Principal, ability: AppAbility, ticketId: string): Promise<TicketDetailResponse> {
+  get(ability: AppAbility, ticketId: string): Promise<TicketDetailResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const row = await this.tickets.findDetail(tx, this.context.require().tenantId, ticketId, readableTickets(ability));
       if (row === null) throw new NotFoundError();
       return toDetail(row);
     });
+  }
+
+  /** The caller as the engine needs them to act on tickets. */
+  actorFor(principal: Principal, ability: AppAbility): TicketActor {
+    return ticketActorOf(principal, ability, this.context.require().tenantId, this.tickets);
   }
 
   list(principal: Principal, ability: AppAbility, query: ListTicketsQuery): Promise<Page<TicketSummaryResponse>> {

@@ -40,7 +40,8 @@ export function validateCapturedValues({ fields, input, existing, context }: Cap
     if (COMPUTED_FIELD_TYPES.has(field.type)) continue;
     const raw = input[field.code];
     if (isBlankValue(raw)) {
-      if (field.isRequired && isBlankValue(existing[field.code])) issues.push({ code: 'REQUIRED', fieldCode: field.code });
+      // A read-only field is never typed by the person, so it cannot be demanded of them either.
+      if (field.isRequired && !field.isReadOnly && isBlankValue(existing[field.code])) issues.push({ code: 'REQUIRED', fieldCode: field.code });
       continue;
     }
     if (field.isReadOnly) {

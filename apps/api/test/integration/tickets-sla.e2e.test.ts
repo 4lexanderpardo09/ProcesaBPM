@@ -33,11 +33,11 @@ describe('SLA: due dates, clocks and results', () => {
 
   const context = () => app.get(TenantContext);
   const as = <T>(userId: string, work: () => Promise<T>) => context().run({ tenantId: world.tenant.tenantId, userId }, work);
-  const actor = (userId: string, canReassign = false): TicketActor => ({ userId, canReassign, canRead: () => Promise.resolve(true) });
+  const actor = (userId: string, supervisor = false): TicketActor => ({ userId, can: (_tx, _id, action) => Promise.resolve(action !== 'reassign' || supervisor), canRead: () => Promise.resolve(true) });
   const user = (member: Member) => ({ participantType: 'USER', userId: member.userId });
   const create = (flow: PublishedFlow, at: Date, extra: Partial<CreateTicketRequest> = {}): Promise<TicketMutationResponse> => {
     clock.set(at);
-    return as(worker.userId, () => app.get(CreateTicketService).create({ userId: worker.userId, canCreate: true, canCreateForOthers: false }, { subcategoryId: flow.subcategoryId, title: 'Request', description: '', values: {}, companyId: world.tenant.companyId, ...extra }));
+    return as(worker.userId, () => app.get(CreateTicketService).create({ userId: worker.userId, mayCreate: () => true }, { subcategoryId: flow.subcategoryId, title: 'Request', description: '', values: {}, companyId: world.tenant.companyId, ...extra }));
   };
   const answer = (ticket: TicketMutationResponse, flow: PublishedFlow, at: Date, label = 'Done', userId = worker.userId, extra: Partial<TransitionTicketRequest> = {}) => {
     clock.set(at);

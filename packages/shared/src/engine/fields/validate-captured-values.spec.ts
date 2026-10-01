@@ -23,6 +23,8 @@ describe('validateCapturedValues', () => {
 
   it('rejects codes the step does not capture', () => expect(codes(run([field('a', 's', 'A')], { OTHER: 'x' }))).toEqual(['OTHER:UNKNOWN_FIELD']));
 
+  it('does not demand a read-only field', () => expect(codes(run([field('a', 's', 'A', { isReadOnly: true, isRequired: true })], {}))).toEqual([]));
+
   it('rejects values for read-only fields', () => expect(codes(run([field('a', 's', 'A', { isReadOnly: true })], { A: 'x' }))).toEqual(['A:NOT_EDITABLE']));
 
   it('ignores client values of computed fields', () => {
@@ -44,6 +46,7 @@ describe('validateCapturedValues', () => {
       [-1, 'OUT_OF_RANGE'],
       [5001, 'OUT_OF_RANGE'],
     ])('rejects %s', (value, code) => expect(codes(run([amount], { AMOUNT: value }))).toEqual([`AMOUNT:${code}`]));
+    it('exponent notation does not hide decimals', () => expect(codes(run([field('n', 's', 'N', { type: 'NUMBER' })], { N: 1e-7 }))).toEqual(['N:TOO_MANY_DECIMALS']));
     it('honours decimals of NUMBER', () => expect(codes(run([field('n', 's', 'N', { type: 'NUMBER', config: { decimals: 1 } })], { N: 1.25 }))).toEqual(['N:TOO_MANY_DECIMALS']));
     it('needs whole numbers in DAYS', () => expect(codes(run([field('d', 's', 'D', { type: 'DAYS' })], { D: 1.5 }))).toEqual(['D:INVALID_TYPE']));
   });
@@ -69,10 +72,15 @@ describe('validateCapturedValues', () => {
       expect(run([multi], { M: ['A', 'A'] }).values).toEqual({ M: ['A'] });
       expect(codes(run([multi], { M: ['A', 'B'] }))).toEqual(['M:OUT_OF_RANGE']);
     });
+    it('a preset value must be an id: anything else is a type error, not a database error', () => {
+      const preset = field('p', 's', 'P', { type: 'SELECT', dataSource: { kind: 'PRESET', preset: 'SITES' } });
+      expect(codes(run([preset], { P: 'abc' }))).toEqual(['P:INVALID_TYPE']);
+    });
     it('asks the server to verify values from a data source', () => {
       const preset = field('p', 's', 'P', { type: 'SELECT', dataSource: { kind: 'PRESET', preset: 'SITES' } });
-      const result = run([preset], { P: 'x' });
-      expect(result.references).toEqual([{ fieldCode: 'P', kind: 'PRESET', value: 'x', config: { preset: 'SITES' } }]);
+      const id = '018f3c1e-7b2a-7c3d-9e4f-0123456789ab';
+      const result = run([preset], { P: id });
+      expect(result.references).toEqual([{ fieldCode: 'P', kind: 'PRESET', value: id, config: { preset: 'SITES' } }]);
     });
   });
 
