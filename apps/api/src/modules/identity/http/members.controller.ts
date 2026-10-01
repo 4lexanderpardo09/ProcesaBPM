@@ -10,6 +10,8 @@ import {
   updateMemberRequestSchema,
 } from '@procesabpm/shared';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
+import type { AppAbility } from '../../authorization/domain/build-ability.js';
+import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { MemberInvitationService } from '../application/member-invitation.service.js';
@@ -49,8 +51,12 @@ export class MembersController {
 
   @RequirePermission('update', 'Membership')
   @Patch(':userId')
-  update(@Param('userId', ParseUUIDPipe) userId: string, @Body(new ZodValidationPipe(updateMemberRequestSchema)) body: UpdateMemberRequest): Promise<MemberResponse> {
-    return this.members.update(userId, body);
+  update(
+    @CurrentAbility() ability: AppAbility,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body(new ZodValidationPipe(updateMemberRequestSchema)) body: UpdateMemberRequest,
+  ): Promise<MemberResponse> {
+    return this.members.update(ability, userId, body);
   }
 
   @RequirePermission('update', 'Membership')
@@ -63,7 +69,7 @@ export class MembersController {
   @RequirePermission('delete', 'Membership')
   @Post(':userId/deactivate')
   @HttpCode(HttpStatus.OK)
-  deactivate(@CurrentPrincipal() principal: Principal, @Param('userId', ParseUUIDPipe) userId: string): Promise<MemberResponse> {
-    return this.members.deactivate(principal.userId, userId);
+  deactivate(@CurrentAbility() ability: AppAbility, @CurrentPrincipal() principal: Principal, @Param('userId', ParseUUIDPipe) userId: string): Promise<MemberResponse> {
+    return this.members.deactivate(ability, principal.userId, userId);
   }
 }

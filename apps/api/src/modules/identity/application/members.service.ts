@@ -8,8 +8,10 @@ import {
   type MembersQuery,
   NotFoundError,
   type Page,
+  PermissionDeniedError,
   type UpdateMemberRequest,
 } from '@procesabpm/shared';
+import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { type MemberRow, MemberRepository } from '../data/member.repository.js';
 import { assertCanDeactivate, statusAfterActivation } from '../domain/member-policy.js';
 
@@ -53,9 +55,10 @@ export class MembersService {
     return this.runner.withTenantTransaction(async (tx) => toMemberResponse(await this.require(tx, userId)));
   }
 
-  update(userId: string, request: UpdateMemberRequest): Promise<MemberResponse> {
+  update(ability: AppAbility, userId: string, request: UpdateMemberRequest): Promise<MemberResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.require(tx, userId);
+      const member = await this.require(tx, userId);
+      if (request.roleId !== undefined && request.roleId !== member.roleId) await this.assertMayLower(tx, ability, member);
       const { companyIds, ...fields } = compact(request);
       if (Object.keys(fields).length > 0) await this.repository.update(tx, this.tenantId, userId, fields);
       if (companyIds !== undefined) await this.repository.replaceCompanies(tx, this.tenantId, userId, companyIds);
@@ -71,13 +74,20 @@ export class MembersService {
     });
   }
 
-  deactivate(actingUserId: string, userId: string): Promise<MemberResponse> {
+  deactivate(ability: AppAbility, actingUserId: string, userId: string): Promise<MemberResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const member = await this.require(tx, userId);
       assertCanDeactivate(member, actingUserId, userId);
+      await this.assertMayLower(tx, ability, member);
       await this.repository.update(tx, this.tenantId, userId, { status: 'INACTIVE' });
       return toMemberResponse(await this.require(tx, userId));
     });
+  }
+
+  /** Taking an administrator off their role, or deactivating them, needs full access (the database backs this up). */
+  private async assertMayLower(tx: TenantTransaction, ability: AppAbility, member: MemberRow): Promise<void> {
+    const targetHasFullAccess = member.isOwner || (await this.repository.roleGrantsFullAccess(tx, this.tenantId, member.roleId));
+    if (targetHasFullAccess && !ability.can('manage', 'all')) throw new PermissionDeniedError('Only an administrator can lower or deactivate an administrator');
   }
 
   private async require(tx: TenantTransaction, userId: string): Promise<MemberRow> {

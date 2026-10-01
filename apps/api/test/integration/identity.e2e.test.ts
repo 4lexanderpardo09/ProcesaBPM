@@ -74,6 +74,14 @@ describe('identity API: members', () => {
       expect((await db.owner.query('SELECT 1 FROM users WHERE email = $1', [email])).rowCount).toBe(0);
     });
 
+    it('resending invalidates the earlier links: only the newest one can be accepted', async () => {
+      const invited = (await invite().expect(201)).body;
+      await admin.post(`/members/${invited.userId}/resend-invitation`).expect(200);
+      const [first, second] = await events(invited.userId);
+      expect((await http().post('/auth/invitations/accept').send({ token: first!.payload.token, password: PASSWORD }).expect(400)).body.error.code).toBe('INVALID_TOKEN');
+      await http().post('/auth/invitations/accept').send({ token: second!.payload.token, password: PASSWORD }).expect(200);
+    });
+
     it('resends a pending invitation with a new link and refuses it once accepted', async () => {
       const invited = (await invite().expect(201)).body;
       await admin.post(`/members/${invited.userId}/resend-invitation`).expect(200);
@@ -210,6 +218,20 @@ describe('identity API: members', () => {
       const { rows } = await db.platform.query<{ email: string }>(`SELECT u.email FROM users u JOIN memberships m ON m.user_id = u.id WHERE m.tenant_id = $1 LIMIT 1`, [other.tenantId]);
       const invited = (await owner.post('/members/invitations', { email: rows[0]!.email, firstName: 'Sent', lastName: 'Names', roleId: staff, companyIds: [world.companyId] }).expect(201)).body;
       expect(invited).toMatchObject({ firstName: 'Sent', lastName: 'Names' });
+    });
+
+    it('lowering an administrator (deactivating, or taking them off the admin role) needs full access (403)', async () => {
+      const manager = await clientWith(db, app, world, [{ action: 'update', subject: 'Membership' }, { action: 'delete', subject: 'Membership' }, { action: 'read', subject: 'Membership' }], unique('Demoter'));
+      const second = await clientOf(db, app, world);
+      const secondId = (await second.get('/auth/me').expect(200)).body.user.id as string;
+      expect((await manager.post(`/members/${secondId}/deactivate`).expect(403)).body.error.code).toBe('PERMISSION_DENIED');
+      await manager.patch(`/members/${secondId}`, { roleId: staff }).expect(403);
+      expect((await owner.get(`/members/${secondId}`).expect(200)).body).toMatchObject({ status: 'ACTIVE', roleId: world.roleId });
+      // Changing something else about an administrator, or lowering a plain member, is fine.
+      await manager.patch(`/members/${secondId}`, { positionId: null }).expect(200);
+      const plain = (await owner.post('/members/invitations', { email: emailOf(), firstName: 'P', lastName: 'P', roleId: staff, companyIds: [world.companyId] }).expect(201)).body;
+      await manager.post(`/members/${plain.userId}/deactivate`).expect(200);
+      await owner.post(`/members/${secondId}/deactivate`).expect(200);
     });
 
     it('a member who can edit memberships but is not an administrator cannot hand out an admin role (403)', async () => {
