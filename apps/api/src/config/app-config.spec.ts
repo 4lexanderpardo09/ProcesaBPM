@@ -10,8 +10,33 @@ const valid = {
 };
 
 describe('loadConfig', () => {
-  it('parses a complete environment', () => {
-    expect(loadConfig(valid)).toEqual({ ...valid, PORT: 3000 });
+  it('parses a complete environment and fills the documented defaults', () => {
+    expect(loadConfig(valid)).toEqual({
+      ...valid,
+      PORT: 3000,
+      DB_TX_TIMEOUT_MS: 10_000,
+      DB_TX_MAX_WAIT_MS: 5_000,
+      DB_POOL_MAX: 10,
+    });
+  });
+
+  it('reads the database tuning variables', () => {
+    const config = loadConfig({ ...valid, DB_TX_TIMEOUT_MS: '20000', DB_TX_MAX_WAIT_MS: '1000', DB_POOL_MAX: '25' });
+    expect(config).toMatchObject({ DB_TX_TIMEOUT_MS: 20_000, DB_TX_MAX_WAIT_MS: 1_000, DB_POOL_MAX: 25 });
+  });
+
+  it.each([
+    ['DB_TX_TIMEOUT_MS', '0'],
+    ['DB_TX_TIMEOUT_MS', 'fast'],
+    ['DB_TX_TIMEOUT_MS', '999999999'],
+    ['DB_TX_MAX_WAIT_MS', '-5'],
+    ['DB_POOL_MAX', '0'],
+    ['DB_POOL_MAX', '1.5'],
+    ['DB_POOL_MAX', '5000'],
+  ])('rejects %s=%s', (variable, value) => {
+    const error = catchError(() => loadConfig({ ...valid, [variable]: value }));
+    expect(error.problems).toHaveLength(1);
+    expect(error.problems[0]).toContain(variable);
   });
 
   it.each(Object.keys(valid))('refuses to start without %s', (variable) => {

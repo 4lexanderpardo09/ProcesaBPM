@@ -4,6 +4,9 @@ const postgresUrl = z
   .string()
   .refine((value) => /^postgres(ql)?:\/\//.test(value), 'must be a PostgreSQL connection URL');
 
+const positiveInteger = (defaultValue: number, max: number) =>
+  z.coerce.number().int().min(1).max(max).default(defaultValue);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().int().min(1).max(65_535),
@@ -12,6 +15,12 @@ const envSchema = z.object({
   DATABASE_URL: postgresUrl,
   /** Login of the `app_platform` role: bypasses row-level security. Platform services only. */
   PLATFORM_DATABASE_URL: postgresUrl,
+  /** Interactive transaction timeout (Prisma's own default is 5 s). */
+  DB_TX_TIMEOUT_MS: positiveInteger(10_000, 120_000),
+  /** How long a transaction may wait for a free connection (Prisma's own default is 2 s). */
+  DB_TX_MAX_WAIT_MS: positiveInteger(5_000, 60_000),
+  /** Connections of the runtime pool. */
+  DB_POOL_MAX: positiveInteger(10, 200),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

@@ -20,7 +20,7 @@ export const SENSITIVE_USER_COLUMNS = {
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
     super({
-      adapter: new PrismaPg({ connectionString: config.DATABASE_URL }),
+      adapter: new PrismaPg({ connectionString: config.DATABASE_URL, max: config.DB_POOL_MAX }),
       omit: { user: SENSITIVE_USER_COLUMNS },
     });
   }
