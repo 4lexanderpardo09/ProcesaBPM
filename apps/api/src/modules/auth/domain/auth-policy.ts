@@ -19,5 +19,10 @@ export const RATE_LIMITS = {
     perIp: { limit: 10, windowMs: 15 * MINUTE },
     perIdentifier: { limit: 3, windowMs: 15 * MINUTE },
   },
+  passwordResetConfirm: {
+    name: 'password-reset-confirm',
+    perIp: { limit: 20, windowMs: 15 * MINUTE },
+    perIdentifier: { limit: 5, windowMs: 15 * MINUTE },
+  },
   invitation: { name: 'invitation', perIp: { limit: 20, windowMs: 15 * MINUTE }, perIdentifier: { limit: 5, windowMs: 15 * MINUTE } },
 } as const satisfies Record<string, RateLimitPolicy>;
