@@ -195,4 +195,67 @@ describe('owner and admin rules', () => {
       await db.platform.query(`INSERT INTO roles (tenant_id, name, is_admin) VALUES ($1, 'Platform made admin', true)`, [tenant.tenantId]);
     });
   });
+
+  describe('bypass attempts found in the security review', () => {
+    /** A plain member (non-admin role) of an owned tenant. */
+    async function plainMember() {
+      const tenant = await ownedTenant();
+      const staff = await nonAdminRole(tenant);
+      const userId = await seedMember(db.platform, tenant);
+      await db.platform.query('UPDATE memberships SET role_id = $3 WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, userId, staff]);
+      return { tenant, userId, staff };
+    }
+
+    it('moving memberships.user_id (which cascades) is refused', async () => {
+      const { tenant, userId } = await plainMember();
+      const other = await seedMember(db.platform, await seedTenant(db.platform));
+      const code = await sqlStateOf(() =>
+        asMember(tenant, userId, (tx) => tx.query('UPDATE memberships SET user_id = $2 WHERE tenant_id = $1 AND is_owner', [tenant.tenantId, other])),
+      );
+      expect(code).toBe('23001');
+    });
+
+    it('moving a manage all grant to another role (role_permissions.role_id) is refused', async () => {
+      const { tenant, userId, staff } = await plainMember();
+      const adminId = await adminRole(tenant, 'Holder');
+      await db.platform.query(
+        `INSERT INTO role_permissions (tenant_id, role_id, permission_id) SELECT $1, $2, id FROM permissions WHERE action = 'manage' AND subject = 'all'`,
+        [tenant.tenantId, adminId],
+      );
+      const code = await sqlStateOf(() =>
+        asMember(tenant, userId, (tx) => tx.query('UPDATE role_permissions SET role_id = $2 WHERE tenant_id = $1 AND role_id = $3', [tenant.tenantId, staff, adminId])),
+      );
+      expect(code).toBe(SqlState.insufficientPrivilege);
+    });
+
+    it('a non-admin cannot reactivate an inactive admin role or an inactive member of one', async () => {
+      const { tenant, userId } = await plainMember();
+      const inactive = await adminRole(tenant, 'Dormant');
+      await db.platform.query('UPDATE roles SET is_active = false WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, inactive]);
+      expect(await sqlStateOf(() => asMember(tenant, userId, (tx) => tx.query('UPDATE roles SET is_active = true WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, inactive])))).toBe(SqlState.insufficientPrivilege);
+
+      const sleeper = await seedMember(db.platform, tenant);
+      await db.platform.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, sleeper]);
+      expect(await sqlStateOf(() => asMember(tenant, userId, (tx) => tx.query(`UPDATE memberships SET status = 'ACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, sleeper])))).toBe(SqlState.insufficientPrivilege);
+      // The owner can.
+      await asMember(tenant, tenant.userId, (tx) => tx.query(`UPDATE memberships SET status = 'ACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, sleeper]));
+    });
+
+    it('an accepted owner cannot be sent back to INVITED by clearing joined_at', async () => {
+      const tenant = await ownedTenant();
+      const code = await sqlStateOf(() =>
+        asMember(tenant, tenant.userId, (tx) => tx.query(`UPDATE memberships SET status = 'INVITED', joined_at = NULL WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, tenant.userId])),
+      );
+      expect(code).toBe(SqlState.checkViolation);
+    });
+
+    it('permissions_version cannot be set by a member, only by the bump trigger', async () => {
+      const { tenant, userId, staff } = await plainMember();
+      expect(await sqlStateOf(() => asMember(tenant, userId, (tx) => tx.query('UPDATE roles SET permissions_version = 2147483647 WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, staff])))).toBe(SqlState.insufficientPrivilege);
+      const { rows: before } = await db.platform.query('SELECT permissions_version FROM roles WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, staff]);
+      await db.platform.query(`INSERT INTO role_permissions (tenant_id, role_id, permission_id) SELECT $1, $2, id FROM permissions WHERE action = 'read' AND subject = 'Company'`, [tenant.tenantId, staff]);
+      const { rows: after } = await db.platform.query('SELECT permissions_version FROM roles WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, staff]);
+      expect(after[0].permissions_version).toBe(before[0].permissions_version + 1);
+    });
+  });
 });

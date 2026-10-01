@@ -12,7 +12,7 @@ function sourceFiles(directory: string): string[] {
   });
 }
 
-const importsOf = (file: string): string[] => [...readFileSync(file, 'utf8').matchAll(/from '([^']+)'/g)].map((match) => match[1]!);
+const importsOf = (file: string): string[] => [...readFileSync(file, 'utf8').matchAll(/(?:from\s*|import\s*\(\s*|import\s+)['"]([^'"]+)['"]/g)].map((match) => match[1]!);
 const posix = (path: string) => relative(SRC, path).split(sep).join('/');
 
 describe('architecture', () => {

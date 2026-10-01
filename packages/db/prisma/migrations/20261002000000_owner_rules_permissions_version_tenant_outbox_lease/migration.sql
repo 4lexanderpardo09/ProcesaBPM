@@ -42,6 +42,12 @@ CREATE FUNCTION trg_role_permissions_version_monotonic() RETURNS trigger
     IF NEW.permissions_version < OLD.permissions_version THEN
       RAISE EXCEPTION 'permissions_version of role % cannot decrease', OLD.id USING ERRCODE = '23514';
     END IF;
+    -- Only the bump trigger (depth 2: its UPDATE is fired from a trigger on role_permissions) may raise it;
+    -- a member setting it to the integer maximum would break every later permission edit of the role.
+    IF NEW.permissions_version <> OLD.permissions_version AND pg_trigger_depth() < 2
+       AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AND current_user <> 'app_platform' THEN
+      RAISE EXCEPTION 'permissions_version is maintained by the database' USING ERRCODE = '42501';
+    END IF;
     RETURN NEW;
   END
   $$;
@@ -162,8 +168,9 @@ CREATE FUNCTION trg_guard_membership_privilege() RETURNS trigger
       END IF;
     END IF;
 
-    -- Giving an admin role.
-    IF TG_OP = 'INSERT' OR NEW.role_id IS DISTINCT FROM OLD.role_id THEN
+    -- Giving an admin role, or reactivating a member of one.
+    IF TG_OP = 'INSERT' OR NEW.role_id IS DISTINCT FROM OLD.role_id
+       OR (NEW.status = 'ACTIVE' AND OLD.status IS DISTINCT FROM 'ACTIVE') THEN
       SELECT r.is_admin INTO v_new_role_is_admin FROM roles r WHERE r.tenant_id = NEW.tenant_id AND r.id = NEW.role_id;
       IF coalesce(v_new_role_is_admin, false) AND NOT acting_user_has_full_access(NEW.tenant_id) THEN
         RAISE EXCEPTION 'only an administrator can give an admin role' USING ERRCODE = '42501';
@@ -172,21 +179,23 @@ CREATE FUNCTION trg_guard_membership_privilege() RETURNS trigger
     RETURN NEW;
   END
   $$;
-CREATE TRIGGER guard_membership_privilege BEFORE INSERT OR UPDATE OF is_owner, role_id ON memberships
+CREATE TRIGGER guard_membership_privilege BEFORE INSERT OR UPDATE OF is_owner, role_id, status ON memberships
   FOR EACH ROW EXECUTE FUNCTION trg_guard_membership_privilege();
 
 CREATE FUNCTION trg_guard_role_privilege() RETURNS trigger
   LANGUAGE plpgsql SET search_path = public, pg_temp
   AS $$
   BEGIN
-    IF NEW.is_admin AND (TG_OP = 'INSERT' OR NOT OLD.is_admin)
+    -- Becoming an active admin role (created, marked admin, or reactivated) is a grant of full access.
+    IF NEW.is_admin AND NEW.is_active
+       AND (TG_OP = 'INSERT' OR NOT (OLD.is_admin AND OLD.is_active))
        AND NOT is_privileged_session() AND NOT acting_user_has_full_access(NEW.tenant_id) THEN
-      RAISE EXCEPTION 'only an administrator can create or mark an admin role' USING ERRCODE = '42501';
+      RAISE EXCEPTION 'only an administrator can create, mark or reactivate an admin role' USING ERRCODE = '42501';
     END IF;
     RETURN NEW;
   END
   $$;
-CREATE TRIGGER guard_role_privilege BEFORE INSERT OR UPDATE OF is_admin ON roles
+CREATE TRIGGER guard_role_privilege BEFORE INSERT OR UPDATE OF is_admin, is_active ON roles
   FOR EACH ROW EXECUTE FUNCTION trg_guard_role_privilege();
 
 CREATE FUNCTION trg_guard_manage_all_grant() RETURNS trigger
@@ -200,8 +209,43 @@ CREATE FUNCTION trg_guard_manage_all_grant() RETURNS trigger
     RETURN NEW;
   END
   $$;
-CREATE TRIGGER guard_manage_all_grant BEFORE INSERT OR UPDATE OF permission_id ON role_permissions
+CREATE TRIGGER guard_manage_all_grant BEFORE INSERT OR UPDATE OF permission_id, role_id, tenant_id ON role_permissions
   FOR EACH ROW EXECUTE FUNCTION trg_guard_manage_all_grant();
+
+-- Identity columns cannot be moved: a foreign key cascades on update, so changing memberships.user_id
+-- would hand the owner flag or an admin membership to another account, and changing
+-- role_permissions.role_id would move a `manage all` grant to another role.
+CREATE FUNCTION trg_identity_columns_immutable() RETURNS trigger
+  LANGUAGE plpgsql SET search_path = public, pg_temp
+  AS $$
+  BEGIN
+    IF NOT is_privileged_session() THEN
+      RAISE EXCEPTION 'the identity columns of % cannot be changed', TG_TABLE_NAME USING ERRCODE = '23001';
+    END IF;
+    RETURN NEW;
+  END
+  $$;
+CREATE TRIGGER memberships_identity_immutable BEFORE UPDATE OF tenant_id, user_id ON memberships
+  FOR EACH ROW EXECUTE FUNCTION trg_identity_columns_immutable();
+CREATE TRIGGER role_permissions_identity_immutable BEFORE UPDATE OF tenant_id, role_id ON role_permissions
+  FOR EACH ROW EXECUTE FUNCTION trg_identity_columns_immutable();
+
+-- An accepted membership never goes back to INVITED (the owner would have no invitation left to accept).
+CREATE FUNCTION trg_membership_no_regress() RETURNS trigger
+  LANGUAGE plpgsql SET search_path = public, pg_temp
+  AS $$
+  BEGIN
+    IF NOT is_privileged_session() AND OLD.joined_at IS NOT NULL AND NEW.joined_at IS NULL THEN
+      RAISE EXCEPTION 'joined_at cannot be cleared' USING ERRCODE = '23514';
+    END IF;
+    IF NOT is_privileged_session() AND NEW.status = 'INVITED' AND OLD.status <> 'INVITED' THEN
+      RAISE EXCEPTION 'a membership cannot go back to INVITED' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+  END
+  $$;
+CREATE TRIGGER membership_no_regress BEFORE UPDATE OF status, joined_at ON memberships
+  FOR EACH ROW EXECUTE FUNCTION trg_membership_no_regress();
 
 -- ===========================================================================
 -- 3. Tenant outbox: lease, fencing and complete/fail (same protocol as the platform outbox)
