@@ -3,7 +3,7 @@
 > Documento de referencia de la capa de datos. Está escrito para quien construya el API (personas o agentes).
 > Fuente de verdad del código: `packages/db/`. Si cambias el esquema, actualiza este documento en el mismo commit.
 >
-> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 218 pruebas en verde**.
+> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 236 pruebas en verde**.
 
 ## Contenido
 1. [Resumen](#1-resumen)
@@ -32,7 +32,7 @@
 | Triggers | 34 (inmutabilidad, máquina de estados, coherencia, `updated_at`) |
 | Row-Level Security | forzada en 82 tablas |
 | Enums | 38 |
-| Pruebas | 218 (integración con PostgreSQL real + unitarias) |
+| Pruebas | 236 (integración con PostgreSQL real + unitarias) |
 
 La BD no es solo almacenamiento: **garantiza por sí misma** el aislamiento entre clientes y las reglas de negocio críticas. Un bug en el API no puede mezclar clientes, romper un flujo publicado ni dejar un ticket en un estado imposible.
 
@@ -281,7 +281,9 @@ Códigos de error que devuelve la BD: `23001` = dato inmutable · `23514` = esta
 | Archivos | Subida de usuario ≤ 4 MB; tamaño > 0; un único documento vigente por paso. | CHECK + índice parcial | 23514 / 23505 |
 | Roles | `roles.permissions_version` sube con cualquier cambio de `role_permissions` (trigger) y nunca baja; la caché de habilidades del API se indexa por esa versión, así que un permiso revocado deja de valer en la siguiente petición. | Triggers `bump_role_permissions_version`, `role_permissions_version_monotonic` | 23514 |
 | Dueño y admin | Si el tenant tiene dueño, su rol es un rol admin **activo** y su membresía está `ACTIVE` (o `INVITED` sin aceptar: el tenant se crea antes de que el dueño acepte). Aceptar fija `joined_at`, así que `ACTIVE` no vuelve a `INVITED`. El dueño no se desactiva, no pierde el rol admin ni se borra; un tenant que tuvo dueño no se queda sin él (el traspaso limpia al anterior y fija al nuevo en la misma transacción). Se valida **al COMMIT** con `SECURITY DEFINER` (sin tenant en el contexto una RLS vacía la dejaría pasar). | Constraint triggers diferidos `check_tenant_keeps_admin*` + `assert_tenant_keeps_admin` | 23514 |
-| Escalada | `is_owner`, un rol admin y el permiso `manage all` dan acceso total, así que solo los concede la plataforma, un superusuario (migraciones) o quien ya tiene ese poder: hacer dueño → solo el dueño, en un traspaso; dar, crear o **reactivar** un rol admin, reactivar a un miembro de uno, o conceder `manage all` → el dueño o un miembro de un rol admin activo. Las columnas de identidad no se mueven (`memberships.tenant_id/user_id`, `role_permissions.tenant_id/role_id`: las FK hacen cascada y se podría pasar el dueño o un `manage all` a otra cuenta o rol); `joined_at` no se borra y una membresía no vuelve a `INVITED`; `roles.permissions_version` solo lo cambia el trigger de la BD. Los cierres vienen de la revisión de seguridad (Opus). | Triggers `guard_membership_privilege`, `guard_role_privilege`, `guard_manage_all_grant`, `*_identity_immutable`, `membership_no_regress`, `role_permissions_version_monotonic` | 42501 / 23001 / 23514 |
+| Escalada | `is_owner`, un rol admin y el permiso `manage all` (en cualquier rol: `role_grants_full_access`) dan acceso total, así que solo los concede la plataforma, un superusuario (migraciones) o quien ya tiene ese poder: hacer dueño → solo el dueño, en un traspaso; dar, crear o **reactivar** un rol con acceso total, reactivar o **revivir una invitación** (INACTIVE → INVITED/ACTIVE) de un miembro de uno, o conceder `manage all` → el dueño o un miembro de un rol admin activo. Las columnas de identidad no se mueven (`memberships.tenant_id/user_id`, `role_permissions.tenant_id/role_id`: las FK hacen cascada y se podría pasar el dueño o un `manage all` a otra cuenta o rol); `joined_at` no se borra y una membresía no vuelve a `INVITED`; `roles.permissions_version` solo lo cambia el trigger de la BD. Los cierres vienen de la revisión de seguridad (Opus). | Triggers `guard_membership_privilege`, `guard_role_privilege`, `guard_manage_all_grant`, `*_identity_immutable`, `membership_no_regress`, `role_permissions_version_monotonic` | 42501 / 23001 / 23514 |
+| Sedes | Una sede sin padre es de nivel 1 y una hija está exactamente un nivel debajo de su padre (lo que también impide ciclos); nivel ≤ 20; el padre es del mismo tenant (FK compuesta); el nombre es único entre los hijos de un padre, **raíces incluidas** (`NULLS NOT DISTINCT`, mismo nombre de índice que Prisma, que no puede expresarlo). La regla de niveles es un constraint trigger **diferido** (mover un subárbol actualiza el nodo y luego cada descendiente; se valida al COMMIT) que vuelve a leer la fila y revisa también a sus hijos, y toma el mismo `pg_advisory_xact_lock('sites:<tenant>')` que el API antes de escribir el árbol. | `check_site_tree`, CHECK `sites_root_is_level_one`/`sites_max_level`, índice `sites_tenant_id_parent_id_name_key` | 23514 / 23505 |
+| Miembros | `INVITED` significa "sin aceptar" (`joined_at` vacío): una membresía que aceptó no vuelve a `INVITED` y `joined_at` no se borra. Reactivar a quien nunca aceptó lo deja en `INVITED`. | `membership_no_regress` | 23514 |
 | Unicidades | Una empresa, un calendario y un tipo de grupo por defecto; un borrador y una publicada por flujo; un dueño por tenant. | Índices únicos parciales | 23505 |
 
 ## 8. Contrato para el API

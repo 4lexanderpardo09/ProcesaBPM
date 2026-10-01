@@ -52,20 +52,11 @@ export class SiteRepository {
   }
 
   /**
-   * Serializes the writers of the site tree of a tenant until the end of the transaction: cycle and
-   * level checks read the whole tree, and two concurrent moves would otherwise each pass on a stale view.
+   * Serializes the writers of the site tree of a tenant until the end of the transaction: the cycle
+   * check reads the whole tree. The database trigger takes the same lock key (`sites:<tenant>`).
    */
   async lockTree(tx: TenantTransaction, tenantId: string): Promise<void> {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`sites:${tenantId}`}, 0))`;
-  }
-
-  /** The unique index treats root sites (no parent) as all different, so the name is checked here. */
-  async nameTaken(tx: TenantTransaction, tenantId: string, parentId: string | null, name: string, exceptId?: string): Promise<boolean> {
-    const found = await tx.site.findFirst({
-      where: { tenantId, parentId, name, ...(exceptId === undefined ? {} : { id: { not: exceptId } }) },
-      select: { id: true },
-    });
-    return found !== null;
   }
 
   async countAtLevel(tx: TenantTransaction, tenantId: string, level: number): Promise<number> {

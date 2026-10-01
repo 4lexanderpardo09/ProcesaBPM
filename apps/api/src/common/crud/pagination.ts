@@ -1,6 +1,6 @@
 import type { Page, PageQuery } from '@procesabpm/shared';
 
-export function pageWindow(query: PageQuery): { skip: number; take: number } {
+export function pageWindow(query: Pick<PageQuery, 'page' | 'pageSize'>): { skip: number; take: number } {
   return { skip: (query.page - 1) * query.pageSize, take: query.pageSize };
 }
 

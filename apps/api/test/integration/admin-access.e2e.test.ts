@@ -55,6 +55,36 @@ const ROUTES: AdminRoute[] = [
   { method: 'get', path: `/categories/${ANY_ID}/visibility`, action: 'read', subject: 'Category' },
   { method: 'put', path: `/categories/${ANY_ID}/visibility`, action: 'update', subject: 'Category' },
   ...crud('/subcategories', 'Subcategory'),
+  { method: 'get', path: '/members', action: 'read', subject: 'Membership' },
+  { method: 'get', path: `/members/${ANY_ID}`, action: 'read', subject: 'Membership' },
+  { method: 'post', path: '/members/invitations', action: 'create', subject: 'Membership' },
+  { method: 'post', path: `/members/${ANY_ID}/resend-invitation`, action: 'update', subject: 'Membership' },
+  { method: 'patch', path: `/members/${ANY_ID}`, action: 'update', subject: 'Membership' },
+  { method: 'post', path: `/members/${ANY_ID}/activate`, action: 'update', subject: 'Membership' },
+  { method: 'post', path: `/members/${ANY_ID}/deactivate`, action: 'delete', subject: 'Membership' },
+  ...crud('/roles', 'Role'),
+  { method: 'delete', path: `/roles/${ANY_ID}`, action: 'delete', subject: 'Role' },
+  { method: 'get', path: `/roles/${ANY_ID}/permissions`, action: 'read', subject: 'Role' },
+  { method: 'put', path: `/roles/${ANY_ID}/permissions`, action: 'update', subject: 'Role' },
+  { method: 'get', path: '/permissions', action: 'read', subject: 'Role' },
+  ...crud('/groups', 'Group'),
+  { method: 'get', path: `/groups/${ANY_ID}/members`, action: 'read', subject: 'Group' },
+  { method: 'put', path: `/groups/${ANY_ID}/members`, action: 'update', subject: 'Group' },
+  { method: 'post', path: `/groups/${ANY_ID}/members`, action: 'update', subject: 'Group' },
+  { method: 'delete', path: `/groups/${ANY_ID}/members/${ANY_ID}`, action: 'update', subject: 'Group' },
+  { method: 'get', path: '/approval-group-types', action: 'read', subject: 'ApprovalGroup' },
+  { method: 'get', path: `/approval-group-types/${ANY_ID}`, action: 'read', subject: 'ApprovalGroup' },
+  { method: 'post', path: '/approval-group-types', action: 'create', subject: 'ApprovalGroup' },
+  { method: 'patch', path: `/approval-group-types/${ANY_ID}`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'delete', path: `/approval-group-types/${ANY_ID}`, action: 'delete', subject: 'ApprovalGroup' },
+  ...crud('/approval-groups', 'ApprovalGroup'),
+  { method: 'get', path: `/approval-groups/${ANY_ID}/approvers`, action: 'read', subject: 'ApprovalGroup' },
+  { method: 'put', path: `/approval-groups/${ANY_ID}/approvers`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'get', path: `/approval-groups/${ANY_ID}/members`, action: 'read', subject: 'ApprovalGroup' },
+  { method: 'put', path: `/approval-groups/${ANY_ID}/members`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'post', path: `/approval-groups/${ANY_ID}/members`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'delete', path: `/approval-groups/${ANY_ID}/members/${ANY_ID}`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'get', path: `/approvals/resolve?userId=${ANY_ID}&typeId=${ANY_ID}&companyId=${ANY_ID}`, action: 'read', subject: 'ApprovalGroup' },
 ];
 
 describe('permissions of the organization and catalog APIs', () => {
@@ -125,6 +155,8 @@ describe('tenant isolation of the organization and catalog APIs', () => {
     ids.priority = (await a.post('/priorities', { name: unique('A-prio') }).expect(201)).body.id;
     ids.category = (await a.post('/categories', { name: unique('A-cat') }).expect(201)).body.id;
     ids.subcategory = (await a.post('/subcategories', { categoryId: ids.category, name: unique('A-sub') }).expect(201)).body.id;
+    ids.role = (await a.post('/roles', { name: unique('A-role') }).expect(201)).body.id;
+    ids.group = (await a.post('/groups', { name: unique('A-group') }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -141,6 +173,8 @@ describe('tenant isolation of the organization and catalog APIs', () => {
     ['priorities', 'priority'],
     ['categories', 'category'],
     ['subcategories', 'subcategory'],
+    ['roles', 'role'],
+    ['groups', 'group'],
   ] as const;
 
   it.each(RESOURCES)('%s: another tenant cannot read, edit or toggle a record by id: always 404, never 403', async (path, key) => {
@@ -183,6 +217,25 @@ describe('tenant isolation of the organization and catalog APIs', () => {
     const ownSite = (await b.post('/sites', { name: unique('Own') }).expect(201)).body.id;
     await b.post(`/sites/${ownSite}/move`, { parentId: ids.site }).expect(422);
     expect((await a.get(`/sites/${ids.site}`).expect(200)).body.parentId).toBeNull();
+  });
+
+  it('members, role permissions and group members of another tenant answer 404 / 422 and nothing changes', async () => {
+    const member = (await a.post('/members/invitations', { email: `${unique('m')}@example.com`, firstName: 'M', lastName: 'M', roleId: ids.role, companyIds: [tenantA.companyId] }).expect(201)).body;
+    await b.get(`/members/${member.userId}`).expect(404);
+    await b.patch(`/members/${member.userId}`, { positionId: null }).expect(404);
+    await b.post(`/members/${member.userId}/deactivate`).expect(404);
+    await b.post(`/members/${member.userId}/activate`).expect(404);
+    await b.post(`/members/${member.userId}/resend-invitation`).expect(404);
+    expect(((await b.get('/members?pageSize=100&includeInactive=true').expect(200)).body.items as Array<{ userId: string }>).map((item) => item.userId)).not.toContain(member.userId);
+    await b.get(`/roles/${ids.role}/permissions`).expect(404);
+    await b.put(`/roles/${ids.role}/permissions`, { permissions: [] }).expect(404);
+    await b.delete(`/roles/${ids.role}`).expect(404);
+    await b.get(`/groups/${ids.group}/members`).expect(404);
+    await b.post(`/groups/${ids.group}/members`, { userId: member.userId }).expect(404);
+    const ownGroup = (await b.post('/groups', { name: unique('B-group') }).expect(201)).body.id;
+    await b.post(`/groups/${ownGroup}/members`, { userId: member.userId }).expect(422);
+    await b.post('/members/invitations', { email: `${unique('x')}@example.com`, firstName: 'X', lastName: 'X', roleId: ids.role, companyIds: [tenantA.companyId] }).expect(422);
+    expect((await a.get(`/members/${member.userId}`).expect(200)).body.status).toBe('INVITED');
   });
 
   it('the same names can exist in two tenants (uniqueness is per tenant)', async () => {
