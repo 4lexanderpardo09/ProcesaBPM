@@ -100,7 +100,7 @@ describe('parallel cancellation and random dispatch', () => {
     });
 
     it('two workers at once never claim the same step', async () => {
-      const tickets = [];
+      const tickets: Array<Awaited<ReturnType<typeof dispatchTicket>>> = [];
       for (let index = 0; index < 6; index += 1) tickets.push(await dispatchTicket(tenant));
       const [first, second] = await Promise.all([claim(), claim()]);
       const mine = (rows: typeof first) => rows.map((row) => row.out_step_id).filter((id) => tickets.some((ticket) => ticket.taskStepId === id));
