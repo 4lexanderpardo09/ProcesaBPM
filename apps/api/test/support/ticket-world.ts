@@ -83,14 +83,9 @@ export interface PublishedFlow {
 
 const transitionKey = (spec: TransitionSpec) => spec.label ?? `${spec.from}->${spec.to}`;
 
-/** Builds and publishes a workflow through the builder API, the way a tenant administrator would. */
-export async function publishFlow(admin: ApiClient, spec: FlowSpec): Promise<PublishedFlow> {
-  const category = (await admin.post('/categories', { name: unique('Cat') }).expect(201)).body.id as string;
-  const subcategoryId = (await admin.post('/subcategories', { categoryId: category, name: unique('Sub') }).expect(201)).body.id as string;
-  const workflow = (await admin.post('/workflows', { subcategoryId, name: unique('Flow') }).expect(201)).body;
-  const versionId = workflow.versions[0].id as string;
-  const base = `/workflows/${workflow.id}/versions/${versionId}`;
-
+/** Fills the draft version of a workflow from a spec through the builder API and publishes it. */
+export async function publishVersion(admin: ApiClient, workflowId: string, versionId: string, spec: FlowSpec): Promise<Pick<PublishedFlow, 'step' | 'transition'>> {
+  const base = `/workflows/${workflowId}/versions/${versionId}`;
   const people = ['TASK', 'APPROVAL', 'DECISION', 'SIGNATURE'];
   const saved = (
     await admin
@@ -144,12 +139,18 @@ export async function publishFlow(admin: ApiClient, spec: FlowSpec): Promise<Pub
   const published = await admin.post(`${base}/publish`, {});
   if (published.status !== 200) throw new Error(`The test workflow did not publish: ${JSON.stringify(published.body)}`);
   return {
-    subcategoryId,
-    workflowId: workflow.id as string,
-    versionId,
     step: Object.fromEntries(spec.steps.map((step) => [step.key, id(step.key)])),
     transition: Object.fromEntries(spec.transitions.map((entry, index) => [transitionKey(entry), saved.idMap[`new:t${index}`]!])),
   };
+}
+
+/** A new category, subcategory and workflow, built from the spec and published as its first version. */
+export async function publishFlow(admin: ApiClient, spec: FlowSpec): Promise<PublishedFlow> {
+  const category = (await admin.post('/categories', { name: unique('Cat') }).expect(201)).body.id as string;
+  const subcategoryId = (await admin.post('/subcategories', { categoryId: category, name: unique('Sub') }).expect(201)).body.id as string;
+  const workflow = (await admin.post('/workflows', { subcategoryId, name: unique('Flow') }).expect(201)).body;
+  const versionId = workflow.versions[0].id as string;
+  return { subcategoryId, workflowId: workflow.id as string, versionId, ...(await publishVersion(admin, workflow.id as string, versionId, spec)) };
 }
 
 /** START → TASK (creator) → END: the smallest flow that has a person's step. */
