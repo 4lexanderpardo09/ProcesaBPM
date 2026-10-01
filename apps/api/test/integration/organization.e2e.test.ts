@@ -82,6 +82,19 @@ describe('organization API', () => {
       await admin.post(`/companies/${defaultCompanyId}/make-default`).expect(200);
     });
 
+    it('make-default racing with deactivate never leaves an inactive default', async () => {
+      const racer = (await admin.post('/companies', { name: unique('Racer'), countryCode: 'CO' }).expect(201)).body;
+      await Promise.all([admin.post(`/companies/${racer.id}/make-default`), admin.post(`/companies/${racer.id}/deactivate`)]);
+      const { rows } = await db.owner.query(`SELECT is_default, is_active FROM companies WHERE id = $1`, [racer.id]);
+      expect(rows[0].is_default && !rows[0].is_active).toBe(false);
+      await admin.post(`/companies/${defaultCompanyId}/make-default`).expect(200);
+    });
+
+    it('repeating the current country keeps the currency and time zone the caller chose', async () => {
+      const company = (await admin.post('/companies', { name: unique('Keeps'), countryCode: 'CO', currencyCode: 'USD' }).expect(201)).body;
+      expect((await admin.patch(`/companies/${company.id}`, { countryCode: 'CO' }).expect(200)).body.currencyCode).toBe('USD');
+    });
+
     it('an inactive company cannot become the default', async () => {
       const other = (await admin.post('/companies', { name: unique('Sleeping'), countryCode: 'CO' }).expect(201)).body;
       await admin.post(`/companies/${other.id}/deactivate`).expect(200);
@@ -191,6 +204,26 @@ describe('organization API', () => {
       expect((await admin.get(`/sites/${c.id}`).expect(200)).body.level).toBe(2);
     });
 
+    it('two concurrent moves that would swap two roots into a cycle: exactly one wins', async () => {
+      const x = await create(unique('X'));
+      const y = await create(unique('Y'));
+      const results = await Promise.all([admin.post(`/sites/${x.id}/move`, { parentId: y.id }), admin.post(`/sites/${y.id}/move`, { parentId: x.id })]);
+      expect(results.map((result) => result.status).sort()).toEqual([200, 422]);
+      const levels = [(await admin.get(`/sites/${x.id}`).expect(200)).body.level, (await admin.get(`/sites/${y.id}`).expect(200)).body.level].sort();
+      expect(levels).toEqual([1, 2]);
+    });
+
+    it('root sites cannot repeat a name either, also when moved to the root or renamed', async () => {
+      const name = unique('Norte');
+      await create(name);
+      expect((await admin.post('/sites', { name }).expect(409)).body.error.code).toBe('DUPLICATE');
+      const parent = await create(unique('P'));
+      const child = await create(name, parent.id);
+      await admin.post(`/sites/${child.id}/move`, { parentId: null }).expect(409);
+      const other = await create(unique('Other'));
+      await admin.patch(`/sites/${other.id}`, { name }).expect(409);
+    });
+
     it('GET /sites/tree returns the nested tree and hides inactive sites unless asked', async () => {
       const root = await create(unique('TreeRoot'));
       const kept = await create(unique('Kept'), root.id);
@@ -273,6 +306,7 @@ describe('organization API', () => {
       await admin.post(`/calendars/${calendar.id}/holidays`, { date: '2027-01-02', name: 'Puente' }).expect(201);
       expect((await admin.post(`/calendars/${calendar.id}/holidays`, { date: '2026-12-24', name: 'Again' }).expect(409)).body.error.code).toBe('DUPLICATE');
       await admin.post(`/calendars/${calendar.id}/holidays`, { date: '2026-02-30', name: 'Impossible' }).expect(400);
+      await admin.post(`/calendars/${calendar.id}/holidays`, { date: '0000-01-01', name: 'Year zero' }).expect(400);
       expect((await admin.get(`/calendars/${calendar.id}/holidays`).expect(200)).body).toEqual([
         { date: '2026-12-24', name: 'Nochebuena' },
         { date: '2027-01-02', name: 'Puente' },

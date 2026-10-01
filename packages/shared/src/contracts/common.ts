@@ -30,7 +30,7 @@ export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use #RRGGBB
 /** `YYYY-MM-DD` that is a real calendar day. */
 export const isoDateSchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .regex(/^(19|20)\d{2}-\d{2}-\d{2}$/)
   .refine((value) => {
     const date = new Date(`${value}T00:00:00Z`);
     return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);

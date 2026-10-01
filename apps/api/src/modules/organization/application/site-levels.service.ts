@@ -22,6 +22,7 @@ export class SiteLevelsService {
   /** Names an existing level or the next one; skipping a number would leave a gap. */
   name(level: number, name: string): Promise<SiteLevelResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
+      await this.sites.lockTree(tx, this.tenantId);
       const existing = await this.levels.list(tx, this.tenantId);
       if (level > existing.length + 1) throw new InvalidStateError(`The next level to name is ${existing.length + 1}`);
       await this.levels.upsert(tx, this.tenantId, level, name);
@@ -32,6 +33,7 @@ export class SiteLevelsService {
   /** Only the last level can be removed, and only while no site sits at it. */
   remove(level: number): Promise<void> {
     return this.runner.withTenantTransaction(async (tx) => {
+      await this.sites.lockTree(tx, this.tenantId);
       const existing = await this.levels.list(tx, this.tenantId);
       if (!existing.some((row) => row.level === level)) return;
       if (level !== existing.length) throw new InvalidStateError('Only the last level can be removed');

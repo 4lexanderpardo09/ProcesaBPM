@@ -27,7 +27,7 @@ function build(stored: CompanyRow | null) {
     create: vi.fn().mockImplementation((_tx, _tenant, data) => Promise.resolve(row(data))),
     update: vi.fn().mockResolvedValue(true),
     setActive: vi.fn().mockResolvedValue(true),
-    makeDefault: vi.fn().mockResolvedValue(undefined),
+    makeDefault: vi.fn().mockResolvedValue(true),
   };
   const runner = { withTenantTransaction: (work: (tx: unknown) => Promise<unknown>) => work({}) } as unknown as TenantTransactionRunner;
   const context = { require: () => ({ tenantId: TENANT, userId: 'u' }) } as unknown as TenantContext;

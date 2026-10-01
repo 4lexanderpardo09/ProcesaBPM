@@ -40,6 +40,7 @@ export function levelsAfterMove(sites: readonly SiteNode[], siteId: string, newP
   const parent = newParentId === null ? undefined : sites.find((site) => site.id === newParentId);
   const levels = new Map<string, number>();
   const assign = (id: string, level: number): void => {
+    if (levels.has(id)) return;
     levels.set(id, level);
     for (const child of sites.filter((site) => site.parentId === id)) assign(child.id, level + 1);
   };

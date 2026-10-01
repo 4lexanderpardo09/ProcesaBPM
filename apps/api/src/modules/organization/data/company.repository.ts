@@ -78,14 +78,16 @@ export class CompanyRepository {
     return count > 0;
   }
 
+  /** Deactivating only matches a company that is not the default: the condition is part of the write. */
   async setActive(tx: TenantTransaction, tenantId: string, id: string, isActive: boolean): Promise<boolean> {
-    const { count } = await tx.company.updateMany({ where: { tenantId, id }, data: { isActive } });
+    const { count } = await tx.company.updateMany({ where: { tenantId, id, ...(isActive ? {} : { isDefault: false }) }, data: { isActive } });
     return count > 0;
   }
 
   /** The unique index allows one default, so the previous one is cleared first. */
-  async makeDefault(tx: TenantTransaction, tenantId: string, id: string): Promise<void> {
+  async makeDefault(tx: TenantTransaction, tenantId: string, id: string): Promise<boolean> {
     await tx.company.updateMany({ where: { tenantId, isDefault: true }, data: { isDefault: false } });
-    await tx.company.updateMany({ where: { tenantId, id }, data: { isDefault: true } });
+    const { count } = await tx.company.updateMany({ where: { tenantId, id, isActive: true }, data: { isDefault: true } });
+    return count > 0;
   }
 }

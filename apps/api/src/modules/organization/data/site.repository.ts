@@ -51,6 +51,23 @@ export class SiteRepository {
     await tx.site.updateMany({ where: { tenantId, id }, data: { level, ...(parentId === undefined ? {} : { parentId }) } });
   }
 
+  /**
+   * Serializes the writers of the site tree of a tenant until the end of the transaction: cycle and
+   * level checks read the whole tree, and two concurrent moves would otherwise each pass on a stale view.
+   */
+  async lockTree(tx: TenantTransaction, tenantId: string): Promise<void> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`sites:${tenantId}`}, 0))`;
+  }
+
+  /** The unique index treats root sites (no parent) as all different, so the name is checked here. */
+  async nameTaken(tx: TenantTransaction, tenantId: string, parentId: string | null, name: string, exceptId?: string): Promise<boolean> {
+    const found = await tx.site.findFirst({
+      where: { tenantId, parentId, name, ...(exceptId === undefined ? {} : { id: { not: exceptId } }) },
+      select: { id: true },
+    });
+    return found !== null;
+  }
+
   async countAtLevel(tx: TenantTransaction, tenantId: string, level: number): Promise<number> {
     return tx.site.count({ where: { tenantId, level } });
   }

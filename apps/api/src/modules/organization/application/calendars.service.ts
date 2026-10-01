@@ -55,6 +55,7 @@ export class CalendarsService {
     return this.runner.withTenantTransaction(async (tx) => {
       const calendar = await this.require(tx, id);
       if (calendar.isDefault) throw new InvalidStateError('The default calendar cannot be deleted');
+      if (await this.repository.isInUse(tx, this.tenantId, id)) throw new InvalidStateError('The calendar is in use by a company');
       await this.repository.remove(tx, this.tenantId, id);
     });
   }

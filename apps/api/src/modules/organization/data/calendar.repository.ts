@@ -54,6 +54,10 @@ export class CalendarRepository {
     await tx.calendar.deleteMany({ where: { tenantId, id } });
   }
 
+  async isInUse(tx: TenantTransaction, tenantId: string, id: string): Promise<boolean> {
+    return (await tx.company.count({ where: { tenantId, calendarId: id } })) > 0;
+  }
+
   findWorkingHours(tx: TenantTransaction, tenantId: string, calendarId: string): Promise<WorkingHoursRow[]> {
     return tx.calendarWorkingHours.findMany({
       where: { tenantId, calendarId },
