@@ -43,7 +43,7 @@ export function extractSqlState(error: unknown): string | undefined {
   for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
     if (typeof current !== 'object' || current === null) return undefined;
     const node = current as ErrorShape;
-    const mapped = candidateCodes(node).find((code): code is string => typeof code === 'string' && code in FACTORY_BY_SQL_STATE);
+    const mapped = candidateCodes(node).find((code): code is string => typeof code === 'string' && Object.hasOwn(FACTORY_BY_SQL_STATE, code));
     if (mapped !== undefined) return mapped;
     current = node.cause;
   }

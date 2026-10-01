@@ -34,6 +34,7 @@ describe('mapDatabaseError', () => {
   it.each([
     ['an unknown SQLSTATE', pgError('40001')],
     ['P0001 (raise_exception) without mapping', pgError('P0001')],
+    ['a code inherited from Object.prototype', pgError('toString')],
     ['an error without code', new Error('plain')],
     ['a non-error value', 'text'],
     ['null', null],
