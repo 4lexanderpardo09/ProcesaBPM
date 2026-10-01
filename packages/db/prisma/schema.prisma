@@ -240,6 +240,7 @@ enum TicketEventType {
   AMOUNT_WARNING
   FIELDS_UPDATED
   SYSTEM
+  PARALLEL_TASK_COMPLETED
 
   @@map("ticket_event_type")
 }
@@ -255,6 +256,7 @@ enum ParallelTaskStatus {
   PENDING
   SIGNED
   REJECTED
+  CANCELLED
 
   @@map("parallel_task_status")
 }
