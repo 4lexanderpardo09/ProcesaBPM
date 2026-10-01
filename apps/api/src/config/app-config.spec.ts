@@ -61,6 +61,17 @@ describe('loadConfig', () => {
       expect(loadConfig({ ...withoutUrl, WORKER_DATABASE_URL: workerUrl }, 'worker').DATABASE_URL).toBe(workerUrl);
     });
 
+    it('the worker does not need the platform login and never carries it', () => {
+      const { PLATFORM_DATABASE_URL: _removed, ...withoutPlatform } = valid;
+      expect(loadConfig({ ...withoutPlatform, WORKER_DATABASE_URL: workerUrl }, 'worker')).not.toHaveProperty('PLATFORM_DATABASE_URL');
+      expect(loadConfig({ ...valid, WORKER_DATABASE_URL: workerUrl }, 'worker')).not.toHaveProperty('PLATFORM_DATABASE_URL');
+    });
+
+    it('the API requires the platform login', () => {
+      const { PLATFORM_DATABASE_URL: _removed, ...withoutPlatform } = valid;
+      expect(catchError(() => loadConfig(withoutPlatform)).problems).toEqual(['PLATFORM_DATABASE_URL is required']);
+    });
+
     it('rejects a worker URL that is not PostgreSQL', () => {
       const error = catchError(() => loadConfig({ ...valid, WORKER_DATABASE_URL: 'mysql://x/y' }, 'worker'));
       expect(error.problems).toEqual([expect.stringContaining('WORKER_DATABASE_URL')]);

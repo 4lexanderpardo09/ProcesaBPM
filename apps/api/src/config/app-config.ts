@@ -40,8 +40,8 @@ const envSchema = z.object({
   DATABASE_URL: postgresUrl.optional(),
   /** Login of the `app_worker` role: subject to row-level security, the only one that claims outbox events. Worker entry only. */
   WORKER_DATABASE_URL: postgresUrl.optional(),
-  /** Login of the `app_platform` role: bypasses row-level security. Platform services only. */
-  PLATFORM_DATABASE_URL: postgresUrl,
+  /** Login of the `app_platform` role: bypasses row-level security. API entry only (platform services); the worker does not get it. */
+  PLATFORM_DATABASE_URL: postgresUrl.optional(),
   /** Signing key of the access and selection tokens (HS256): at least 32 bytes. */
   JWT_SECRET: z.string().refine((value) => Buffer.byteLength(value, 'utf8') >= 32, 'must be at least 32 bytes long'),
   /** Which proxies may set X-Forwarded-For; the client IP (rate limits, sessions) depends on it. */
@@ -62,6 +62,12 @@ type Env = z.infer<typeof envSchema>;
  * login and the worker never reads the API's.
  */
 export type AppConfig = Omit<Env, 'DATABASE_URL' | 'WORKER_DATABASE_URL'> & { DATABASE_URL: string };
+
+/** Login variables each entry point must have: the worker never receives the BYPASSRLS platform login. */
+const REQUIRED_CONNECTIONS: Readonly<Record<EntryPoint, readonly (keyof Env)[]>> = {
+  api: ['DATABASE_URL', 'PLATFORM_DATABASE_URL'],
+  worker: ['WORKER_DATABASE_URL'],
+};
 
 export type EntryPoint = 'api' | 'worker';
 
@@ -88,10 +94,11 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>, en
           const variable = String(issue.path[0]);
           return env[variable] === undefined ? `${variable} is required` : `${variable} ${issue.message}`;
         })),
-    ...(env[connection] === undefined ? [`${connection} is required`] : []),
+    ...REQUIRED_CONNECTIONS[entry].filter((variable) => env[variable] === undefined).map((variable) => `${variable} is required`),
   ];
   if (!result.success || problems.length > 0) throw new ConfigError(problems);
 
-  const { DATABASE_URL: _api, WORKER_DATABASE_URL: _worker, ...rest } = result.data;
-  return { ...rest, DATABASE_URL: result.data[connection]! };
+  const { DATABASE_URL: _api, WORKER_DATABASE_URL: _worker, PLATFORM_DATABASE_URL: platformUrl, ...rest } = result.data;
+  // The worker never carries the platform login, even if it is set in its environment.
+  return { ...rest, DATABASE_URL: result.data[connection]!, ...(entry === 'api' && platformUrl !== undefined ? { PLATFORM_DATABASE_URL: platformUrl } : {}) };
 }
