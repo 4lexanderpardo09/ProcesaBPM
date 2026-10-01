@@ -15,6 +15,7 @@ const PUBLIC_ROUTES = [
   'GET /ready',
   'POST /auth/login',
   'POST /auth/select-tenant',
+  'POST /auth/platform/select',
   'POST /auth/refresh',
   'POST /auth/logout',
   'POST /auth/password-reset/request',
@@ -25,6 +26,14 @@ const PUBLIC_ROUTES = [
 
 /** Routes that need a signed-in user but no permission of the catalog. */
 const AUTHENTICATED_ONLY_ROUTES = ['GET /auth/me'];
+
+/** Routes of the platform administrators: they need a platform token, never a tenant one. */
+const PLATFORM_ROUTES = [
+  'POST /auth/platform/logout',
+  'POST /platform/tenants',
+  'POST /platform/tenants/:id/suspend',
+  'POST /platform/tenants/:id/reactivate',
+];
 
 /** Test routes that exist to prove the deny-by-default behaviour: they declare nothing on purpose. */
 const INTENTIONALLY_UNDECLARED = ['GET /test/undeclared'];
@@ -67,6 +76,11 @@ describe('route protection (deny by default)', () => {
 
   it('only the expected routes are authenticated-only', () => {
     expect(routes.filter((route) => route.access === 'authenticated-only').map(label)).toEqual(AUTHENTICATED_ONLY_ROUTES);
+  });
+
+  it('only the expected routes are platform-only, and every /platform route is one of them', () => {
+    expect(routes.filter((route) => route.access === 'platform').map(label).sort()).toEqual([...PLATFORM_ROUTES].sort());
+    expect(routes.filter((route) => route.path.startsWith('/platform')).every((route) => route.access === 'platform')).toBe(true);
   });
 
   it('every other route of the application declares a permission, and none mixes declarations', () => {

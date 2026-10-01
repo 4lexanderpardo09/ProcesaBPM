@@ -1,7 +1,5 @@
-import type { Prisma } from '@procesabpm/db';
 import { Injectable } from '@nestjs/common';
-
-export type PlatformTransaction = Prisma.TransactionClient;
+import type { PlatformTransaction } from '../../../infrastructure/database/platform-transaction-runner.js';
 
 export interface NewRole {
   readonly systemRole: 'ADMIN' | 'SUPERVISOR' | 'AGENT' | 'REQUESTER';

@@ -3,7 +3,7 @@ import { Clock } from '../../../infrastructure/clock.js';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { generateOpaqueToken, sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { CredentialsRepository } from '../data/credentials.repository.js';
-import { PlatformOutboxRepository } from '../data/platform-outbox.repository.js';
+import { PlatformOutboxRepository } from '../../../infrastructure/outbox/platform-outbox.repository.js';
 import { PASSWORD_RESET_EMAIL_EVENT, PASSWORD_RESET_TTL_MS } from '../domain/auth-policy.js';
 import { OneTimeTokenService } from './one-time-token.service.js';
 

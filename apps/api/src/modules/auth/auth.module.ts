@@ -16,7 +16,7 @@ import { TenantAccessService } from './application/tenant-access.service.js';
 import { TenantSelectionService } from './application/tenant-selection.service.js';
 import { CredentialsRepository } from './data/credentials.repository.js';
 import { PlatformAccessRepository } from './data/platform-access.repository.js';
-import { PlatformOutboxRepository } from './data/platform-outbox.repository.js';
+import { PlatformOutboxRepository } from '../../infrastructure/outbox/platform-outbox.repository.js';
 import { ProfileRepository } from './data/profile.repository.js';
 import { SessionRepository } from './data/session.repository.js';
 import { TenantAccessRepository } from './data/tenant-access.repository.js';

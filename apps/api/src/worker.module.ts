@@ -5,7 +5,7 @@ import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { WorkerLifecycle } from './worker-lifecycle.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('worker'), LoggingModule, DatabaseModule.forEntry('worker')],
+  imports: [ConfigModule.forEntry('worker'), LoggingModule, DatabaseModule],
   providers: [WorkerLifecycle],
 })
 export class WorkerModule {}
