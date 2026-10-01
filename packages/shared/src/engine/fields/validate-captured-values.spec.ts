@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { NotImplementedError } from '../../errors/domain-error.js';
 import { field } from '../../workflow/test-builders.js';
 import { captureFieldsFor, validateCapturedValues } from './validate-captured-values.js';
 
@@ -126,5 +125,27 @@ describe('validateCapturedValues', () => {
     });
   });
 
-  it('refuses file values until the files module exists', () => expect(() => run([field('f', 's', 'F', { type: 'FILE' })], { F: 'x' })).toThrow(NotImplementedError));
+  describe('file fields', () => {
+    const [first, second] = ['0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f90', '0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f91'];
+    const files = field('f', 's', 'F', { type: 'FILE', config: { maxFiles: 2, accept: ['PDF'] } });
+
+    it('keeps the ids, without repeats, and asks the server to verify each one', () => {
+      const result = run([files], { F: [first, first.toUpperCase(), second] });
+      expect(result.values).toEqual({ F: [first, second] });
+      expect(result.references).toEqual([
+        { fieldCode: 'F', kind: 'FILE', value: first, config: { accept: ['PDF'] } },
+        { fieldCode: 'F', kind: 'FILE', value: second, config: { accept: ['PDF'] } },
+      ]);
+    });
+    it('rejects more files than the field allows and values that are not a list of ids', () => {
+      expect(codes(run([files], { F: [first, second, '0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f92'] }))).toEqual(['F:TOO_MANY_FILES']);
+      expect(codes(run([files], { F: 'x' }))).toEqual(['F:INVALID_TYPE']);
+      expect(codes(run([files], { F: ['not-an-id'] }))).toEqual(['F:INVALID_TYPE']);
+    });
+    it('counts an empty list as not answered', () => {
+      const required = field('f', 's', 'F', { type: 'FILE', isRequired: true, config: { maxFiles: 1 } });
+      expect(codes(run([required], { F: [] }))).toEqual(['F:REQUIRED']);
+      expect(codes(run([required], { F: [] }, { F: [first] }))).toEqual([]);
+    });
+  });
 });

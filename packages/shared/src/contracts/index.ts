@@ -2,6 +2,7 @@ export * from './approvals/index.js';
 export * from './auth/index.js';
 export * from './catalog/index.js';
 export * from './common.js';
+export * from './files/index.js';
 export * from './ids.js';
 export * from './identity/index.js';
 export * from './organization/index.js';

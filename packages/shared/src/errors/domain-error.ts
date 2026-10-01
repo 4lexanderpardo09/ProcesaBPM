@@ -54,6 +54,12 @@ export const ERROR_CODES = {
   invalidErrorType: 'INVALID_ERROR_TYPE',
   assigneeRequired: 'ASSIGNEE_REQUIRED',
   extraApprovalRequired: 'EXTRA_APPROVAL_REQUIRED',
+  storageQuotaExceeded: 'STORAGE_QUOTA_EXCEEDED',
+  fileNotUploaded: 'FILE_NOT_UPLOADED',
+  fileRejected: 'FILE_REJECTED',
+  attachmentsInvalid: 'ATTACHMENTS_INVALID',
+  submissionFilesLimit: 'SUBMISSION_FILES_LIMIT',
+  storageUnavailable: 'STORAGE_UNAVAILABLE',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -421,5 +427,49 @@ export class RejectionNotAllowedError extends DomainError {
 export class CommentRequiredError extends DomainError {
   constructor() {
     super(ERROR_CODES.commentRequired, 'A comment is required');
+  }
+}
+
+export class StorageQuotaExceededError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.storageQuotaExceeded, 'The storage quota of the plan is exhausted');
+  }
+}
+
+/** Confirmation arrived before the browser finished uploading: the client can retry. */
+export class FileNotUploadedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.fileNotUploaded, 'The file has not been uploaded yet');
+  }
+}
+
+export type FileRejectionReason = 'SIZE_MISMATCH' | 'HASH_MISMATCH' | 'TYPE_NOT_ALLOWED' | 'TYPE_MISMATCH';
+
+export class FileRejectedError extends DomainError {
+  constructor(readonly reason: FileRejectionReason) {
+    super(ERROR_CODES.fileRejected, 'The uploaded file was rejected', { details: { reason } });
+  }
+}
+
+export interface AttachmentIssue {
+  readonly fileId: string;
+  readonly code: 'FILE_NOT_ATTACHABLE';
+}
+
+export class AttachmentsInvalidError extends DomainError {
+  constructor(readonly issues: readonly AttachmentIssue[]) {
+    super(ERROR_CODES.attachmentsInvalid, 'Some attachments cannot be attached', { details: { issues } });
+  }
+}
+
+export class SubmissionFilesLimitError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.submissionFilesLimit, 'Too many files or too many bytes in one submission');
+  }
+}
+
+export class StorageUnavailableError extends DomainError {
+  constructor(options?: { cause?: unknown }) {
+    super(ERROR_CODES.storageUnavailable, 'The file storage is not available', options);
   }
 }

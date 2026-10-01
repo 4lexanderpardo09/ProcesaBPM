@@ -1,4 +1,3 @@
-import { NotImplementedError } from '../../errors/domain-error.js';
 import type { FieldDocument } from '../../workflow/document.js';
 import { decimalPlaces } from '../money/decimal.js';
 import type { FieldIssueCode, ReferenceToVerify, ValidationContext } from './types.js';
@@ -99,6 +98,14 @@ function normalizeUuid(raw: unknown, kind: 'SITE' | 'USER', config: Config): Nor
   return good(value, [{ kind, value, config }]);
 }
 
+/** A FILE field holds the ids of confirmed uploads; the server checks they are attachable (owner, type, not used). */
+function normalizeFiles(raw: unknown, config: Config): Normalized {
+  if (!Array.isArray(raw) || !raw.every((item) => typeof item === 'string' && UUID.test(item.trim()))) return bad('INVALID_TYPE');
+  const ids = [...new Set(raw.map((item: string) => item.trim().toLowerCase()))];
+  if (ids.length > (asNumber(config, 'maxFiles') ?? 1)) return bad('TOO_MANY_FILES');
+  return good(ids, ids.map((value) => ({ kind: 'FILE' as const, value, config: { accept: config.accept } })));
+}
+
 interface TableColumn {
   readonly code: string;
   readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT';
@@ -173,7 +180,7 @@ export function normalizeValue(type: FieldDocument['type'] | TableColumn['type']
     case 'USER':
       return normalizeUuid(raw, 'USER', { positionIds: config.positionIds });
     case 'FILE':
-      throw new NotImplementedError('File fields');
+      return normalizeFiles(raw, config);
     case 'TABLE':
     case 'FORMULA':
     case 'CALCULATOR':

@@ -1,4 +1,4 @@
-import { NotImplementedError, type FieldValueIssue } from '../../errors/domain-error.js';
+import type { FieldValueIssue } from '../../errors/domain-error.js';
 import type { FieldDocument } from '../../workflow/document.js';
 import { isBlankValue, normalizeTable, normalizeValue } from './normalize-value.js';
 import type { CapturedValues, ReferenceToVerify, ValidationContext } from './types.js';
@@ -48,7 +48,6 @@ export function validateCapturedValues({ fields, input, existing, context }: Cap
       issues.push({ code: 'NOT_EDITABLE', fieldCode: field.code });
       continue;
     }
-    if (field.type === 'FILE') throw new NotImplementedError('File fields');
     if (field.type === 'TABLE') {
       const table = normalizeTable(raw, field.config, context);
       if (table.ok) values[field.code] = table.value;
