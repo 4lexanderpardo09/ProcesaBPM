@@ -18,7 +18,24 @@ describe('loadConfig', () => {
       DB_TX_TIMEOUT_MS: 10_000,
       DB_TX_MAX_WAIT_MS: 5_000,
       DB_POOL_MAX: 10,
+      TRUST_PROXY: false,
     });
+  });
+
+  it.each([
+    ['false', false],
+    ['1', 1],
+    ['2', 2],
+    ['loopback', ['loopback']],
+    ['10.0.0.0/8, 192.168.1.10', ['10.0.0.0/8', '192.168.1.10']],
+    ['fd00::/8', ['fd00::/8']],
+  ])('reads TRUST_PROXY=%s', (value, expected) => {
+    expect(loadConfig({ ...valid, TRUST_PROXY: value }).TRUST_PROXY).toEqual(expected);
+  });
+
+  it.each(['true', 'yes', '10.0.0.0/8,evil.example.com', '-1', ''])('rejects TRUST_PROXY=%j', (value) => {
+    const error = catchError(() => loadConfig({ ...valid, TRUST_PROXY: value }));
+    expect(error.problems).toEqual([expect.stringContaining('TRUST_PROXY')]);
   });
 
   it('reads the database tuning variables', () => {

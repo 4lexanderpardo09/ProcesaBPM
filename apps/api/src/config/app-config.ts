@@ -7,6 +7,31 @@ const postgresUrl = z
 const positiveInteger = (defaultValue: number, max: number) =>
   z.coerce.number().int().min(1).max(max).default(defaultValue);
 
+const TRUSTED_PROXY_ENTRY = /^(loopback|linklocal|uniquelocal|\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?|[0-9a-f:]+(\/\d{1,3})?)$/i;
+
+export type TrustProxy = false | number | string[];
+
+/**
+ * `false` (no proxy), the number of proxies in front of the API, or the addresses/CIDRs/names of the
+ * trusted proxies, comma-separated. `true` is refused: it would let any client forge X-Forwarded-For.
+ */
+function parseTrustProxy(value: string): TrustProxy | undefined {
+  if (value === 'false') return false;
+  if (/^\d{1,2}$/.test(value)) return Number(value);
+  const entries = value.split(',').map((entry) => entry.trim());
+  return entries.every((entry) => TRUSTED_PROXY_ENTRY.test(entry)) ? entries : undefined;
+}
+
+const trustProxySchema = z
+  .string()
+  .default('false')
+  .transform((value, context): TrustProxy => {
+    const parsed = parseTrustProxy(value.trim());
+    if (parsed !== undefined) return parsed;
+    context.addIssue({ code: 'custom', message: 'must be false, a number of proxies or a list of proxy addresses' });
+    return z.NEVER;
+  });
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   PORT: z.coerce.number().int().min(1).max(65_535),
@@ -17,6 +42,8 @@ const envSchema = z.object({
   PLATFORM_DATABASE_URL: postgresUrl,
   /** Signing key of the access and selection tokens (HS256): at least 32 bytes. */
   JWT_SECRET: z.string().refine((value) => Buffer.byteLength(value, 'utf8') >= 32, 'must be at least 32 bytes long'),
+  /** Which proxies may set X-Forwarded-For; the client IP (rate limits, sessions) depends on it. */
+  TRUST_PROXY: trustProxySchema,
   /** Interactive transaction timeout (Prisma's own default is 5 s). */
   DB_TX_TIMEOUT_MS: positiveInteger(10_000, 120_000),
   /** How long a transaction may wait for a free connection (Prisma's own default is 2 s). */
