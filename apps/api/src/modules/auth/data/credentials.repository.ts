@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Organization } from '@procesabpm/shared';
+import { InvalidTokenError, type Organization } from '@procesabpm/shared';
 import type { AuthTransaction } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { LOGIN_LOCKOUT } from '../domain/auth-policy.js';
 import type { LoginCandidate } from '../domain/login-eligibility.js';
@@ -61,12 +61,15 @@ export class CredentialsRepository {
     return row;
   }
 
-  /** Raises 42501 when the token is unknown, used or expired, and 23514 when a needed password is missing. */
+  /**
+   * Raises 42501 when the token is unknown, used or expired, and 23514 when a needed password is
+   * missing or when an invitation sends one for a user who already has a password.
+   */
   async consumeToken(tx: AuthTransaction, tokenHash: string, newPasswordHash: string | null): Promise<ConsumedUserToken> {
     const [row] = await tx.$queryRaw<ConsumedUserToken[]>`
       SELECT user_id AS "userId", token_type::text AS type, invited_tenant_id AS "invitedTenantId"
       FROM auth_consume_user_token(${tokenHash}, ${newPasswordHash}::text)`;
-    if (row === undefined) throw new Error('auth_consume_user_token returned no row');
+    if (row === undefined) throw new InvalidTokenError();
     return row;
   }
 }

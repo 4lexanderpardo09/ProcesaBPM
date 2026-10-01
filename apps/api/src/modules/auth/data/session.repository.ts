@@ -43,18 +43,22 @@ export class SessionRepository {
     return session ?? undefined;
   }
 
+  /** Locks the row until the end of the transaction, so that concurrent rotations run one after the other. */
+  async findByIdForUpdate(tx: AuthTransaction, id: string): Promise<StoredSession | undefined> {
+    const [row] = await tx.$queryRaw<StoredSession[]>`
+      SELECT id, user_id AS "userId", active_tenant_id AS "activeTenantId", expires_at AS "expiresAt",
+             revoked_at AS "revokedAt", replaced_by AS "replacedBy"
+      FROM refresh_sessions WHERE id = ${id}::uuid FOR UPDATE`;
+    return row;
+  }
+
   async create(tx: AuthTransaction, session: NewSession): Promise<string> {
     const { id } = await tx.refreshSession.create({ data: session, select: { id: true } });
     return id;
   }
 
-  /** Atomic: only one caller can rotate a given session. Returns false when it was already revoked. */
-  async markReplaced(tx: AuthTransaction, id: string, replacedBy: string, now: Date): Promise<boolean> {
-    const { count } = await tx.refreshSession.updateMany({
-      where: { id, revokedAt: null },
-      data: { revokedAt: now, replacedBy },
-    });
-    return count === 1;
+  async markReplaced(tx: AuthTransaction, id: string, replacedBy: string, now: Date): Promise<void> {
+    await tx.refreshSession.update({ where: { id }, data: { revokedAt: now, replacedBy }, select: { id: true } });
   }
 
   async revoke(tx: AuthTransaction, id: string, now: Date): Promise<void> {

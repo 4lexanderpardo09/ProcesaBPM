@@ -19,6 +19,8 @@ export interface RateLimiter {
 export const RATE_LIMITER = Symbol('RATE_LIMITER');
 
 const PURGE_EVERY_HITS = 1_000;
+/** Bounds the memory: beyond it the oldest windows are dropped first. */
+export const MAX_TRACKED_KEYS = 100_000;
 
 interface Window {
   count: number;
@@ -39,9 +41,18 @@ export class InMemoryRateLimiter implements RateLimiter {
     const current = this.windows.get(key);
     const window = current !== undefined && current.resetsAt > now ? current : { count: 0, resetsAt: now + rule.windowMs };
     window.count += 1;
+    this.windows.delete(key);
     this.windows.set(key, window);
+    this.evictOldest();
     const allowed = window.count <= rule.limit;
     return Promise.resolve({ allowed, retryAfterSeconds: allowed ? 0 : Math.ceil((window.resetsAt - now) / 1000) });
+  }
+
+  private evictOldest(): void {
+    for (const key of this.windows.keys()) {
+      if (this.windows.size <= MAX_TRACKED_KEYS) return;
+      this.windows.delete(key);
+    }
   }
 
   private purgeExpired(now: number): void {

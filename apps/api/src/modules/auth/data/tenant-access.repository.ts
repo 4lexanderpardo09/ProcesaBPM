@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface TenantAccess {
+  readonly userStatus: 'ACTIVE' | 'LOCKED' | 'DISABLED' | undefined;
   readonly membershipStatus: 'INVITED' | 'ACTIVE' | 'INACTIVE' | undefined;
   readonly tenantStatus: 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'DELETED' | undefined;
 }
@@ -21,7 +22,8 @@ export class TenantAccessRepository {
       select: { status: true },
     });
     const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { status: true } });
-    return { membershipStatus: membership?.status, tenantStatus: tenant?.status };
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true } });
+    return { userStatus: user?.status, membershipStatus: membership?.status, tenantStatus: tenant?.status };
   }
 
   async findSession(tx: TenantTransaction, sessionId: string): Promise<SessionState | undefined> {

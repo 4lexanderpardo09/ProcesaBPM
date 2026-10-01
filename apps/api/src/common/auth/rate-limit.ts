@@ -37,11 +37,15 @@ export class RateLimitGuard implements CanActivate {
     const policy = this.reflector.get<RateLimitPolicy | undefined>(RATE_LIMIT_KEY, context.getHandler());
     if (policy === undefined) return true;
     const request = context.switchToHttp().getRequest<Request>();
-    const checks = [this.limiter.hit(`${policy.name}:ip:${request.ip ?? 'unknown'}`, policy.perIp)];
+    // The IP goes first: a client over its limit cannot spend the budget of someone else's e-mail.
+    await this.enforce(`${policy.name}:ip:${request.ip ?? 'unknown'}`, policy.perIp);
     const identifier = identifierOf(request.body);
-    if (identifier !== undefined) checks.push(this.limiter.hit(`${policy.name}:${identifier}`, policy.perIdentifier));
-    const denied = (await Promise.all(checks)).filter((result) => !result.allowed);
-    if (denied.length > 0) throw new RateLimitedError(Math.max(...denied.map((result) => result.retryAfterSeconds)));
+    if (identifier !== undefined) await this.enforce(`${policy.name}:${identifier}`, policy.perIdentifier);
     return true;
+  }
+
+  private async enforce(key: string, rule: RateLimitRule): Promise<void> {
+    const result = await this.limiter.hit(key, rule);
+    if (!result.allowed) throw new RateLimitedError(result.retryAfterSeconds);
   }
 }

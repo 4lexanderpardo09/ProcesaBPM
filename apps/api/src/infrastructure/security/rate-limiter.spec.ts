@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Clock } from '../clock.js';
-import { InMemoryRateLimiter } from './rate-limiter.js';
+import { InMemoryRateLimiter, MAX_TRACKED_KEYS } from './rate-limiter.js';
 
 function setup() {
   let now = 0;
@@ -41,5 +41,14 @@ describe('InMemoryRateLimiter', () => {
     advance(61_000);
     await limiter.hit('ip:new', rule);
     expect((limiter as unknown as { windows: Map<string, unknown> }).windows.size).toBe(1);
+  });
+
+  it('never keeps more than the maximum number of keys, dropping the least recently hit', async () => {
+    const { limiter } = setup();
+    for (let i = 0; i < MAX_TRACKED_KEYS + 10; i += 1) await limiter.hit(`ip:${i}`, rule);
+    const windows = (limiter as unknown as { windows: Map<string, unknown> }).windows;
+    expect(windows.size).toBe(MAX_TRACKED_KEYS);
+    expect(windows.has('ip:0')).toBe(false);
+    expect(windows.has(`ip:${MAX_TRACKED_KEYS + 9}`)).toBe(true);
   });
 });

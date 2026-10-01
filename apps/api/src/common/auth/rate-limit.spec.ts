@@ -46,6 +46,15 @@ describe('RateLimitGuard', () => {
     await expect(call('limited', { token: 't2' }, '10.0.0.4')).resolves.toBe(true);
   });
 
+  it('a client over its IP limit does not spend the budget of the e-mail it targets', async () => {
+    const { call } = setup();
+    for (let i = 0; i < 3; i += 1) await call('limited', { email: `x${i}@example.com` }, '10.0.0.9');
+    await expect(call('limited', { email: 'victim@example.com' }, '10.0.0.9')).rejects.toBeInstanceOf(RateLimitedError);
+    await expect(call('limited', { email: 'victim@example.com' }, '10.0.0.9')).rejects.toBeInstanceOf(RateLimitedError);
+    await expect(call('limited', { email: 'victim@example.com' }, '10.0.1.1')).resolves.toBe(true);
+    await expect(call('limited', { email: 'victim@example.com' }, '10.0.1.2')).resolves.toBe(true);
+  });
+
   it('limits per IP whatever the body', async () => {
     const { call } = setup();
     await call('limited', { email: 'a@example.com' });

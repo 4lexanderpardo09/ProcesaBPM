@@ -13,8 +13,9 @@ export interface AccessRequest {
 }
 
 /**
- * The check behind every authenticated request, tenant selection and refresh: the membership is
- * ACTIVE, the tenant is ACTIVE and the session has not been revoked. One transaction per call.
+ * The check behind every authenticated request, tenant selection and refresh: the account and the
+ * membership are ACTIVE, the tenant is ACTIVE and the session has not been revoked. One transaction
+ * per call, so disabling a user or a membership takes effect on the next request.
  */
 @Injectable()
 export class TenantAccessService {
@@ -30,7 +31,8 @@ export class TenantAccessService {
     return this.tenantContext.run(scope, () =>
       this.runner.withTenantTransaction(async (tx) => {
         const access = await this.repository.findAccess(tx, request.tenantId, request.userId);
-        if (access.membershipStatus !== 'ACTIVE' || access.tenantStatus === undefined) throw new UnauthenticatedError();
+        const allowed = access.userStatus === 'ACTIVE' && access.membershipStatus === 'ACTIVE' && access.tenantStatus !== undefined;
+        if (!allowed) throw new UnauthenticatedError();
         if (request.sessionId !== undefined) {
           const session = await this.repository.findSession(tx, request.sessionId);
           if (!this.isLive(session, request.tenantId)) throw new UnauthenticatedError();

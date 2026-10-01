@@ -20,6 +20,7 @@ import type { Request, Response } from 'express';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { Public } from '../../../common/auth/public.decorator.js';
 import { RateLimit, RateLimitGuard } from '../../../common/auth/rate-limit.js';
+import { BackgroundTasks } from '../../../common/background/background-tasks.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { InvitationService } from '../application/invitation.service.js';
 import { LoginService } from '../application/login.service.js';
@@ -46,6 +47,7 @@ export class AuthController {
     @Inject(PasswordResetService) private readonly passwordReset: PasswordResetService,
     @Inject(InvitationService) private readonly invitations: InvitationService,
     @Inject(ProfileService) private readonly profiles: ProfileService,
+    @Inject(BackgroundTasks) private readonly background: BackgroundTasks,
   ) {}
 
   @Public()
@@ -79,7 +81,8 @@ export class AuthController {
     try {
       return this.deliver(await this.sessions.refresh(readRefreshCookie(request), clientOf(request)), response);
     } catch (error) {
-      clearRefreshCookie(response);
+      // A suspended tenant (403) keeps the session: it works again when the tenant is reactivated.
+      if (error instanceof UnauthenticatedError) clearRefreshCookie(response);
       throw error;
     }
   }
@@ -97,10 +100,9 @@ export class AuthController {
   @HttpCode(HttpStatus.ACCEPTED)
   @RateLimit(RATE_LIMITS.passwordReset)
   @UseGuards(RateLimitGuard)
-  async requestPasswordReset(
-    @Body(new ZodValidationPipe(passwordResetRequestSchema)) body: PasswordResetRequest,
-  ): Promise<void> {
-    await this.passwordReset.request(body.email);
+  /** Answers at once and does the work afterwards, so the response time does not reveal whether the account exists. */
+  requestPasswordReset(@Body(new ZodValidationPipe(passwordResetRequestSchema)) body: PasswordResetRequest): void {
+    this.background.run('auth.password_reset_request', () => this.passwordReset.request(body.email));
   }
 
   @Public()
