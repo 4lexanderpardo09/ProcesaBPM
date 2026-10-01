@@ -9,6 +9,9 @@ const principal: Principal = {
   userId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ab',
   tenantId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ac',
   sessionId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ad',
+  roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae',
+  roleActive: true,
+  membership: { departmentId: null, siteId: null },
 };
 
 function run(requestPrincipal: Principal | undefined) {

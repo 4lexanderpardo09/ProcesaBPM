@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { RateLimitGuard } from '../../common/auth/rate-limit.js';
 import { TenantScopeInterceptor } from '../../common/auth/tenant-scope.interceptor.js';
-import { Clock } from '../../infrastructure/clock.js';
 import { InMemoryRateLimiter, RATE_LIMITER } from '../../infrastructure/security/rate-limiter.js';
 import { JwtTokenService } from '../../infrastructure/security/jwt-token-service.js';
 import { PasswordHasher } from '../../infrastructure/security/password-hasher.js';
@@ -22,11 +21,13 @@ import { TenantAccessRepository } from './data/tenant-access.repository.js';
 import { AccessTokenGuard } from './http/access-token.guard.js';
 import { AuthController } from './http/auth.controller.js';
 
-/** Registers the global guard: every route of the application requires an access token unless `@Public()`. */
+/**
+ * Authentication. The global guard that applies it (together with the permission check) is registered
+ * by the authorization module, which orders the two.
+ */
 @Module({
   controllers: [AuthController],
   providers: [
-    Clock,
     PasswordHasher,
     JwtTokenService,
     { provide: RATE_LIMITER, useClass: InMemoryRateLimiter },
@@ -44,8 +45,9 @@ import { AuthController } from './http/auth.controller.js';
     PasswordResetService,
     InvitationService,
     ProfileService,
-    { provide: APP_GUARD, useClass: AccessTokenGuard },
+    AccessTokenGuard,
     { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],
+  exports: [AccessTokenGuard],
 })
 export class AuthModule {}

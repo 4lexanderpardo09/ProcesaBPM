@@ -20,6 +20,7 @@ import type { Request, Response } from 'express';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { Public } from '../../../common/auth/public.decorator.js';
 import { RateLimit, RateLimitGuard } from '../../../common/auth/rate-limit.js';
+import { AuthenticatedOnly } from '../../../common/auth/route-access.js';
 import { BackgroundTasks } from '../../../common/background/background-tasks.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { InvitationService } from '../application/invitation.service.js';
@@ -127,6 +128,8 @@ export class AuthController {
     return this.invitations.accept(body.token, body.password);
   }
 
+  /** Any signed-in member may read their own profile: no permission of the catalog applies. */
+  @AuthenticatedOnly()
   @Get('me')
   me(@CurrentPrincipal() principal: Principal): Promise<MeResponse> {
     return this.profiles.me(principal);
