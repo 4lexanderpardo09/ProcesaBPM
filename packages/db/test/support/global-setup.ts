@@ -8,7 +8,7 @@ export const RUNTIME_LOGIN = { user: 'test_runtime', password: 'runtime' } as co
 export const PLATFORM_LOGIN = { user: 'test_platform', password: 'platform' } as const;
 
 /** Database created (and recreated on every run) when an external server is used. */
-const EXTERNAL_TEST_DATABASE = 'procesabpm_test';
+export const DEFAULT_TEST_DATABASE = 'procesabpm_test';
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -26,7 +26,15 @@ let container: StartedPostgreSqlContainer | undefined;
  * existing PostgreSQL 18 server: a fresh `procesabpm_test` database is created on it.
  */
 export async function setup(project: TestProject): Promise<void> {
-  const ownerUrl = await provisionDatabase();
+  await setupTestDatabase(project, DEFAULT_TEST_DATABASE);
+}
+
+/**
+ * Same as `setup`, with its own database name so that packages whose tests run at the same
+ * time (`pnpm -r test`) never drop each other's database.
+ */
+export async function setupTestDatabase(project: TestProject, databaseName: string): Promise<void> {
+  const ownerUrl = await provisionDatabase(databaseName);
 
   const owner = new pg.Client({ connectionString: ownerUrl });
   await owner.connect();
@@ -47,7 +55,7 @@ export async function teardown(): Promise<void> {
   await container?.stop();
 }
 
-async function provisionDatabase(): Promise<string> {
+async function provisionDatabase(databaseName: string): Promise<string> {
   const externalUrl = process.env.TEST_DATABASE_URL;
   if (!externalUrl) {
     container = await new PostgreSqlContainer('postgres:18-alpine').start();
@@ -57,13 +65,13 @@ async function provisionDatabase(): Promise<string> {
   const admin = new pg.Client({ connectionString: externalUrl });
   await admin.connect();
   try {
-    await admin.query(`DROP DATABASE IF EXISTS ${EXTERNAL_TEST_DATABASE} WITH (FORCE)`);
-    await admin.query(`CREATE DATABASE ${EXTERNAL_TEST_DATABASE}`);
+    await admin.query(`DROP DATABASE IF EXISTS ${databaseName} WITH (FORCE)`);
+    await admin.query(`CREATE DATABASE ${databaseName}`);
   } finally {
     await admin.end();
   }
   const url = new URL(externalUrl);
-  url.pathname = `/${EXTERNAL_TEST_DATABASE}`;
+  url.pathname = `/${databaseName}`;
   return url.toString();
 }
 
