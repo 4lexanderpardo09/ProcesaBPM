@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Injectable } from '@nestjs/common';
-import { MissingTenantContextError } from '@procesabpm/shared';
+import { InvalidTenantContextError, isUuid, MissingTenantContextError } from '@procesabpm/shared';
 
 export interface TenantScope {
   readonly tenantId: string;
@@ -12,7 +12,11 @@ export interface TenantScope {
 export class TenantContext {
   private readonly storage = new AsyncLocalStorage<TenantScope>();
 
+  /** Throws `InvalidTenantContextError` unless both ids are UUIDs, so garbage never reaches the database. */
   run<T>(scope: TenantScope, work: () => T): T {
+    if (!isUuid(scope.tenantId) || !isUuid(scope.userId)) {
+      throw new InvalidTenantContextError();
+    }
     return this.storage.run(scope, work);
   }
 

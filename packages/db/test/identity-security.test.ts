@@ -232,6 +232,45 @@ describe('identity security (API role)', () => {
       const { rows } = await db.owner.query<{ email: string }>('SELECT email FROM users WHERE id = $1', [tenant.userId]);
       expect(rows[0]?.email).toBe(newEmail);
     });
+
+    it('never let an invitation change the password of a user who already has one', async () => {
+      const other = await seedTenant(db.platform);
+      const asOtherAdmin = <T>(work: Parameters<typeof withContext<T>>[2]) =>
+        withContext(db.runtime, { tenantId: other.tenantId, userId: other.userId }, work);
+      const { rows: emails } = await db.owner.query<{ email: string }>('SELECT email FROM users WHERE id = $1', [colleagueId]);
+      const token = randomUUID();
+      await asOtherAdmin(async (client) => {
+        const { rows } = await client.query<{ id: string }>(`SELECT invite_user($1, 'Ana', 'Ruiz') AS id`, [emails[0]!.email]);
+        expect(rows[0]?.id).toBe(colleagueId);
+        await client.query(`INSERT INTO memberships (tenant_id, user_id, role_id) VALUES ($1, $2, $3)`, [other.tenantId, colleagueId, other.roleId]);
+        await client.query(`INSERT INTO membership_companies (tenant_id, user_id, company_id) VALUES ($1, $2, $3)`, [
+          other.tenantId,
+          colleagueId,
+          other.companyId,
+        ]);
+        await client.query(`SELECT auth_issue_user_token($1, 'INVITATION', $2, $3)`, [colleagueId, hashToken(token), inOneHour()]);
+      });
+      const { rows: before } = await db.owner.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [colleagueId]);
+      const consume = (newHash: string | null) =>
+        withContext(db.runtime, {}, (client) =>
+          client.query('SELECT * FROM auth_consume_user_token($1, $2)', [hashToken(token), newHash]),
+        );
+      const membershipStatus = async () =>
+        (
+          await db.owner.query<{ status: string }>('SELECT status FROM memberships WHERE tenant_id = $1 AND user_id = $2', [
+            other.tenantId,
+            colleagueId,
+          ])
+        ).rows[0]?.status;
+
+      expect(await sqlStateOf(() => consume('attacker-chosen-hash'))).toBe(SqlState.checkViolation);
+      expect(await membershipStatus()).toBe('INVITED');
+
+      await consume(null);
+      const { rows: after } = await db.owner.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [colleagueId]);
+      expect(after[0]?.password_hash).toBe(before[0]?.password_hash);
+      expect(await membershipStatus()).toBe('ACTIVE');
+    });
   });
 
   describe('login lockout', () => {

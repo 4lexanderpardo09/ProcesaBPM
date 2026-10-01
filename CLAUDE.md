@@ -54,7 +54,7 @@ ProcesaBPM: SaaS multi-tenant de gestión de procesos, extraído del sistema de 
 
 ## Estructura y comandos
 - **Organización de carpetas y capas de `apps/api`, `apps/web` y `packages/shared`: `docs/arquitectura.md`** (léelo antes de crear código nuevo).
-- Monorepo pnpm: `packages/db` (**terminado**: esquema Prisma, 3 migraciones, semilla, 109 pruebas). Siguen `apps/api`, `apps/web` y `packages/shared`.
+- Monorepo pnpm: `packages/db` (**terminado**: esquema Prisma, 4 migraciones, semilla, 110 pruebas), `packages/shared` (en curso: motor de SLA, condiciones y errores de dominio) y `apps/api` (en curso: base con acceso a datos por tenant y autenticación; sigue la autorización CASL). Falta `apps/web`. El estado detallado está en `docs/pendientes.md`.
 - **Antes de tocar datos o escribir el API, lee `docs/base-de-datos.md`**, sobre todo §8 "Contrato para el API": contexto por transacción, columnas sensibles de `users` (Prisma `omit`), funciones `auth_*`, secuencia de creación y avance de tickets, y reglas de aprobadores.
 - La BD impone reglas de negocio (versiones publicadas inmutables, máquina de estados del ticket, coherencia ticket ↔ versión, historial de solo inserción). No las dupliques ni las evites en el API; traduce sus códigos de error (§7).
 - Cambiar el esquema: sigue la lista de `docs/base-de-datos.md` §11 (RLS con `app_enable_tenant_rls`, índice por FK, pruebas, cero diferencias con Prisma).

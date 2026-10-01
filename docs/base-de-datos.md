@@ -3,7 +3,7 @@
 > Documento de referencia de la capa de datos. Está escrito para quien construya el API (personas o agentes).
 > Fuente de verdad del código: `packages/db/`. Si cambias el esquema, actualiza este documento en el mismo commit.
 >
-> Última actualización: 2026-09-30 · Estado: **esquema v1 completo, 109 pruebas en verde**.
+> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 110 pruebas en verde**.
 
 ## Contenido
 1. [Resumen](#1-resumen)
@@ -32,7 +32,7 @@
 | Triggers | 34 (inmutabilidad, máquina de estados, coherencia, `updated_at`) |
 | Row-Level Security | forzada en 82 tablas |
 | Enums | 38 |
-| Pruebas | 109 (integración con PostgreSQL real + unitarias) |
+| Pruebas | 110 (integración con PostgreSQL real + unitarias) |
 
 La BD no es solo almacenamiento: **garantiza por sí misma** el aislamiento entre clientes y las reglas de negocio críticas. Un bug en el API no puede mezclar clientes, romper un flujo publicado ni dejar un ticket en un estado imposible.
 
@@ -49,7 +49,8 @@ packages/db/
 │   └── migrations/
 │       ├── 20260930000000_init/           # generada por Prisma desde schema.prisma
 │       ├── 20260930000100_security_and_constraints/   # RLS, roles, CHECKs, auth, outbox
-│       └── 20260930000200_integrity_rules/            # triggers de negocio, auth avanzada, purgas
+│       ├── 20260930000200_integrity_rules/            # triggers de negocio, auth avanzada, purgas
+│       └── 20261001000000_invitation_keeps_password/  # una invitación nunca cambia una contraseña existente
 ├── prisma.config.ts
 ├── src/
 │   ├── holidays/colombia.ts               # generador de festivos (Pascua + Ley Emiliani)
@@ -229,7 +230,7 @@ ALTER ROLE procesabpm_platform SET role = 'app_platform';
 | `auth_find_refresh_session(hash)` | API | Renovación del token de acceso. |
 | `invite_user(email, nombre, apellido)` | API, con tenant | Crea la identidad **sin contraseña**, o devuelve la existente sin tocarla. |
 | `auth_issue_user_token(user, tipo, hash, expira, payload)` | API | Emite un token de un solo uso (el cambio de correo solo para uno mismo; la invitación solo si ya existe la membresía). |
-| `auth_consume_user_token(hash, nuevo_hash?)` | API | Consume el token una vez y aplica su efecto: nueva contraseña (revoca las sesiones), activa la invitación, verifica o cambia el correo. |
+| `auth_consume_user_token(hash, nuevo_hash?)` | API | Consume el token una vez y aplica su efecto: nueva contraseña (revoca las sesiones), activa la invitación, verifica o cambia el correo. Una invitación solo fija la contraseña de un usuario que no tiene; si el usuario ya tiene una y se envía otra, falla con 23514 y no cambia nada (migración `20261001000000`). |
 | `auth_find_user_token(hash)` | API | Consulta un token (p. ej. para mostrar la invitación). |
 | `auth_set_own_password(hash)` | API, usuario autenticado | Cambio de contraseña (el API verifica antes la actual). |
 | `auth_get_own_mfa_secret()`, `auth_set_own_mfa(secreto, activo)` | API, usuario autenticado | Secreto TOTP cifrado. |
@@ -270,6 +271,7 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 
 1. **Contexto:** cada transacción empieza con los dos `set_config(..., true)` (§6.2). Con Prisma: una extensión de cliente que abre la transacción y fija el contexto antes de ejecutar el trabajo.
 2. **Columnas sensibles de `users`:** el rol del API **no puede leer** `password_hash`, `mfa_secret_encrypted`, `failed_logins` ni `locked_until`. Prisma selecciona todas las columnas por defecto, así que el cliente debe crearse con `omit: { user: { passwordHash: true, mfaSecretEncrypted: true, failedLogins: true, lockedUntil: true } }`. Todo lo de credenciales va por las funciones `auth_*`.
+2b. **Autenticación (implementada en `apps/api/src/modules/auth`):** el login, el refresh y la recuperación corren antes de que exista un tenant, en transacciones con `app.tenant_id` vacío (`AuthTransactionRunner`): anónimas para `auth_find_user_by_email`, `auth_register_login_attempt`, `auth_find_refresh_session`, `auth_find_user_token`, `auth_issue_user_token` (`PASSWORD_RESET`) y `auth_consume_user_token`; con `app.user_id` del usuario para `auth_list_memberships` y para leer, crear, rotar y revocar sus `refresh_sessions` (la RLS `own_sessions` lo exige). `auth_find_refresh_session` no devuelve `replaced_by`, así que la detección de reutilización lee la fila propia con `app.user_id` fijado. Los parámetros del bloqueo (5 intentos, 15 minutos) los pasa el API a `auth_register_login_attempt`.
 3. **Identidades:** nunca `INSERT` en `users`. Una invitación es: `invite_user()`, luego insertar `memberships` (`INVITED`) y `membership_companies`, luego `auth_issue_user_token(..., 'INVITATION', ...)` y enviar el correo.
 4. **Secretos:** `webhooks.secret_encrypted` y `users.mfa_secret_encrypted` se cifran en la app (AES-256-GCM, con la llave en el gestor de secretos). No se guardan hashes: se necesitan en claro para firmar y verificar.
 5. **Errores:** mapear los códigos de §7 a respuestas HTTP (23001/23514 → 409 o 422; 23503 → 422; 23505 → 409; 23P01 → 409; 42501 → 403). Las reglas diferidas fallan en el **COMMIT**, no en la sentencia.
@@ -375,7 +377,7 @@ Todas las de `analisis.md` §0.1, más las de la revisión de integridad (`revis
 
 ### 13.3 Pendientes técnicos
 - **Prisma [#30374](https://github.com/prisma/orm/issues/30374)**: **no se reproduce en 7.10.0** (2026-10-01). La prueba `apps/api/test/integration/prisma-30374.poc.test.ts` provoca errores de la BD dentro de transacciones interactivas con `@prisma/adapter-pg` (23505, 23514, 23503, 42501, 42601 y 22012; con el error lanzado, capturado y seguido de más consultas, en paralelo con otra consulta, y con la transacción vencida por tiempo), con dos tenants y 8 trabajadores en paralelo sobre pools de 1, 2 y 5 conexiones (el peor caso: la misma conexión se reutiliza justo después del error). Cada trabajador comprueba que lee de vuelta sus propios marcadores, solo las filas de su tenant y que el tenant no se queda en la conexión. Resultado: 5 corridas seguidas, 0 respuestas cruzadas.
-  - **Decisión:** se fija **Prisma 7.10.0 exacta** (`@prisma/client` y `@prisma/adapter-pg`, sin `^`). No hay un 8.0 RC publicado en npm (solo builds `8.1.0-dev.*`); no se probó. Como el bug no se reproduce, no se aplica la mitigación de descartar la conexión.
+  - **Decisión:** se fija **Prisma 7.10.0 exacta** (`@prisma/client` y `@prisma/adapter-pg`, sin `^`). Prisma 8.0 existe como release candidate solo para el CLI (`prisma@8.0.0-rc.19`, tag `latest`; `next` = `8.0.0-rc.10`), pero `@prisma/client` y `@prisma/adapter-pg` no tienen ninguna versión 8.0.x en npm (solo `8.1.0-dev.*`, tag `dev`; `latest` = 7.10.0), así que la prueba no se pudo correr contra el 8.0 RC (revisado 2026-10-01). Queda pendiente para cuando salga el 8.0 estable con sus paquetes de cliente y adaptador. Como el bug no se reproduce en 7.10.0, no se aplica la mitigación de descartar la conexión.
   - **Defensa adicional:** `TenantTransactionRunner` fija el contexto con una sola consulta que devuelve los valores fijados y compara con lo pedido; si la respuesta no coincide lanza `TenantContextMismatchError` antes de leer o escribir datos del tenant (falla cerrado).
   - **Regla:** la prueba queda en el CI. Antes de subir la versión de Prisma o del adaptador, debe pasar; si algún día falla, aplicar la mitigación (descartar la conexión ante cualquier error de BD dentro de la transacción) o no usar transacciones interactivas en las operaciones con RLS.
   - **Forma de los errores de Prisma 7.10 con el adaptador:** el SQLSTATE llega en `meta.driverAdapterError.cause.originalCode` (p. ej. `P2002` para 23505 y `P2010` para el resto); `mapDatabaseError` ya lo busca ahí. Los errores de Prisma sin SQLSTATE de regla (`P2028`, tiempo agotado) no se traducen y salen como 500.
