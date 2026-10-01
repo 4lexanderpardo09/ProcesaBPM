@@ -96,8 +96,8 @@ export class InvalidDurationError extends DomainError {
 }
 
 export class InvalidConditionError extends DomainError {
-  constructor(message: string) {
-    super(ERROR_CODES.invalidCondition, message);
+  constructor(message: string, options?: DomainErrorOptions) {
+    super(ERROR_CODES.invalidCondition, message, options);
   }
 }
 
