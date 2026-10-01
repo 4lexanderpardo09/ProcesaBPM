@@ -15,6 +15,8 @@ const envSchema = z.object({
   DATABASE_URL: postgresUrl,
   /** Login of the `app_platform` role: bypasses row-level security. Platform services only. */
   PLATFORM_DATABASE_URL: postgresUrl,
+  /** Signing key of the access and selection tokens (HS256): at least 32 bytes. */
+  JWT_SECRET: z.string().refine((value) => Buffer.byteLength(value, 'utf8') >= 32, 'must be at least 32 bytes long'),
   /** Interactive transaction timeout (Prisma's own default is 5 s). */
   DB_TX_TIMEOUT_MS: positiveInteger(10_000, 120_000),
   /** How long a transaction may wait for a free connection (Prisma's own default is 2 s). */

@@ -7,6 +7,7 @@ const valid = {
   LOG_LEVEL: 'info',
   DATABASE_URL: 'postgresql://api:secret@localhost:5432/procesabpm',
   PLATFORM_DATABASE_URL: 'postgres://platform:secret@localhost:5432/procesabpm',
+  JWT_SECRET: 'a-test-secret-of-at-least-32-bytes!!',
 };
 
 describe('loadConfig', () => {
@@ -52,6 +53,8 @@ describe('loadConfig', () => {
     ['LOG_LEVEL', 'verbose'],
     ['DATABASE_URL', 'mysql://localhost/db'],
     ['PLATFORM_DATABASE_URL', 'not a url'],
+    ['JWT_SECRET', 'too-short'],
+    ['JWT_SECRET', 'é'.repeat(15)],
   ])('rejects %s=%s', (variable, value) => {
     const error = catchError(() => loadConfig({ ...valid, [variable]: value }));
     expect(error).toBeInstanceOf(ConfigError);
@@ -62,6 +65,10 @@ describe('loadConfig', () => {
   it('lists every problem at once', () => {
     const error = catchError(() => loadConfig({}));
     expect(error.problems).toHaveLength(Object.keys(valid).length);
+  });
+
+  it('counts the secret in bytes, not characters', () => {
+    expect(loadConfig({ ...valid, JWT_SECRET: 'é'.repeat(16) }).JWT_SECRET).toHaveLength(16);
   });
 
   it('never prints the value of a rejected variable', () => {

@@ -1,7 +1,8 @@
 import { inject } from 'vitest';
 import { afterAll, beforeAll } from 'vitest';
 
-const VARIABLES = ['NODE_ENV', 'PORT', 'LOG_LEVEL', 'DATABASE_URL', 'PLATFORM_DATABASE_URL'] as const;
+export const TEST_JWT_SECRET = 'integration-test-secret-with-more-than-32-bytes';
+const VARIABLES = ['NODE_ENV', 'PORT', 'LOG_LEVEL', 'DATABASE_URL', 'PLATFORM_DATABASE_URL', 'JWT_SECRET'] as const;
 
 /** Points the application configuration at the test database for the duration of a test file. */
 export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[number], string>> = {}): void {
@@ -14,6 +15,7 @@ export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[
       LOG_LEVEL: 'error',
       DATABASE_URL: inject('runtimeUrl'),
       PLATFORM_DATABASE_URL: inject('platformUrl'),
+      JWT_SECRET: TEST_JWT_SECRET,
       ...overrides,
     });
   });
