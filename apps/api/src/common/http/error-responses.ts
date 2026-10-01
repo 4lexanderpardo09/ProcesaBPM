@@ -34,6 +34,7 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.tenantNotFound]: { status: 404, message: 'The tenant does not exist' },
   [ERROR_CODES.approverNotFound]: { status: 422, message: 'No approver could be resolved' },
   [ERROR_CODES.workflowNotPublishable]: { status: 422, message: 'The workflow has errors and cannot be published' },
+  [ERROR_CODES.staleRevision]: { status: 409, message: 'The workflow was changed by someone else: reload it' },
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },
 };

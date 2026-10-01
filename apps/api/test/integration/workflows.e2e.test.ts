@@ -106,6 +106,21 @@ describe('workflows API (builder backend)', () => {
       expect(saved.validation).toEqual({ errors: [], warnings: [] });
     });
 
+    it('optimistic concurrency: a save made on a stale revision answers 409 and the draft is untouched', async () => {
+      const c = await newWorkflow();
+      const read = await detail(c);
+      expect(read.version.revision).toBe(0);
+      const first = (await admin.put(`${version(c)}/graph`, { ...taskGraph(c), revision: 0 }).expect(200)).body;
+      expect(first.revision).toBe(1);
+      const stale = await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [], revision: 0 });
+      expect(stale.status).toBe(409);
+      expect(stale.body.error).toMatchObject({ code: 'STALE_REVISION', details: { currentRevision: 1 } });
+      expect((await detail(c)).document.steps).toHaveLength(3);
+      expect((await admin.put(`${version(c)}/graph`, { ...taskGraph(c), steps: first.document.steps.map((step: StepDocument) => stepInput(step.id, step.type, { name: step.name, ...(step.assignmentMode === 'NONE' ? {} : { assignmentMode: step.assignmentMode }) })), transitions: first.document.transitions.map((t: { id: string; fromStepId: string; toStepId: string; type: string; label: string }) => edge(t.id, t.fromStepId, t.toStepId, t.type, { label: t.label })), revision: 1 }).expect(200)).body.revision).toBe(2);
+      // Without a revision the save is not conditional.
+      expect((await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200)).body.revision).toBe(3);
+    });
+
     it('removing a block removes its fields; the rest is untouched, and positions are kept', async () => {
       const c = await newWorkflow();
       const first = (await admin.put(`${version(c)}/graph`, { ...taskGraph(c), steps: [stepInput(c.start, 'START', { ui: { x: 10, y: 20 } }), stepInput('new:task', 'TASK'), stepInput(c.end, 'END')] }).expect(200)).body;

@@ -259,7 +259,7 @@ Códigos de error que devuelve la BD: `23001` = dato inmutable · `23514` = esta
 
 | Área | Regla | Mecanismo | Código |
 |---|---|---|---|
-| Flujos | Una versión publicada o archivada no se modifica (pasos, transiciones, campos, topes, candidatos, iniciadores, SLA por empresa, firmantes, archivos). | Triggers `guard_version_config` / `guard_step_config` | 23001 |
+| Flujos | Una versión publicada o archivada no se modifica (pasos, transiciones, campos, topes, candidatos, iniciadores, SLA por empresa, firmantes, archivos). La comprobación bloquea la fila de la versión (`FOR SHARE`): publicar espera a quien edita el borrador y una edición tardía falla. Los topes de monto apuntan a pasos de **su** versión (FK con `version_id`). `workflow_versions.revision` sube con cada guardado del lienzo (control optimista). | Triggers `guard_version_config` / `guard_step_config` | 23001 |
 | Flujos | Ciclo de vida `DRAFT → PUBLISHED → ARCHIVED`; solo se borran borradores; `published_at` automático. | `guard_version_lifecycle` | 23001 |
 | Flujos | Un flujo no cambia de subcategoría. | `workflow_subcategory_immutable` | 23001 |
 | Flujos | Bloques automáticos (START, CONDITION, DOCUMENT, EXPORT, NOTIFICATION, WEBHOOK, CALCULATOR, WAIT, END) sin responsable, sin SLA y sin cierre manual; los bloques de personas siempre tienen modo de asignación. | CHECK `steps_assignment_by_type`, `steps_automatic_without_sla` | 23514 |

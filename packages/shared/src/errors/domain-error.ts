@@ -28,6 +28,7 @@ export const ERROR_CODES = {
   notFound: 'NOT_FOUND',
   approverNotFound: 'APPROVER_NOT_FOUND',
   workflowNotPublishable: 'WORKFLOW_NOT_PUBLISHABLE',
+  staleRevision: 'STALE_REVISION',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -217,5 +218,12 @@ export class ApproverNotFoundError extends DomainError {
 export class WorkflowNotPublishableError extends DomainError {
   constructor(readonly validation: WorkflowValidation) {
     super(ERROR_CODES.workflowNotPublishable, 'The workflow has errors and cannot be published', { details: validation });
+  }
+}
+
+/** Someone saved the canvas after it was read: the client must reload before saving again. */
+export class StaleRevisionError extends DomainError {
+  constructor(readonly currentRevision: number) {
+    super(ERROR_CODES.staleRevision, 'The workflow was changed by someone else', { details: { currentRevision } });
   }
 }

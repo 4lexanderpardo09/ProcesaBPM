@@ -6,6 +6,7 @@ export const toVersionSummary = (row: VersionRow): VersionSummary => ({
   number: row.number,
   status: row.status,
   notes: row.notes,
+  revision: row.revision,
   publishedAt: row.publishedAt?.toISOString() ?? null,
   publishedById: row.publishedById,
   createdAt: row.createdAt.toISOString(),
