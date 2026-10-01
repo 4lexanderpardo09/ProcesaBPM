@@ -110,6 +110,15 @@ export class MemberRepository {
                                    ${token.expiresAt}::timestamptz, NULL::jsonb)::text AS id`;
   }
 
+  /** An admin role, or one holding `manage all`: whoever has it has full access. */
+  async roleGrantsFullAccess(tx: TenantTransaction, tenantId: string, roleId: string): Promise<boolean> {
+    const role = await tx.role.findFirst({
+      where: { tenantId, id: roleId, OR: [{ isAdmin: true }, { permissions: { some: { permission: { action: 'manage', subject: 'all' } } } }] },
+      select: { id: true },
+    });
+    return role !== null;
+  }
+
   async findTenantName(tx: TenantTransaction, tenantId: string): Promise<string | undefined> {
     return (await tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }))?.name;
   }

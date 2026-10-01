@@ -296,4 +296,43 @@ describe('owner and admin rules', () => {
       await asMember(tenant, tenant.userId, (tx) => tx.query(`UPDATE memberships SET status = 'INVITED' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, invitee]));
     });
   });
+
+  describe('lowering an administrator needs full access too', () => {
+    async function world() {
+      const tenant = await ownedTenant();
+      const staff = await nonAdminRole(tenant);
+      const plain = await seedMember(db.platform, tenant);
+      await db.platform.query('UPDATE memberships SET role_id = $3 WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, plain, staff]);
+      const otherAdmin = await seedMember(db.platform, tenant);
+      return { tenant, plain, staff, otherAdmin };
+    }
+
+    it('a non-admin cannot deactivate an administrator or take them off the admin role (42501); an administrator can', async () => {
+      const { tenant, plain, staff, otherAdmin } = await world();
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, otherAdmin])))).toBe(SqlState.insufficientPrivilege);
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query('UPDATE memberships SET role_id = $3 WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, otherAdmin, staff])))).toBe(SqlState.insufficientPrivilege);
+      await asMember(tenant, tenant.userId, (tx) => tx.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, otherAdmin]));
+    });
+
+    it('a non-admin cannot clear the admin flag of a role, deactivate it, or remove its manage all', async () => {
+      const { tenant, plain } = await world();
+      const second = await adminRole(tenant, 'Another admin');
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query('UPDATE roles SET is_admin = false WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, second])))).toBe(SqlState.insufficientPrivilege);
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query('UPDATE roles SET is_active = false WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, second])))).toBe(SqlState.insufficientPrivilege);
+
+      const powerful = await nonAdminRole(tenant, 'Holder');
+      await db.platform.query(`INSERT INTO role_permissions (tenant_id, role_id, permission_id) SELECT $1, $2, id FROM permissions WHERE action = 'manage' AND subject = 'all'`, [tenant.tenantId, powerful]);
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query('DELETE FROM role_permissions WHERE tenant_id = $1 AND role_id = $2', [tenant.tenantId, powerful])))).toBe(SqlState.insufficientPrivilege);
+      await asMember(tenant, tenant.userId, (tx) => tx.query('DELETE FROM role_permissions WHERE tenant_id = $1 AND role_id = $2', [tenant.tenantId, powerful]));
+      await asMember(tenant, tenant.userId, (tx) => tx.query('UPDATE roles SET is_active = false WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, second]));
+    });
+
+    it('a non-admin can still change the members and roles that carry no full access', async () => {
+      const { tenant, plain, staff } = await world();
+      const other = await seedMember(db.platform, tenant);
+      await db.platform.query('UPDATE memberships SET role_id = $3 WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, other, staff]);
+      await asMember(tenant, plain, (tx) => tx.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, other]));
+      await asMember(tenant, plain, (tx) => tx.query('UPDATE roles SET is_active = false WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, staff]));
+    });
+  });
 });
