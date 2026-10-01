@@ -3,6 +3,7 @@ import { connectTestDatabase, type TestDatabase } from '@procesabpm/db/testing/d
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { BackgroundTasks } from '../../src/common/background/background-tasks.js';
 import { sha256Hex } from '../../src/infrastructure/security/token-utils.js';
 import { bearer, signIn } from '../support/auth-helpers.js';
 import { inviteUser, membershipStatus, seedUser, type TestUser, userRow } from '../support/auth-fixtures.js';
@@ -24,7 +25,12 @@ describe('one-time tokens', () => {
   let tenant: SeededTenant;
 
   const http = () => request(app.getHttpServer());
-  const requestReset = (email: string) => http().post('/auth/password-reset/request').send({ email });
+  /** The request answers at once and does its work in the background; this waits for that work. */
+  const requestReset = async (email: string, expectedStatus = 202) => {
+    const response = await http().post('/auth/password-reset/request').send({ email }).expect(expectedStatus);
+    await app.get(BackgroundTasks).whenIdle();
+    return response;
+  };
   const confirmReset = (token: string, newPassword = NEW_PASSWORD) =>
     http().post('/auth/password-reset/confirm').send({ token, newPassword });
   const login = (email: string, password: string) => http().post('/auth/login').send({ email, password });
@@ -39,7 +45,7 @@ describe('one-time tokens', () => {
   }
 
   async function resetTokenFor(user: TestUser): Promise<string> {
-    await requestReset(user.email).expect(202);
+    await requestReset(user.email);
     return (await resetEmails(user.userId)).at(-1)!.payload.token;
   }
 
@@ -57,7 +63,7 @@ describe('one-time tokens', () => {
   describe('POST /auth/password-reset/request', () => {
     it('answers 202 with no body for an unknown e-mail and queues nothing', async () => {
       const { rows: before } = await db.platform.query(`SELECT count(*)::int AS n FROM outbox_events WHERE type = 'email.password_reset'`);
-      const response = await requestReset(`nobody-${Date.now()}@example.com`).expect(202);
+      const response = await requestReset(`nobody-${Date.now()}@example.com`);
       expect(response.text).toBe('');
       const { rows: after } = await db.platform.query(`SELECT count(*)::int AS n FROM outbox_events WHERE type = 'email.password_reset'`);
       expect(after[0].n).toBe(before[0].n);
@@ -65,7 +71,7 @@ describe('one-time tokens', () => {
 
     it('for an active account issues a 30-minute token and queues the e-mail with it', async () => {
       const user = await seedUser(db, tenant);
-      const response = await requestReset(user.email).expect(202);
+      const response = await requestReset(user.email);
       expect(response.text).toBe('');
 
       const [email] = await resetEmails(user.userId);
@@ -83,12 +89,12 @@ describe('one-time tokens', () => {
     it('does nothing for a disabled account, with the same answer', async () => {
       const user = await seedUser(db, tenant);
       await db.platform.query(`UPDATE users SET status = 'DISABLED' WHERE id = $1`, [user.userId]);
-      await requestReset(user.email).expect(202);
+      await requestReset(user.email);
       expect(await resetEmails(user.userId)).toEqual([]);
     });
 
     it('validates the e-mail', async () => {
-      const response = await requestReset('not-an-email').expect(400);
+      const response = await requestReset('not-an-email', 400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
   });
@@ -164,6 +170,19 @@ describe('one-time tokens', () => {
       const response = await accept({ token: invited.token }).expect(422);
       expect(response.body.error.code).toBe('INVALID_STATE');
       await accept({ token: invited.token, password: NEW_PASSWORD }).expect(200);
+    });
+
+    it('an existing user who sends a password is refused (422) and the password does not change', async () => {
+      const user = await seedUser(db, tenant);
+      const other = await seedTenant(db.platform);
+      const invited = await inviteUser(db, other, user.email);
+      const before = await userRow(db, user.userId);
+      const response = await accept({ token: invited.token, password: 'attacker chosen password' }).expect(422);
+      expect(response.body.error.code).toBe('INVALID_STATE');
+      expect((await userRow(db, user.userId)).password_hash).toBe(before.password_hash);
+      expect(await membershipStatus(db, other.tenantId, user.userId)).toBe('INVITED');
+      await login(user.email, 'attacker chosen password').expect(401);
+      await login(user.email, user.password).expect(200);
     });
 
     it('an existing user joins another tenant and keeps the password', async () => {

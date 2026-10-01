@@ -7,7 +7,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { JwtTokenService } from '../../src/infrastructure/security/jwt-token-service.js';
 import { sha256Hex } from '../../src/infrastructure/security/token-utils.js';
-import { bearer, logIn, refreshCookieOf, signIn } from '../support/auth-helpers.js';
+import { bearer, logIn, REFRESH_COOKIE_NAME, refreshCookieOf, refreshSetCookieOf, signIn } from '../support/auth-helpers.js';
 import { addMembership, inviteUser, seedUser, type TestUser } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { TenantProbeController } from '../support/test-controllers.js';
@@ -24,7 +24,10 @@ describe('sessions', () => {
   const http = () => request(app.getHttpServer());
   const me = (accessToken: string) => http().get('/auth/me').set(bearer(accessToken));
   const refresh = (cookie: string) => http().post('/auth/refresh').set('cookie', cookie);
-  const cookieValue = (cookie: string) => cookie.slice('refresh_token='.length);
+  const cookieValue = (cookie: string) => cookie.slice(REFRESH_COOKIE_NAME.length + 1);
+  /** Moves the rotation of a session back in time, past the grace window for concurrent refreshes. */
+  const rotatedAMinuteAgo = (cookie: string) =>
+    db.platform.query(`UPDATE refresh_sessions SET revoked_at = now() - interval '1 minute' WHERE token_hash = $1`, [sha256Hex(cookieValue(cookie))]);
 
   async function sessionsOf(userId: string) {
     const { rows } = await db.platform.query<{ id: string; token_hash: string; revoked_at: Date | null; replaced_by: string | null; active_tenant_id: string }>(
@@ -64,8 +67,8 @@ describe('sessions', () => {
       expect(response.body).toEqual({ accessToken: expect.any(String), tokenType: 'Bearer', expiresIn: 900 });
       expect(decodeJwt(response.body.accessToken)).toMatchObject({ sub: user.userId, tid: tenantA.tenantId, sid: expect.any(String) });
 
-      const setCookie = ([] as string[]).concat(response.headers['set-cookie'] ?? [])[0]!;
-      expect(setCookie).toMatch(/^refresh_token=[A-Za-z0-9_-]{43};/);
+      const setCookie = refreshSetCookieOf(response)!;
+      expect(setCookie).toMatch(/^__Secure-refresh_token=[A-Za-z0-9_-]{43};/);
       expect(setCookie).toContain('HttpOnly');
       expect(setCookie).toContain('Secure');
       expect(setCookie).toContain('SameSite=Lax');
@@ -108,8 +111,22 @@ describe('sessions', () => {
       await me(second.accessToken).expect(200);
     });
 
-    it('reusing a rotated refresh token revokes every session of the user (theft detection)', async () => {
+    it('the rotation keeps the absolute expiry of the session', async () => {
+      const { rows } = await db.platform.query<{ expires_at: Date }>(
+        'SELECT expires_at FROM refresh_sessions WHERE user_id = $1 ORDER BY created_at',
+        [user.userId],
+      );
+      expect(rows[1]!.expires_at).toEqual(rows[0]!.expires_at);
+    });
+
+    it('reusing a rotated refresh token right after the rotation is refused without revoking anything (two tabs)', async () => {
+      await refresh(first.refreshCookie).expect(401);
+      await me(second.accessToken).expect(200);
+    });
+
+    it('reusing a rotated refresh token later revokes every session of the user (theft detection)', async () => {
       const elsewhere = await signIn(app, user.email, tenantA.tenantId);
+      await rotatedAMinuteAgo(first.refreshCookie);
       const response = await refresh(first.refreshCookie).expect(401);
       expect(response.body.error.code).toBe('UNAUTHENTICATED');
       expect(refreshCookieOf(response)).toBeUndefined();
@@ -124,7 +141,7 @@ describe('sessions', () => {
       const kept = await signIn(app, user.email, tenantA.tenantId);
       const closed = await signIn(app, user.email, tenantA.tenantId);
       const response = await http().post('/auth/logout').set('cookie', closed.refreshCookie).expect(204);
-      expect(([] as string[]).concat(response.headers['set-cookie'] ?? [])[0]).toMatch(/^refresh_token=;.*Expires=Thu, 01 Jan 1970/);
+      expect(refreshSetCookieOf(response)).toMatch(/^__Secure-refresh_token=;.*Expires=Thu, 01 Jan 1970/);
 
       await me(closed.accessToken).expect(401);
       await refresh(closed.refreshCookie).expect(401);
@@ -136,12 +153,50 @@ describe('sessions', () => {
   describe('refresh', () => {
     it.each([
       ['without a cookie', undefined],
-      ['with an unknown token', `refresh_token=${'A'.repeat(43)}`],
-      ['with an empty cookie', 'refresh_token='],
+      ['with an unknown token', `${REFRESH_COOKIE_NAME}=${'A'.repeat(43)}`],
+      ['with an empty cookie', `${REFRESH_COOKIE_NAME}=`],
+      ['with the name without the __Secure- prefix', `refresh_token=${'A'.repeat(43)}`],
     ])('answers 401 %s', async (_label, cookie) => {
       const call = http().post('/auth/refresh');
       const response = await (cookie === undefined ? call : call.set('cookie', cookie)).expect(401);
       expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    });
+
+    it('refuses two refresh cookies at once (cookie planted by another site), without revoking anything', async () => {
+      const user = await seedUser(db, tenantA);
+      const session = await signIn(app, user.email, tenantA.tenantId);
+      const planted = `${REFRESH_COOKIE_NAME}=${'B'.repeat(43)}`;
+      await refresh(`${planted}; ${session.refreshCookie}`).expect(401);
+      await refresh(session.refreshCookie).expect(200);
+    });
+
+    it('of two concurrent refreshes with the same token, one rotates and the other is refused; nothing else is revoked', async () => {
+      const user = await seedUser(db, tenantA);
+      const session = await signIn(app, user.email, tenantA.tenantId);
+      const responses = await Promise.all([refresh(session.refreshCookie), refresh(session.refreshCookie)]);
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+      const winner = responses.find((response) => response.status === 200)!;
+      await me(winner.body.accessToken).expect(200);
+      await refresh(refreshCookieOf(winner)!).expect(200);
+    });
+
+    it('a refresh racing a logout never revokes the other sessions', async () => {
+      const user = await seedUser(db, tenantA);
+      const other = await signIn(app, user.email, tenantA.tenantId);
+      const session = await signIn(app, user.email, tenantA.tenantId);
+      await Promise.all([refresh(session.refreshCookie), http().post('/auth/logout').set('cookie', session.refreshCookie)]);
+      await me(other.accessToken).expect(200);
+    });
+
+    it('a suspended tenant refuses the refresh with 403 and keeps the cookie and the session', async () => {
+      const tenant = await seedTenant(db.platform);
+      const user = await seedUser(db, tenant);
+      const session = await signIn(app, user.email, tenant.tenantId);
+      await db.platform.query(`UPDATE tenants SET status = 'SUSPENDED' WHERE id = $1`, [tenant.tenantId]);
+      const response = await refresh(session.refreshCookie).expect(403);
+      expect(refreshSetCookieOf(response)).toBeUndefined();
+      await db.platform.query(`UPDATE tenants SET status = 'ACTIVE' WHERE id = $1`, [tenant.tenantId]);
+      await refresh(session.refreshCookie).expect(200);
     });
 
     it('rejects an expired session', async () => {
@@ -210,10 +265,13 @@ describe('sessions', () => {
       await me(selectionToken).expect(401);
     });
 
-    it('validates the body', async () => {
-      const response = await select(selectionToken, 'acme').expect(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-    });
+    it.each(['acme', '00000000-0000-0000-0000-000000000000', 'ffffffff-ffff-ffff-ffff-ffffffffffff'])(
+      'validates the tenant id %j',
+      async (tenantId) => {
+        const response = await select(selectionToken, tenantId).expect(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      },
+    );
   });
 
   describe('access token guard', () => {
@@ -224,6 +282,14 @@ describe('sessions', () => {
       await db.platform.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenantA.tenantId, user.userId]);
       const response = await me(accessToken).expect(401);
       expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    });
+
+    it.each(['DISABLED', 'LOCKED'])('rejects a user whose account became %s, also on refresh', async (status) => {
+      const user = await seedUser(db, tenantA);
+      const session = await signIn(app, user.email, tenantA.tenantId);
+      await db.platform.query('UPDATE users SET status = $1::user_status WHERE id = $2', [status, user.userId]);
+      await me(session.accessToken).expect(401);
+      await refresh(session.refreshCookie).expect(401);
     });
 
     it('answers 403 TENANT_SUSPENDED while the tenant is suspended', async () => {

@@ -2,7 +2,7 @@ import { inject } from 'vitest';
 import { afterAll, beforeAll } from 'vitest';
 
 export const TEST_JWT_SECRET = 'integration-test-secret-with-more-than-32-bytes';
-const VARIABLES = ['NODE_ENV', 'PORT', 'LOG_LEVEL', 'DATABASE_URL', 'PLATFORM_DATABASE_URL', 'JWT_SECRET'] as const;
+const VARIABLES = ['NODE_ENV', 'PORT', 'LOG_LEVEL', 'DATABASE_URL', 'PLATFORM_DATABASE_URL', 'JWT_SECRET', 'TRUST_PROXY'] as const;
 
 /** Points the application configuration at the test database for the duration of a test file. */
 export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[number], string>> = {}): void {

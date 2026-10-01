@@ -3,6 +3,7 @@ import type { TestDatabase } from '@procesabpm/db/testing/database';
 import request from 'supertest';
 import { expect } from 'vitest';
 import { PasswordHasher } from '../../src/infrastructure/security/password-hasher.js';
+import { REFRESH_COOKIE_NAME } from '../../src/modules/auth/http/refresh-cookie.js';
 
 export const TEST_PASSWORD = 'correct horse battery staple';
 
@@ -17,12 +18,17 @@ export async function emailOf(db: TestDatabase, userId: string): Promise<string>
   return rows[0]!.email;
 }
 
-/** The `refresh_token=…` pair of a Set-Cookie header, ready to send back as a Cookie header. */
+export { REFRESH_COOKIE_NAME };
+
+/** The refresh cookie line of a response, if any. */
+export function refreshSetCookieOf(response: request.Response): string | undefined {
+  return ([] as string[]).concat(response.headers['set-cookie'] ?? []).find((value) => value.startsWith(`${REFRESH_COOKIE_NAME}=`));
+}
+
+/** The `name=value` pair of the refresh cookie, ready to send back as a Cookie header. */
 export function refreshCookieOf(response: request.Response): string | undefined {
-  const cookies = ([] as string[]).concat(response.headers['set-cookie'] ?? []);
-  const cookie = cookies.find((value) => value.startsWith('refresh_token='));
-  const pair = cookie?.split(';')[0];
-  return pair === 'refresh_token=' ? undefined : pair;
+  const pair = refreshSetCookieOf(response)?.split(';')[0];
+  return pair === `${REFRESH_COOKIE_NAME}=` ? undefined : pair;
 }
 
 export interface SignedIn {

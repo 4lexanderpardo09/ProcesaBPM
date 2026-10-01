@@ -49,6 +49,22 @@ describe('rate limiting', () => {
     await call().expect(429);
   });
 
+  it('ignores X-Forwarded-For by default (TRUST_PROXY=false): it cannot be used to dodge the limit', async () => {
+    const fresh = await createTestApp({ rateLimiting: true });
+    try {
+      // A different e-mail and a different forged client IP each time: only the per-IP limit can stop it.
+      const attempt = (i: number) =>
+        request(fresh.app.getHttpServer())
+          .post('/auth/login')
+          .set('x-forwarded-for', `203.0.113.${i}`)
+          .send({ email: `spoof-${i}@example.com`, password: 'x' });
+      for (let i = 0; i < RATE_LIMITS.login.perIp.limit; i += 1) await attempt(i).expect(401);
+      await attempt(200).expect(429);
+    } finally {
+      await fresh.app.close();
+    }
+  });
+
   it('limits per IP across e-mails', async () => {
     const fresh = await createTestApp({ rateLimiting: true });
     try {
