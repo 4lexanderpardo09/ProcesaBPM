@@ -29,6 +29,21 @@ export const ERROR_CODES = {
   approverNotFound: 'APPROVER_NOT_FOUND',
   workflowNotPublishable: 'WORKFLOW_NOT_PUBLISHABLE',
   staleRevision: 'STALE_REVISION',
+  notImplemented: 'NOT_IMPLEMENTED',
+  fieldValuesInvalid: 'FIELD_VALUES_INVALID',
+  amountLimitExceeded: 'AMOUNT_LIMIT_EXCEEDED',
+  workflowNotAvailable: 'WORKFLOW_NOT_AVAILABLE',
+  companyRequired: 'COMPANY_REQUIRED',
+  initiatorNotAllowed: 'INITIATOR_NOT_ALLOWED',
+  noAssigneeCandidates: 'NO_ASSIGNEE_CANDIDATES',
+  assigneeSelectionRequired: 'ASSIGNEE_SELECTION_REQUIRED',
+  invalidAssignee: 'INVALID_ASSIGNEE',
+  invalidTransition: 'INVALID_TRANSITION',
+  noMatchingBranch: 'NO_MATCHING_BRANCH',
+  maxLoopsReached: 'MAX_LOOPS_REACHED',
+  ticketNotOpen: 'TICKET_NOT_OPEN',
+  closeNotAllowed: 'CLOSE_NOT_ALLOWED',
+  staleTicket: 'STALE_TICKET',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -225,5 +240,109 @@ export class WorkflowNotPublishableError extends DomainError {
 export class StaleRevisionError extends DomainError {
   constructor(readonly currentRevision: number) {
     super(ERROR_CODES.staleRevision, 'The workflow was changed by someone else', { details: { currentRevision } });
+  }
+}
+
+/** A feature the model allows but the engine does not run yet (WAIT, PARALLEL, calculators…). */
+export class NotImplementedError extends DomainError {
+  constructor(readonly feature: string) {
+    super(ERROR_CODES.notImplemented, `${feature} is not implemented yet`, { details: { feature } });
+  }
+}
+
+export interface FieldValueIssue {
+  readonly code: string;
+  readonly fieldCode: string;
+  readonly row?: number;
+  readonly column?: string;
+}
+
+export class FieldValuesInvalidError extends DomainError {
+  constructor(readonly issues: readonly FieldValueIssue[]) {
+    super(ERROR_CODES.fieldValuesInvalid, 'Some field values are not valid', { details: { issues } });
+  }
+}
+
+export class AmountLimitExceededError extends DomainError {
+  constructor(readonly messages: readonly string[]) {
+    super(ERROR_CODES.amountLimitExceeded, 'An amount exceeds its limit', { details: { messages } });
+  }
+}
+
+export class WorkflowNotAvailableError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.workflowNotAvailable, 'The category has no published workflow');
+  }
+}
+
+export class CompanyRequiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.companyRequired, 'Choose the company the ticket is created for');
+  }
+}
+
+export class InitiatorNotAllowedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.initiatorNotAllowed, 'The requester cannot start this workflow');
+  }
+}
+
+export class NoAssigneeCandidatesError extends DomainError {
+  constructor(stepId: string, mode: string) {
+    super(ERROR_CODES.noAssigneeCandidates, 'The step has nobody to assign', { details: { stepId, mode } });
+  }
+}
+
+export interface AssigneeCandidate {
+  readonly userId: string;
+  readonly name: string;
+}
+
+export class AssigneeSelectionRequiredError extends DomainError {
+  constructor(stepId: string, candidates: readonly AssigneeCandidate[]) {
+    super(ERROR_CODES.assigneeSelectionRequired, 'Choose who the step is assigned to', { details: { stepId, candidates } });
+  }
+}
+
+export class InvalidAssigneeError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidAssignee, 'The chosen user cannot be assigned to this step');
+  }
+}
+
+export class InvalidTransitionError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidTransition, 'The transition does not leave the current step');
+  }
+}
+
+export class NoMatchingBranchError extends DomainError {
+  constructor(stepId: string) {
+    super(ERROR_CODES.noMatchingBranch, 'No branch of the condition block matches', { details: { stepId } });
+  }
+}
+
+export class MaxLoopsReachedError extends DomainError {
+  constructor(stepId: string, maxLoops: number) {
+    super(ERROR_CODES.maxLoopsReached, 'The step cannot be visited again', { details: { stepId, maxLoops } });
+  }
+}
+
+export class TicketNotOpenError extends DomainError {
+  constructor(readonly status: string) {
+    super(ERROR_CODES.ticketNotOpen, 'The ticket is not open', { details: { status } });
+  }
+}
+
+export class CloseNotAllowedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.closeNotAllowed, 'The current step does not allow closing the ticket');
+  }
+}
+
+/** The caller acted on a step that is no longer the current one (someone else moved the ticket first). */
+export class StaleTicketError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.staleTicket, 'The ticket changed: reload it');
   }
 }

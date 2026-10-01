@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { collectReferences, type ReferenceKind, type WorkflowProblem, type WorkflowValidation, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { collectReferences, findEngineSupportProblems, validateWorkflowGraph, type ReferenceKind, type WorkflowProblem, type WorkflowValidation, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { ReferenceCheckRepository } from '../data/reference-check.repository.js';
 
@@ -34,4 +34,9 @@ export class ReferenceValidator {
 
 export function withProblems(validation: WorkflowValidation, extra: readonly WorkflowProblem[]): WorkflowValidation {
   return { errors: [...validation.errors, ...extra.filter((problem) => problem.severity === 'error')], warnings: [...validation.warnings, ...extra.filter((problem) => problem.severity === 'warning')] };
+}
+
+/** The design rules plus what the engine cannot run yet: the single check drafts and publication share. */
+export function validateDocument(doc: WorkflowVersionDocument): WorkflowValidation {
+  return withProblems(validateWorkflowGraph(doc), findEngineSupportProblems(doc));
 }
