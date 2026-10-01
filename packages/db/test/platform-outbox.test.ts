@@ -110,19 +110,20 @@ describe('platform outbox and the worker role', () => {
         tenantA.tenantId,
         tenantB.tenantId,
       ]);
-      const claimed = await withoutContext(db.worker, async (client) => (await client.query<{ tenant_id: string; type: string }>('SELECT * FROM claim_outbox_events(100)')).rows);
+      const claimed = await withoutContext(db.worker, async (client) => (await client.query<{ tenant_id: string; type: string; id: string; attempts: number }>('SELECT * FROM claim_outbox_events(100)')).rows);
       expect(claimed.filter((row) => row.type.startsWith('test.')).map((row) => row.tenant_id).sort()).toEqual([tenantA.tenantId, tenantB.tenantId].sort());
 
       const withoutTenant = await withoutContext(db.worker, (client) => client.query('SELECT 1 FROM outbox_events'));
       expect(withoutTenant.rowCount).toBe(0);
-      const done = await withContext(db.worker, { tenantId: tenantA.tenantId }, (client) =>
-        client.query(`UPDATE outbox_events SET status = 'DONE', processed_at = now() WHERE type = 'test.a' RETURNING 1`),
-      );
-      expect(done.rowCount).toBe(1);
-      const other = await withContext(db.worker, { tenantId: tenantA.tenantId }, (client) =>
-        client.query(`UPDATE outbox_events SET status = 'DONE', processed_at = now() WHERE type = 'test.b' RETURNING 1`),
-      );
-      expect(other.rowCount).toBe(0);
+      const claimedA = claimed.find((row) => row.type === 'test.a')!;
+      const claimedB = claimed.find((row) => row.type === 'test.b')!;
+      const complete = (tenantId: string, row: { id: string; attempts?: number }) =>
+        withContext(db.worker, { tenantId }, async (client) =>
+          (await client.query<{ ok: boolean }>('SELECT complete_outbox_event($1, $2) AS ok', [row.id, row.attempts])).rows[0]!.ok,
+        );
+      expect(await complete(tenantA.tenantId, claimedA as never)).toBe(true);
+      // Another tenant's context cannot close it, and neither can a stale attempt.
+      expect(await complete(tenantA.tenantId, claimedB as never)).toBe(false);
     });
 
     it('two workers claiming at the same time get disjoint events', async () => {
@@ -241,7 +242,7 @@ describe('platform outbox and the worker role', () => {
         expect(await sqlStateOf(() => db.platform.query(`SELECT * FROM ${table}`))).toBe(SqlState.insufficientPrivilege);
       }
       // It owns (and can read) the tenant outbox, so only the platform outbox functions are closed to it.
-      for (const call of [`claim_platform_outbox_events(10)`, `enqueue_platform_event('email.password_reset', '{}')`]) {
+      for (const call of [`claim_platform_outbox_events(10)`, `complete_platform_outbox_event('00000000-0000-4000-8000-000000000000', 1)`]) {
         expect(await sqlStateOf(() => db.platform.query(`SELECT * FROM ${call}`))).toBe(SqlState.insufficientPrivilege);
       }
     });

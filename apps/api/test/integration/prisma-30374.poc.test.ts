@@ -36,8 +36,8 @@ const FAILURES: Record<string, Failure> = {
     tx.$executeRaw`INSERT INTO companies (tenant_id, name, country_code, currency_code, time_zone)
                    VALUES (${tenant.tenantId}::uuid, 'bad zone', 'CO', 'COP', 'Mars/Olympus')`,
   'foreign key violation (23503)': (tx, tenant) =>
-    tx.$executeRaw`INSERT INTO memberships (tenant_id, user_id, role_id, status)
-                   VALUES (${tenant.tenantId}::uuid, gen_random_uuid(), ${tenant.roleId}::uuid, 'ACTIVE')`,
+    tx.$executeRaw`INSERT INTO membership_companies (tenant_id, user_id, company_id)
+                   VALUES (${tenant.tenantId}::uuid, gen_random_uuid(), ${tenant.companyId}::uuid)`,
   'missing privilege (42501)': (tx) => tx.$executeRaw`DELETE FROM audit_logs`,
   'syntax error (42601)': (tx) => tx.$queryRawUnsafe('SELEC 1'),
   'runtime error (22012)': (tx) => tx.$queryRaw`SELECT 1 / 0`,

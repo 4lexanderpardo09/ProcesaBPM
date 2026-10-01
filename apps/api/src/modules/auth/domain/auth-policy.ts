@@ -12,6 +12,9 @@ export const REFRESH_SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
  */
 export const REFRESH_REUSE_GRACE_MS = 10_000;
 
+/** Lifetime of a platform session; there is no refresh token for it. */
+export const PLATFORM_SESSION_TTL_MS = 15 * 60 * 1000;
+
 export const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
 export const PASSWORD_RESET_EMAIL_EVENT = 'email.password_reset';
@@ -25,6 +28,7 @@ export const RATE_LIMITS = {
     perIp: { limit: 10, windowMs: 15 * MINUTE },
     perIdentifier: { limit: 3, windowMs: 15 * MINUTE },
   },
+  platformSelect: { name: 'platform-select', perIp: { limit: 20, windowMs: 15 * MINUTE }, perIdentifier: { limit: 10, windowMs: 15 * MINUTE } },
   passwordResetConfirm: {
     name: 'password-reset-confirm',
     perIp: { limit: 20, windowMs: 15 * MINUTE },

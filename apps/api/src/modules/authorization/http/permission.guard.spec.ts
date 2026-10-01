@@ -3,7 +3,7 @@ import { PermissionDeniedError, UnauthenticatedError } from '@procesabpm/shared'
 import { describe, expect, it, vi } from 'vitest';
 import { Public } from '../../../common/auth/public.decorator.js';
 import type { Principal } from '../../../common/auth/principal.js';
-import { AuthenticatedOnly, RequireAnyPermission, RequirePermission } from '../../../common/auth/route-access.js';
+import { AuthenticatedOnly, PlatformAdminOnly, RequireAnyPermission, RequirePermission } from '../../../common/auth/route-access.js';
 import type { AbilityService } from '../application/ability.service.js';
 import { buildAbility, type RawPermissionRule } from '../domain/build-ability.js';
 import { SubjectRegistry } from '../domain/subject-registry.js';
@@ -15,6 +15,9 @@ const principal: Principal = {
   sessionId: 's1',
   roleId: 'r1',
   roleActive: true,
+  roleIsAdmin: false,
+  isOwner: false,
+  permissionsVersion: 0,
   membership: { departmentId: null, siteId: null },
 };
 
@@ -31,6 +34,8 @@ class Routes {
   @Public()
   @RequirePermission('read', 'Company')
   conflicting(): void {}
+  @PlatformAdminOnly()
+  platform(): void {}
 }
 
 function setup(rules: RawPermissionRule[], requestPrincipal: Principal | null = principal) {
@@ -103,5 +108,20 @@ describe('PermissionGuard', () => {
     await call('readCompany');
     expect(forPrincipal).toHaveBeenCalledWith(principal);
     expect(request.ability).toBeDefined();
+  });
+
+  describe('platform routes', () => {
+    it('are allowed with a platform principal, without building any ability', async () => {
+      const { call, request, forPrincipal } = setup([], null);
+      request.platformPrincipal = { userId: 'u1', sessionId: 's1' };
+      await expect(call('platform')).resolves.toBe(true);
+      expect(forPrincipal).not.toHaveBeenCalled();
+      expect(request.ability).toBeUndefined();
+    });
+
+    it('are refused (401) without a platform principal, even with a tenant principal and manage all', async () => {
+      const { call } = setup([rule('manage', 'all')]);
+      await expect(call('platform')).rejects.toBeInstanceOf(UnauthenticatedError);
+    });
   });
 });

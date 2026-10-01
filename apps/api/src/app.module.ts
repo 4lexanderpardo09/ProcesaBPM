@@ -12,7 +12,7 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), HealthModule, AuthModule, AuthorizationModule, PlatformModule],
+  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule, HealthModule, AuthModule, AuthorizationModule, PlatformModule],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

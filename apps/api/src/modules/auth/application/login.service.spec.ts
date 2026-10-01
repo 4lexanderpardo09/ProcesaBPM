@@ -27,6 +27,7 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean) 
     findLoginCandidate: vi.fn().mockResolvedValue(candidate),
     registerLoginAttempt: vi.fn().mockResolvedValue(undefined),
     listOrganizations: vi.fn().mockResolvedValue([]),
+    isPlatformAdmin: vi.fn().mockResolvedValue(false),
   };
   const hasher = { verify: vi.fn().mockResolvedValue(passwordMatches) };
   const tokens = { issueSelectionToken: vi.fn().mockResolvedValue({ token: 'selection', expiresIn: 120 }) };
@@ -46,7 +47,7 @@ const request = { email: 'jane@example.com', password: 'secret password' };
 describe('LoginService', () => {
   it('a correct password returns the organizations and the selection token, and resets the counter', async () => {
     const { service, credentials } = setup(active, true);
-    await expect(service.login(request)).resolves.toEqual({ organizations: [], selectionToken: 'selection', expiresIn: 120 });
+    await expect(service.login(request)).resolves.toEqual({ organizations: [], selectionToken: 'selection', expiresIn: 120, platformAdmin: false });
     expect(credentials.registerLoginAttempt).toHaveBeenCalledWith(expect.anything(), active.id, true);
   });
 
@@ -71,6 +72,18 @@ describe('LoginService', () => {
       else expect(userId).toBe(countedUser);
     },
   );
+
+  it('tells a platform administrator that they may open a platform session', async () => {
+    const { service, credentials } = setup(active, true);
+    credentials.isPlatformAdmin.mockResolvedValue(true);
+    await expect(service.login(request)).resolves.toMatchObject({ platformAdmin: true });
+  });
+
+  it('never asks (and never tells) anything about platform rights when the login fails', async () => {
+    const { service, credentials } = setup(undefined, false);
+    await expect(service.login(request)).rejects.toBeInstanceOf(InvalidCredentialsError);
+    expect(credentials.isPlatformAdmin).not.toHaveBeenCalled();
+  });
 
   it('an MFA account with the right password gets MFA_NOT_IMPLEMENTED and no session', async () => {
     const { service, credentials } = setup({ ...active, mfaEnabled: true }, true);

@@ -28,6 +28,12 @@ export class CredentialsRepository {
     return row;
   }
 
+  /** Needs `app.user_id` = `userId`: a user is only told about themselves. */
+  async isPlatformAdmin(tx: AuthTransaction, userId: string): Promise<boolean> {
+    const [row] = await tx.$queryRaw<{ ok: boolean }[]>`SELECT auth_is_platform_admin(${userId}::uuid) AS ok`;
+    return row?.ok === true;
+  }
+
   async registerLoginAttempt(tx: AuthTransaction, userId: string, success: boolean): Promise<void> {
     await tx.$executeRaw`
       SELECT auth_register_login_attempt(${userId}::uuid, ${success}, ${LOGIN_LOCKOUT.maxFailedAttempts}::int,

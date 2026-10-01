@@ -24,6 +24,11 @@ export class PermissionGuard implements CanActivate {
     if (access === 'conflict') throw new PermissionDeniedError('The route declares conflicting access rules');
 
     const request = context.switchToHttp().getRequest<AbilityRequest>();
+    if (access === 'platform') {
+      // Platform routes carry a platform principal and never a CASL ability: they act on tenants, they have none.
+      if (request.platformPrincipal === undefined) throw new UnauthenticatedError();
+      return true;
+    }
     if (request.principal === undefined) throw new UnauthenticatedError();
     request.ability = await this.abilities.forPrincipal(request.principal);
 

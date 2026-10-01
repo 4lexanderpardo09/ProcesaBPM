@@ -22,6 +22,9 @@ describe('ERROR_RESPONSES', () => {
     [ERROR_CODES.rateLimited, 429],
     [ERROR_CODES.validationFailed, 400],
     [ERROR_CODES.mfaNotImplemented, 501],
+    [ERROR_CODES.platformAccessDenied, 403],
+    [ERROR_CODES.tenantSlugTaken, 409],
+    [ERROR_CODES.tenantNotFound, 404],
   ])('%s is answered with %i', (code, status) => {
     expect(ERROR_RESPONSES[code].status).toBe(status);
   });

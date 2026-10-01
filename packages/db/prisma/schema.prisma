@@ -797,6 +797,8 @@ model Role {
   systemRole  SystemRole? @map("system_role")
   isAdmin     Boolean     @default(false) @map("is_admin")
   isActive    Boolean     @default(true) @map("is_active")
+  /// Bumped by a trigger on any change of role_permissions; the ability cache is keyed by it.
+  permissionsVersion Int @default(0) @map("permissions_version")
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2491,6 +2493,21 @@ model PlatformOutboxEvent {
 
   @@index([type])
   @@map("platform_outbox_events")
+}
+
+/// Append-only trail of platform actions (they bypass row-level security). No tenant_id and no foreign keys.
+model PlatformAuditLog {
+  id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  actorUserId    String   @map("actor_user_id") @db.Uuid
+  action         String
+  targetTenantId String?  @map("target_tenant_id") @db.Uuid
+  data           Json     @default("{}")
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([targetTenantId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@map("platform_audit_logs")
 }
 
 model Webhook {

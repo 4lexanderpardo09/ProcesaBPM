@@ -68,6 +68,8 @@ describe('database functions', () => {
 
   describe('claim_outbox_events', () => {
     it('lets the worker role claim pending events across tenants without handing the same event to two workers', async () => {
+      // Other test files leave events behind; this test counts exactly the ones it creates.
+      await db.owner.query(`UPDATE outbox_events SET status = 'DONE', processed_at = now() WHERE status IN ('PENDING', 'PROCESSING')`);
       for (const { tenantId } of [tenantA, tenantB]) {
         await db.platform.query(
           `INSERT INTO outbox_events (tenant_id, type, payload)

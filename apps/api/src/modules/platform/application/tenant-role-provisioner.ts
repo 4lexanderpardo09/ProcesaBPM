@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ROLE_TEMPLATES, type RoleTemplate } from '@procesabpm/db';
 import { MissingCatalogPermissionError } from '@procesabpm/shared';
-import { PlatformPrismaService } from '../../../infrastructure/database/platform-prisma.service.js';
-import { type CatalogEntry, type PlatformTransaction, TenantRoleRepository } from '../data/tenant-role.repository.js';
+import { type PlatformTransaction, PlatformTransactionRunner } from '../../../infrastructure/database/platform-transaction-runner.js';
+import { type CatalogEntry, TenantRoleRepository } from '../data/tenant-role.repository.js';
 
 export const BASE_ROLE_TEMPLATES = Symbol('BASE_ROLE_TEMPLATES');
 
@@ -16,7 +16,7 @@ export interface CreatedRole {
 @Injectable()
 export class TenantRoleProvisioner {
   constructor(
-    @Inject(PlatformPrismaService) private readonly platform: PlatformPrismaService,
+    @Inject(PlatformTransactionRunner) private readonly runner: PlatformTransactionRunner,
     @Inject(TenantRoleRepository) private readonly repository: TenantRoleRepository,
     @Inject(BASE_ROLE_TEMPLATES) private readonly templates: readonly RoleTemplate[] = ROLE_TEMPLATES,
   ) {}
@@ -27,7 +27,7 @@ export class TenantRoleProvisioner {
    * a second call for the same tenant fails on the unique role names.
    */
   createBaseRoles(tenantId: string, tx?: PlatformTransaction): Promise<CreatedRole[]> {
-    return tx === undefined ? this.platform.$transaction((own) => this.create(own, tenantId)) : this.create(tx, tenantId);
+    return tx === undefined ? this.runner.run((own) => this.create(own, tenantId)) : this.create(tx, tenantId);
   }
 
   private async create(tx: PlatformTransaction, tenantId: string): Promise<CreatedRole[]> {

@@ -3,7 +3,6 @@ import { connectTestDatabase, type TestDatabase } from '@procesabpm/db/testing/d
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AbilityService } from '../../src/modules/authorization/application/ability.service.js';
 import { bearer, signIn } from '../support/auth-helpers.js';
 import { addMembership, seedUser } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
@@ -82,26 +81,43 @@ describe('authorization (CASL, deny by default)', () => {
   });
 
   describe('the role comes from the database, never from the token', () => {
-    it('removing a permission takes effect on the next request, once the cache entry is invalidated', async () => {
+    it('removing a permission takes effect on the very next request, with no invalidation', async () => {
       const role = await seedRole(db, tenantA.tenantId, 'Temporary');
       await setRolePermissions(db, tenantA.tenantId, role, [{ action: 'read', subject: 'Company' }]);
       const token = await tokenOf(tenantA, { roleId: role });
       await get('/test/companies', token).expect(200);
+      await get('/test/companies', token).expect(200); // served from the cache
 
       await setRolePermissions(db, tenantA.tenantId, role, []);
-      await get('/test/companies', token).expect(200); // still cached: the change is not announced yet
-      await app.get(AbilityService).invalidateRole(tenantA.tenantId, role);
       await get('/test/companies', token).expect(403);
     });
 
-    it('granting a permission is seen after invalidating the role', async () => {
+    it('granting a permission is seen on the next request too', async () => {
       const role = await seedRole(db, tenantA.tenantId, 'Growing');
       const token = await tokenOf(tenantA, { roleId: role });
       await get('/test/companies', token).expect(403);
       await setRolePermissions(db, tenantA.tenantId, role, [{ action: 'read', subject: 'Company' }]);
-      await get('/test/companies', token).expect(403); // cached empty rules
-      await app.get(AbilityService).invalidateTenant(tenantA.tenantId);
       await get('/test/companies', token).expect(200);
+    });
+
+    it('a revocation reaches a second application instance (separate cache) at once', async () => {
+      const role = await seedRole(db, tenantA.tenantId, 'Two instances');
+      await setRolePermissions(db, tenantA.tenantId, role, [{ action: 'read', subject: 'Company' }]);
+      const user = await seedUser(db, tenantA, undefined, { roleId: role });
+      const { app: other } = await createTestApp({ controllers: [TenantProbeController] });
+      try {
+        const first = (await signIn(app, user.email, tenantA.tenantId)).accessToken;
+        const second = (await signIn(other, user.email, tenantA.tenantId)).accessToken;
+        await get('/test/companies', first).expect(200);
+        await request(other.getHttpServer()).get('/test/companies').set(bearer(second)).expect(200);
+
+        await db.platform.query('DELETE FROM role_permissions WHERE tenant_id = $1 AND role_id = $2', [tenantA.tenantId, role]);
+
+        await get('/test/companies', first).expect(403);
+        await request(other.getHttpServer()).get('/test/companies').set(bearer(second)).expect(403);
+      } finally {
+        await other.close();
+      }
     });
 
     it('moving a member to another role applies at once (the role is read on every request)', async () => {
@@ -114,11 +130,45 @@ describe('authorization (CASL, deny by default)', () => {
 
     it('a deactivated role grants nothing', async () => {
       const role = await seedRole(db, tenantA.tenantId, 'Soon inactive');
-      await setRolePermissions(db, tenantA.tenantId, role, [{ action: 'manage', subject: 'all' }]);
+      await setRolePermissions(db, tenantA.tenantId, role, [{ action: 'read', subject: 'Company' }]);
       const token = await tokenOf(tenantA, { roleId: role });
       await get('/test/companies', token).expect(200);
       await db.platform.query('UPDATE roles SET is_active = false WHERE tenant_id = $1 AND id = $2', [tenantA.tenantId, role]);
       await get('/test/companies', token).expect(403);
+    });
+  });
+
+  describe('full access of the admin role and of the owner', () => {
+    it('an admin role means manage all even with no role_permissions at all', async () => {
+      const admin = await seedRole(db, tenantA.tenantId, 'Bare admin');
+      await db.platform.query('UPDATE roles SET is_admin = true WHERE tenant_id = $1 AND id = $2', [tenantA.tenantId, admin]);
+      const token = await tokenOf(tenantA, { roleId: admin });
+      await get('/test/companies', token).expect(200);
+      await get('/test/invalid-step-change?stepId=00000000-0000-4000-8000-000000000001', token).expect(200);
+    });
+
+    it('turning is_admin off takes the access away on the next request', async () => {
+      const admin = await seedRole(db, tenantA.tenantId, 'Demoted admin');
+      await db.platform.query('UPDATE roles SET is_admin = true WHERE tenant_id = $1 AND id = $2', [tenantA.tenantId, admin]);
+      const token = await tokenOf(tenantA, { roleId: admin });
+      await get('/test/companies', token).expect(200);
+      await db.platform.query('UPDATE roles SET is_admin = false WHERE tenant_id = $1 AND id = $2', [tenantA.tenantId, admin]);
+      await get('/test/companies', token).expect(403);
+    });
+
+    it('an inactive admin role grants nothing', async () => {
+      const admin = await seedRole(db, tenantA.tenantId, 'Inactive admin');
+      await db.platform.query('UPDATE roles SET is_admin = true, is_active = false WHERE tenant_id = $1 AND id = $2', [tenantA.tenantId, admin]);
+      await get('/test/companies', await tokenOf(tenantA, { roleId: admin })).expect(403);
+    });
+
+    it('the owner (who must keep an admin role) has full access', async () => {
+      const tenant = await seedTenant(db.platform);
+      const user = await seedUser(db, tenant);
+      await db.platform.query('UPDATE memberships SET is_owner = true, joined_at = now() WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, user.userId]);
+      const { accessToken } = await signIn(app, user.email, tenant.tenantId);
+      await get('/test/companies', accessToken).expect(200);
+      await get('/test/invalid-step-change?stepId=00000000-0000-4000-8000-000000000001', accessToken).expect(200);
     });
   });
 
@@ -137,14 +187,6 @@ describe('authorization (CASL, deny by default)', () => {
       expect(b.body.map((row: { tenantId: string }) => row.tenantId)).toEqual([tenantB.tenantId]);
     });
 
-    it('an invalid role id in the cache key cannot be shared: each tenant and role has its own entry', async () => {
-      const abilities = app.get(AbilityService);
-      await abilities.invalidateTenant(tenantA.tenantId);
-      const token = await tokenOf(tenantA, { roleId: companyReaderRole });
-      await get('/test/companies', token).expect(200);
-      await abilities.invalidateTenant(tenantB.tenantId);
-      await get('/test/companies', token).expect(200);
-    });
   });
 
   describe('conditions and records (fake subject TestDoc)', () => {

@@ -10,6 +10,7 @@ const GLOBAL_TABLES = new Set([
   'plans',
   'platform_admins',
   'platform_event_types',
+  'platform_audit_logs',
   'platform_outbox_events',
   'platform_announcements',
 ]);

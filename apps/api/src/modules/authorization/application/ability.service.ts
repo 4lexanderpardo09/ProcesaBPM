@@ -10,14 +10,10 @@ import { ABILITY_CACHE, type AbilityCache } from './ability-cache.js';
 
 export const SUBJECT_REGISTRY = Symbol('SUBJECT_REGISTRY');
 
+const FULL_ACCESS: readonly RawPermissionRule[] = [{ action: 'manage', subject: 'all', conditions: null }];
+
 @Injectable()
 export class AbilityService {
-  /**
-   * Bumped by every invalidation. A load that was in flight while the role was invalidated must not
-   * write its (possibly stale) rules to the cache afterwards.
-   */
-  private readonly generations = new Map<string, number>();
-
   constructor(
     @Inject(ABILITY_CACHE) private readonly cache: AbilityCache,
     @Inject(SUBJECT_REGISTRY) private readonly registry: SubjectRegistry,
@@ -28,12 +24,15 @@ export class AbilityService {
   ) {}
 
   /**
-   * What the member may do: the rules of the role (cached per tenant and role) resolved for this
-   * member. A role that is not active grants nothing. The ability is built for each request.
-   * Whoever changes permissions must invalidate AFTER the change is committed.
+   * What the member may do:
+   * - the owner of the tenant, and members of an active admin role, can do everything (`manage all`);
+   * - a role that is not active grants nothing;
+   * - otherwise, the rules of the role, resolved for this member. They are cached per tenant, role and
+   *   permissions version, so a change of permissions takes effect on every instance at once.
+   * The ability is built for each request.
    */
   async forPrincipal(principal: Principal): Promise<AppAbility> {
-    const rules = principal.roleActive ? await this.rulesOf(principal.tenantId, principal.roleId, principal.userId) : [];
+    const rules = await this.rulesOf(principal);
     const { ability, dropped } = buildAbility(rules, { userId: principal.userId, membership: principal.membership }, this.registry);
     for (const rule of dropped) {
       this.logger.warn('Permission rule not applied', { event: 'authorization.rule_dropped', roleId: principal.roleId, ...rule });
@@ -41,33 +40,20 @@ export class AbilityService {
     return ability;
   }
 
-  /** The permissions of a role changed: the next request reads them again. */
-  invalidateRole(tenantId: string, roleId: string): Promise<void> {
-    this.bump(`${tenantId}:${roleId}`);
-    return this.cache.invalidateRole(tenantId, roleId);
-  }
+  private async rulesOf(principal: Principal): Promise<readonly RawPermissionRule[]> {
+    if (principal.isOwner || (principal.roleActive && principal.roleIsAdmin)) return FULL_ACCESS;
+    if (!principal.roleActive) return [];
 
-  invalidateTenant(tenantId: string): Promise<void> {
-    this.bump(tenantId);
-    return this.cache.invalidateTenant(tenantId);
-  }
-
-  private async rulesOf(tenantId: string, roleId: string, userId: string): Promise<readonly RawPermissionRule[]> {
-    const cached = await this.cache.get(tenantId, roleId);
+    const { tenantId, roleId, userId, permissionsVersion } = principal;
+    const cached = await this.cache.get(tenantId, roleId, permissionsVersion);
     if (cached !== undefined) return cached;
-    const generation = this.generationOf(tenantId, roleId);
-    const rules = await this.tenantContext.run({ tenantId, userId }, () =>
-      this.runner.withTenantTransaction((tx) => this.repository.loadRules(tx, roleId)),
+
+    const loaded = await this.tenantContext.run({ tenantId, userId }, () =>
+      this.runner.withTenantTransaction((tx) => this.repository.loadRules(tx, tenantId, roleId)),
     );
-    if (this.generationOf(tenantId, roleId) === generation) await this.cache.set(tenantId, roleId, rules);
-    return rules;
-  }
-
-  private bump(key: string): void {
-    this.generations.set(key, (this.generations.get(key) ?? 0) + 1);
-  }
-
-  private generationOf(tenantId: string, roleId: string): string {
-    return `${this.generations.get(tenantId) ?? 0}.${this.generations.get(`${tenantId}:${roleId}`) ?? 0}`;
+    if (loaded === undefined) return [];
+    // Stored under the version read together with the rules, which may be newer than the principal's.
+    await this.cache.set(tenantId, roleId, loaded.version, loaded.rules);
+    return loaded.rules;
   }
 }

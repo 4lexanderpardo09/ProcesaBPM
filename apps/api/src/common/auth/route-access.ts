@@ -2,6 +2,7 @@ import { SetMetadata } from '@nestjs/common';
 
 export const REQUIRED_PERMISSIONS_KEY = 'auth:requiredPermissions';
 export const AUTHENTICATED_ONLY_KEY = 'auth:authenticatedOnly';
+export const PLATFORM_ADMIN_ONLY_KEY = 'auth:platformAdminOnly';
 
 export interface PermissionRequirement {
   /** Any one of these actions on `subject` is enough. */
@@ -25,3 +26,10 @@ export const RequireAnyPermission = (actions: readonly string[], subject: string
  * profile of the caller). Without it, an authenticated route that declares no permission is refused.
  */
 export const AuthenticatedOnly = (): MethodDecorator & ClassDecorator => SetMetadata(AUTHENTICATED_ONLY_KEY, true);
+
+/**
+ * The route belongs to the platform (it acts on tenants, with no tenant of its own). It needs a
+ * platform access token (`POST /auth/platform/select`), never a tenant token, and it is mutually
+ * exclusive with every other access declaration. No CASL ability is built for it.
+ */
+export const PlatformAdminOnly = (): MethodDecorator & ClassDecorator => SetMetadata(PLATFORM_ADMIN_ONLY_KEY, true);

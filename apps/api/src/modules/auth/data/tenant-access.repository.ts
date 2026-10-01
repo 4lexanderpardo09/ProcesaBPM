@@ -3,7 +3,15 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 
 export interface TenantAccess {
   readonly membership:
-    | { readonly roleId: string; readonly roleActive: boolean; readonly departmentId: string | null; readonly siteId: string | null }
+    | {
+        readonly roleId: string;
+        readonly roleActive: boolean;
+        readonly roleIsAdmin: boolean;
+        readonly permissionsVersion: number;
+        readonly isOwner: boolean;
+        readonly departmentId: string | null;
+        readonly siteId: string | null;
+      }
     | undefined;
   readonly userStatus: 'ACTIVE' | 'LOCKED' | 'DISABLED' | undefined;
   readonly membershipStatus: 'INVITED' | 'ACTIVE' | 'INACTIVE' | undefined;
@@ -22,7 +30,14 @@ export class TenantAccessRepository {
   async findAccess(tx: TenantTransaction, tenantId: string, userId: string): Promise<TenantAccess> {
     const membership = await tx.membership.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
-      select: { status: true, roleId: true, departmentId: true, siteId: true, role: { select: { isActive: true } } },
+      select: {
+        status: true,
+        roleId: true,
+        isOwner: true,
+        departmentId: true,
+        siteId: true,
+        role: { select: { isActive: true, isAdmin: true, permissionsVersion: true } },
+      },
     });
     const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { status: true } });
     const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true } });
@@ -33,7 +48,15 @@ export class TenantAccessRepository {
       membership:
         membership === null
           ? undefined
-          : { roleId: membership.roleId, roleActive: membership.role.isActive, departmentId: membership.departmentId, siteId: membership.siteId },
+          : {
+              roleId: membership.roleId,
+              roleActive: membership.role.isActive,
+              roleIsAdmin: membership.role.isAdmin,
+              permissionsVersion: membership.role.permissionsVersion,
+              isOwner: membership.isOwner,
+              departmentId: membership.departmentId,
+              siteId: membership.siteId,
+            },
     };
   }
 

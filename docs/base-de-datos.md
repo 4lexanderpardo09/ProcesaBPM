@@ -3,7 +3,7 @@
 > Documento de referencia de la capa de datos. Está escrito para quien construya el API (personas o agentes).
 > Fuente de verdad del código: `packages/db/`. Si cambias el esquema, actualiza este documento en el mismo commit.
 >
-> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 145 pruebas en verde**.
+> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 218 pruebas en verde**.
 
 ## Contenido
 1. [Resumen](#1-resumen)
@@ -26,13 +26,13 @@
 | Métrica | Valor |
 |---|---|
 | Motor | PostgreSQL 18 |
-| Tablas | 91 (9 de plataforma sin `tenant_id`: 7 catálogos globales y el outbox de plataforma con su lista de tipos; 4 de identidad/autenticación; 78 de tenant) |
+| Tablas | 92 (10 de plataforma sin `tenant_id`: 7 catálogos globales, el outbox de plataforma con su lista de tipos y la bitácora de plataforma `platform_audit_logs`; 4 de identidad/autenticación; 78 de tenant) |
 | Llaves foráneas | 252, **todas con índice** y compuestas con `tenant_id` entre tablas de tenant |
 | Restricciones | 59 `CHECK`, 2 de exclusión, índices únicos parciales |
 | Triggers | 34 (inmutabilidad, máquina de estados, coherencia, `updated_at`) |
 | Row-Level Security | forzada en 82 tablas |
 | Enums | 38 |
-| Pruebas | 145 (integración con PostgreSQL real + unitarias) |
+| Pruebas | 218 (integración con PostgreSQL real + unitarias) |
 
 La BD no es solo almacenamiento: **garantiza por sí misma** el aislamiento entre clientes y las reglas de negocio críticas. Un bug en el API no puede mezclar clientes, romper un flujo publicado ni dejar un ticket en un estado imposible.
 
@@ -211,9 +211,9 @@ Nunca `SET` de sesión: detrás de PgBouncer en modo transacción, el valor pasa
 | Rol | Uso | Atributos |
 |---|---|---|
 | `app_runtime` | API | Sujeto a RLS. Sin `INSERT` en `users`/`tenants`, sin acceso a `user_tokens`/`platform_admins`, sin `UPDATE`/`DELETE` en el historial. Solo lee las columnas públicas de `users`. |
-| `app_worker` | Worker (cola de eventos) | `NOLOGIN`, sin `BYPASSRLS`. **Hereda** los privilegios de tabla de `app_runtime` (una sola fuente de verdad, sin `SET ROLE` hacia él) y es el **único** que puede reclamar eventos del outbox (`claim_*`) y reportar su resultado. Sin acceso directo a las tablas de plataforma. Procesa cada evento en una transacción con su propio `app.tenant_id`, sujeto a RLS como el API. |
+| `app_worker` | Worker (cola de eventos) | `NOLOGIN`, sin `BYPASSRLS`. **Hereda** los privilegios de tabla de `app_runtime` (una sola fuente de verdad, sin `SET ROLE` hacia él) y es el **único** que puede reclamar eventos de los dos outbox (`claim_*`) y reportar su resultado (`complete_*`/`fail_*`); ya no tiene `UPDATE`/`DELETE` directo sobre `outbox_events`. Sin acceso directo a las tablas de plataforma. Procesa cada evento en una transacción con su propio `app.tenant_id`, sujeto a RLS como el API. |
 | `app_outbox_owner` | Dueño del outbox de plataforma | `NOLOGIN`, sin `BYPASSRLS`. Es dueño de las dos tablas del outbox de plataforma y de las 5 funciones que las tocan. Existe para que `app_platform` (cuyo login, con `BYPASSRLS`, tienen el API y los jobs de plataforma) **no tenga ningún privilegio sobre ellas**: si no, quien tenga ese login leería los tokens de recuperación en claro. |
-| `app_platform` | Aprovisionamiento, facturación, purgas, semillas | `BYPASSRLS`. Dueño de las demás funciones `SECURITY DEFINER`. Sin acceso a las tablas del outbox de plataforma; solo puede ejecutar su purga. |
+| `app_platform` | Aprovisionamiento (alta de tenants), facturación, purgas, semillas | `BYPASSRLS`. Dueño de las demás funciones `SECURITY DEFINER`. Sin acceso a las tablas del outbox de plataforma; solo puede ejecutar su purga y `enqueue_platform_event` (el alta de tenant encola así la invitación). El API solo lo usa desde `modules/platform` (una prueba de arquitectura lo exige). Solo inserta en `platform_audit_logs` (sin `UPDATE`/`DELETE`/`TRUNCATE`). |
 | Dueño del esquema | Migraciones | Crea objetos. No lo usa la aplicación. |
 
 Los usuarios de login los crea la infraestructura. **`BYPASSRLS` no se hereda por pertenecer a un rol**, así que cada login debe ejecutarse como su rol:
@@ -226,7 +226,7 @@ CREATE ROLE procesabpm_platform LOGIN PASSWORD '...' IN ROLE app_platform;
 ALTER ROLE procesabpm_platform SET role = 'app_platform';
 ```
 
-**Tablas solo de plataforma** (`platform_admins`, `user_tokens`, `platform_outbox_events`, `platform_event_types`): ni `app_runtime` ni `app_worker` tienen privilegio alguno sobre ellas; solo las funciones (y `app_platform` tampoco sobre las dos del outbox). Como `ALTER DEFAULT PRIVILEGES` concede a `app_runtime` y a `app_platform` toda tabla nueva, la migración de una tabla así debe hacer `REVOKE ALL` explícito; `schema-conventions.test.ts` falla si alguna de estas tablas es accesible para los roles de la aplicación, y otra prueba compara que `app_worker` tenga exactamente los privilegios de tabla de `app_runtime`.
+**Tablas solo de plataforma** (`platform_admins`, `user_tokens`, `platform_outbox_events`, `platform_event_types`; `platform_audit_logs` solo la toca `app_platform`): ni `app_runtime` ni `app_worker` tienen privilegio alguno sobre ellas; solo las funciones (y `app_platform` tampoco sobre las dos del outbox). Como `ALTER DEFAULT PRIVILEGES` concede a `app_runtime` y a `app_platform` toda tabla nueva, la migración de una tabla así debe hacer `REVOKE ALL` explícito; `schema-conventions.test.ts` falla si alguna de estas tablas es accesible para los roles de la aplicación, y otra prueba compara que `app_worker` tenga exactamente los privilegios de tabla de `app_runtime`.
 
 **Tablas temporales:** `TEMP` se revoca a `PUBLIC` en la base de datos. Con el `search_path` de las funciones `SECURITY DEFINER` (`public`), una tabla temporal con el nombre de una real la sustituye dentro de la función (comprobado), así que los roles de la aplicación no pueden crearlas; las funciones nuevas además terminan su `search_path` con `pg_temp`. Una prueba lo verifica. Pendiente: llevar el mismo `search_path` a las funciones `auth_*` existentes.
 
@@ -244,8 +244,11 @@ ALTER ROLE procesabpm_platform SET role = 'app_platform';
 | `auth_set_own_password(hash)` | API, usuario autenticado | Cambio de contraseña (el API verifica antes la actual). |
 | `auth_get_own_mfa_secret()`, `auth_set_own_mfa(secreto, activo)` | API, usuario autenticado | Secreto TOTP cifrado. |
 | `next_tenant_sequence(nombre)` | API, con tenant | Siguiente número (p. ej. del ticket), sin repetidos en concurrencia. |
-| `claim_outbox_events(n)` | **Solo `app_worker`** | Reclama eventos de todos los tenants con `SKIP LOCKED`. Desde la migración `20261001000100` ya no tiene `EXECUTE` el API (antes lo tenía `app_runtime`). Su comportamiento no cambió: un evento reclamado cuyo worker cae queda en `PROCESSING` (pendiente: arrendamiento como el del outbox de plataforma). |
-| `enqueue_platform_event(tipo, payload)` | API (`app_runtime`), sin contexto de tenant | Único acceso del API al outbox de plataforma (`platform_outbox_events`, sin `tenant_id`). Solo acepta los tipos de la tabla `platform_event_types` (hoy `email.password_reset`; agregar un tipo es insertar una fila); un tipo fuera de la lista falla con 42501 y un payload que no sea objeto o pase de 8 KiB, con 23514. |
+| `claim_outbox_events(n, arriendo, max_intentos)` | **Solo `app_worker`** | Reclama eventos de todos los tenants con `SKIP LOCKED` y arrendamiento (migración `20261002000000`): el evento queda `PROCESSING` y `available_at` guarda el vencimiento del arriendo (5 min); si el worker cae, se reclama de nuevo; `attempts` cuenta los reclamos y un arriendo vencido con `max_intentos` (10) pasa a `FAILED`. Antes de eso no tenía arrendamiento y desde `20261001000100` ya no tiene `EXECUTE` el API. |
+| `complete_outbox_event(id, intento)`, `fail_outbox_event(id, intento, error, reintento_en, max_intentos)` | **Solo `app_worker`**, con `app.tenant_id` fijado | Mismo protocolo que el outbox de plataforma, filtrado por `app_current_tenant()`: el `intento` es una ficha de exclusión (un arriendo vencido no pisa al nuevo dueño; devuelven `false`). Reemplazan el `UPDATE` directo, que se revocó. |
+| `auth_is_platform_admin(user_id)` | API, `app.user_id` = ese usuario | ¿Es administrador de plataforma activo? El login lo usa para ofrecer `POST /auth/platform/select`. Solo responde sobre uno mismo. |
+| `auth_platform_access(user_id, session_id)` | API, `app.user_id` = ese usuario | Verificación **por petición** de una sesión de plataforma: sigue en `platform_admins`, cuenta `ACTIVE`, y la sesión (`refresh_sessions` con `active_tenant_id NULL`) vigente y sin revocar. Quitar la fila de `platform_admins` o restablecer la contraseña corta el acceso de inmediato. |
+| `enqueue_platform_event(tipo, payload)` | API (`app_runtime`) y `app_platform`, sin contexto de tenant | Único acceso del API al outbox de plataforma (`platform_outbox_events`, sin `tenant_id`). Solo acepta los tipos de la tabla `platform_event_types` (hoy `email.password_reset` y `email.invitation`; agregar un tipo es insertar una fila); un tipo fuera de la lista falla con 42501 y un payload que no sea objeto o pase de 8 KiB, con 23514. |
 | `claim_platform_outbox_events(n, arriendo, max_intentos)` | **Solo `app_worker`** | Reclama con arrendamiento: el evento queda `PROCESSING` y `available_at` guarda el vencimiento del arriendo (5 min), así que si el worker cae se reclama de nuevo; `attempts` cuenta los reclamos y un arriendo vencido con `max_intentos` (10) reclamos pasa a `FAILED`, sin el token. |
 | `complete_platform_outbox_event(id, intento)`, `fail_platform_outbox_event(id, intento, error, reintento_en, max_intentos)` | **Solo `app_worker`** | Reportan el resultado. El `intento` es una ficha de exclusión: un worker cuyo arriendo venció no puede pisar el resultado del nuevo dueño (devuelven `false` y no cambian nada). **Todo estado final borra `token` del payload** (`DONE`, y `FAILED` por cualquier vía). `fail` con `reintento_en` vuelve el evento a `PENDING` en esa fecha, salvo que sea el último intento permitido: entonces pasa a `FAILED` (si no, quedaría `PENDING` sin que nadie pudiera reclamarlo). |
 | `purge_tenant(tenant)` | Solo `app_platform` | Borra el tenant completo y las identidades que solo le pertenecían. |
@@ -276,6 +279,9 @@ Códigos de error que devuelve la BD: `23001` = dato inmutable · `23514` = esta
 | Calendario | Franjas del mismo día sin solaparse (los turnos nocturnos van en dos filas). | Exclusión GiST | 23P01 |
 | Valores | Zona horaria IANA válida; correo en minúsculas; locale `xx-XX`; SHA-256 hexadecimal; slug del tenant; color `#RRGGBB`; moneda, país y códigos de campo con formato. | CHECK | 23514 |
 | Archivos | Subida de usuario ≤ 4 MB; tamaño > 0; un único documento vigente por paso. | CHECK + índice parcial | 23514 / 23505 |
+| Roles | `roles.permissions_version` sube con cualquier cambio de `role_permissions` (trigger) y nunca baja; la caché de habilidades del API se indexa por esa versión, así que un permiso revocado deja de valer en la siguiente petición. | Triggers `bump_role_permissions_version`, `role_permissions_version_monotonic` | 23514 |
+| Dueño y admin | Si el tenant tiene dueño, su rol es un rol admin **activo** y su membresía está `ACTIVE` (o `INVITED` sin aceptar: el tenant se crea antes de que el dueño acepte). Aceptar fija `joined_at`, así que `ACTIVE` no vuelve a `INVITED`. El dueño no se desactiva, no pierde el rol admin ni se borra; un tenant que tuvo dueño no se queda sin él (el traspaso limpia al anterior y fija al nuevo en la misma transacción). Se valida **al COMMIT** con `SECURITY DEFINER` (sin tenant en el contexto una RLS vacía la dejaría pasar). | Constraint triggers diferidos `check_tenant_keeps_admin*` + `assert_tenant_keeps_admin` | 23514 |
+| Escalada | `is_owner`, un rol admin y el permiso `manage all` dan acceso total, así que solo los concede la plataforma, un superusuario (migraciones) o quien ya tiene ese poder: hacer dueño → solo el dueño, en un traspaso; dar, crear o **reactivar** un rol admin, reactivar a un miembro de uno, o conceder `manage all` → el dueño o un miembro de un rol admin activo. Las columnas de identidad no se mueven (`memberships.tenant_id/user_id`, `role_permissions.tenant_id/role_id`: las FK hacen cascada y se podría pasar el dueño o un `manage all` a otra cuenta o rol); `joined_at` no se borra y una membresía no vuelve a `INVITED`; `roles.permissions_version` solo lo cambia el trigger de la BD. Los cierres vienen de la revisión de seguridad (Opus). | Triggers `guard_membership_privilege`, `guard_role_privilege`, `guard_manage_all_grant`, `*_identity_immutable`, `membership_no_regress`, `role_permissions_version_monotonic` | 42501 / 23001 / 23514 |
 | Unicidades | Una empresa, un calendario y un tipo de grupo por defecto; un borrador y una publicada por flujo; un dueño por tenant. | Índices únicos parciales | 23505 |
 
 ## 8. Contrato para el API
@@ -313,6 +319,9 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
     Los valores numéricos y de moneda se guardan normalizados como número JSON (sin separadores de miles como `1.500.000`): el servidor normaliza al guardar, y el evaluador de condiciones no interpreta esos textos como número. En las condiciones de fecha, si un lado es `YYYY-MM-DD` y el otro trae hora, el día se toma como medianoche UTC.
 14. **Archivos:** subir a `PENDING` (reservando cuota en `tenant_usage`) y confirmar en la transacción del negocio. Nunca sobrescribir: cada PDF nuevo es otra fila de `ticket_documents` con `version + 1` y la anterior pasa a `is_current = false`.
 15. **Purga de tenant:** solo el servicio de plataforma, con `purge_tenant()`. Borrar los objetos del bucket (`tenants/{id}/`) es un job aparte.
+
+16. **Alta de tenant** (implementada en `apps/api/src/modules/platform`, solo administradores de plataforma): UNA transacción con el login `app_platform`, en este orden: plan activo y país → comprobar que el correo del dueño no esté `DISABLED` → `INSERT INTO tenants ... ON CONFLICT (slug) DO NOTHING` (el índice único decide, también en concurrencia) → `set_config('app.tenant_id', …)` (lo exigen `invite_user` y `auth_issue_user_token`; sin usuario) → `tenant_usage` → calendario por defecto (L–V 08:00–12:00 y 14:00–18:00, festivos del país del año en curso y el siguiente) → empresa por defecto (moneda y zona del país) → roles base → tipo de grupo "General", prioridades y tipos de error (con "Reapertura") → `invite_user`, membresía `INVITED` con `is_owner` y rol Administrador, y `auth_issue_user_token(INVITATION)` → `enqueue_platform_event('email.invitation')` con el token en claro (solo lo lee el worker; se borra al terminar) → fila en `platform_audit_logs`. Los valores por defecto están en `packages/db/src/seed/tenant-defaults.ts`. Con el login de plataforma (RLS ignorada) **toda** fila se escribe con `tenant_id` explícito. Suspender/reactivar bloquea la fila del tenant (`FOR UPDATE`) y es idempotente; `CANCELLED`/`DELETED` no cambian de estado (422).
+17. **`tenants`:** `app_runtime` solo puede actualizar `name`, `time_zone`, `primary_color`, `logo_file_id` y `updated_at` (privilegio por columna): el estado, el plan y el país los cambia únicamente la plataforma.
 
 ## 9. Catálogo global y semillas
 `src/seed/run.ts` carga, de forma **idempotente** (upsert por llave natural), en cada despliegue:

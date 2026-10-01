@@ -5,6 +5,7 @@ import { insertReturningId, seedTenant, type SeededTenant } from '@procesabpm/db
 import { MissingCatalogPermissionError } from '@procesabpm/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlatformPrismaService } from '../../src/infrastructure/database/platform-prisma.service.js';
+import { PlatformTransactionRunner } from '../../src/infrastructure/database/platform-transaction-runner.js';
 import { TenantRoleProvisioner } from '../../src/modules/platform/application/tenant-role-provisioner.js';
 import { TenantRoleRepository } from '../../src/modules/platform/data/tenant-role.repository.js';
 import { bearer, signIn } from '../support/auth-helpers.js';
@@ -21,6 +22,7 @@ describe('TenantRoleProvisioner (platform service)', () => {
   let app: INestApplication;
   let provisioner: TenantRoleProvisioner;
   let platform: PlatformPrismaService;
+  let runner: PlatformTransactionRunner;
 
   /** A tenant row with no roles at all, as the sign-up will create it before provisioning. */
   const bareTenant = async () =>
@@ -52,7 +54,8 @@ describe('TenantRoleProvisioner (platform service)', () => {
     const created = await createTestApp({ controllers: [TenantProbeController] });
     app = created.app;
     provisioner = created.moduleRef.get(TenantRoleProvisioner);
-    platform = created.moduleRef.get(PlatformPrismaService);
+    platform = created.moduleRef.get(PlatformPrismaService, { strict: false });
+    runner = created.moduleRef.get(PlatformTransactionRunner, { strict: false });
   });
 
   afterAll(async () => {
@@ -118,7 +121,7 @@ describe('TenantRoleProvisioner (platform service)', () => {
       ...ROLE_TEMPLATES,
       { systemRole: 'AGENT', name: 'Broken', isAdmin: false, permissions: [{ action: 'teleport', subject: 'Ticket' }, { action: 'fly', subject: 'Ticket' }] },
     ];
-    const broken = new TenantRoleProvisioner(platform, new TenantRoleRepository(), templates);
+    const broken = new TenantRoleProvisioner(runner, new TenantRoleRepository(), templates);
     const failure = await broken.createBaseRoles(tenantId).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(MissingCatalogPermissionError);
     expect((failure as MissingCatalogPermissionError).missing).toEqual(['fly Ticket', 'teleport Ticket']);
