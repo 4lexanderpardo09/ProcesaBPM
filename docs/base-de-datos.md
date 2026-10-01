@@ -3,7 +3,7 @@
 > Documento de referencia de la capa de datos. Está escrito para quien construya el API (personas o agentes).
 > Fuente de verdad del código: `packages/db/`. Si cambias el esquema, actualiza este documento en el mismo commit.
 >
-> Última actualización: 2026-09-30 · Estado: **esquema v1 completo, 109 pruebas en verde**.
+> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 110 pruebas en verde**.
 
 ## Contenido
 1. [Resumen](#1-resumen)
@@ -32,7 +32,7 @@
 | Triggers | 34 (inmutabilidad, máquina de estados, coherencia, `updated_at`) |
 | Row-Level Security | forzada en 82 tablas |
 | Enums | 38 |
-| Pruebas | 109 (integración con PostgreSQL real + unitarias) |
+| Pruebas | 110 (integración con PostgreSQL real + unitarias) |
 
 La BD no es solo almacenamiento: **garantiza por sí misma** el aislamiento entre clientes y las reglas de negocio críticas. Un bug en el API no puede mezclar clientes, romper un flujo publicado ni dejar un ticket en un estado imposible.
 
@@ -49,7 +49,8 @@ packages/db/
 │   └── migrations/
 │       ├── 20260930000000_init/           # generada por Prisma desde schema.prisma
 │       ├── 20260930000100_security_and_constraints/   # RLS, roles, CHECKs, auth, outbox
-│       └── 20260930000200_integrity_rules/            # triggers de negocio, auth avanzada, purgas
+│       ├── 20260930000200_integrity_rules/            # triggers de negocio, auth avanzada, purgas
+│       └── 20261001000000_invitation_keeps_password/  # una invitación nunca cambia una contraseña existente
 ├── prisma.config.ts
 ├── src/
 │   ├── holidays/colombia.ts               # generador de festivos (Pascua + Ley Emiliani)
@@ -229,7 +230,7 @@ ALTER ROLE procesabpm_platform SET role = 'app_platform';
 | `auth_find_refresh_session(hash)` | API | Renovación del token de acceso. |
 | `invite_user(email, nombre, apellido)` | API, con tenant | Crea la identidad **sin contraseña**, o devuelve la existente sin tocarla. |
 | `auth_issue_user_token(user, tipo, hash, expira, payload)` | API | Emite un token de un solo uso (el cambio de correo solo para uno mismo; la invitación solo si ya existe la membresía). |
-| `auth_consume_user_token(hash, nuevo_hash?)` | API | Consume el token una vez y aplica su efecto: nueva contraseña (revoca las sesiones), activa la invitación, verifica o cambia el correo. |
+| `auth_consume_user_token(hash, nuevo_hash?)` | API | Consume el token una vez y aplica su efecto: nueva contraseña (revoca las sesiones), activa la invitación, verifica o cambia el correo. Una invitación solo fija la contraseña de un usuario que no tiene; si el usuario ya tiene una y se envía otra, falla con 23514 y no cambia nada (migración `20261001000000`). |
 | `auth_find_user_token(hash)` | API | Consulta un token (p. ej. para mostrar la invitación). |
 | `auth_set_own_password(hash)` | API, usuario autenticado | Cambio de contraseña (el API verifica antes la actual). |
 | `auth_get_own_mfa_secret()`, `auth_set_own_mfa(secreto, activo)` | API, usuario autenticado | Secreto TOTP cifrado. |
