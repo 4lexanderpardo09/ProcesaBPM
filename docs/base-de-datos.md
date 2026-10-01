@@ -3,7 +3,7 @@
 > Documento de referencia de la capa de datos. Está escrito para quien construya el API (personas o agentes).
 > Fuente de verdad del código: `packages/db/`. Si cambias el esquema, actualiza este documento en el mismo commit.
 >
-> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 110 pruebas en verde**.
+> Última actualización: 2026-10-01 · Estado: **esquema v1 completo, 136 pruebas en verde**.
 
 ## Contenido
 1. [Resumen](#1-resumen)
@@ -26,13 +26,13 @@
 | Métrica | Valor |
 |---|---|
 | Motor | PostgreSQL 18 |
-| Tablas | 89 (7 catálogos globales, 4 de identidad/autenticación, 78 de tenant) |
+| Tablas | 91 (9 de plataforma sin `tenant_id`: 7 catálogos globales y el outbox de plataforma con su lista de tipos; 4 de identidad/autenticación; 78 de tenant) |
 | Llaves foráneas | 252, **todas con índice** y compuestas con `tenant_id` entre tablas de tenant |
 | Restricciones | 59 `CHECK`, 2 de exclusión, índices únicos parciales |
 | Triggers | 34 (inmutabilidad, máquina de estados, coherencia, `updated_at`) |
 | Row-Level Security | forzada en 82 tablas |
 | Enums | 38 |
-| Pruebas | 110 (integración con PostgreSQL real + unitarias) |
+| Pruebas | 136 (integración con PostgreSQL real + unitarias) |
 
 La BD no es solo almacenamiento: **garantiza por sí misma** el aislamiento entre clientes y las reglas de negocio críticas. Un bug en el API no puede mezclar clientes, romper un flujo publicado ni dejar un ticket en un estado imposible.
 
@@ -50,7 +50,8 @@ packages/db/
 │       ├── 20260930000000_init/           # generada por Prisma desde schema.prisma
 │       ├── 20260930000100_security_and_constraints/   # RLS, roles, CHECKs, auth, outbox
 │       ├── 20260930000200_integrity_rules/            # triggers de negocio, auth avanzada, purgas
-│       └── 20261001000000_invitation_keeps_password/  # una invitación nunca cambia una contraseña existente
+│       ├── 20261001000000_invitation_keeps_password/  # una invitación nunca cambia una contraseña existente
+│       └── 20261001000100_platform_outbox_and_worker_role/  # outbox de plataforma y rol app_worker
 ├── prisma.config.ts
 ├── src/
 │   ├── holidays/colombia.ts               # generador de festivos (Pascua + Ley Emiliani)
@@ -209,7 +210,8 @@ Nunca `SET` de sesión: detrás de PgBouncer en modo transacción, el valor pasa
 ### 6.3 Roles de base de datos
 | Rol | Uso | Atributos |
 |---|---|---|
-| `app_runtime` | API y worker | Sujeto a RLS. Sin `INSERT` en `users`/`tenants`, sin acceso a `user_tokens`/`platform_admins`, sin `UPDATE`/`DELETE` en el historial. Solo lee las columnas públicas de `users`. |
+| `app_runtime` | API | Sujeto a RLS. Sin `INSERT` en `users`/`tenants`, sin acceso a `user_tokens`/`platform_admins`, sin `UPDATE`/`DELETE` en el historial. Solo lee las columnas públicas de `users`. |
+| `app_worker` | Worker (cola de eventos) | `NOLOGIN`, sin `BYPASSRLS`. **Hereda** los privilegios de tabla de `app_runtime` (una sola fuente de verdad, sin `SET ROLE` hacia él) y es el **único** que puede reclamar eventos del outbox (`claim_*`) y reportar su resultado. Sin acceso directo a las tablas de plataforma. Procesa cada evento en una transacción con su propio `app.tenant_id`, sujeto a RLS como el API. |
 | `app_platform` | Aprovisionamiento, facturación, purgas, semillas | `BYPASSRLS`. Dueño de las funciones `SECURITY DEFINER`. |
 | Dueño del esquema | Migraciones | Crea objetos. No lo usa la aplicación. |
 
@@ -217,9 +219,13 @@ Los usuarios de login los crea la infraestructura. **`BYPASSRLS` no se hereda po
 ```sql
 CREATE ROLE procesabpm_api LOGIN PASSWORD '...' IN ROLE app_runtime;
 ALTER ROLE procesabpm_api SET role = 'app_runtime';
+CREATE ROLE procesabpm_worker LOGIN PASSWORD '...' IN ROLE app_worker;
+ALTER ROLE procesabpm_worker SET role = 'app_worker';
 CREATE ROLE procesabpm_platform LOGIN PASSWORD '...' IN ROLE app_platform;
 ALTER ROLE procesabpm_platform SET role = 'app_platform';
 ```
+
+**Tablas solo de plataforma** (`platform_admins`, `user_tokens`, `platform_outbox_events`, `platform_event_types`): ni `app_runtime` ni `app_worker` tienen privilegio alguno sobre ellas; solo las funciones. Como `ALTER DEFAULT PRIVILEGES` concede a `app_runtime` toda tabla nueva, la migración de una tabla así debe hacer `REVOKE ALL` explícito; `schema-conventions.test.ts` falla si alguna de estas tablas es accesible para los roles de la aplicación, y otra prueba compara que `app_worker` tenga exactamente los privilegios de tabla de `app_runtime`.
 
 ### 6.4 Funciones de entrada (`SECURITY DEFINER`, dueño `app_platform`, `search_path = public`)
 | Función | Quién | Qué hace |
@@ -235,9 +241,12 @@ ALTER ROLE procesabpm_platform SET role = 'app_platform';
 | `auth_set_own_password(hash)` | API, usuario autenticado | Cambio de contraseña (el API verifica antes la actual). |
 | `auth_get_own_mfa_secret()`, `auth_set_own_mfa(secreto, activo)` | API, usuario autenticado | Secreto TOTP cifrado. |
 | `next_tenant_sequence(nombre)` | API, con tenant | Siguiente número (p. ej. del ticket), sin repetidos en concurrencia. |
-| `claim_outbox_events(n)` | Worker | Reclama eventos de todos los tenants con `SKIP LOCKED`. |
+| `claim_outbox_events(n)` | **Solo `app_worker`** | Reclama eventos de todos los tenants con `SKIP LOCKED`. Desde la migración `20261001000100` ya no tiene `EXECUTE` el API (antes lo tenía `app_runtime`). Su comportamiento no cambió: un evento reclamado cuyo worker cae queda en `PROCESSING` (pendiente: arrendamiento como el del outbox de plataforma). |
+| `enqueue_platform_event(tipo, payload)` | API (`app_runtime`), sin contexto de tenant | Único acceso del API al outbox de plataforma (`platform_outbox_events`, sin `tenant_id`). Solo acepta los tipos de la tabla `platform_event_types` (hoy `email.password_reset`; agregar un tipo es insertar una fila); un tipo fuera de la lista falla con 42501 y un payload que no sea objeto o pase de 8 KiB, con 23514. |
+| `claim_platform_outbox_events(n, arriendo, max_intentos)` | **Solo `app_worker`** | Reclama con arrendamiento: el evento queda `PROCESSING` y `available_at` guarda el vencimiento del arriendo (5 min), así que si el worker cae se reclama de nuevo; `attempts` cuenta los reclamos y al llegar a `max_intentos` (10) pasa a `FAILED`. |
+| `complete_platform_outbox_event(id, intento)`, `fail_platform_outbox_event(id, intento, error, reintento_en)` | **Solo `app_worker`** | Reportan el resultado. El `intento` es una ficha de exclusión: un worker cuyo arriendo venció no puede pisar el resultado del nuevo dueño (devuelven `false` y no cambian nada). Ambos **borran `token` del payload** al terminar (`DONE` o `FAILED`); `fail` con `reintento_en` vuelve el evento a `PENDING` en esa fecha. |
 | `purge_tenant(tenant)` | Solo `app_platform` | Borra el tenant completo y las identidades que solo le pertenecían. |
-| `purge_processed_outbox_events(intervalo)`, `purge_read_notifications(intervalo)` | Solo `app_platform` | Retención. |
+| `purge_processed_outbox_events(intervalo)`, `purge_processed_platform_outbox_events(intervalo)`, `purge_read_notifications(intervalo)` | Solo `app_platform` | Retención (los eventos `DONE`). |
 
 ## 7. Reglas de integridad que impone la BD
 Códigos de error que devuelve la BD: `23001` = dato inmutable · `23514` = estado de negocio inválido · `23503` = referencia inválida · `23505` = duplicado · `23P01` = solapamiento · `42501` = sin permiso.
@@ -357,11 +366,12 @@ Orden en cada entorno:
 1. **Migraciones** con el dueño del esquema: `pnpm migrate:deploy`. Crean los roles `app_runtime`/`app_platform` si no existen, y el esquema `extensions`.
 2. **Logins** (una vez por entorno, lo hace la infraestructura): ver §6.3.
 3. **Semilla** con el login de plataforma: `DATABASE_URL=<login plataforma> pnpm seed`.
-4. Variables del API: `DATABASE_URL` (login de runtime, a través de PgBouncer en modo transacción) y `PLATFORM_DATABASE_URL` (login de plataforma, solo para los servicios de plataforma y los jobs de purga y retención).
+4. Variables del API: `DATABASE_URL` (login de runtime, a través de PgBouncer en modo transacción) y `PLATFORM_DATABASE_URL` (login de plataforma, solo para los servicios de plataforma y los jobs de purga y retención). Variables del **worker**: `WORKER_DATABASE_URL` (login de `app_worker`) y `PLATFORM_DATABASE_URL`; el worker nunca lee `DATABASE_URL` y el API nunca lee `WORKER_DATABASE_URL` (`loadConfig(env, 'api' | 'worker')`).
 5. Jobs programados de plataforma:
-   - `purge_processed_outbox_events('7 days')` diario;
+   - `purge_processed_outbox_events('7 days')` y `purge_processed_platform_outbox_events('7 days')` diarios;
    - `purge_read_notifications('180 days')` semanal;
    - `purge_tenant()` para los tenants con `purge_after` vencido.
+   - Estos jobs necesitan el login de plataforma: **decisión pendiente** de si los ejecuta el proceso del worker (que entonces recibe también `PLATFORM_DATABASE_URL`) o un job de plataforma aparte.
 
 ## 13. Decisiones y pendientes
 

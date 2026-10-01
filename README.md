@@ -5,7 +5,7 @@ SaaS multi-tenant de gestión de procesos (BPM ligero): flujos visuales con apro
 Nace de extraer la lógica del sistema de gestión (mesa de ayuda) de Electrocréditos del Cauca (`~/dev/mesa-de-ayuda`), sin los módulos de viáticos, ventas ni listas de precios. Electrocréditos **no** se migra; sigue con su versión.
 
 ## Estado
-En construcción. **Hecho:** la base de datos (`packages/db`), la lógica compartida inicial (`packages/shared`) y en `apps/api` el acceso a datos por tenant y la autenticación. **Siguiente:** autorización (CASL) y los módulos de negocio. Detalle en [docs/pendientes.md](docs/pendientes.md).
+En construcción. **Hecho:** la base de datos (`packages/db`), la lógica compartida inicial (`packages/shared`) y en `apps/api` el acceso a datos por tenant, la autenticación y la autorización (CASL). **Siguiente:** los módulos de negocio. Detalle en [docs/pendientes.md](docs/pendientes.md).
 
 ## Documentos
 - [docs/analisis.md](docs/analisis.md): análisis del sistema original (lógica, BD, bugs), decisiones tomadas (§0.1) y diseño propuesto (multi-tenant, archivos, SLA, aprobadores, despliegue, constructor de flujos).
