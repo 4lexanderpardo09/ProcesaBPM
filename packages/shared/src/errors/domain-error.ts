@@ -10,6 +10,7 @@ export const ERROR_CODES = {
   invalidCondition: 'INVALID_CONDITION',
   missingTenantContext: 'MISSING_TENANT_CONTEXT',
   tenantContextMismatch: 'TENANT_CONTEXT_MISMATCH',
+  invalidTenantContext: 'INVALID_TENANT_CONTEXT',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -88,5 +89,11 @@ export class MissingTenantContextError extends DomainError {
 export class TenantContextMismatchError extends DomainError {
   constructor() {
     super(ERROR_CODES.tenantContextMismatch, 'The database did not confirm the requested tenant context');
+  }
+}
+
+export class InvalidTenantContextError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidTenantContext, 'The tenant context needs a tenantId and a userId that are UUIDs');
   }
 }

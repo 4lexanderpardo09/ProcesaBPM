@@ -4,7 +4,7 @@ import type { PrismaService } from './prisma.service.js';
 import { TenantContext } from './tenant-context.js';
 import { TenantTransactionRunner, type TenantTransaction } from './tenant-transaction-runner.js';
 
-const scope = { tenantId: 'tenant-a', userId: 'user-a' };
+const scope = { tenantId: '11111111-1111-4111-8111-111111111111', userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
 
 function setup(applied: unknown = [{ tenant_id: scope.tenantId, user_id: scope.userId }]) {
   const queryRaw = vi.fn().mockResolvedValue(applied);
@@ -48,8 +48,8 @@ describe('TenantTransactionRunner', () => {
   });
 
   it.each([
-    ['another tenant', [{ tenant_id: 'tenant-b', user_id: scope.userId }]],
-    ['another user', [{ tenant_id: scope.tenantId, user_id: 'user-b' }]],
+    ['another tenant', [{ tenant_id: '22222222-2222-4222-8222-222222222222', user_id: scope.userId }]],
+    ['another user', [{ tenant_id: scope.tenantId, user_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }]],
     ['an empty answer', []],
   ])('stops before the work when the database confirms %s', async (_label, applied) => {
     const { runner, context } = setup(applied);

@@ -13,4 +13,5 @@ export const HTTP_STATUS_BY_ERROR_CODE: Readonly<Record<ErrorCode, number>> = {
   [ERROR_CODES.invalidCondition]: 422,
   [ERROR_CODES.missingTenantContext]: 500,
   [ERROR_CODES.tenantContextMismatch]: 500,
+  [ERROR_CODES.invalidTenantContext]: 500,
 };

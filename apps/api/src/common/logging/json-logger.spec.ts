@@ -26,10 +26,10 @@ describe('JsonLogger', () => {
   it('adds tenant_id and request_id of the current async context', () => {
     const { logger, tenantContext, requestContext, entries } = setup();
     requestContext.run({ requestId: 'req-1' }, () =>
-      tenantContext.run({ tenantId: 'tenant-a', userId: 'user-a' }, () => logger.log('inside')),
+      tenantContext.run({ tenantId: '11111111-1111-4111-8111-111111111111', userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, () => logger.log('inside')),
     );
     logger.log('outside');
-    expect(entries()[0]).toMatchObject({ tenant_id: 'tenant-a', request_id: 'req-1' });
+    expect(entries()[0]).toMatchObject({ tenant_id: '11111111-1111-4111-8111-111111111111', request_id: 'req-1' });
     expect(entries()[1]).not.toHaveProperty('tenant_id');
     expect(entries()[1]).not.toHaveProperty('request_id');
   });
