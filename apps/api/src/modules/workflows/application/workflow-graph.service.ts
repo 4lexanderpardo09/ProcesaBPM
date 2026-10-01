@@ -17,6 +17,7 @@ import { VersionDocumentRepository } from '../data/version-document.repository.j
 import { WorkflowRepository } from '../data/workflow.repository.js';
 import { countNewRefs, resolveReferences } from '../domain/graph-ids.js';
 import { DraftLock } from './draft-lock.js';
+import { ReferenceValidator, withProblems } from './reference-validator.js';
 
 type StepRow = Omit<StepDocument, 'candidates' | 'initiators' | 'slaOverrides' | 'signers' | 'files'>;
 
@@ -29,6 +30,7 @@ export class WorkflowGraphService {
     @Inject(WorkflowRepository) private readonly workflows: WorkflowRepository,
     @Inject(VersionDocumentRepository) private readonly documents: VersionDocumentRepository,
     @Inject(DraftLock) private readonly draftLock: DraftLock,
+    @Inject(ReferenceValidator) private readonly references: ReferenceValidator,
   ) {}
 
   /**
@@ -84,7 +86,8 @@ export class WorkflowGraphService {
   validate(workflowId: string, versionId: string): Promise<WorkflowValidation> {
     return this.runner.withTenantTransaction(async (tx) => {
       if ((await this.workflows.findVersion(tx, this.tenantId, workflowId, versionId)) === null) throw new NotFoundError();
-      return validateWorkflowGraph(await this.documents.load(tx, this.tenantId, versionId));
+      const document = await this.documents.load(tx, this.tenantId, versionId);
+      return withProblems(validateWorkflowGraph(document), await this.references.check(tx, this.tenantId, workflowId, document));
     });
   }
 

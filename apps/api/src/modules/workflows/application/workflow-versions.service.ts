@@ -46,10 +46,6 @@ export class WorkflowVersionsService {
     return this.runner.withTenantTransaction((tx) => this.read(tx, workflowId, versionId));
   }
 
-  read(tx: TenantTransaction, workflowId: string, versionId: string): Promise<VersionDetailResponse> {
-    return this.readWith(tx, workflowId, versionId);
-  }
-
   /** Only a draft can be deleted: published and archived versions are history that tickets point to. */
   deleteDraft(workflowId: string, versionId: string): Promise<void> {
     return this.runner.withTenantTransaction(async (tx) => {
@@ -67,7 +63,7 @@ export class WorkflowVersionsService {
     await this.documents.insertDocument(tx, this.tenantId, targetId, copy);
   }
 
-  private async readWith(tx: TenantTransaction, workflowId: string, versionId: string): Promise<VersionDetailResponse> {
+  private async read(tx: TenantTransaction, workflowId: string, versionId: string): Promise<VersionDetailResponse> {
     const workflow = await this.workflows.findById(tx, this.tenantId, workflowId);
     const version = await this.workflows.findVersion(tx, this.tenantId, workflowId, versionId);
     if (workflow === null || version === null) throw new NotFoundError();

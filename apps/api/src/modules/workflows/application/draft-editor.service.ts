@@ -122,7 +122,7 @@ export class DraftEditorService {
 
   private editStep(workflowId: string, versionId: string, stepId: string, write: (tx: TenantTransaction) => Promise<void>): Promise<StepChildren> {
     return this.edit(workflowId, versionId, async (tx) => {
-      await this.requireStep(tx, versionId, stepId);
+      if (!(await this.content.lockStep(tx, this.tenantId, versionId, stepId))) throw new NotFoundError();
       await write(tx);
       const step = (await this.documents.load(tx, this.tenantId, versionId)).steps.find((candidate) => candidate.id === stepId)!;
       return { candidates: step.candidates, initiators: step.initiators, signers: step.signers, slaOverrides: step.slaOverrides, files: step.files };

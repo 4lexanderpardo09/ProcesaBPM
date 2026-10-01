@@ -35,14 +35,19 @@ export function checkFields({ doc, stepById, fieldByCode, problems }: RuleContex
     if (unknown.length > 0) problems.error('FORMULA_UNKNOWN_FIELD', { fieldId: field.id, params: { codes: unknown } });
     formulaRefs.set(field.code, refs.filter((token) => fieldByCode.get(token)?.type === 'FORMULA'));
   }
+  // Depth-first colouring (white, grey = on the current path, black = done): linear in fields and references.
   const inCycle = new Set<string>();
-  const visit = (code: string, path: readonly string[]): void => {
-    if (path.includes(code)) {
-      for (const member of path.slice(path.indexOf(code))) inCycle.add(member);
-      return;
+  const state = new Map<string, 'grey' | 'black'>();
+  const visit = (code: string, path: string[]): void => {
+    state.set(code, 'grey');
+    path.push(code);
+    for (const next of formulaRefs.get(code) ?? []) {
+      if (state.get(next) === 'grey') for (const member of path.slice(path.indexOf(next))) inCycle.add(member);
+      else if (!state.has(next)) visit(next, path);
     }
-    for (const next of formulaRefs.get(code) ?? []) visit(next, [...path, code]);
+    path.pop();
+    state.set(code, 'black');
   };
-  for (const code of formulaRefs.keys()) visit(code, []);
+  for (const code of formulaRefs.keys()) if (!state.has(code)) visit(code, []);
   for (const code of inCycle) problems.error('FORMULA_CYCLE', { fieldId: fieldByCode.get(code)!.id, params: { code } });
 }

@@ -207,6 +207,41 @@ describe('validateWorkflowGraph: loops', () => {
   });
 });
 
+describe('validateWorkflowGraph: regressions from the review', () => {
+  it('an automatic cycle inside a loop that also has people is still an error', () => {
+    const doc = version({
+      steps: [step('start', 'START'), step('cond', 'CONDITION'), step('notify', 'NOTIFICATION', { config: { recipients: [{ kind: 'CREATOR' }], channels: ['EMAIL'], subject: 's', body: 'b' } }), step('task', 'TASK'), step('end', 'END')],
+      transitions: [
+        next('start', 'cond'),
+        transition('c-n', 'cond', 'notify', 'DEFAULT'),
+        next('notify', 'cond'),
+        transition('c-t', 'cond', 'task', 'CONDITION', { condition: [{ field: 'X', op: 'equals', value: 'a' }] }),
+        next('task', 'cond', 'DECISION'),
+        transition('t-end', 'task', 'end', 'DECISION', { label: 'done' }),
+      ],
+      fields: [field('f', 'start', 'X')],
+    });
+    const loop = validateWorkflowGraph(doc).errors.filter((problem) => problem.code === 'AUTOMATIC_LOOP');
+    expect(loop).toHaveLength(1);
+    expect(loop[0]!.params).toEqual({ stepIds: expect.arrayContaining(['cond', 'notify']) });
+  });
+
+  it('formula cycle detection is linear: many formulas that all reference each other validate quickly', () => {
+    const codes = Array.from({ length: 60 }, (_, index) => `F${String(index).padStart(2, '0')}`);
+    const fields = codes.map((code, index) => field(code, 'start', code, { type: 'FORMULA', config: { expression: codes.slice(index + 1).join(' + ') || '1', resultType: 'NUMBER' } }));
+    const startedAt = Date.now();
+    expect(validateWorkflowGraph({ ...minimalFlow(), fields }).errors).toEqual([]);
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+  });
+
+  it('formula references that form a cycle through several fields are reported once per field in it', () => {
+    const formula = (code: string, expression: string) => field(code, 'start', code, { type: 'FORMULA', config: { expression, resultType: 'NUMBER' } });
+    const problems = validateWorkflowGraph({ ...minimalFlow(), fields: [formula('A', 'B'), formula('B', 'C'), formula('C', 'A'), formula('D', 'A')] }).errors.filter((problem) => problem.code === 'FORMULA_CYCLE');
+    expect(problems.map((problem) => problem.params)).toEqual(expect.arrayContaining([{ code: 'A' }, { code: 'B' }, { code: 'C' }]));
+    expect(problems).toHaveLength(3);
+  });
+});
+
 describe('validateWorkflowGraph: fields', () => {
   it('codes are unique and upper snake case', () => {
     const doc = withParts({ fields: [field('1', 'start', 'A'), field('2', 'task', 'A'), field('3', 'task', 'bad code')] });

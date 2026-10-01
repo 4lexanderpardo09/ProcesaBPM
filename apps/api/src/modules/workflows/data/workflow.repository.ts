@@ -60,9 +60,13 @@ export class WorkflowRepository {
     return tx.workflowVersion.findFirst({ where: { tenantId, workflowId, id: versionId }, select: VERSION });
   }
 
-  /** Serializes the creation and publication of versions of one workflow. Returns false when it does not exist. */
+  /**
+   * Serializes the creation and publication of versions of one workflow. `FOR NO KEY UPDATE` still excludes the
+   * other writers of versions but lets inserts that only reference the workflow (tickets, observers…) go on.
+   * Returns false when it does not exist.
+   */
   async lockWorkflow(tx: TenantTransaction, tenantId: string, workflowId: string): Promise<boolean> {
-    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM workflows WHERE tenant_id = ${tenantId}::uuid AND id = ${workflowId}::uuid FOR UPDATE`;
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM workflows WHERE tenant_id = ${tenantId}::uuid AND id = ${workflowId}::uuid FOR NO KEY UPDATE`;
     return rows.length > 0;
   }
 

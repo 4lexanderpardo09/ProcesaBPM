@@ -13,16 +13,15 @@ const jsonOrNull = (value: unknown): Prisma.InputJsonValue | typeof Prisma.DbNul
 @Injectable()
 export class VersionDocumentRepository {
   async load(tx: TenantTransaction, tenantId: string, versionId: string): Promise<WorkflowVersionDocument> {
-    const [steps, transitions, fields, amountRules] = await Promise.all([
-      tx.step.findMany({
-        where: { tenantId, versionId },
-        orderBy: [{ uiY: 'asc' }, { uiX: 'asc' }, { id: 'asc' }],
-        include: { candidates: true, initiators: true, slaOverrides: true, signers: { orderBy: { sortOrder: 'asc' } }, files: { orderBy: { sortOrder: 'asc' } } },
-      }),
-      tx.transition.findMany({ where: { tenantId, versionId }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] }),
-      tx.field.findMany({ where: { tenantId, versionId }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] }),
-      tx.amountRule.findMany({ where: { tenantId, versionId }, orderBy: { id: 'asc' } }),
-    ]);
+    // One query after another: an interactive transaction has a single connection.
+    const steps = await tx.step.findMany({
+      where: { tenantId, versionId },
+      orderBy: [{ uiY: 'asc' }, { uiX: 'asc' }, { id: 'asc' }],
+      include: { candidates: true, initiators: true, slaOverrides: true, signers: { orderBy: { sortOrder: 'asc' } }, files: { orderBy: { sortOrder: 'asc' } } },
+    });
+    const transitions = await tx.transition.findMany({ where: { tenantId, versionId }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] });
+    const fields = await tx.field.findMany({ where: { tenantId, versionId }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] });
+    const amountRules = await tx.amountRule.findMany({ where: { tenantId, versionId }, orderBy: { id: 'asc' } });
     return {
       steps: steps.map(
         (step): StepDocument => ({

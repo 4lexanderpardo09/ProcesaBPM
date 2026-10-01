@@ -323,6 +323,7 @@ describe('owner and admin rules', () => {
       const powerful = await nonAdminRole(tenant, 'Holder');
       await db.platform.query(`INSERT INTO role_permissions (tenant_id, role_id, permission_id) SELECT $1, $2, id FROM permissions WHERE action = 'manage' AND subject = 'all'`, [tenant.tenantId, powerful]);
       expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query('DELETE FROM role_permissions WHERE tenant_id = $1 AND role_id = $2', [tenant.tenantId, powerful])))).toBe(SqlState.insufficientPrivilege);
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query(`UPDATE role_permissions SET permission_id = (SELECT id FROM permissions WHERE action = 'read' AND subject = 'Company') WHERE tenant_id = $1 AND role_id = $2`, [tenant.tenantId, powerful])))).toBe(SqlState.insufficientPrivilege);
       await asMember(tenant, tenant.userId, (tx) => tx.query('DELETE FROM role_permissions WHERE tenant_id = $1 AND role_id = $2', [tenant.tenantId, powerful]));
       await asMember(tenant, tenant.userId, (tx) => tx.query('UPDATE roles SET is_active = false WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, second]));
     });

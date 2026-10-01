@@ -4,6 +4,7 @@ export * from './document.js';
 export * from './field-config.js';
 export * from './graph.js';
 export * from './problems.js';
+export * from './references.js';
 export * from './remap.js';
 export * from './transition-condition.js';
 export * from './validate-workflow-graph.js';

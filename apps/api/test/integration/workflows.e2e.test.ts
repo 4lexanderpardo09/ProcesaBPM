@@ -248,6 +248,51 @@ describe('workflows API (builder backend)', () => {
     });
   });
 
+  describe('review regressions', () => {
+    it('a block that points at a webhook that does not exist, or at another workflow\'s document, cannot be published', async () => {
+      const c = await newWorkflow();
+      const other = await newWorkflow();
+      const webhook = await insertReturningId(db.platform, `INSERT INTO webhooks (tenant_id, url, secret_encrypted, events) VALUES ($1, 'https://example.com/hook', '\\x00', ARRAY['ticket.created']) RETURNING id`, [tenant.tenantId]);
+      const withHook = (webhookId: string) => ({
+        steps: [stepInput(c.start, 'START'), stepInput('new:hook', 'WEBHOOK', { config: { webhookId } }), stepInput(c.end, 'END')],
+        transitions: [edge('new:a', c.start, 'new:hook', 'DEFAULT'), edge('new:b', 'new:hook', c.end, 'DEFAULT')],
+      });
+      await admin.put(`${version(c)}/graph`, withHook(ANY_ID)).expect(200);
+      const refused = await publishFlow(c);
+      expect(refused.status).toBe(422);
+      expect(refused.body.error.details.errors.map((p: { code: string; params: { kind: string } }) => `${p.code}:${p.params.kind}`)).toContain('BLOCK_REFERENCE_UNKNOWN:WEBHOOK');
+      expect((await admin.get(`${version(c)}/validation`).expect(200)).body.errors.map((p: { code: string }) => p.code)).toContain('BLOCK_REFERENCE_UNKNOWN');
+      expect((await detail(c)).version.status).toBe('DRAFT');
+
+      const foreignDocument = await insertReturningId(db.platform, `INSERT INTO workflow_documents (tenant_id, workflow_id, kind, moment) VALUES ($1, $2, 'DESIGNED', 'CLOSING') RETURNING id`, [tenant.tenantId, other.workflowId]);
+      await admin.put(`${version(c)}/graph`, {
+        steps: [stepInput(c.start, 'START'), stepInput('new:doc', 'DOCUMENT', { config: { workflowDocumentId: foreignDocument, role: 'MAIN_DOCUMENT' } }), stepInput(c.end, 'END')],
+        transitions: [edge('new:a', c.start, 'new:doc', 'DEFAULT'), edge('new:b', 'new:doc', c.end, 'DEFAULT')],
+      }).expect(200);
+      expect((await publishFlow(c)).status).toBe(422);
+      await admin.put(`${version(c)}/graph`, withHook(webhook)).expect(200);
+      expect((await publishFlow(c)).status).toBe(200);
+    });
+
+    it('two simultaneous replacements of a list leave exactly one of the lists, not both merged', async () => {
+      const c = await newWorkflow();
+      const saved = (await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200)).body;
+      const taskId = saved.idMap['new:task'] as string;
+      const [first, second] = [await admin.post('/positions', { name: unique('P1') }), await admin.post('/positions', { name: unique('P2') })];
+      const candidates = (position: string) => ({ candidates: [{ participantType: 'USER', userId: tenant.userId }, { participantType: 'POSITION', positionId: position }] });
+      const results = await Promise.all([admin.put(`${version(c)}/steps/${taskId}/candidates`, candidates(first.body.id)), admin.put(`${version(c)}/steps/${taskId}/candidates`, candidates(second.body.id))]);
+      expect(results.map((r) => r.status)).toEqual([200, 200]);
+      expect((await detail(c)).document.steps.find((s) => s.id === taskId)!.candidates).toHaveLength(2);
+    });
+
+    it('a canvas of 300 blocks (far over the old 100 kb body limit) is saved', async () => {
+      const c = await newWorkflow();
+      const steps = [stepInput(c.start, 'START'), ...Array.from({ length: 298 }, (_, index) => stepInput(`new:s${index}`, 'TASK', { name: `Task ${index} ${'x'.repeat(120)}`, description: 'd'.repeat(200) })), stepInput(c.end, 'END')];
+      const saved = (await admin.put(`${version(c)}/graph`, { steps, transitions: [] }).expect(200)).body;
+      expect(saved.document.steps).toHaveLength(300);
+    });
+  });
+
   describe('published versions cannot be edited (409)', () => {
     it('every way of editing answers 409', async () => {
       const c = await newWorkflow();

@@ -18,7 +18,7 @@ import { type VersionRow, type WorkflowRow, WorkflowRepository } from '../data/w
 import { toVersionSummary } from './version-summary.js';
 
 const toResponse = (row: WorkflowRow): WorkflowResponse => ({ ...row, createdAt: row.createdAt.toISOString() });
-export const toDetail = (row: WorkflowRow, versions: readonly VersionRow[]): WorkflowDetailResponse => ({ ...toResponse(row), versions: versions.map(toVersionSummary) });
+const toDetail = (row: WorkflowRow, versions: readonly VersionRow[]): WorkflowDetailResponse => ({ ...toResponse(row), versions: versions.map(toVersionSummary) });
 
 /** The canvas of a new workflow opens valid: START leads to END. */
 export function startingDocument(ids: { start: string; end: string; transition: string }): WorkflowVersionDocument {

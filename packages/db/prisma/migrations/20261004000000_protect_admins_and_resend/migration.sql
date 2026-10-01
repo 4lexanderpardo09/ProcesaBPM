@@ -82,7 +82,7 @@ DROP TRIGGER guard_role_privilege ON roles;
 CREATE TRIGGER guard_role_privilege BEFORE INSERT OR UPDATE OF is_admin, is_active ON roles
   FOR EACH ROW EXECUTE FUNCTION trg_guard_role_privilege();
 
--- Removing a `manage all` row is lowering too.
+-- Removing a `manage all` row, by deleting it or by pointing the row at another permission, is lowering too.
 CREATE FUNCTION trg_guard_manage_all_removal() RETURNS trigger
   LANGUAGE plpgsql SET search_path = public, pg_temp
   AS $$
@@ -91,10 +91,10 @@ CREATE FUNCTION trg_guard_manage_all_removal() RETURNS trigger
        AND NOT is_privileged_session() AND NOT acting_user_has_full_access(OLD.tenant_id) THEN
       RAISE EXCEPTION 'only an administrator can remove manage all' USING ERRCODE = '42501';
     END IF;
-    RETURN OLD;
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
   END
   $$;
-CREATE TRIGGER guard_manage_all_removal BEFORE DELETE ON role_permissions
+CREATE TRIGGER guard_manage_all_removal BEFORE DELETE OR UPDATE OF permission_id ON role_permissions
   FOR EACH ROW EXECUTE FUNCTION trg_guard_manage_all_removal();
 
 -- A new invitation link replaces the earlier ones of the same person in the same tenant.
