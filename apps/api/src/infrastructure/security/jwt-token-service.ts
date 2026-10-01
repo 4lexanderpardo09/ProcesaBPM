@@ -1,5 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AccessTokenClaims, accessTokenClaimsSchema, UnauthenticatedError, uuidSchema } from '@procesabpm/shared';
+import {
+  type AccessTokenClaims,
+  accessTokenClaimsSchema,
+  type PlatformTokenClaims,
+  platformTokenClaimsSchema,
+  UnauthenticatedError,
+  uuidSchema,
+} from '@procesabpm/shared';
 import { jwtVerify, SignJWT } from 'jose';
 import { z } from 'zod';
 import type { AppConfig } from '../../config/app-config.js';
@@ -8,10 +15,13 @@ import { Clock } from '../clock.js';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const SELECTION_TOKEN_TTL_SECONDS = 2 * 60;
+/** A platform session is short and never renewed: after it, the administrator logs in again. */
+export const PLATFORM_TOKEN_TTL_SECONDS = 15 * 60;
 
 const ISSUER = 'procesabpm';
 const ACCESS_AUDIENCE = 'procesabpm:api';
 const SELECTION_AUDIENCE = 'procesabpm:tenant-selection';
+const PLATFORM_AUDIENCE = 'procesabpm:platform';
 const ALGORITHM = 'HS256';
 const CLOCK_TOLERANCE_SECONDS = 5;
 
@@ -41,6 +51,10 @@ export class JwtTokenService {
     return this.sign({ tid: claims.tid, sid: claims.sid }, claims.sub, ACCESS_AUDIENCE, ACCESS_TOKEN_TTL_SECONDS);
   }
 
+  issuePlatformToken(claims: PlatformTokenClaims): Promise<IssuedToken> {
+    return this.sign({ sid: claims.sid }, claims.sub, PLATFORM_AUDIENCE, PLATFORM_TOKEN_TTL_SECONDS);
+  }
+
   issueSelectionToken(userId: string): Promise<IssuedToken> {
     return this.sign({}, userId, SELECTION_AUDIENCE, SELECTION_TOKEN_TTL_SECONDS);
   }
@@ -48,6 +62,13 @@ export class JwtTokenService {
   async verifyAccessToken(token: string): Promise<AccessTokenClaims> {
     const payload = await this.verify(token, ACCESS_AUDIENCE);
     const claims = accessTokenClaimsSchema.safeParse(payload);
+    if (!claims.success) throw new UnauthenticatedError();
+    return claims.data;
+  }
+
+  /** Signature, audience and claims of a platform token; a tenant token is not one. */
+  async verifyPlatformToken(token: string): Promise<PlatformTokenClaims> {
+    const claims = platformTokenClaimsSchema.safeParse(await this.verify(token, PLATFORM_AUDIENCE));
     if (!claims.success) throw new UnauthenticatedError();
     return claims.data;
   }

@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { accessMetadataOf, classifyAccess } from './route-metadata.js';
 import { Public } from './public.decorator.js';
-import { AuthenticatedOnly, RequireAnyPermission, RequirePermission } from './route-access.js';
+import { AuthenticatedOnly, PlatformAdminOnly, RequireAnyPermission, RequirePermission } from './route-access.js';
 
 const requirement = { actions: ['read'], subject: 'Company' };
 
 describe('classifyAccess', () => {
   it.each([
-    ['nothing declared', { isPublic: false, authenticatedOnly: false, requirement: undefined }, 'undeclared'],
-    ['public', { isPublic: true, authenticatedOnly: false, requirement: undefined }, 'public'],
-    ['authenticated only', { isPublic: false, authenticatedOnly: true, requirement: undefined }, 'authenticated-only'],
-    ['a permission', { isPublic: false, authenticatedOnly: false, requirement }, 'permission'],
-    ['public and a permission', { isPublic: true, authenticatedOnly: false, requirement }, 'conflict'],
-    ['public and authenticated only', { isPublic: true, authenticatedOnly: true, requirement: undefined }, 'conflict'],
-    ['authenticated only and a permission', { isPublic: false, authenticatedOnly: true, requirement }, 'conflict'],
+    ['nothing declared', { isPublic: false, authenticatedOnly: false, platformOnly: false, requirement: undefined }, 'undeclared'],
+    ['public', { isPublic: true, authenticatedOnly: false, platformOnly: false, requirement: undefined }, 'public'],
+    ['authenticated only', { isPublic: false, authenticatedOnly: true, platformOnly: false, requirement: undefined }, 'authenticated-only'],
+    ['a permission', { isPublic: false, authenticatedOnly: false, platformOnly: false, requirement }, 'permission'],
+    ['public and a permission', { isPublic: true, authenticatedOnly: false, platformOnly: false, requirement }, 'conflict'],
+    ['public and authenticated only', { isPublic: true, authenticatedOnly: true, platformOnly: false, requirement: undefined }, 'conflict'],
+    ['platform only', { isPublic: false, authenticatedOnly: false, platformOnly: true, requirement: undefined }, 'platform'],
+    ['platform only and public', { isPublic: true, authenticatedOnly: false, platformOnly: true, requirement: undefined }, 'conflict'],
+    ['platform only and a permission', { isPublic: false, authenticatedOnly: false, platformOnly: true, requirement }, 'conflict'],
+    ['platform only and authenticated only', { isPublic: false, authenticatedOnly: true, platformOnly: true, requirement: undefined }, 'conflict'],
+    ['authenticated only and a permission', { isPublic: false, authenticatedOnly: true, platformOnly: false, requirement }, 'conflict'],
   ] as const)('%s → %s', (_label, metadata, expected) => {
     expect(classifyAccess(metadata)).toBe(expected);
   });
@@ -35,6 +39,18 @@ describe('accessMetadataOf', () => {
     @AuthenticatedOnly()
     profile(): void {}
   }
+
+  @PlatformAdminOnly()
+  class PlatformController {
+    @RequirePermission('read', 'Company')
+    mixed(): void {}
+    plain(): void {}
+  }
+
+  it('a platform-only class is platform-only, and mixing it with a method permission is a conflict', () => {
+    expect(classifyAccess(metadata(PlatformController, 'plain'))).toBe('platform');
+    expect(classifyAccess(metadata(PlatformController, 'mixed'))).toBe('conflict');
+  });
 
   const metadata = (controller: new () => object, method: string) =>
     accessMetadataOf(controller, (controller.prototype as Record<string, object>)[method]!);

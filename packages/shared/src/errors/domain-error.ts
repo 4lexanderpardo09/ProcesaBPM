@@ -19,6 +19,9 @@ export const ERROR_CODES = {
   validationFailed: 'VALIDATION_FAILED',
   tenantSuspended: 'TENANT_SUSPENDED',
   missingCatalogPermission: 'MISSING_CATALOG_PERMISSION',
+  platformAccessDenied: 'PLATFORM_ACCESS_DENIED',
+  tenantSlugTaken: 'TENANT_SLUG_TAKEN',
+  tenantNotFound: 'TENANT_NOT_FOUND',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -168,5 +171,24 @@ export class TenantSuspendedError extends DomainError {
 export class MissingCatalogPermissionError extends DomainError {
   constructor(readonly missing: readonly string[]) {
     super(ERROR_CODES.missingCatalogPermission, `The permission catalog lacks: ${missing.join(', ')}`);
+  }
+}
+
+/** The user is not (or is no longer) a platform administrator. */
+export class PlatformAccessDeniedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.platformAccessDenied, 'Platform access is not allowed');
+  }
+}
+
+export class TenantSlugTakenError extends DomainError {
+  constructor(readonly slug: string) {
+    super(ERROR_CODES.tenantSlugTaken, `The slug ${slug} is already taken`);
+  }
+}
+
+export class TenantNotFoundError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.tenantNotFound, 'The tenant does not exist');
   }
 }

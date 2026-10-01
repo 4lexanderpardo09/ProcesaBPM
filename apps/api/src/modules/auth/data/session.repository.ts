@@ -17,7 +17,8 @@ export interface StoredSession {
 
 export interface NewSession {
   readonly userId: string;
-  readonly activeTenantId: string;
+  /** `null` for a platform session. */
+  readonly activeTenantId: string | null;
   readonly tokenHash: string;
   readonly expiresAt: Date;
   readonly ipAddress: string | null;

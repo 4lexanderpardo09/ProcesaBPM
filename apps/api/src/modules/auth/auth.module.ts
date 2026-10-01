@@ -9,11 +9,13 @@ import { InvitationService } from './application/invitation.service.js';
 import { LoginService } from './application/login.service.js';
 import { OneTimeTokenService } from './application/one-time-token.service.js';
 import { PasswordResetService } from './application/password-reset.service.js';
+import { PlatformSessionService } from './application/platform-session.service.js';
 import { ProfileService } from './application/profile.service.js';
 import { SessionService } from './application/session.service.js';
 import { TenantAccessService } from './application/tenant-access.service.js';
 import { TenantSelectionService } from './application/tenant-selection.service.js';
 import { CredentialsRepository } from './data/credentials.repository.js';
+import { PlatformAccessRepository } from './data/platform-access.repository.js';
 import { PlatformOutboxRepository } from './data/platform-outbox.repository.js';
 import { ProfileRepository } from './data/profile.repository.js';
 import { SessionRepository } from './data/session.repository.js';
@@ -37,6 +39,8 @@ import { AuthController } from './http/auth.controller.js';
     TenantAccessRepository,
     ProfileRepository,
     PlatformOutboxRepository,
+    PlatformAccessRepository,
+    PlatformSessionService,
     TenantAccessService,
     SessionService,
     LoginService,

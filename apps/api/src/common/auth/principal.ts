@@ -20,7 +20,13 @@ export interface Principal {
   readonly membership: { readonly departmentId: string | null; readonly siteId: string | null };
 }
 
-export type AuthenticatedRequest = Request & { principal?: Principal };
+/** A platform administrator acting on tenants: no tenant, no CASL ability. */
+export interface PlatformPrincipal {
+  readonly userId: string;
+  readonly sessionId: string;
+}
+
+export type AuthenticatedRequest = Request & { principal?: Principal; platformPrincipal?: PlatformPrincipal };
 
 export function principalOf(request: AuthenticatedRequest): Principal {
   if (request.principal === undefined) throw new UnauthenticatedError();
@@ -30,3 +36,9 @@ export function principalOf(request: AuthenticatedRequest): Principal {
 export const CurrentPrincipal = createParamDecorator((_data: unknown, context: ExecutionContext): Principal =>
   principalOf(context.switchToHttp().getRequest<AuthenticatedRequest>()),
 );
+
+export const CurrentPlatformPrincipal = createParamDecorator((_data: unknown, context: ExecutionContext): PlatformPrincipal => {
+  const { platformPrincipal } = context.switchToHttp().getRequest<AuthenticatedRequest>();
+  if (platformPrincipal === undefined) throw new UnauthenticatedError();
+  return platformPrincipal;
+});

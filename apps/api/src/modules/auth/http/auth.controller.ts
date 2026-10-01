@@ -17,14 +17,15 @@ import {
   UnauthenticatedError,
 } from '@procesabpm/shared';
 import type { Request, Response } from 'express';
-import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
+import { CurrentPlatformPrincipal, CurrentPrincipal, type PlatformPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { Public } from '../../../common/auth/public.decorator.js';
 import { RateLimit, RateLimitGuard } from '../../../common/auth/rate-limit.js';
-import { AuthenticatedOnly } from '../../../common/auth/route-access.js';
+import { AuthenticatedOnly, PlatformAdminOnly } from '../../../common/auth/route-access.js';
 import { BackgroundTasks } from '../../../common/background/background-tasks.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { InvitationService } from '../application/invitation.service.js';
 import { LoginService } from '../application/login.service.js';
+import { PlatformSessionService } from '../application/platform-session.service.js';
 import { PasswordResetService } from '../application/password-reset.service.js';
 import { ProfileService } from '../application/profile.service.js';
 import { type ClientInfo, type OpenedSession, SessionService } from '../application/session.service.js';
@@ -49,6 +50,7 @@ export class AuthController {
     @Inject(InvitationService) private readonly invitations: InvitationService,
     @Inject(ProfileService) private readonly profiles: ProfileService,
     @Inject(BackgroundTasks) private readonly background: BackgroundTasks,
+    @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
   ) {}
 
   @Public()
@@ -73,6 +75,29 @@ export class AuthController {
     if (selectionToken === undefined) throw new UnauthenticatedError();
     const session = await this.tenantSelection.select(selectionToken, body.tenantId, clientOf(request));
     return this.deliver(session, response);
+  }
+
+  /**
+   * A platform administrator opens a platform session with the selection token of the login. The access
+   * token is short, has its own audience and no refresh token or cookie: after it, they log in again.
+   */
+  @Public()
+  @Post('platform/select')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(RATE_LIMITS.platformSelect)
+  @UseGuards(RateLimitGuard)
+  async selectPlatform(@Req() request: Request): Promise<AccessTokenResponse> {
+    const selectionToken = bearerToken(request.header('authorization'));
+    if (selectionToken === undefined) throw new UnauthenticatedError();
+    const issued = await this.platformSessions.open(selectionToken, clientOf(request));
+    return { accessToken: issued.token, tokenType: 'Bearer', expiresIn: issued.expiresIn };
+  }
+
+  @PlatformAdminOnly()
+  @Post('platform/logout')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logoutPlatform(@CurrentPlatformPrincipal() principal: PlatformPrincipal): Promise<void> {
+    await this.platformSessions.close(principal.userId, principal.sessionId);
   }
 
   @Public()

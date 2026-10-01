@@ -3,6 +3,7 @@ import { PermissionDeniedError, UnauthenticatedError } from '@procesabpm/shared'
 import type { AuthenticatedRequest } from '../../../common/auth/principal.js';
 import { accessMetadataOf, classifyAccess } from '../../../common/auth/route-metadata.js';
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
+import { PlatformSessionService } from '../application/platform-session.service.js';
 import { TenantAccessService } from '../application/tenant-access.service.js';
 import { bearerToken } from './bearer-token.js';
 
@@ -17,6 +18,7 @@ export class AccessTokenGuard implements CanActivate {
   constructor(
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
     @Inject(TenantAccessService) private readonly tenantAccess: TenantAccessService,
+    @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -28,6 +30,11 @@ export class AccessTokenGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = bearerToken(request.header('authorization'));
     if (token === undefined) throw new UnauthenticatedError();
+
+    if (routeAccess === 'platform') {
+      await this.authenticatePlatform(request, token);
+      return true;
+    }
 
     const claims = await this.tokens.verifyAccessToken(token);
     const access = await this.tenantAccess.verify({ userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid });
@@ -43,5 +50,34 @@ export class AccessTokenGuard implements CanActivate {
       membership: { departmentId: access.departmentId, siteId: access.siteId },
     };
     return true;
+  }
+
+  /**
+   * Platform routes take a platform token only. A genuine tenant token is refused with 403 (a valid
+   * identity without platform rights); anything else is 401. The principal set here is never a tenant
+   * principal, so no tenant context or ability exists for these routes.
+   */
+  private async authenticatePlatform(request: AuthenticatedRequest, token: string): Promise<void> {
+    const claims = await this.platformClaims(token);
+    await this.platformSessions.verify(claims.sub, claims.sid);
+    request.platformPrincipal = { userId: claims.sub, sessionId: claims.sid };
+  }
+
+  private async platformClaims(token: string) {
+    try {
+      return await this.tokens.verifyPlatformToken(token);
+    } catch (error) {
+      if (await this.isTenantToken(token)) throw new PermissionDeniedError('A tenant token cannot be used on a platform route');
+      throw error;
+    }
+  }
+
+  private async isTenantToken(token: string): Promise<boolean> {
+    try {
+      await this.tokens.verifyAccessToken(token);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

@@ -2,9 +2,9 @@ import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import type { ModulesContainer } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
-import { AUTHENTICATED_ONLY_KEY, type PermissionRequirement, REQUIRED_PERMISSIONS_KEY } from './route-access.js';
+import { AUTHENTICATED_ONLY_KEY, PLATFORM_ADMIN_ONLY_KEY, type PermissionRequirement, REQUIRED_PERMISSIONS_KEY } from './route-access.js';
 
-export type RouteAccess = 'public' | 'authenticated-only' | 'permission' | 'undeclared' | 'conflict';
+export type RouteAccess = 'public' | 'authenticated-only' | 'platform' | 'permission' | 'undeclared' | 'conflict';
 
 export interface RouteInfo {
   readonly method: string;
@@ -16,14 +16,16 @@ export interface RouteInfo {
 export interface AccessMetadata {
   readonly isPublic: boolean;
   readonly authenticatedOnly: boolean;
+  readonly platformOnly: boolean;
   readonly requirement: PermissionRequirement | undefined;
 }
 
-export function classifyAccess({ isPublic, authenticatedOnly, requirement }: AccessMetadata): RouteAccess {
-  const declared = [isPublic, authenticatedOnly, requirement !== undefined].filter(Boolean).length;
+export function classifyAccess({ isPublic, authenticatedOnly, platformOnly, requirement }: AccessMetadata): RouteAccess {
+  const declared = [isPublic, authenticatedOnly, platformOnly, requirement !== undefined].filter(Boolean).length;
   if (declared > 1) return 'conflict';
   if (isPublic) return 'public';
   if (authenticatedOnly) return 'authenticated-only';
+  if (platformOnly) return 'platform';
   return requirement === undefined ? 'undeclared' : 'permission';
 }
 
@@ -31,8 +33,8 @@ const normalize = (...parts: unknown[]) =>
   `/${parts.flatMap((part) => (typeof part === 'string' ? part.split('/') : [])).filter(Boolean).join('/')}`;
 
 /**
- * Reads the access declaration of every route from the Nest metadata. `@Public`, `@AuthenticatedOnly`
- * and a permission requirement are mutually exclusive, whether they sit on the method or on the
+ * Reads the access declaration of every route from the Nest metadata. `@Public`, `@AuthenticatedOnly`,
+ * `@PlatformAdminOnly` and a permission requirement are mutually exclusive, whether they sit on the method or on the
  * class: mixing them is a conflict, never a silent choice (a class-level `@Public` must not
  * override a method-level permission). A requirement on the method replaces the one of the class.
  */
@@ -70,10 +72,12 @@ export function accessMetadataOf(controller: object, handler: object): AccessMet
   ];
   const [publicOnMethod, publicOnClass] = read<boolean>(IS_PUBLIC_KEY);
   const [onlyOnMethod, onlyOnClass] = read<boolean>(AUTHENTICATED_ONLY_KEY);
+  const [platformOnMethod, platformOnClass] = read<boolean>(PLATFORM_ADMIN_ONLY_KEY);
   const [requirementOnMethod, requirementOnClass] = read<PermissionRequirement>(REQUIRED_PERMISSIONS_KEY);
   return {
     isPublic: publicOnMethod === true || publicOnClass === true,
     authenticatedOnly: onlyOnMethod === true || onlyOnClass === true,
+    platformOnly: platformOnMethod === true || platformOnClass === true,
     requirement: requirementOnMethod ?? requirementOnClass,
   };
 }

@@ -37,11 +37,12 @@ export class LoginService {
     if (candidate.mfaEnabled) throw new MfaNotImplementedError();
 
     await this.registerAttempt(candidate.id, true);
-    const organizations = await this.runner.withUserTransaction(candidate.id, (tx) =>
-      this.credentials.listOrganizations(tx, candidate.id),
-    );
+    const { organizations, platformAdmin } = await this.runner.withUserTransaction(candidate.id, async (tx) => ({
+      organizations: await this.credentials.listOrganizations(tx, candidate.id),
+      platformAdmin: await this.credentials.isPlatformAdmin(tx, candidate.id),
+    }));
     const selection = await this.tokens.issueSelectionToken(candidate.id);
-    return { organizations, selectionToken: selection.token, expiresIn: selection.expiresIn };
+    return { organizations, selectionToken: selection.token, expiresIn: selection.expiresIn, platformAdmin };
   }
 
   /** A random id matches no row: the decoy update keeps the work identical for unknown accounts. */

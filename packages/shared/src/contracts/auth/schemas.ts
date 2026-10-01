@@ -1,8 +1,8 @@
 import { z } from 'zod';
+import { emailSchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 import { newPasswordSchema, PASSWORD_MAX_LENGTH } from './password.js';
 
-const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 /** Opaque one-time tokens (invitation, password reset): long random strings. */
 const oneTimeTokenSchema = z.string().min(20).max(256);
 
@@ -27,6 +27,8 @@ export const loginResponseSchema = z.object({
   /** Short-lived token that only works to pick an organization (`POST /auth/select-tenant`). */
   selectionToken: z.string(),
   expiresIn: z.number().int().positive(),
+  /** The user may also open a platform session (`POST /auth/platform/select`). Only they are told. */
+  platformAdmin: z.boolean(),
 });
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
 
@@ -94,3 +96,12 @@ export const accessTokenClaimsSchema = z.object({
   sid: uuidSchema,
 });
 export type AccessTokenClaims = z.infer<typeof accessTokenClaimsSchema>;
+
+/** Claims of the platform access token: no tenant. */
+export const platformTokenClaimsSchema = z.object({
+  /** User id. */
+  sub: uuidSchema,
+  /** Session id (row of `refresh_sessions` with no active tenant). */
+  sid: uuidSchema,
+});
+export type PlatformTokenClaims = z.infer<typeof platformTokenClaimsSchema>;
