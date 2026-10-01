@@ -1,14 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { CloseNotAllowedError, type CloseTicketRequest, InvalidStateError, type TicketMutationResponse } from '@procesabpm/shared';
+import { type CloseTicketRequest, InvalidStateError, type TicketMutationResponse } from '@procesabpm/shared';
 import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { PublishedVersionReader } from '../../workflows/application/published-version-reader.js';
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
+import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import type { EventPlan } from '../domain/plan.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
-import { SubmissionValidator } from './submission-validator.js';
+import { assertMayClose } from '../domain/close-policy.js';
+import { diversionEdge, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 import { TicketSlaService } from './ticket-sla.service.js';
 
@@ -22,6 +24,7 @@ export class CloseTicketService {
     @Inject(LockedTicketLoader) private readonly loader: LockedTicketLoader,
     @Inject(PublishedVersionReader) private readonly versions: PublishedVersionReader,
     @Inject(TicketContextRepository) private readonly people: TicketContextRepository,
+    @Inject(TicketWriteRepository) private readonly writes: TicketWriteRepository,
     @Inject(SubmissionValidator) private readonly submissions: SubmissionValidator,
     @Inject(TicketSlaService) private readonly sla: TicketSlaService,
     @Inject(TicketMutationApplier) private readonly applier: TicketMutationApplier,
@@ -39,7 +42,6 @@ export class CloseTicketService {
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
       const step = document.steps.find((candidate) => candidate.id === ticket.currentStepId);
       if (step === undefined) throw new InvalidStateError('The ticket is not on a step of its version');
-      if (step.closeRule === 'NOT_ALLOWED') throw new CloseNotAllowedError();
 
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const actorMember = await this.people.findActiveMember(tx, tenantId, actor.userId);
@@ -54,9 +56,12 @@ export class CloseTicketService {
         positionId: actorMember?.positionId ?? null,
         at,
       });
+      const diversion = diversionEdge(document, submission.amounts, step.id);
+      assertMayClose(step, diversion !== undefined && !(await this.writes.hasVisited(tx, tenantId, ticket.id, diversion.toStepId)));
       const closing = await this.sla.closeVisit(tx, tenantId, company, visit, current.clocks, at, null);
       const events: EventPlan[] = [
         ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { changes: submission.changes } } satisfies EventPlan]),
+        ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { ...warning } })),
         {
           type: 'CLOSED',
           stepId: step.id,

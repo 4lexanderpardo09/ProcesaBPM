@@ -44,6 +44,8 @@ export const ERROR_CODES = {
   ticketNotOpen: 'TICKET_NOT_OPEN',
   closeNotAllowed: 'CLOSE_NOT_ALLOWED',
   staleTicket: 'STALE_TICKET',
+  closeRequired: 'CLOSE_REQUIRED',
+  extraApprovalRequired: 'EXTRA_APPROVAL_REQUIRED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -344,5 +346,19 @@ export class CloseNotAllowedError extends DomainError {
 export class StaleTicketError extends DomainError {
   constructor() {
     super(ERROR_CODES.staleTicket, 'The ticket changed: reload it');
+  }
+}
+
+/** The step can only be left by closing the ticket (`close_rule` REQUIRED). */
+export class CloseRequiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.closeRequired, 'This step can only be left by closing the ticket');
+  }
+}
+
+/** Closing would skip the extra approval a cap on an amount demands. */
+export class ExtraApprovalRequiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.extraApprovalRequired, 'An amount exceeds its cap: the extra approval is required before the ticket can close');
   }
 }

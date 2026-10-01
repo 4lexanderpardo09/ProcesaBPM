@@ -9,6 +9,7 @@ import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
+import { assertMayLeaveByDecision } from '../domain/close-policy.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { diversionEdge, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
@@ -49,6 +50,8 @@ export class TransitionTicketService {
       const chosen = document.transitions.find((transition) => transition.id === request.transitionId);
       const step = document.steps.find((candidate) => candidate.id === ticket.currentStepId);
       if (chosen === undefined || step === undefined || chosen.fromStepId !== step.id || chosen.type !== 'DECISION') throw new InvalidTransitionError();
+
+      assertMayLeaveByDecision(step);
 
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const actorMember = await this.people.findActiveMember(tx, tenantId, actor.userId);
