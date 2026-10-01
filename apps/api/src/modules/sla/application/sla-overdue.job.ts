@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../infrastructure/database/prisma.service.js';
+import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 
 export const OVERDUE_BATCH_SIZE = 500;
 
@@ -11,13 +11,13 @@ export const OVERDUE_BATCH_SIZE = 500;
  */
 @Injectable()
 export class SlaOverdueJob {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(@Inject(WorkerTransactionRunner) private readonly runner: WorkerTransactionRunner) {}
 
   /** Alerts every overdue clock, a batch at a time; returns how many there were. */
   async runOnce(batchSize: number = OVERDUE_BATCH_SIZE): Promise<number> {
     let total = 0;
     for (;;) {
-      const [row] = await this.prisma.$queryRaw<Array<{ claimed: number }>>`SELECT claim_overdue_sla_clocks(${batchSize}::int) AS claimed`;
+      const [row] = await this.runner.withoutTenant((tx) => tx.$queryRaw<Array<{ claimed: number }>>`SELECT claim_overdue_sla_clocks(${batchSize}::int) AS claimed`);
       const claimed = row?.claimed ?? 0;
       total += claimed;
       if (claimed < batchSize) return total;
