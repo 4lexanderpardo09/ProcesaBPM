@@ -8,11 +8,11 @@ import {
   NotFoundError,
   NotImplementedError,
   PermissionDeniedError,
-  plainTextToHtml,
   type StepDocument,
   type TicketMutationResponse,
   WorkflowNotAvailableError,
 } from '@procesabpm/shared';
+import { sanitizeRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -119,7 +119,7 @@ export class CreateTicketService {
         creatorId: requester.userId,
         registeredById,
         title: request.title,
-        descriptionHtml: plainTextToHtml(request.description),
+        descriptionHtml: sanitizeRichText(request.description),
         currentStepId,
         currentLoop: arrival.kind === 'END' ? 1 : arrival.plan.visit.loop,
         createdAt: at,

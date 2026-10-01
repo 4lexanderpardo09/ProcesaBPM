@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidAssigneeError, PermissionDeniedError, plainTextToHtml, type ReassignTicketRequest, type TicketMutationResponse } from '@procesabpm/shared';
+import { InvalidAssigneeError, PermissionDeniedError, type ReassignTicketRequest, type TicketMutationResponse } from '@procesabpm/shared';
+import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -54,7 +55,7 @@ export class ReassignTicketService {
         loop: visit.loop,
         actorId: actor.userId,
         assigneeId: target.userId,
-        commentHtml: request.comment === undefined ? null : plainTextToHtml(request.comment),
+        commentHtml: sanitizeOptionalRichText(request.comment),
         data: { fromUserIds: current.assignees.map((assignee) => assignee.userId) },
         outbox: [{ type: 'ticket.assigned', payload: { stepId: visit.stepId, loop: visit.loop, userId: target.userId, assigneeType: 'PRIMARY' } }],
       });

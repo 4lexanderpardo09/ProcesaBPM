@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { CloseNotAllowedError, type CloseTicketRequest, InvalidStateError, plainTextToHtml, type TicketMutationResponse } from '@procesabpm/shared';
+import { CloseNotAllowedError, type CloseTicketRequest, InvalidStateError, type TicketMutationResponse } from '@procesabpm/shared';
+import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -61,7 +62,7 @@ export class CloseTicketService {
           stepId: step.id,
           loop: visit.loop,
           actorId: actor.userId,
-          commentHtml: request.comment === undefined ? null : plainTextToHtml(request.comment),
+          commentHtml: sanitizeOptionalRichText(request.comment),
           data: { reason: 'CLOSED_BY_USER' },
           outbox: [{ type: 'ticket.closed', payload: { closedById: actor.userId } }],
         },

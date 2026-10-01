@@ -3,6 +3,7 @@ import { pageQuerySchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 
 const values = z.record(z.string(), z.unknown()).default({});
+/** An HTML fragment, sanitized by the server; the length limit applies to what is sent. */
 const comment = z.string().trim().min(1).max(5000).optional();
 export const TICKET_VIEWS = ['created', 'assigned', 'observed', 'all'] as const;
 export const ticketStatusSchema = z.enum(['OPEN', 'PAUSED', 'CLOSED']);
@@ -17,7 +18,7 @@ export const createTicketRequestSchema = z.object({
   requesterId: uuidSchema.optional(),
   priorityId: uuidSchema.optional(),
   title: z.string().trim().min(1).max(300),
-  /** Plain text: the server stores it escaped as HTML until rich text gets its sanitizer. */
+  /** An HTML fragment: the server sanitizes it with an allowlist (formatting tags and safe links); plain text is valid too. */
   description: z.string().trim().max(20_000).default(''),
   values,
   /** Who takes the first people step when that step has `manual_selection`. */

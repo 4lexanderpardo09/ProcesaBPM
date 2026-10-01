@@ -147,9 +147,14 @@ describe('ticket flow (create, advance, close)', () => {
       expect((await db.platform.query(`SELECT company_id FROM tickets WHERE id = $1`, [chosen.body.id])).rows[0].company_id).toBe(other);
     });
 
-    it('the description is stored escaped', async () => {
-      const created = await create(purchases, { values: { AMOUNT: 1 }, description: '<img src=x onerror=alert(1)>' }).expect(201);
-      expect((await requester.client.get(`/tickets/${created.body.id}`).expect(200)).body.descriptionHtml).toBe('<p>&lt;img src=x onerror=alert(1)&gt;</p>');
+    it('the description and the comments are sanitized with an allowlist', async () => {
+      const created = await create(purchases, { values: { AMOUNT: 1 }, description: '<p>Hi <strong>there</strong></p><script>alert(1)</script><a href="javascript:alert(1)">x</a><img src=x onerror=alert(1)>' }).expect(201);
+      expect((await requester.client.get(`/tickets/${created.body.id}`).expect(200)).body.descriptionHtml).toBe('<p>Hi <strong>there</strong></p><a rel="noopener noreferrer nofollow" target="_blank">x</a>');
+      const moved = await move(reviewer, created.body.id, purchases.transition['Send to approval']!, created.body.openVisitId, { comment: '<b>ok</b><script>x</script>' }).expect(200);
+      const empty = await move(approver, created.body.id, purchases.transition.Approve!, moved.body.openVisitId, { comment: '<script>x</script>' }).expect(200);
+      expect(empty.body.currentStepId).toBeDefined();
+      const comments = (await world.db.platform.query(`SELECT comment_html FROM ticket_events WHERE ticket_id = $1 AND type = 'TRANSITIONED' AND actor_id IS NOT NULL ORDER BY created_at, id`, [created.body.id])).rows.map((row) => row.comment_html);
+      expect(comments).toEqual(['<b>ok</b>', null]);
     });
   });
 

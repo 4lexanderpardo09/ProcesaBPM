@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidReferenceError, InvalidTransitionError, plainTextToHtml, type TicketMutationResponse, type TransitionTicketRequest } from '@procesabpm/shared';
+import { InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionTicketRequest } from '@procesabpm/shared';
+import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -93,7 +94,7 @@ export class TransitionTicketService {
           transitionId: exit.transitionId,
           loop: visit.loop,
           actorId: actor.userId,
-          commentHtml: request.comment === undefined ? null : plainTextToHtml(request.comment),
+          commentHtml: sanitizeOptionalRichText(request.comment),
           data: { ...(diverted ? { intendedTransitionId: chosen.id, amountRuleId: diversion.ruleId } : {}), ...(current.actorIsPoolMember ? { tookFromPool: true } : {}) },
           outbox: [{ type: 'ticket.transitioned', payload: { fromStepId: step.id, toStepId: exit.toStepId, transitionId: exit.transitionId, actorId: actor.userId } }],
         },
