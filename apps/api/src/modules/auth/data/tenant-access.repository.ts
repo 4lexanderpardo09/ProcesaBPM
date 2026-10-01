@@ -11,6 +11,7 @@ export interface TenantAccess {
         readonly isOwner: boolean;
         readonly departmentId: string | null;
         readonly siteId: string | null;
+        readonly positionId: string | null;
       }
     | undefined;
   readonly userStatus: 'ACTIVE' | 'LOCKED' | 'DISABLED' | undefined;
@@ -36,6 +37,7 @@ export class TenantAccessRepository {
         isOwner: true,
         departmentId: true,
         siteId: true,
+        positionId: true,
         role: { select: { isActive: true, isAdmin: true, permissionsVersion: true } },
       },
     });
@@ -56,6 +58,7 @@ export class TenantAccessRepository {
               isOwner: membership.isOwner,
               departmentId: membership.departmentId,
               siteId: membership.siteId,
+              positionId: membership.positionId,
             },
     };
   }

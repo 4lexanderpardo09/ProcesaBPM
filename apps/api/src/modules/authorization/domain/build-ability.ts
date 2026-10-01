@@ -1,7 +1,7 @@
 import { createPrismaAbility } from '@casl/prisma/runtime';
 import type { Ability, RawRuleFrom } from '@casl/ability';
 import { resolveConditionTemplate } from './condition-template.js';
-import { type Condition, isCatalogScopedAction, type SubjectContext, type SubjectRegistry } from './subject-registry.js';
+import { type Condition, isCatalogScopedAction, type SubjectContext, type SubjectRegistry, type TrustedConditionBuilder } from './subject-registry.js';
 
 export type AppAbility = Ability<[string, string], Record<string, unknown>>;
 
@@ -22,6 +22,11 @@ export interface BuiltAbility {
   readonly ability: AppAbility;
   /** Rules that were not applied: invalid conditions or unset placeholders. They are never widened. */
   readonly dropped: readonly DroppedRule[];
+}
+
+function trusted(build: TrustedConditionBuilder, context: SubjectContext): { valid: true; condition: Condition } | { valid: false; reason: string } {
+  const condition = build(context);
+  return condition === undefined ? { valid: false, reason: 'the member lacks what the condition needs' } : { valid: true, condition };
 }
 
 const hasConditions = (conditions: unknown): boolean => conditions !== null && conditions !== undefined;
@@ -67,7 +72,7 @@ export function buildAbility(rules: readonly RawPermissionRule[], context: Subje
 
     const parts: Condition[] = [];
     if (implied !== undefined) {
-      const resolvedImplied = resolveConditionTemplate(implied, definition.fields, context);
+      const resolvedImplied = typeof implied === 'function' ? trusted(implied, context) : resolveConditionTemplate(implied, definition.fields, context);
       if (!resolvedImplied.valid) {
         drop(`built-in condition: ${resolvedImplied.reason}`);
         continue;

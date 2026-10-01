@@ -102,6 +102,22 @@ describe('buildAbility', () => {
       expect(ability.can('read_created', subject('Ticket', { creatorId: 'user-2' }) as never)).toBe(false);
     });
 
+    it('accepts a trusted builder that may use relations and OR, and drops the rule when it gives nothing', () => {
+      const registry = new SubjectRegistry().register('Ticket', {
+        fields: new Set(),
+        impliedConditions: {
+          read_assigned: ({ userId }) => ({ OR: [{ assignees: { some: { userId } } }, { creatorId: userId }] }),
+          read_observed: ({ membership }) => (membership.positionId ? { positionId: membership.positionId } : undefined),
+        },
+      });
+      const withoutPosition = buildAbility([rule('read_assigned', 'Ticket'), rule('read_observed', 'Ticket')], member, registry);
+      expect(withoutPosition.dropped.map((entry) => entry.action)).toEqual(['read_observed']);
+      expect(withoutPosition.ability.can('read_assigned', 'Ticket')).toBe(true);
+      expect(withoutPosition.ability.can('read_observed', 'Ticket')).toBe(false);
+      const withPosition = buildAbility([rule('read_observed', 'Ticket')], { ...member, membership: { positionId: 'p1' } }, registry);
+      expect(withPosition.dropped).toEqual([]);
+    });
+
     it('does not touch the unscoped actions of the same subject, nor manage', () => {
       const { ability } = build([rule('read_all', 'Ticket'), rule('manage', 'all')]);
       expect(ability.can('read_all', 'Ticket')).toBe(true);

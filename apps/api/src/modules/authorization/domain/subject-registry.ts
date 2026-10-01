@@ -1,7 +1,7 @@
 /** Where a stored condition may point: the placeholders resolved from the acting member. */
 export interface SubjectContext {
   readonly userId: string;
-  readonly membership: { readonly departmentId?: string | null; readonly siteId?: string | null };
+  readonly membership: { readonly departmentId?: string | null; readonly siteId?: string | null; readonly positionId?: string | null };
 }
 
 /**
@@ -20,15 +20,21 @@ export function isCatalogScopedAction(subject: string, action: string): boolean 
 export type ConditionValue = string | number | boolean | null;
 export type Condition = Readonly<Record<string, unknown>>;
 
+/**
+ * A condition written in code (not stored): it may use relations and OR, which stored templates cannot.
+ * Returning `undefined` drops the rule, so a member that lacks what the condition needs gets nothing.
+ */
+export type TrustedConditionBuilder = (context: SubjectContext) => Condition | undefined;
+
 export interface SubjectDefinition {
   /** Fields that stored conditions may use; any other field makes the rule invalid. */
   readonly fields: ReadonlySet<string>;
   /**
-   * Conditions built into a scoped action (e.g. `read_created` → `{ creatorId: ${user.id} }`).
-   * They live in code and are combined with AND with the stored ones, so a stored condition can
-   * only narrow a scoped action, never widen it.
+   * Conditions built into a scoped action (e.g. `read_created` → `{ creatorId: ${user.id} }`), as a
+   * template of placeholders or as a trusted builder. They live in code and are combined with AND with
+   * the stored ones, so a stored condition can only narrow a scoped action, never widen it.
    */
-  readonly impliedConditions?: Readonly<Record<string, Condition>>;
+  readonly impliedConditions?: Readonly<Record<string, Condition | TrustedConditionBuilder>>;
 }
 
 /**
