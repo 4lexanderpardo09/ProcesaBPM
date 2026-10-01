@@ -3,3 +3,4 @@ export { CURRENCIES, COUNTRIES, PLANS, PERMISSIONS, type PermissionSeed, type Pl
 export { ROLE_TEMPLATES, type RoleTemplate, type SystemRoleCode } from './seed/role-templates.js';
 export { seedGlobalCatalog, type SeedOptions } from './seed/seed-global-catalog.js';
 export * from './generated/prisma/client.js';
+export * from './seed/tenant-defaults.js';
