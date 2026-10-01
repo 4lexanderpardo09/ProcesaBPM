@@ -59,10 +59,14 @@ export class ReopenTicketService {
       const visits = await this.writes.findVisits(tx, tenantId, ticket.id);
       const stepId = reopenTarget(visits, peopleSteps, request.stepId);
 
+      const reopenStep = document.steps.find((candidate) => candidate.id === stepId);
+      // A parallel step asks its signers again: nobody can be put there by name, and nobody just "holds" it.
+      if (reopenStep?.assignmentMode === 'PARALLEL' && request.assigneeId !== undefined) throw new InvalidAssigneeError();
       const errorType = await this.people.findReopeningErrorType(tx, tenantId, request.errorTypeId, request.errorSubtypeId);
       if (errorType === null) throw new InvalidErrorTypeError();
       const responsibleId = request.responsibleId ?? ticket.closedById;
       if (responsibleId === null) throw new InvalidReferenceError('Say who is responsible for the error: nobody is recorded as having closed the ticket');
+      if (request.responsibleId !== undefined && (await this.people.findActiveMember(tx, tenantId, request.responsibleId)) === null) throw new InvalidReferenceError('The responsible person is not an active member');
       const description = sanitizeRichText(request.description);
       if (description === '') throw new ValidationFailedError([{ path: 'description', message: 'The description is empty' }]);
 

@@ -160,4 +160,20 @@ describe('RANDOM_DISPATCH: waiting tickets are handed out round-robin by the wor
     expect((await db.platform.query(`SELECT last_assigned_user_id FROM step_runtime_states WHERE step_id = $1`, [theirs.step.task])).rows[0].last_assigned_user_id).toBe(theirWorker.userId);
     void pointerBefore;
   });
+
+  it('a dispatched holder who is gone when their incident ends sends the ticket back to the queue', async () => {
+    const holderMember = await world.member([...WORKER_GRANTS, { action: 'open_incident', subject: 'Ticket' }]);
+    const handler = await world.member(WORKER_GRANTS);
+    const solo = await publishFlow(world.admin, simpleFlow({ assignmentMode: 'RANDOM_DISPATCH', dispatchIntervalMin: 5, slaValue: 8, slaUnit: 'BUSINESS_HOURS' }, { candidates: [user(holderMember)] }));
+    const ticket = (await create(solo)).body;
+    await letIntervalPass(solo.step.task!).catch(() => undefined);
+    await dispatchAll();
+    expect(await holder(ticket.id)).toEqual([holderMember.userId]);
+
+    const incident = (await holderMember.client.post(`/tickets/${ticket.id}/incidents`, { visitId: ticket.openVisitId, assignedToId: handler.userId, description: 'Paused' }).expect(201)).body;
+    await db.platform.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [world.tenant.tenantId, holderMember.userId]);
+    await handler.client.post(`/tickets/${ticket.id}/incidents/${incident.incidentId}/resolve`, { resolution: 'ok' }).then((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
+    expect(await world.assignees(ticket.id)).toEqual([]);
+    expect((await world.clocks(ticket.id)).map((clock) => [clock.responsible_id, clock.completed_at])).toEqual([[null, null]]);
+  });
 });

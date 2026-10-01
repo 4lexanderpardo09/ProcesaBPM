@@ -179,10 +179,11 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect(await taskStatus(ticket.id, a)).toBe('PENDING');
     });
 
-    it('an approval step asks for a comment when rejecting', async () => {
+    it('an approval step asks for a comment when rejecting (one that sanitizes to nothing is none)', async () => {
       const ticket = (await create(approvalFlow)).body;
       const refused = await reject(a, ticket);
       expect([refused.status, refused.body.error.code]).toEqual([422, 'COMMENT_REQUIRED']);
+      expect((await reject(a, ticket, { comment: '<script>x</script>' })).body.error.code).toBe('COMMENT_REQUIRED');
       await reject(a, ticket, { comment: 'Because' }).expect(200);
     });
 
@@ -224,6 +225,32 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect((await sign(a, ticket)).status).toBe(403);
       await sign(c, ticket).expect(200);
       await sign(b, ticket).expect(200);
+    });
+
+    it('an incident cannot hand a parallel step to a named person: the signatures would be left pending', async () => {
+      const opener = await world.member([...WORKER_GRANTS, grant('open_incident')]);
+      const incidentFlow = await publishFlow(world.admin, spec([signer(opener), signer(b)]));
+      const ticket = (await create(incidentFlow)).body;
+      const incident = (await opener.client.post(`/tickets/${ticket.id}/incidents`, { visitId: ticket.openVisitId, assignedToId: c.userId, description: 'Paused' }).expect(201)).body;
+      const refused = await supervisor.client.post(`/tickets/${ticket.id}/incidents/${incident.incidentId}/resolve`, { resolution: 'x', assigneeId: a.userId });
+      expect([refused.status, refused.body.error.code]).toEqual([422, 'INVALID_ASSIGNEE']);
+    });
+
+    it('reopening into a parallel step asks its signers again, and nobody can be named for it', async () => {
+      const ticket = (await create(ending)).body;
+      await sign(a, ticket).expect(200);
+      await sign(b, ticket).expect(200);
+      const errorType = (await db.platform.query(`INSERT INTO error_types (tenant_id, name, is_reopening) VALUES ($1, $2, true) RETURNING id`, [world.tenant.tenantId, `Reopen ${Math.random()}`])).rows[0].id as string;
+      const reopener = await world.member([...SUPERVISOR_GRANTS, grant('reopen')]);
+      const body = { errorTypeId: errorType, description: 'Again', responsibleId: a.userId };
+      expect((await reopener.client.post(`/tickets/${ticket.id}/reopen`, { ...body, assigneeId: c.userId })).status).toBe(422);
+      const reopened = await reopener.client.post(`/tickets/${ticket.id}/reopen`, body);
+      expect(reopened.status, JSON.stringify(reopened.body)).toBe(200);
+      expect((await world.assignees(ticket.id)).map((row) => row.type)).toEqual(['PARALLEL', 'PARALLEL']);
+      const fresh = (await db.platform.query(`SELECT status FROM ticket_parallel_tasks WHERE ticket_id = $1 AND loop = 2 ORDER BY user_id`, [ticket.id])).rows;
+      expect(fresh.map((row) => row.status)).toEqual(['PENDING', 'PENDING']);
+      await sign(a, reopened.body).expect(200);
+      expect((await sign(b, reopened.body).expect(200)).body.status).toBe('CLOSED');
     });
 
     it('a parallel step cannot be closed by hand', async () => {

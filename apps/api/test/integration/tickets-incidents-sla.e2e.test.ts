@@ -164,6 +164,17 @@ describe('incidents and the SLA: the pause moves the due date by business time',
     expect((await clocks(ticket.id))[0]!.alerted_at).toBeNull();
   });
 
+  it('I. a clock that ends when the incident is resolved is judged against the shifted due date', async () => {
+    const ticket = await create(hours4, bogota('2026-09-07', '09:00'));
+    const { incidentId } = await open(ticket, bogota('2026-09-07', '10:00'));
+    clock.set(bogota('2026-09-08', '15:00'));
+    await as(helper.userId, () => app.get(ResolveIncidentService).resolve(actor(helper.userId), ticket.id, incidentId, { resolution: 'Handed over', assigneeId: helper.userId }));
+    const [ended, fresh] = await clocks(ticket.id);
+    // One business hour was used (09:00-10:00): on time, even though the original due date (13:00 Monday) is long gone.
+    expect(ended).toMatchObject({ responsible_id: worker.userId, result: 'ON_TIME', business_minutes: 60, paused_at: null, paused_minutes: 660 });
+    expect(fresh).toMatchObject({ responsible_id: helper.userId, completed_at: null });
+  });
+
   it('E. a pool: the pool clock pauses and shifts, and taking the ticket keeps its start', async () => {
     const ticket = await create(pool, bogota('2026-09-07', '09:00'));
     const { incidentId } = await open(ticket, bogota('2026-09-07', '10:00'));

@@ -59,6 +59,8 @@ export class ResolveIncidentService {
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
       const step = document.steps.find((candidate) => candidate.id === visit.stepId);
       if (step === undefined) throw new InvalidStateError('The ticket is not on a step of its version');
+      // Signatures move with `reassign` + `fromUserId`, not by naming a holder: that would leave the tasks pending and nobody signing.
+      if (step.assignmentMode === 'PARALLEL' && request.assigneeId !== undefined) throw new InvalidAssigneeError();
       const active = new Set((await this.candidates.byUsers(tx, tenantId, incident.previousAssigneeIds)).map((row) => row.userId));
       const plan = restorePlan({
         previousAssigneeIds: incident.previousAssigneeIds,
@@ -76,13 +78,17 @@ export class ResolveIncidentService {
       const resumedVisit = resumeSla({ startedAt: visit.enteredAt, terms: { value: visit.slaValue, unit: visit.slaUnit }, calendar, pauses, pausedAt: incident.openedAt, resumedAt: at, pausedMinutes: visit.pausedMinutes });
       const pausedBusinessMinutes = resumedVisit.pausedMinutes - visit.pausedMinutes;
 
-      // Clocks that end here: all of them when the ticket goes to a named person (as a reassignment does), else the dropped people's.
-      const ending = request.assigneeId === undefined ? clocks.filter((clock) => clock.responsibleId !== null && plan.dropped.includes(clock.responsibleId)) : clocks;
+      // A dispatched ticket whose holder is gone goes back to the queue (its clock loses the responsible but keeps running);
+      // otherwise the dropped people's clocks end, and all of them do when the ticket goes to a named person (as a reassignment does).
+      const backToQueue = step.assignmentMode === 'RANDOM_DISPATCH' && request.assigneeId === undefined && plan.restore.length === 0;
+      const dropped = clocks.filter((clock) => clock.responsibleId !== null && plan.dropped.includes(clock.responsibleId));
+      const ending = backToQueue ? [] : request.assigneeId === undefined ? dropped : clocks;
       const endingIds = new Set(ending.map((clock) => clock.id));
-      const closed = await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, ending, at);
-
-      await this.writes.closeClocks(tx, tenantId, at, closed);
-      for (const clock of clocks.filter((candidate) => !endingIds.has(candidate.id))) await this.writes.resumeClock(tx, tenantId, clock.id, resumedClock(clock));
+      // Every clock runs again first, with its due date moved by the pause: the ones that end here are judged against that date, not the stale one.
+      for (const clock of clocks) await this.writes.resumeClock(tx, tenantId, clock.id, resumedClock(clock));
+      const resumedEnding = ending.map((clock) => ({ ...clock, ...resumedClock(clock), pausedAt: null }));
+      await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, resumedEnding, at));
+      if (backToQueue) for (const clock of dropped) await this.writes.releaseClock(tx, tenantId, clock.id);
       await this.writes.updateVisitPause(tx, tenantId, visit.id, resumedVisit);
       await this.writes.deleteAssignees(tx, tenantId, ticket.id);
       const events: EventPlan[] = [];

@@ -86,7 +86,7 @@ export class ArrivalPlanner {
     const loop = request.ignoreMaxLoops === true ? nextReopenLoop(previousLoops) : nextLoop(previousLoops, step.maxLoops, step.id);
     const sla = openSla(slaTermsOf(step, request.companyId), request.calendar?.calendar ?? null, request.at);
     const decision: { type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; userIds: readonly string[] } =
-      request.holders !== undefined && request.holders.length > 0 ? { type: 'PRIMARY', userIds: request.holders } : step.assignmentMode === 'PARALLEL' ? await this.signers(tx, request, step) : await this.decide(tx, request, step);
+      request.holders !== undefined && request.holders.length > 0 && step.assignmentMode !== 'PARALLEL' ? { type: 'PRIMARY', userIds: request.holders } : step.assignmentMode === 'PARALLEL' ? await this.signers(tx, request, step) : await this.decide(tx, request, step);
 
     const clockBase = { startedAt: request.at, sla: { value: sla.value, unit: sla.unit }, calendarId: request.calendar?.id ?? null, dueAt: sla.dueAt };
     const clocks: ClockPlan[] = decision.type === 'POOL' || decision.type === 'DISPATCH' ? [{ ...clockBase, responsibleId: null }] : decision.userIds.map((userId) => ({ ...clockBase, responsibleId: userId }));

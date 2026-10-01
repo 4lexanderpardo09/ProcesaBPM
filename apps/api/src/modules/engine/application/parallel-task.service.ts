@@ -70,9 +70,9 @@ export class ParallelTaskService {
       const outcome = parallelOutcome(tasks, actor.userId, action);
       if (action === 'REJECT') {
         if (exits.rejection === null) throw new RejectionNotAllowedError();
-        if (step.type === 'APPROVAL' && step.config.rejectRequiresComment !== false && (request.comment ?? '').trim() === '') throw new CommentRequiredError();
       }
       const comment = sanitizeOptionalRichText(request.comment);
+      if (action === 'REJECT' && step.type === 'APPROVAL' && step.config.rejectRequiresComment !== false && comment === null) throw new CommentRequiredError();
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const taskEvent = (taskId: string, userId: string, status: 'SIGNED' | 'REJECTED' | 'CANCELLED'): EventPlan => ({
         type: 'PARALLEL_TASK_COMPLETED',

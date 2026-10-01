@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
+import { DispatchRepository } from '../data/dispatch.repository.js';
 import { DispatchStepService } from './dispatch-step.service.js';
 
 export const DISPATCH_BATCH_SIZE = 200;
@@ -14,12 +15,13 @@ export const DISPATCH_BATCH_SIZE = 200;
 export class RandomDispatchJob {
   constructor(
     @Inject(WorkerTransactionRunner) private readonly runner: WorkerTransactionRunner,
+    @Inject(DispatchRepository) private readonly dispatches: DispatchRepository,
     @Inject(DispatchStepService) private readonly dispatch: DispatchStepService,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
 
   async runOnce(): Promise<{ steps: number; tickets: number; failed: number }> {
-    const due = await this.runner.withoutTenant((tx) => tx.$queryRaw<Array<{ tenantId: string; stepId: string }>>`SELECT out_tenant_id::text AS "tenantId", out_step_id::text AS "stepId" FROM claim_random_dispatch_steps(${DISPATCH_BATCH_SIZE}::int)`);
+    const due = await this.runner.withoutTenant((tx) => this.dispatches.claimDueSteps(tx, DISPATCH_BATCH_SIZE));
     let tickets = 0;
     let failed = 0;
     for (const { tenantId, stepId } of due) {

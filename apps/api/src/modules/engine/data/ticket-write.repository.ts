@@ -207,6 +207,11 @@ export class TicketWriteRepository {
     await tx.ticketSlaClock.updateMany({ where: { tenantId, id: clockId, completedAt: null }, data: { pausedAt: null, pausedMinutes: resumed.pausedMinutes, dueAt: resumed.dueAt } });
   }
 
+  /** A clock whose responsible is gone goes back to waiting for a dispatch: it keeps running, with nobody's name on it. */
+  async releaseClock(tx: TenantTransaction, tenantId: string, clockId: string): Promise<void> {
+    await tx.ticketSlaClock.updateMany({ where: { tenantId, id: clockId, completedAt: null }, data: { responsibleId: null } });
+  }
+
   async updateVisitPause(tx: TenantTransaction, tenantId: string, visitId: string, resumed: { pausedMinutes: number; dueAt: Date | null }): Promise<void> {
     await tx.ticketStepVisit.updateMany({ where: { tenantId, id: visitId, exitedAt: null }, data: { pausedMinutes: resumed.pausedMinutes, dueAt: resumed.dueAt } });
   }

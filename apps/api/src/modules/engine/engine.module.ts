@@ -20,6 +20,7 @@ import { TransitionTicketService } from './application/transition-ticket.service
 import { AssignmentCandidatesRepository } from './data/assignment-candidates.repository.js';
 import { FieldReferenceRepository } from './data/field-reference.repository.js';
 import { TicketContextRepository } from './data/ticket-context.repository.js';
+import { DispatchRepository } from './data/dispatch.repository.js';
 import { TicketWriteRepository } from './data/ticket-write.repository.js';
 
 /** The ticket engine: starts tickets, moves them along their workflow, resolves who is assigned and keeps their SLA clocks. */
@@ -27,6 +28,7 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
   imports: [WorkflowsModule, ApprovalsModule],
   providers: [
     TicketWriteRepository,
+    DispatchRepository,
     TicketContextRepository,
     AssignmentCandidatesRepository,
     FieldReferenceRepository,
@@ -47,6 +49,6 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     ParallelTaskService,
     DispatchStepService,
   ],
-  exports: [CreateTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchStepService],
+  exports: [CreateTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchStepService, DispatchRepository],
 })
 export class EngineModule {}
