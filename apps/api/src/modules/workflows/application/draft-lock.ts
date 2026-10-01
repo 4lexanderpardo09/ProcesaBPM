@@ -12,9 +12,9 @@ import { WorkflowRepository } from '../data/workflow.repository.js';
 export class DraftLock {
   constructor(@Inject(WorkflowRepository) private readonly workflows: WorkflowRepository) {}
 
-  /** `SHARE` for a granular edit (publishing waits for it), `UPDATE` for rewriting or deleting the draft. */
-  async acquire(tx: TenantTransaction, tenantId: string, workflowId: string, versionId: string, mode: 'SHARE' | 'UPDATE'): Promise<{ revision: number }> {
-    const locked = await this.workflows.lockVersion(tx, tenantId, workflowId, versionId, mode);
+  /** Waits for publishing and for other edits (they queue on the row), then returns the revision the edit starts from. */
+  async acquire(tx: TenantTransaction, tenantId: string, workflowId: string, versionId: string): Promise<{ revision: number }> {
+    const locked = await this.workflows.lockVersion(tx, tenantId, workflowId, versionId);
     if (locked === undefined) throw new NotFoundError();
     if (locked.status !== 'DRAFT') throw new ImmutableDataError(`The version is ${locked.status.toLowerCase()} and cannot be edited`);
     return { revision: locked.revision };

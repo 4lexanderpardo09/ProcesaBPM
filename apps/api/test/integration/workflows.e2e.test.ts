@@ -9,6 +9,22 @@ import { useTestEnvironment } from '../support/test-environment.js';
 
 useTestEnvironment();
 
+/** Saves a canvas with the revision the draft has now (the API requires it): the test reads it like a client would. */
+const putGraph = (client: ApiClient, base: string, body: Record<string, unknown>) => {
+  const run = async () => {
+    const current = await client.get(base);
+    return client.put(`${base}/graph`, { revision: current.body?.version?.revision ?? 0, ...body });
+  };
+  return {
+    then: <T>(resolve: (value: Awaited<ReturnType<typeof run>>) => T, reject?: (reason: unknown) => T) => run().then(resolve, reject),
+    expect: async (status: number) => {
+      const response = await run();
+      expect(response.status, JSON.stringify(response.body)).toBe(status);
+      return response;
+    },
+  };
+};
+
 const unique = (label: string) => `${label}-${Math.random().toString(36).slice(2, 8)}`;
 const ANY_ID = '018f3c1e-7b2a-7c3d-9e4f-0123456789ab';
 
@@ -96,7 +112,7 @@ describe('workflows API (builder backend)', () => {
     it('replaces blocks and transitions, keeps the ids of the blocks that stay and returns the ids of the new ones', async () => {
       const c = await newWorkflow();
       await admin.post(`${version(c)}/fields`, { stepId: c.start, code: 'AMOUNT', label: 'Amount', type: 'NUMBER' }).expect(201);
-      const saved = (await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200)).body;
+      const saved = (await putGraph(admin, version(c), taskGraph(c)).expect(200)).body;
       expect(Object.keys(saved.idMap).sort()).toEqual(['new:t1', 'new:t2', 'new:task']);
       const after = await detail(c);
       expect(after.document.steps.map((s) => s.id)).toEqual(expect.arrayContaining([c.start, c.end, saved.idMap['new:task']]));
@@ -110,23 +126,61 @@ describe('workflows API (builder backend)', () => {
       const c = await newWorkflow();
       const read = await detail(c);
       expect(read.version.revision).toBe(0);
-      const first = (await admin.put(`${version(c)}/graph`, { ...taskGraph(c), revision: 0 }).expect(200)).body;
+      const first = (await putGraph(admin, version(c), { ...taskGraph(c), revision: 0 }).expect(200)).body;
       expect(first.revision).toBe(1);
-      const stale = await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [], revision: 0 });
+      const stale = await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [], revision: 0 });
       expect(stale.status).toBe(409);
       expect(stale.body.error).toMatchObject({ code: 'STALE_REVISION', details: { currentRevision: 1 } });
       expect((await detail(c)).document.steps).toHaveLength(3);
-      expect((await admin.put(`${version(c)}/graph`, { ...taskGraph(c), steps: first.document.steps.map((step: StepDocument) => stepInput(step.id, step.type, { name: step.name, ...(step.assignmentMode === 'NONE' ? {} : { assignmentMode: step.assignmentMode }) })), transitions: first.document.transitions.map((t: { id: string; fromStepId: string; toStepId: string; type: string; label: string }) => edge(t.id, t.fromStepId, t.toStepId, t.type, { label: t.label })), revision: 1 }).expect(200)).body.revision).toBe(2);
-      // Without a revision the save is not conditional.
-      expect((await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200)).body.revision).toBe(3);
+      expect((await putGraph(admin, version(c), { ...taskGraph(c), steps: first.document.steps.map((step: StepDocument) => stepInput(step.id, step.type, { name: step.name, ...(step.assignmentMode === 'NONE' ? {} : { assignmentMode: step.assignmentMode }) })), transitions: first.document.transitions.map((t: { id: string; fromStepId: string; toStepId: string; type: string; label: string }) => edge(t.id, t.fromStepId, t.toStepId, t.type, { label: t.label })), revision: 1 }).expect(200)).body.revision).toBe(2);
+      // The revision is mandatory: a save that does not say what it read would overwrite whatever happened since.
+      await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(400);
+      expect((await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200)).body.revision).toBe(3);
+    });
+
+    it('every granular edit bumps the revision and says so in a header; a canvas read before it is stale', async () => {
+      const c = await newWorkflow();
+      const saved = (await putGraph(admin, version(c), taskGraph(c)).expect(200)).body;
+      const taskId = saved.idMap['new:task'] as string;
+      let expected = (await detail(c)).version.revision;
+      const bumped = (response: { status: number; headers: Record<string, unknown> }, status: number) => {
+        expect(response.status).toBe(status);
+        expected += 1;
+        expect(response.headers['workflow-revision']).toBe(String(expected));
+      };
+      const field = await admin.post(`${version(c)}/fields`, { stepId: c.start, code: 'AMOUNT', label: 'Amount', type: 'CURRENCY' });
+      bumped(field, 201);
+      bumped(await admin.patch(`${version(c)}/fields/${field.body.id}`, { label: 'Total' }), 200);
+      const rule = await admin.post(`${version(c)}/amount-rules`, { fieldCode: 'AMOUNT', maxAmount: '10.00', currencyCode: 'COP', action: 'BLOCK' });
+      bumped(rule, 201);
+      bumped(await admin.patch(`${version(c)}/amount-rules/${rule.body.id}`, { maxAmount: '20.00' }), 200);
+      bumped(await admin.delete(`${version(c)}/amount-rules/${rule.body.id}`), 204);
+      for (const list of ['candidates', 'initiators', 'signers', 'sla-overrides', 'files']) {
+        const body = { candidates: { candidates: [] }, initiators: { initiators: [] }, signers: { signers: [] }, 'sla-overrides': { overrides: [] }, files: { files: [] } }[list];
+        bumped(await admin.put(`${version(c)}/steps/${taskId}/${list}`, body), 200);
+      }
+      bumped(await admin.delete(`${version(c)}/fields/${field.body.id}`), 204);
+      expect((await detail(c)).version.revision).toBe(expected);
+
+      const stale = await admin.put(`${version(c)}/graph`, { ...taskGraph(c), revision: saved.revision });
+      expect(stale.status).toBe(409);
+      expect(stale.body.error.details.currentRevision).toBe(expected);
+    });
+
+    it('concurrent granular edits do not deadlock and each one counts', async () => {
+      const c = await newWorkflow();
+      const before = (await detail(c)).version.revision;
+      const edits = await Promise.all(['A', 'B', 'C', 'D'].map((code) => admin.post(`${version(c)}/fields`, { stepId: c.start, code, label: code, type: 'TEXT' })));
+      expect(edits.map((edit) => edit.status)).toEqual([201, 201, 201, 201]);
+      expect((await detail(c)).version.revision).toBe(before + 4);
     });
 
     it('removing a block removes its fields; the rest is untouched, and positions are kept', async () => {
       const c = await newWorkflow();
-      const first = (await admin.put(`${version(c)}/graph`, { ...taskGraph(c), steps: [stepInput(c.start, 'START', { ui: { x: 10, y: 20 } }), stepInput('new:task', 'TASK'), stepInput(c.end, 'END')] }).expect(200)).body;
+      const first = (await putGraph(admin, version(c), { ...taskGraph(c), steps: [stepInput(c.start, 'START', { ui: { x: 10, y: 20 } }), stepInput('new:task', 'TASK'), stepInput(c.end, 'END')] }).expect(200)).body;
       const taskId = first.idMap['new:task'] as string;
       await admin.post(`${version(c)}/fields`, { stepId: taskId, code: 'NOTE', label: 'Note', type: 'TEXT' }).expect(201);
-      const reduced = (await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START', { ui: { x: 10, y: 20 } }), stepInput(c.end, 'END')], transitions: [edge('new:direct', c.start, c.end, 'DEFAULT')] }).expect(200)).body;
+      const reduced = (await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START', { ui: { x: 10, y: 20 } }), stepInput(c.end, 'END')], transitions: [edge('new:direct', c.start, c.end, 'DEFAULT')] }).expect(200)).body;
       expect(reduced.document.steps).toHaveLength(2);
       expect(reduced.document.fields).toEqual([]);
       expect(reduced.document.steps.find((s: StepDocument) => s.id === c.start).ui).toEqual({ x: 10, y: 20 });
@@ -134,9 +188,9 @@ describe('workflows API (builder backend)', () => {
 
     it('is atomic: a transition the database refuses (from an END) cancels the whole save', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       const before = await detail(c);
-      const response = await admin.put(`${version(c)}/graph`, {
+      const response = await putGraph(admin, version(c), {
         steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END'), stepInput('new:extra', 'TASK')],
         transitions: [edge('new:ok', c.start, 'new:extra', 'DEFAULT'), edge('new:bad', c.end, 'new:extra', 'DECISION')],
       });
@@ -146,9 +200,9 @@ describe('workflows API (builder backend)', () => {
 
     it('a block type change on a connected block is allowed (transitions are rewritten); a duplicated label answers 409', async () => {
       const c = await newWorkflow();
-      const saved = (await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200)).body;
+      const saved = (await putGraph(admin, version(c), taskGraph(c)).expect(200)).body;
       const taskId = saved.idMap['new:task'] as string;
-      await admin.put(`${version(c)}/graph`, {
+      await putGraph(admin, version(c), {
         steps: [stepInput(c.start, 'START'), stepInput(taskId, 'DECISION', { name: 'Choose' }), stepInput(c.end, 'END')],
         transitions: [edge('new:t1', c.start, taskId, 'DEFAULT'), edge('new:t2', taskId, c.end, 'DECISION', { label: 'Yes' }), edge('new:t3', taskId, c.end, 'DECISION', { label: 'yes' })],
       }).expect(409);
@@ -156,14 +210,14 @@ describe('workflows API (builder backend)', () => {
 
     it('refuses ids that are not of the version (422): blocks and transitions', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, { steps: [stepInput(ANY_ID, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(422);
-      await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [edge(ANY_ID, c.start, c.end, 'DEFAULT')] }).expect(422);
-      await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [edge('new:x', c.start, 'new:ghost', 'DEFAULT')] }).expect(422);
+      await putGraph(admin, version(c), { steps: [stepInput(ANY_ID, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(422);
+      await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [edge(ANY_ID, c.start, c.end, 'DEFAULT')] }).expect(422);
+      await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [edge('new:x', c.start, 'new:ghost', 'DEFAULT')] }).expect(422);
     });
 
     it('a graph with problems is saved (only publishing needs a valid one) and reports them', async () => {
       const c = await newWorkflow();
-      const saved = (await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200)).body;
+      const saved = (await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200)).body;
       expect(saved.validation.errors.map((p: { code: string }) => p.code)).toEqual(expect.arrayContaining(['END_NOT_REACHABLE', 'AUTOMATIC_BLOCK_WITHOUT_DEFAULT']));
       expect((await admin.get(`${version(c)}/validation`).expect(200)).body.errors.length).toBeGreaterThan(0);
     });
@@ -171,7 +225,7 @@ describe('workflows API (builder backend)', () => {
     it('conditions are stored on CONDITION transitions only (SQL NULL elsewhere)', async () => {
       const c = await newWorkflow();
       await admin.post(`${version(c)}/fields`, { stepId: c.start, code: 'AMOUNT', label: 'Amount', type: 'NUMBER' }).expect(201);
-      const saved = (await admin.put(`${version(c)}/graph`, {
+      const saved = (await putGraph(admin, version(c), {
         steps: [stepInput(c.start, 'START'), stepInput('new:cond', 'CONDITION'), stepInput('new:review', 'TASK'), stepInput(c.end, 'END')],
         transitions: [
           edge('new:a', c.start, 'new:cond', 'DEFAULT'),
@@ -189,21 +243,21 @@ describe('workflows API (builder backend)', () => {
     it('a block that is the extra approval step of an amount rule cannot be removed (422)', async () => {
       const c = await newWorkflow();
       const type = (await admin.post('/approval-group-types', { name: unique('T') }).expect(201)).body.id;
-      const saved = (await admin.put(`${version(c)}/graph`, {
+      const saved = (await putGraph(admin, version(c), {
         steps: [stepInput(c.start, 'START'), stepInput('new:task', 'TASK'), stepInput('new:approval', 'APPROVAL', { assignmentMode: 'APPROVER', approvalGroupTypeId: type, approvalLevel: 1 }), stepInput(c.end, 'END')],
         transitions: [edge('new:a', c.start, 'new:task', 'DEFAULT'), edge('new:b', 'new:task', c.end, 'DECISION'), edge('new:sys', 'new:task', 'new:approval', 'SYSTEM_ONLY'), edge('new:d', 'new:approval', c.end, 'DECISION')],
       }).expect(200)).body;
       await admin.post(`${version(c)}/fields`, { stepId: c.start, code: 'AMOUNT', label: 'Amount', type: 'CURRENCY' }).expect(201);
       await admin.post(`${version(c)}/amount-rules`, { fieldCode: 'AMOUNT', maxAmount: '1000.50', currencyCode: 'COP', action: 'EXTRA_APPROVAL', approvalStepId: saved.idMap['new:approval'] }).expect(201);
       const reduced = { steps: [stepInput(c.start, 'START'), stepInput(saved.idMap['new:task'], 'TASK'), stepInput(c.end, 'END')], transitions: [edge('new:a', c.start, saved.idMap['new:task'], 'DEFAULT'), edge('new:b', saved.idMap['new:task'], c.end, 'DECISION')] };
-      expect((await admin.put(`${version(c)}/graph`, reduced).expect(422)).body.error.code).toBe('INVALID_STATE');
+      expect((await putGraph(admin, version(c), reduced).expect(422)).body.error.code).toBe('INVALID_STATE');
     });
   });
 
   describe('publish', () => {
     it('refuses a draft with errors (422 with the whole list) and changes nothing', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200);
+      await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200);
       const response = await publishFlow(c).then((r) => r);
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('WORKFLOW_NOT_PUBLISHABLE');
@@ -214,7 +268,7 @@ describe('workflows API (builder backend)', () => {
 
     it('publishes a valid draft and returns the warnings', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       const published = (await publishFlow(c).then((r) => { expect(r.status).toBe(200); return r; })).body;
       expect(published.version).toMatchObject({ status: 'PUBLISHED', number: 1 });
       expect(published.version.publishedAt).not.toBeNull();
@@ -224,7 +278,7 @@ describe('workflows API (builder backend)', () => {
 
     it('publishing a new draft archives the previously published version', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       await publishFlow(c).then((r) => expect(r.status).toBe(200));
       const draft = (await admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId }).expect(201)).body;
       expect(draft).toMatchObject({ number: 2, status: 'DRAFT' });
@@ -235,14 +289,14 @@ describe('workflows API (builder backend)', () => {
 
     it('a published or archived version is not published again (409)', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       await publishFlow(c).then((r) => expect(r.status).toBe(200));
       expect((await publishFlow(c)).status).toBe(409);
     });
 
     it('publish waits for an edit that is still running, then the edit is not lost to a published version', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       // An edit in another connection holds the version (FOR SHARE) and has not committed.
       const editor = await db.platform.connect();
       try {
@@ -271,20 +325,20 @@ describe('workflows API (builder backend)', () => {
         steps: [stepInput(c.start, 'START'), stepInput('new:hook', 'WEBHOOK', { config: { webhookId } }), stepInput(c.end, 'END')],
         transitions: [edge('new:a', c.start, 'new:hook', 'DEFAULT'), edge('new:b', 'new:hook', c.end, 'DEFAULT')],
       });
-      await admin.put(`${version(c)}/graph`, withHook(ANY_ID)).expect(200);
+      await putGraph(admin, version(c), withHook(ANY_ID)).expect(200);
       const refused = await publishFlow(c);
       expect(refused.status).toBe(422);
       expect(refused.body.error.details.errors.map((p: { code: string; params: { kind: string } }) => `${p.code}:${p.params.kind}`)).toContain('BLOCK_REFERENCE_UNKNOWN:WEBHOOK');
       expect((await admin.get(`${version(c)}/validation`).expect(200)).body.errors.map((p: { code: string }) => p.code)).toContain('BLOCK_REFERENCE_UNKNOWN');
       expect((await detail(c)).version.status).toBe('DRAFT');
 
-      await admin.put(`${version(c)}/graph`, withHook(webhook)).expect(200);
+      await putGraph(admin, version(c), withHook(webhook)).expect(200);
       expect((await publishFlow(c)).status).toBe(200);
     });
 
     it('two simultaneous replacements of a list leave exactly one of the lists, not both merged', async () => {
       const c = await newWorkflow();
-      const saved = (await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200)).body;
+      const saved = (await putGraph(admin, version(c), taskGraph(c)).expect(200)).body;
       const taskId = saved.idMap['new:task'] as string;
       const [first, second] = [await admin.post('/positions', { name: unique('P1') }), await admin.post('/positions', { name: unique('P2') })];
       const candidates = (position: string) => ({ candidates: [{ participantType: 'USER', userId: tenant.userId }, { participantType: 'POSITION', positionId: position }] });
@@ -296,7 +350,7 @@ describe('workflows API (builder backend)', () => {
     it('a canvas of 300 blocks (far over the old 100 kb body limit) is saved', async () => {
       const c = await newWorkflow();
       const steps = [stepInput(c.start, 'START'), ...Array.from({ length: 298 }, (_, index) => stepInput(`new:s${index}`, 'TASK', { name: `Task ${index} ${'x'.repeat(120)}`, description: 'd'.repeat(200) })), stepInput(c.end, 'END')];
-      const saved = (await admin.put(`${version(c)}/graph`, { steps, transitions: [] }).expect(200)).body;
+      const saved = (await putGraph(admin, version(c), { steps, transitions: [] }).expect(200)).body;
       expect(saved.document.steps).toHaveLength(300);
     });
   });
@@ -304,11 +358,11 @@ describe('workflows API (builder backend)', () => {
   describe('published versions cannot be edited (409)', () => {
     it('every way of editing answers 409', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       await publishFlow(c).then((r) => expect(r.status).toBe(200));
       const d = await detail(c);
       const taskId = d.document.steps.find((s) => s.type === 'TASK')!.id;
-      expect((await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(409)).body.error.code).toBe('IMMUTABLE_DATA');
+      expect((await putGraph(admin, version(c), taskGraph(c)).expect(409)).body.error.code).toBe('IMMUTABLE_DATA');
       await admin.post(`${version(c)}/fields`, { stepId: c.start, code: 'X', label: 'X', type: 'TEXT' }).expect(409);
       await admin.post(`${version(c)}/amount-rules`, { fieldCode: 'X', maxAmount: '1', currencyCode: 'COP', action: 'BLOCK' }).expect(409);
       await admin.put(`${version(c)}/steps/${taskId}/candidates`, { candidates: [] }).expect(409);
@@ -321,7 +375,7 @@ describe('workflows API (builder backend)', () => {
 
     it('the database also refuses direct changes of published content (23001), and the API translates it to 409', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       await publishFlow(c).then((r) => expect(r.status).toBe(200));
       await expect(db.platform.query(`UPDATE steps SET name = 'changed' WHERE version_id = $1`, [c.versionId])).rejects.toMatchObject({ code: '23001' });
     });
@@ -331,7 +385,7 @@ describe('workflows API (builder backend)', () => {
     it('copies a published version into a draft identical to it, with new ids everywhere', async () => {
       const c = await newWorkflow();
       const type = (await admin.post('/approval-group-types', { name: unique('T') }).expect(201)).body.id;
-      const saved = (await admin.put(`${version(c)}/graph`, {
+      const saved = (await putGraph(admin, version(c), {
         steps: [stepInput(c.start, 'START'), stepInput('new:task', 'TASK', { slaValue: 4, slaUnit: 'BUSINESS_HOURS' }), stepInput('new:approval', 'APPROVAL', { assignmentMode: 'APPROVER', approvalGroupTypeId: type, approvalLevel: 1 }), stepInput(c.end, 'END')],
         transitions: [edge('new:a', c.start, 'new:task', 'DEFAULT'), edge('new:b', 'new:task', c.end, 'DECISION'), edge('new:sys', 'new:task', 'new:approval', 'SYSTEM_ONLY'), edge('new:d', 'new:approval', c.end, 'DECISION')],
       }).expect(200)).body;
@@ -387,7 +441,7 @@ describe('workflows API (builder backend)', () => {
 
     it('two concurrent copies are numbered one after the other; only one draft survives', async () => {
       const c = await newWorkflow();
-      await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(admin, version(c), taskGraph(c)).expect(200);
       await publishFlow(c).then((r) => expect(r.status).toBe(200));
       const results = await Promise.all([admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId }), admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId })]);
       expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
@@ -412,7 +466,7 @@ describe('workflows API (builder backend)', () => {
 
     it('replaces the lists of a block: candidates, initiators, signers, SLA by company', async () => {
       const c = await newWorkflow();
-      const saved = (await admin.put(`${version(c)}/graph`, taskGraph(c)).expect(200)).body;
+      const saved = (await putGraph(admin, version(c), taskGraph(c)).expect(200)).body;
       const taskId = saved.idMap['new:task'] as string;
       const position = (await admin.post('/positions', { name: unique('P') }).expect(201)).body.id;
       const group = (await admin.post('/groups', { name: unique('G') }).expect(201)).body.id;
@@ -471,16 +525,16 @@ describe('workflows API (builder backend)', () => {
       await reader.get('/workflows').expect(200);
       await reader.get(version(c)).expect(200);
       await reader.get(`${version(c)}/validation`).expect(200);
-      await reader.put(`${version(c)}/graph`, taskGraph(c)).expect(403);
+      await putGraph(reader, version(c), taskGraph(c)).expect(403);
       await reader.post('/workflows', { subcategoryId: ANY_ID, name: 'x' }).expect(403);
       await reader.post(`${version(c)}/publish`, {}).expect(403);
       await reader.delete(version(c)).expect(403);
       await nobody.get('/workflows').expect(403);
 
-      await editor.put(`${version(c)}/graph`, taskGraph(c)).expect(200);
+      await putGraph(editor, version(c), taskGraph(c)).expect(200);
       await editor.post(`${version(c)}/publish`, {}).expect(403);
       expect((await detail(c)).version.status).toBe('DRAFT');
-      await publisher.put(`${version(c)}/graph`, taskGraph(c)).expect(403);
+      await putGraph(publisher, version(c), taskGraph(c)).expect(403);
       await publisher.post(`${version(c)}/publish`, {}).expect(200);
     });
 
@@ -490,7 +544,7 @@ describe('workflows API (builder backend)', () => {
       await stranger.get(`/workflows/${c.workflowId}`).expect(404);
       await stranger.get(version(c)).expect(404);
       await stranger.get(`${version(c)}/validation`).expect(404);
-      await stranger.put(`${version(c)}/graph`, taskGraph(c)).expect(404);
+      await putGraph(stranger, version(c), taskGraph(c)).expect(404);
       await stranger.post(`${version(c)}/publish`, {}).expect(404);
       await stranger.delete(version(c)).expect(404);
       await stranger.post(`/workflows/${c.workflowId}/versions`, {}).expect(404);
@@ -504,8 +558,8 @@ describe('workflows API (builder backend)', () => {
       const own = await newWorkflow(stranger);
       const foreignPosition = await insertReturningId(db.platform, `INSERT INTO positions (tenant_id, name) VALUES ($1, 'Mine') RETURNING id`, [tenant.tenantId]);
       const foreignSteps = { steps: [stepInput(own.start, 'START'), stepInput('new:t', 'TASK', { assignmentMode: 'POSITION', positionId: foreignPosition }), stepInput(own.end, 'END')], transitions: [edge('new:a', own.start, 'new:t', 'DEFAULT'), edge('new:b', 'new:t', own.end, 'DECISION')] };
-      await stranger.put(`${version(own)}/graph`, foreignSteps).expect(422);
-      await stranger.put(`${version(own)}/graph`, { steps: [stepInput(c.start, 'START'), stepInput(own.end, 'END')], transitions: [] }).expect(422);
+      await putGraph(stranger, version(own), foreignSteps).expect(422);
+      await putGraph(stranger, version(own), { steps: [stepInput(c.start, 'START'), stepInput(own.end, 'END')], transitions: [] }).expect(422);
       await stranger.put(`${version(own)}/steps/${c.start}/candidates`, { candidates: [] }).expect(404);
     });
   });

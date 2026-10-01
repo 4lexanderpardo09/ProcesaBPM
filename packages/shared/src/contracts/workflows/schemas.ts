@@ -130,8 +130,8 @@ export type TransitionGraphInput = z.infer<typeof transitionGraphInputSchema>;
 /** The whole canvas: the blocks and transitions replace the ones of the draft in one transaction. */
 export const saveGraphRequestSchema = z
   .object({
-    /** The revision the canvas was read at: when given and no longer current, the save is refused (409). */
-    revision: z.number().int().min(0).optional(),
+    /** The revision the canvas was read at (every save and every granular edit bumps it): if it is no longer current the save is refused (409). */
+    revision: z.number().int().min(0),
     steps: z.array(stepGraphInputSchema).max(MAX_STEPS_PER_VERSION),
     transitions: z.array(transitionGraphInputSchema).max(MAX_TRANSITIONS_PER_VERSION),
   })

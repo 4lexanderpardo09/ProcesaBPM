@@ -90,6 +90,7 @@ export async function publishVersion(admin: ApiClient, workflowId: string, versi
   const saved = (
     await admin
       .put(`${base}/graph`, {
+        revision: 0,
         steps: spec.steps.map((step) => ({
           id: `new:${step.key}`,
           type: step.type,

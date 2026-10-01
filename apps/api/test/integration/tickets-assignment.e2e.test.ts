@@ -315,6 +315,7 @@ describe('assignment, pool, reassignment', () => {
         const base = `/workflows/${workflow.id}/versions/${workflow.versions[0].id}`;
         await world.admin
           .put(`${base}/graph`, {
+            revision: 0,
             steps: spec.steps.map((step) => ({ id: `new:${step.key}`, type: step.type, name: step.key, ...(step.type === 'TASK' ? { assignmentMode: 'CREATOR' } : {}), ...step.extra })),
             transitions: spec.transitions.map((entry, index) => ({ id: `new:t${index}`, fromStepId: `new:${entry.from}`, toStepId: `new:${entry.to}`, type: entry.type, label: `t${index}` })),
           })

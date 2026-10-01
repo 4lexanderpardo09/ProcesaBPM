@@ -34,7 +34,7 @@ export class WorkflowPublicationService {
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.tenantId;
       if (!(await this.workflows.lockWorkflow(tx, tenantId, workflowId))) throw new NotFoundError();
-      const locked = await this.workflows.lockVersion(tx, tenantId, workflowId, versionId, 'UPDATE');
+      const locked = await this.workflows.lockVersion(tx, tenantId, workflowId, versionId);
       if (locked === undefined) throw new NotFoundError();
       if (locked.status !== 'DRAFT') throw new ImmutableDataError(`The version is ${locked.status.toLowerCase()}: only a draft is published`);
 
