@@ -1,3 +1,5 @@
+import type { ApproverNotFound } from '../contracts/approvals/types.js';
+
 export const ERROR_CODES = {
   immutableData: 'IMMUTABLE_DATA',
   invalidState: 'INVALID_STATE',
@@ -23,6 +25,7 @@ export const ERROR_CODES = {
   tenantSlugTaken: 'TENANT_SLUG_TAKEN',
   tenantNotFound: 'TENANT_NOT_FOUND',
   notFound: 'NOT_FOUND',
+  approverNotFound: 'APPROVER_NOT_FOUND',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -198,5 +201,12 @@ export class TenantNotFoundError extends DomainError {
 export class NotFoundError extends DomainError {
   constructor() {
     super(ERROR_CODES.notFound, 'The resource does not exist');
+  }
+}
+
+/** No approver could be resolved; `reason` and the trace say where the search ended. */
+export class ApproverNotFoundError extends DomainError {
+  constructor(readonly outcome: ApproverNotFound) {
+    super(ERROR_CODES.approverNotFound, `No approver found (${outcome.reason}) at level ${outcome.level}`, { details: outcome });
   }
 }

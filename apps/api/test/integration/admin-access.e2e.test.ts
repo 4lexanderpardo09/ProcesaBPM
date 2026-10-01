@@ -72,6 +72,19 @@ const ROUTES: AdminRoute[] = [
   { method: 'put', path: `/groups/${ANY_ID}/members`, action: 'update', subject: 'Group' },
   { method: 'post', path: `/groups/${ANY_ID}/members`, action: 'update', subject: 'Group' },
   { method: 'delete', path: `/groups/${ANY_ID}/members/${ANY_ID}`, action: 'update', subject: 'Group' },
+  { method: 'get', path: '/approval-group-types', action: 'read', subject: 'ApprovalGroup' },
+  { method: 'get', path: `/approval-group-types/${ANY_ID}`, action: 'read', subject: 'ApprovalGroup' },
+  { method: 'post', path: '/approval-group-types', action: 'create', subject: 'ApprovalGroup' },
+  { method: 'patch', path: `/approval-group-types/${ANY_ID}`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'delete', path: `/approval-group-types/${ANY_ID}`, action: 'delete', subject: 'ApprovalGroup' },
+  ...crud('/approval-groups', 'ApprovalGroup'),
+  { method: 'get', path: `/approval-groups/${ANY_ID}/approvers`, action: 'read', subject: 'ApprovalGroup' },
+  { method: 'put', path: `/approval-groups/${ANY_ID}/approvers`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'get', path: `/approval-groups/${ANY_ID}/members`, action: 'read', subject: 'ApprovalGroup' },
+  { method: 'put', path: `/approval-groups/${ANY_ID}/members`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'post', path: `/approval-groups/${ANY_ID}/members`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'delete', path: `/approval-groups/${ANY_ID}/members/${ANY_ID}`, action: 'update', subject: 'ApprovalGroup' },
+  { method: 'get', path: `/approvals/resolve?userId=${ANY_ID}&typeId=${ANY_ID}&companyId=${ANY_ID}`, action: 'read', subject: 'ApprovalGroup' },
 ];
 
 describe('permissions of the organization and catalog APIs', () => {
