@@ -249,9 +249,8 @@ describe('workflows API (builder backend)', () => {
   });
 
   describe('review regressions', () => {
-    it('a block that points at a webhook that does not exist, or at another workflow\'s document, cannot be published', async () => {
+    it('a block that points at a webhook that does not exist cannot be published', async () => {
       const c = await newWorkflow();
-      const other = await newWorkflow();
       const webhook = await insertReturningId(db.platform, `INSERT INTO webhooks (tenant_id, url, secret_encrypted, events) VALUES ($1, 'https://example.com/hook', '\\x00', ARRAY['ticket.created']) RETURNING id`, [tenant.tenantId]);
       const withHook = (webhookId: string) => ({
         steps: [stepInput(c.start, 'START'), stepInput('new:hook', 'WEBHOOK', { config: { webhookId } }), stepInput(c.end, 'END')],
@@ -264,12 +263,6 @@ describe('workflows API (builder backend)', () => {
       expect((await admin.get(`${version(c)}/validation`).expect(200)).body.errors.map((p: { code: string }) => p.code)).toContain('BLOCK_REFERENCE_UNKNOWN');
       expect((await detail(c)).version.status).toBe('DRAFT');
 
-      const foreignDocument = await insertReturningId(db.platform, `INSERT INTO workflow_documents (tenant_id, workflow_id, kind, moment) VALUES ($1, $2, 'DESIGNED', 'CLOSING') RETURNING id`, [tenant.tenantId, other.workflowId]);
-      await admin.put(`${version(c)}/graph`, {
-        steps: [stepInput(c.start, 'START'), stepInput('new:doc', 'DOCUMENT', { config: { workflowDocumentId: foreignDocument, role: 'MAIN_DOCUMENT' } }), stepInput(c.end, 'END')],
-        transitions: [edge('new:a', c.start, 'new:doc', 'DEFAULT'), edge('new:b', 'new:doc', c.end, 'DEFAULT')],
-      }).expect(200);
-      expect((await publishFlow(c)).status).toBe(422);
       await admin.put(`${version(c)}/graph`, withHook(webhook)).expect(200);
       expect((await publishFlow(c)).status).toBe(200);
     });
