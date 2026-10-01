@@ -1,7 +1,8 @@
 import { subject } from '@casl/ability';
 import { describe, expect, it } from 'vitest';
 import { buildAbility, type RawPermissionRule } from './build-ability.js';
-import { member, TEST_SUBJECT, testRegistry } from './test-subjects.js';
+import { SubjectRegistry } from './subject-registry.js';
+import { member, TEST_SUBJECT, testRegistry } from '../../../../test/support/test-subjects.js';
 
 const rule = (action: string, subjectName: string, conditions: unknown = null): RawPermissionRule => ({ action, subject: subjectName, conditions });
 const build = (rules: RawPermissionRule[], ctx = member) => buildAbility(rules, ctx, testRegistry());
@@ -77,6 +78,49 @@ describe('buildAbility', () => {
     it('a stored condition that tries to open the scope up does not replace the built-in one', () => {
       const { ability } = build([rule('read_own', TEST_SUBJECT, { ownerId: { not: 'nobody' } })]);
       expect(ability.can('read_own', doc({ ownerId: 'user-2' }))).toBe(false);
+    });
+  });
+
+  describe('scoped actions of the catalog fail closed', () => {
+    it.each(['read_created', 'read_assigned', 'read_observed'])('drops %s on Ticket when the subject registered no built-in condition', (action) => {
+      const { ability, dropped } = build([rule(action, 'Ticket')]);
+      expect(ability.can(action, 'Ticket')).toBe(false);
+      expect(dropped).toEqual([expect.objectContaining({ action, subject: 'Ticket', reason: expect.stringContaining('built-in condition') })]);
+    });
+
+    it('drops it even when stored conditions are present (they must not stand in for the scope)', () => {
+      const registry = new SubjectRegistry().register('Ticket', { fields: new Set(['status']) });
+      const { ability } = buildAbility([rule('read_created', 'Ticket', { status: 'OPEN' })], member, registry);
+      expect(ability.can('read_created', 'Ticket')).toBe(false);
+    });
+
+    it('applies it once the subject registers the built-in condition', () => {
+      const registry = new SubjectRegistry().register('Ticket', { fields: new Set(['creatorId']), impliedConditions: { read_created: { creatorId: '${user.id}' } } });
+      const { ability, dropped } = buildAbility([rule('read_created', 'Ticket')], member, registry);
+      expect(dropped).toEqual([]);
+      expect(ability.can('read_created', subject('Ticket', { creatorId: 'user-1' }) as never)).toBe(true);
+      expect(ability.can('read_created', subject('Ticket', { creatorId: 'user-2' }) as never)).toBe(false);
+    });
+
+    it('does not touch the unscoped actions of the same subject, nor manage', () => {
+      const { ability } = build([rule('read_all', 'Ticket'), rule('manage', 'all')]);
+      expect(ability.can('read_all', 'Ticket')).toBe(true);
+    });
+  });
+
+  describe('the subject registry', () => {
+    it('refuses to register a subject twice (a second registration would replace its conditions silently)', () => {
+      const registry = new SubjectRegistry().register('Ticket', { fields: new Set() });
+      expect(() => registry.register('Ticket', { fields: new Set(['x']) })).toThrow('already registered');
+    });
+
+    it('lists the catalog scoped actions that have no built-in condition', () => {
+      expect(new SubjectRegistry().unregisteredScopedActions().map((entry) => entry.action).sort()).toEqual(['read_assigned', 'read_created', 'read_observed']);
+      const registry = new SubjectRegistry().register('Ticket', {
+        fields: new Set(['x']),
+        impliedConditions: { read_created: { x: '${user.id}' }, read_assigned: { x: '${user.id}' }, read_observed: { x: '${user.id}' } },
+      });
+      expect(registry.unregisteredScopedActions()).toEqual([]);
     });
   });
 

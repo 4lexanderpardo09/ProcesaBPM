@@ -4,6 +4,19 @@ export interface SubjectContext {
   readonly membership: { readonly departmentId?: string | null; readonly siteId?: string | null };
 }
 
+/**
+ * Catalog actions that only make sense with a built-in condition (a scope): without it they would
+ * mean "every record". A rule for one of them is applied only when its subject registered the
+ * condition; otherwise it is dropped (fail closed). The tickets module registers `Ticket`.
+ */
+export const CATALOG_SCOPED_ACTIONS: Readonly<Record<string, readonly string[]>> = {
+  Ticket: ['read_created', 'read_assigned', 'read_observed'],
+};
+
+export function isCatalogScopedAction(subject: string, action: string): boolean {
+  return CATALOG_SCOPED_ACTIONS[subject]?.includes(action) ?? false;
+}
+
 export type ConditionValue = string | number | boolean | null;
 export type Condition = Readonly<Record<string, unknown>>;
 
@@ -26,9 +39,18 @@ export interface SubjectDefinition {
 export class SubjectRegistry {
   private readonly definitions = new Map<string, SubjectDefinition>();
 
+  /** A subject is registered once: a second registration would silently replace its conditions. */
   register(subject: string, definition: SubjectDefinition): this {
+    if (this.definitions.has(subject)) throw new Error(`The subject ${subject} is already registered`);
     this.definitions.set(subject, definition);
     return this;
+  }
+
+  /** Catalog scoped actions whose subject has not registered the built-in condition. */
+  unregisteredScopedActions(): Array<{ subject: string; action: string }> {
+    return Object.entries(CATALOG_SCOPED_ACTIONS).flatMap(([subject, actions]) =>
+      actions.filter((action) => this.definitions.get(subject)?.impliedConditions?.[action] === undefined).map((action) => ({ subject, action })),
+    );
   }
 
   get(subject: string): SubjectDefinition | undefined {

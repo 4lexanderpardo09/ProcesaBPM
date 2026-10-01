@@ -68,6 +68,41 @@ describe('AbilityService', () => {
     expect(loadRules).toHaveBeenCalledTimes(2);
   });
 
+  it('a load that was in flight while the role was invalidated does not write stale rules to the cache', async () => {
+    const { service, loadRules } = setup([read]);
+    let release!: () => void;
+    loadRules.mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve([read]))));
+    const first = service.forPrincipal(principal);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await service.invalidateRole(principal.tenantId, principal.roleId); // the change happened while loading
+    release();
+    await first;
+    await service.forPrincipal(principal); // must read again: the first result was not cached
+    expect(loadRules).toHaveBeenCalledTimes(2);
+  });
+
+  it('a tenant invalidation during a load also keeps the stale rules out of the cache', async () => {
+    const { service, loadRules } = setup([read]);
+    let release!: () => void;
+    loadRules.mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve([read]))));
+    const first = service.forPrincipal(principal);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await service.invalidateTenant(principal.tenantId);
+    release();
+    await first;
+    await service.forPrincipal(principal);
+    expect(loadRules).toHaveBeenCalledTimes(2);
+  });
+
+  it('an invalidation of another role or tenant does not stop the cache from working', async () => {
+    const { service, loadRules } = setup([read]);
+    await service.invalidateRole(principal.tenantId, 'another-role');
+    await service.invalidateTenant('another-tenant');
+    await service.forPrincipal(principal);
+    await service.forPrincipal(principal);
+    expect(loadRules).toHaveBeenCalledTimes(1);
+  });
+
   it('a role that is not active grants nothing and does not even touch the database', async () => {
     const { service, loadRules } = setup([{ action: 'manage', subject: 'all', conditions: null }]);
     const ability = await service.forPrincipal({ ...principal, roleActive: false });

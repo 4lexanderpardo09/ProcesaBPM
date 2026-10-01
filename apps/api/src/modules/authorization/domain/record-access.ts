@@ -1,7 +1,7 @@
 import { subject as caslSubject } from '@casl/ability';
 import { accessibleBy } from '@casl/prisma/runtime';
 import { PermissionDeniedError } from '@procesabpm/shared';
-import type { AppAbility } from './build-ability.js';
+import { type AppAbility, requiredFieldsOf } from './build-ability.js';
 
 /** A record as the use case loaded it: only the fields its conditions refer to are needed. */
 export type SubjectRecord = Readonly<Record<string, unknown>>;
@@ -12,9 +12,15 @@ const MATCH_NOTHING = Object.freeze({ id: { in: [] as string[] } });
 /**
  * A type-level `ability.can(action, 'Ticket')` is true as soon as ANY rule exists, even a conditional
  * one, so it must not authorize access to a concrete record. These helpers check the record itself.
- * The record is copied: CASL's `subject()` writes the subject type into the object it receives.
+ * The record must carry every field the rules of its type refer to (load them all), and is copied:
+ * CASL's `subject()` writes the subject type into the object it receives.
  */
 export function canOnRecord(ability: AppAbility, action: string, subjectType: string, record: SubjectRecord): boolean {
+  // A condition such as `{ status: { not: 'X' } }` passes when the field is missing, so a record that
+  // lacks a field some rule refers to is denied instead of being judged on what happens to be loaded.
+  for (const field of requiredFieldsOf(ability, subjectType)) {
+    if (record[field] === undefined) return false;
+  }
   return ability.can(action, caslSubject(subjectType, { ...record }) as never);
 }
 

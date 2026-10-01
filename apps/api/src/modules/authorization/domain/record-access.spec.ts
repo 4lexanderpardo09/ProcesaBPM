@@ -2,7 +2,7 @@ import { PermissionDeniedError } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
 import { buildAbility, type RawPermissionRule } from './build-ability.js';
 import { accessibleWhere, assertCanOnRecord, canAnyOnRecord, canOnRecord } from './record-access.js';
-import { member, TEST_SUBJECT, testRegistry } from './test-subjects.js';
+import { member, TEST_SUBJECT, testRegistry } from '../../../../test/support/test-subjects.js';
 
 const rule = (action: string, conditions: unknown = null): RawPermissionRule => ({ action, subject: TEST_SUBJECT, conditions });
 const abilityOf = (...rules: RawPermissionRule[]) => buildAbility(rules, member, testRegistry()).ability;
@@ -29,6 +29,24 @@ describe('record access', () => {
   it('a record that lacks the fields the condition needs is denied', () => {
     const ability = abilityOf(rule('read', { departmentId: '${membership.departmentId}' }));
     expect(canOnRecord(ability, 'read', TEST_SUBJECT, { id: 'x' })).toBe(false);
+  });
+
+  it('a "not" condition does not pass just because the record was loaded without the field', () => {
+    const ability = abilityOf(rule('read', { status: { not: 'SECRET' } }));
+    expect(canOnRecord(ability, 'read', TEST_SUBJECT, { id: 'x', status: 'OPEN' })).toBe(true);
+    expect(canOnRecord(ability, 'read', TEST_SUBJECT, { id: 'x', status: 'SECRET' })).toBe(false);
+    expect(canOnRecord(ability, 'read', TEST_SUBJECT, { id: 'x' })).toBe(false);
+  });
+
+  it('a field that is present but null counts as loaded', () => {
+    const ability = abilityOf(rule('read', { status: { not: 'SECRET' } }));
+    expect(canOnRecord(ability, 'read', TEST_SUBJECT, { id: 'x', status: null })).toBe(true);
+  });
+
+  it('requires the fields of every rule of the type, also for a rule without conditions', () => {
+    const ability = abilityOf(rule('read_all'), rule('read', { status: { not: 'SECRET' } }));
+    expect(canOnRecord(ability, 'read_all', TEST_SUBJECT, { id: 'x' })).toBe(false);
+    expect(canOnRecord(ability, 'read_all', TEST_SUBJECT, { id: 'x', status: 'OPEN' })).toBe(true);
   });
 
   it('does not modify the record it was given', () => {

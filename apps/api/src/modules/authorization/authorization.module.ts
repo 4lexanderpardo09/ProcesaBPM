@@ -8,6 +8,7 @@ import { SubjectRegistry } from './domain/subject-registry.js';
 import { PermissionGuard } from './http/permission.guard.js';
 import { RequestAuthGuard } from './http/request-auth.guard.js';
 import { RouteAccessAuditor } from './http/route-access-auditor.js';
+import { ScopedActionsAuditor } from './http/scoped-actions-auditor.js';
 
 /**
  * Authorization with CASL. Registers THE global guard (token, then permission). Domain modules
@@ -23,6 +24,7 @@ import { RouteAccessAuditor } from './http/route-access-auditor.js';
     PermissionGuard,
     RequestAuthGuard,
     RouteAccessAuditor,
+    ScopedActionsAuditor,
     { provide: APP_GUARD, useExisting: RequestAuthGuard },
   ],
   exports: [AbilityService, SUBJECT_REGISTRY],
