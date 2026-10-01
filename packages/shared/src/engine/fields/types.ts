@@ -18,6 +18,10 @@ export interface ValidationContext {
   readonly today: string;
 }
 
+/** A reference to the tenant's data (everything but files, which are checked where they are locked for attaching). */
+export type DataReference = ReferenceToVerify & { readonly kind: Exclude<ReferenceToVerify['kind'], 'FILE'> };
+export const isDataReference = (reference: ReferenceToVerify): reference is DataReference => reference.kind !== 'FILE';
+
 export interface CapturedValues {
   /** Canonical values of the fields the caller sent. */
   readonly values: Readonly<Record<string, unknown>>;

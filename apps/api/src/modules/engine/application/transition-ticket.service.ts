@@ -11,6 +11,7 @@ import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { assertMayLeaveByDecision } from '../domain/close-policy.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
+import { attachmentsPlanOf } from './submission-files.js';
 import { diversionEdge, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 import { TicketSlaService } from './ticket-sla.service.js';
@@ -66,6 +67,8 @@ export class TransitionTicketService {
         company,
         positionId: actorMember?.positionId ?? null,
         at,
+        uploaderId: actor.userId,
+        attachmentIds: request.attachments,
       });
 
       const diversion = diversionEdge(document, submission.amounts, step.id);
@@ -101,6 +104,7 @@ export class TransitionTicketService {
           loop: visit.loop,
           actorId: actor.userId,
           commentHtml: sanitizeOptionalRichText(request.comment),
+          attachments: attachmentsPlanOf(submission.files, step.id, 'ATTACHMENT'),
           data: { ...(diverted ? { intendedTransitionId: chosen.id, amountRuleId: diversion.ruleId } : {}), ...(current.actorIsPoolMember ? { tookFromPool: true } : {}), ...(cancelled.length > 0 ? { parallelOverride: true, cancelledUserIds: cancelled.map((task) => task.userId) } : {}) },
           outbox: [{ type: 'ticket.transitioned', payload: { fromStepId: step.id, toStepId: exit.toStepId, transitionId: exit.transitionId, actorId: actor.userId } }],
         },

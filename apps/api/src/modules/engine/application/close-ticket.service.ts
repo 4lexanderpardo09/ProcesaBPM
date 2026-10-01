@@ -10,6 +10,7 @@ import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import type { EventPlan } from '../domain/plan.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { assertMayClose } from '../domain/close-policy.js';
+import { attachmentsPlanOf } from './submission-files.js';
 import { diversionEdge, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 import { TicketSlaService } from './ticket-sla.service.js';
@@ -55,6 +56,8 @@ export class CloseTicketService {
         company,
         positionId: actorMember?.positionId ?? null,
         at,
+        uploaderId: actor.userId,
+        attachmentIds: request.attachments,
       });
       const diversion = diversionEdge(document, submission.amounts, step.id);
       assertMayClose(step, diversion !== undefined && !(await this.writes.hasVisited(tx, tenantId, ticket.id, diversion.toStepId)));
@@ -68,6 +71,7 @@ export class CloseTicketService {
           loop: visit.loop,
           actorId: actor.userId,
           commentHtml: sanitizeOptionalRichText(request.comment),
+          attachments: attachmentsPlanOf(submission.files, step.id, 'CLOSING'),
           data: { reason: 'CLOSED_BY_USER' },
           outbox: [{ type: 'ticket.closed', payload: { closedById: actor.userId } }],
         },

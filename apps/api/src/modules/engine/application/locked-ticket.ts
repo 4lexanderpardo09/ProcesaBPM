@@ -3,7 +3,7 @@ import { InvalidStateError, NotFoundError, PermissionDeniedError, StaleTicketErr
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type LockedTicket, type OpenClockRow, type OpenVisitRow, TicketWriteRepository } from '../data/ticket-write.repository.js';
 
-export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen';
+export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen' | 'comment';
 
 /** Who acts on a ticket and what they are allowed to see: the HTTP layer builds it from the CASL ability. */
 export interface TicketActor {

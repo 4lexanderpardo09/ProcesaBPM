@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { FileAttachmentService } from '../../files/application/file-attachment.service.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import type { TicketMutation } from '../domain/plan.js';
 
@@ -17,7 +18,10 @@ export interface MutatedTicket {
  */
 @Injectable()
 export class TicketMutationApplier {
-  constructor(@Inject(TicketWriteRepository) private readonly writes: TicketWriteRepository) {}
+  constructor(
+    @Inject(TicketWriteRepository) private readonly writes: TicketWriteRepository,
+    @Inject(FileAttachmentService) private readonly files: FileAttachmentService,
+  ) {}
 
   /** Returns the id of the visit the ticket is in afterwards, `null` when it is closed. */
   async apply(tx: TenantTransaction, tenantId: string, ticket: MutatedTicket, mutation: TicketMutation): Promise<string | null> {
@@ -39,7 +43,10 @@ export class TicketMutationApplier {
     if (mutation.ticket.kind === 'current') await this.writes.moveTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
     else if (mutation.ticket.kind === 'reopened') await this.writes.reopenTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
     else await this.writes.closeTicket(tx, tenantId, ticket.id, at, mutation.actorId, mutation.ticket.stepId);
-    for (const event of mutation.events) await this.writes.insertEvent(tx, tenantId, ticket.id, at, event);
+    for (const event of mutation.events) {
+      const eventId = await this.writes.insertEvent(tx, tenantId, ticket.id, at, event);
+      if (event.attachments !== undefined) await this.files.link(tx, tenantId, { ...event.attachments, ticketId: ticket.id, companyId: ticket.companyId, eventId, at, attachmentRole: event.attachments.role });
+    }
     return openVisitId;
   }
 }

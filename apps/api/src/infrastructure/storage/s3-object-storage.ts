@@ -6,7 +6,7 @@ import { ObjectStorage, type PresignDownloadInput, type PresignedDownload, type 
 export interface S3StorageSettings {
   readonly endpoint: string;
   /** Host the browsers reach; defaults to `endpoint`. */
-  readonly publicEndpoint?: string;
+  readonly publicEndpoint?: string | undefined;
   readonly region: string;
   readonly bucket: string;
   readonly accessKeyId: string;

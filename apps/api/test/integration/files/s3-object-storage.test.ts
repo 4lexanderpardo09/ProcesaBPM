@@ -19,7 +19,7 @@ describe('S3ObjectStorage against a real MinIO', () => {
   const upload = async (key: string, content: Uint8Array, declared: number = content.length) => {
     const signed = await storage.presignUpload({ key, contentType: 'application/pdf', contentLength: declared, expiresInSeconds: 600, now: now() });
     const { 'content-length': _fixedByTheBody, ...headers } = signed.headers;
-    return fetch(signed.url, { method: signed.method, headers, body: content });
+    return fetch(signed.url, { method: signed.method, headers, body: Buffer.from(content) });
   };
 
   afterAll(async () => {

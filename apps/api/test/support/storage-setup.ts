@@ -17,6 +17,8 @@ declare module 'vitest' {
   }
 }
 
+const MINIO_IMAGE = 'minio/minio:RELEASE.2025-09-07T16-13-09Z';
+
 let container: StartedMinioContainer | undefined;
 
 /**
@@ -51,7 +53,7 @@ function fromEnvironment(): TestStorageSettings {
 }
 
 async function startContainer(): Promise<TestStorageSettings> {
-  container = await new MinioContainer().start();
+  container = await new MinioContainer(MINIO_IMAGE).start();
   return {
     endpoint: container.getConnectionUrl(),
     region: 'us-east-1',

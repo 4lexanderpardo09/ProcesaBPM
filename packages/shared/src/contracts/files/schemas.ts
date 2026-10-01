@@ -41,6 +41,10 @@ export const commentTicketRequestSchema = z.object({
 });
 export type CommentTicketRequest = z.infer<typeof commentTicketRequestSchema>;
 
+export interface CommentTicketResponse {
+  readonly eventId: string;
+}
+
 export interface UploadSlotResponse {
   readonly fileId: string;
   readonly url: string;

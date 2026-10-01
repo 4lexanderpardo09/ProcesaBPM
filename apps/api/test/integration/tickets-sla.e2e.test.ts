@@ -37,11 +37,11 @@ describe('SLA: due dates, clocks and results', () => {
   const user = (member: Member) => ({ participantType: 'USER', userId: member.userId });
   const create = (flow: PublishedFlow, at: Date, extra: Partial<CreateTicketRequest> = {}): Promise<TicketMutationResponse> => {
     clock.set(at);
-    return as(worker.userId, () => app.get(CreateTicketService).create({ userId: worker.userId, mayCreate: () => true }, { subcategoryId: flow.subcategoryId, title: 'Request', description: '', values: {}, companyId: world.tenant.companyId, ...extra }));
+    return as(worker.userId, () => app.get(CreateTicketService).create({ userId: worker.userId, mayCreate: () => true }, { subcategoryId: flow.subcategoryId, title: 'Request', description: '', values: {}, attachments: [], companyId: world.tenant.companyId, ...extra }));
   };
   const answer = (ticket: TicketMutationResponse, flow: PublishedFlow, at: Date, label = 'Done', userId = worker.userId, extra: Partial<TransitionTicketRequest> = {}) => {
     clock.set(at);
-    return as(userId, () => app.get(TransitionTicketService).transition(actor(userId), ticket.id, { transitionId: flow.transition[label]!, visitId: ticket.openVisitId!, values: {}, ...extra }));
+    return as(userId, () => app.get(TransitionTicketService).transition(actor(userId), ticket.id, { transitionId: flow.transition[label]!, visitId: ticket.openVisitId!, values: {}, attachments: [], ...extra }));
   };
   // The builder API needs a valid token, and tokens read the (fake) clock: every workflow is built before it moves.
   let hours4: PublishedFlow;
