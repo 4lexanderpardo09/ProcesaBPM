@@ -153,8 +153,19 @@ Reglas:
 6. `documents`, `notifications`, `reports`; luego lo de la v2 (`exports`, `webhooks`…).
 
 ## 7. Cómo se accede a los datos en `apps/api` (hecho)
-- `TenantContext` guarda `{ tenantId, userId }` en un `AsyncLocalStorage`; lo fija la capa de autenticación (todavía no existe) al inicio de cada petición o job.
+- `TenantContext` guarda `{ tenantId, userId }` en un `AsyncLocalStorage`. En HTTP lo fija `TenantScopeInterceptor` con el principal que verificó el guard (§8); en los jobs, quien los ejecute. Rechaza ids que no sean UUID (`InvalidTenantContextError`).
+- La transacción usa `DB_TX_TIMEOUT_MS` (10 s) y `DB_TX_MAX_WAIT_MS` (5 s), y el pool del rol runtime `DB_POOL_MAX` (10); los tres son opcionales y se validan con zod.
 - Todo acceso a datos de un tenant pasa por `TenantTransactionRunner.withTenantTransaction(work)`: abre una transacción, fija `app.tenant_id` y `app.user_id` como locales a la transacción, verifica que la BD los confirmó y ejecuta `work`. Sin contexto lanza `MissingTenantContextError` y no consulta nada.
 - `DatabaseModule` **no exporta** `PrismaService` (el cliente del rol `app_runtime`, con `omit` de las columnas sensibles de `users`): los repositorios solo reciben el `tx` del runner.
 - `PlatformPrismaService` (rol `app_platform`, ignora RLS) se exporta aparte y solo lo inyectan los servicios de plataforma.
+- `AuthTransactionRunner` (solo para el módulo `auth`) abre transacciones antes de que exista un tenant: anónimas (solo las funciones `auth_*` por correo o hash) o con `app.user_id` (sus propias `refresh_sessions` y `auth_list_memberships`), siempre con `app.tenant_id` vacío.
 - Pruebas: unitarias en `src/**/*.spec.ts` (proyecto `unit` de Vitest) y de integración y E2E contra PostgreSQL real en `test/integration/*.test.ts` (proyecto `integration`), con la BD de `packages/db` (`@procesabpm/db/testing`) en una base propia (`procesabpm_api_test`). `pnpm test` en la raíz corre los paquetes de uno en uno.
+
+## 8. Autenticación (`modules/auth`, hecho)
+- **Guard global deny-by-default** (`AccessTokenGuard`, `APP_GUARD`): toda ruta exige `Authorization: Bearer <access token>` salvo las marcadas con `@Public()` (`common/auth/public.decorator.ts`). Una prueba recorre todas las rutas registradas y falla si aparece una ruta pública nueva que no esté en su lista o una protegida que no responda 401.
+- En cada petición el guard verifica la firma del JWT y, en una transacción del tenant, que la membresía siga `ACTIVE`, que el tenant esté `ACTIVE` (si no, 403 `TENANT_SUSPENDED`) y que la sesión `sid` no esté revocada ni vencida y sea la del tenant `tid`. Una consulta por petición; la caché vendrá después. Luego `TenantScopeInterceptor` ejecuta el handler dentro del `TenantContext` del principal; los handlers leen el principal con `@CurrentPrincipal()`.
+- **Flujo:** `POST /auth/login` → lista de organizaciones + token de selección (JWT de 2 min, audiencia propia) → `POST /auth/select-tenant` (con ese token) → access token (JWT HS256 de 15 min, claims `sub`, `tid`, `sid`) + refresh token opaco en cookie `refresh_token` (httpOnly, Secure, SameSite=Lax, Path=/auth, 14 días) → `POST /auth/refresh` (rotación obligatoria) → `POST /auth/logout`. Recuperación: `POST /auth/password-reset/request` (siempre 202) y `/confirm`; invitaciones: `POST /auth/invitations/accept`. `GET /auth/me` devuelve el perfil y la membresía actual.
+- **Contraseñas:** Argon2id (19 MiB, t=2, p=1, OWASP), mínimo 10 y máximo 128 caracteres para las nuevas.
+- **Contratos:** los esquemas zod de requests y responses están en `packages/shared/src/contracts/auth`; el API los aplica con `ZodValidationPipe` (400 `VALIDATION_FAILED` con las rutas de los campos, sin repetir valores).
+- **Rate limit:** `@RateLimit(policy)` + `RateLimitGuard`, por IP y por correo (o por token cuando no hay correo), con la interfaz `RateLimiter`; hoy en memoria (`InMemoryRateLimiter`), luego en Redis. 429 `RATE_LIMITED` con `Retry-After`.
+- **Capas:** `http/` (controlador, guard, cookie) → `application/` (un servicio por caso de uso) → `domain/` (política y elegibilidad) y `data/` (repositorios; credenciales solo por funciones `auth_*`).
