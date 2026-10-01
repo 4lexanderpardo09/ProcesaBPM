@@ -144,6 +144,10 @@ describe('approvals API', () => {
       await employee.post('/delegations', { toUserId: colleague, startsAt: inDays(3), endsAt: inDays(2) }).expect(400);
     });
 
+    it('a delegation that already ended cannot be created (400)', async () => {
+      await employee.post('/delegations', { toUserId: colleague, startsAt: inDays(-3), endsAt: inDays(-2) }).expect(400);
+    });
+
     it('overlapping delegations of the same person are 409; back-to-back ones are fine', async () => {
       const worker = await clientWith(db, app, tenant, [], unique('Worker'));
       await worker.post('/delegations', { toUserId: colleague, startsAt: inDays(10), endsAt: inDays(12) }).expect(201);
@@ -182,8 +186,7 @@ describe('approvals API', () => {
       const ended = (await employee.post(`/delegations/${active.id}/cancel`).expect(200)).body;
       expect(new Date(ended.endsAt).getTime()).toBeLessThanOrEqual(Date.now());
       expect((await employee.post(`/delegations/${active.id}/cancel`).expect(422)).body.error.code).toBe('INVALID_STATE');
-      const finished = (await admin.post('/delegations', { fromUserId: colleague, toUserId: employeeId, startsAt: inDays(-10), endsAt: inDays(-9) }).expect(201)).body;
-      await admin.post(`/delegations/${finished.id}/cancel`).expect(422);
+      await employee.post(`/delegations/${active.id}/cancel`).expect(422);
     });
   });
 
@@ -231,6 +234,10 @@ describe('approvals API', () => {
       expect((await resolve(creator, { companyId: company }).expect(200)).body).toMatchObject({ approverId: boss, onBehalfOfId: null });
       expect((await resolve(creator, { companyId: company, at: inDays(6) }).expect(200)).body).toMatchObject({ approverId: delegate, onBehalfOfId: boss });
       expect((await resolve(creator, { companyId: company, at: inDays(8) }).expect(200)).body).toMatchObject({ approverId: boss, onBehalfOfId: null });
+      // Seeing the delegations of another instant needs the right to see delegations.
+      const reader = await clientWith(db, app, tenant, [{ action: 'read', subject: 'ApprovalGroup' }], unique('GroupReader'));
+      await reader.get(`/approvals/resolve?userId=${creator}&typeId=${typeId}&companyId=${company}`).expect(200);
+      await reader.get(`/approvals/resolve?userId=${creator}&typeId=${typeId}&companyId=${company}&at=${encodeURIComponent(inDays(6))}`).expect(403);
     });
 
     it('self-approval passes to the next approver, and with nobody else the answer explains why (200, found false)', async () => {

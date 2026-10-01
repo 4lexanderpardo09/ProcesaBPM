@@ -10,9 +10,9 @@ describe('cancellationOf', () => {
     expect(cancellationOf({ startsAt: at('2026-10-11T00:00:00Z'), endsAt: at('2026-10-12T00:00:00Z') }, now)).toBe('DELETE');
   });
 
-  it('a delegation in force ends now, also exactly when it starts', () => {
+  it('a delegation in force ends now; one starting exactly now is removed', () => {
     expect(cancellationOf({ startsAt: at('2026-10-09T00:00:00Z'), endsAt: at('2026-10-12T00:00:00Z') }, now)).toBe('END_NOW');
-    expect(cancellationOf({ startsAt: now, endsAt: at('2026-10-12T00:00:00Z') }, now)).toBe('END_NOW');
+    expect(cancellationOf({ startsAt: now, endsAt: at('2026-10-12T00:00:00Z') }, now)).toBe('DELETE');
   });
 
   it('a delegation that ended (also exactly now) cannot be cancelled', () => {

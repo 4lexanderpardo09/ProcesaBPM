@@ -139,14 +139,22 @@ describe('resolveApprover: delegation', () => {
     expect(outcome.approverId).toBe('delegate');
   });
 
-  it('a delegate already in the chain is a cycle, not a free pass', () => {
+  it('a delegate who is the subject of the level is self-approval by proxy, not a free pass', () => {
     const groups: GroupSpec[] = [
       { id: 'g1', members: ['creator'], approvers: ['a'] },
       { id: 'g2', members: ['a'], approvers: ['b'] },
     ];
-    // Level 2 would delegate to `a`, who already approved level 1.
-    const outcome = missing(resolveApprover(snapshot(groups, { b: 'a' }), 'creator', 2));
-    expect(outcome).toMatchObject({ reason: 'APPROVAL_CYCLE', level: 2 });
+    // Level 2 would delegate to `a`, whose approver it is looking for.
+    expect(missing(resolveApprover(snapshot(groups, { b: 'a' }), 'creator', 2))).toMatchObject({ reason: 'SELF_APPROVAL_ONLY', level: 2 });
+  });
+
+  it('a delegate from an earlier level is a cycle', () => {
+    const groups: GroupSpec[] = [
+      { id: 'g1', members: ['creator'], approvers: ['a'] },
+      { id: 'g2', members: ['a'], approvers: ['b'] },
+      { id: 'g3', members: ['b'], approvers: ['c'] },
+    ];
+    expect(missing(resolveApprover(snapshot(groups, { c: 'a' }), 'creator', 3))).toMatchObject({ reason: 'APPROVAL_CYCLE', level: 3 });
   });
 
   it('the delegate of a boss who is also the creator is not used (self-approval by proxy)', () => {
@@ -238,6 +246,14 @@ describe('resolveApprover: several levels', () => {
       { id: 'g-b', members: ['b'], approvers: ['a', 'spare'] },
     ];
     expect(resolved(resolveApprover(snapshot(groups), 'creator', 3)).approverId).toBe('spare');
+  });
+
+  it('a person who is the only approver of their own group at level 2 is self-approval, not a cycle', () => {
+    const groups: GroupSpec[] = [
+      { id: 'g1', members: ['creator'], approvers: ['a'] },
+      { id: 'g2', members: ['a'], approvers: ['a'] },
+    ];
+    expect(missing(resolveApprover(snapshot(groups), 'creator', 2))).toMatchObject({ reason: 'SELF_APPROVAL_ONLY', level: 2, subjectId: 'a' });
   });
 
   it('a long ring terminates within the requested levels', () => {

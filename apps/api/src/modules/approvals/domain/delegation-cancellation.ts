@@ -8,5 +8,6 @@ export type CancellationAction = 'DELETE' | 'END_NOW';
  */
 export function cancellationOf(delegation: { startsAt: Date; endsAt: Date }, now: Date): CancellationAction {
   if (delegation.endsAt <= now) throw new InvalidStateError('The delegation has already ended');
-  return delegation.startsAt > now ? 'DELETE' : 'END_NOW';
+  // Ending at the very instant it starts would leave an empty period, so that case is a removal too.
+  return delegation.startsAt >= now ? 'DELETE' : 'END_NOW';
 }

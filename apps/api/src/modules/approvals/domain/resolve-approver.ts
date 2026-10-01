@@ -51,7 +51,7 @@ function candidateGroups(snapshot: ApprovalSnapshot, subjectId: string): GroupSn
  * already in the chain before their delegation is looked at, so nobody approves their own ticket,
  * neither directly nor through a delegate, and cycles cannot come back.
  */
-function pickFromGroup(snapshot: ApprovalSnapshot, group: GroupSnapshot, creatorId: string, visited: ReadonlySet<string>): { result?: LevelResult; trace: GroupTrace } {
+function pickFromGroup(snapshot: ApprovalSnapshot, group: GroupSnapshot, creatorId: string, subjectId: string, visited: ReadonlySet<string>): { result?: LevelResult; trace: GroupTrace } {
   const skipped: Array<{ userId: string; reason: SkipReason }> = [];
   const passOver = (userId: string, reason: SkipReason) => skipped.push({ userId, reason });
   const ordered = [...group.approvers].sort((a, b) => a.position - b.position);
@@ -62,7 +62,7 @@ function pickFromGroup(snapshot: ApprovalSnapshot, group: GroupSnapshot, creator
       continue;
     }
     if (visited.has(approver.userId)) {
-      passOver(approver.userId, approver.userId === creatorId ? 'SELF' : 'CHAIN');
+      passOver(approver.userId, approver.userId === creatorId || approver.userId === subjectId ? 'SELF' : 'CHAIN');
       continue;
     }
     const delegation = snapshot.delegations.get(approver.userId);
@@ -75,7 +75,7 @@ function pickFromGroup(snapshot: ApprovalSnapshot, group: GroupSnapshot, creator
       continue;
     }
     if (visited.has(delegation.toUserId)) {
-      passOver(approver.userId, delegation.toUserId === creatorId ? 'DELEGATE_IS_SELF' : 'CHAIN');
+      passOver(approver.userId, delegation.toUserId === creatorId || delegation.toUserId === subjectId ? 'DELEGATE_IS_SELF' : 'CHAIN');
       continue;
     }
     return { result: { nominalId: approver.userId, effectiveId: delegation.toUserId, groupId: group.id, scope: group.scope }, trace: { groupId: group.id, scope: group.scope, skipped } };
@@ -110,7 +110,7 @@ export function resolveApprover(snapshot: ApprovalSnapshot, creatorId: string, l
     const groupsTried: GroupTrace[] = [];
     let found: LevelResult | undefined;
     for (const group of candidateGroups(snapshot, subjectId)) {
-      const picked = pickFromGroup(snapshot, group, creatorId, visited);
+      const picked = pickFromGroup(snapshot, group, creatorId, subjectId, visited);
       groupsTried.push(picked.trace);
       if (picked.result !== undefined) {
         found = picked.result;

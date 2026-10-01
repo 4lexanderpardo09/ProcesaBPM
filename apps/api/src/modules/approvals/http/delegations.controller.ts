@@ -41,7 +41,7 @@ export class DelegationsController {
     return this.delegations.create({ userId: principal.userId, ability }, body);
   }
 
-  /** A future delegation is removed (204); one in force ends now (200 with it). */
+  /** A future delegation is removed (200 `{ removed: true }`); one in force ends now (200 with it). */
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   async cancel(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<DelegationResponse | { removed: true }> {

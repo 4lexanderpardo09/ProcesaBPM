@@ -36,7 +36,8 @@ export class MemberInvitationService {
       });
       await this.members.replaceCompanies(tx, this.tenantId, userId, request.companyIds);
       await this.sendInvitation(tx, userId);
-      return toMemberResponse(await this.requireMember(tx, userId));
+      // Until the person accepts, the names are the ones sent: the stored ones may come from another organization.
+      return { ...toMemberResponse(await this.requireMember(tx, userId)), firstName: request.firstName, lastName: request.lastName };
     });
   }
 

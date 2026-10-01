@@ -61,6 +61,7 @@ export class DelegationsService {
     const fromUserId = request.fromUserId ?? actor.userId;
     if (fromUserId !== actor.userId && !canManage(actor)) throw new PermissionDeniedError('Only an administrator creates delegations for someone else');
     if (fromUserId === request.toUserId) throw new ValidationFailedError([{ path: 'toUserId', message: 'Nobody delegates to themselves' }]);
+    if (new Date(request.endsAt) <= this.clock.now()) throw new ValidationFailedError([{ path: 'endsAt', message: 'The delegation must end in the future' }]);
     return this.runner.withTenantTransaction(async (tx) => {
       try {
         const created = await this.repository.create(tx, this.tenantId, {

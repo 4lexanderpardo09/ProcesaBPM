@@ -192,6 +192,26 @@ describe('identity API: members', () => {
       expect(stripped.body.error.code).toBe('INVALID_STATE');
     });
 
+    it('a non-admin cannot bring back a deactivated invitation of an admin, nor take a role that holds manage all (403)', async () => {
+      const manager = await clientWith(db, app, world, [{ action: 'update', subject: 'Membership' }, { action: 'read', subject: 'Membership' }], unique('Reviver'));
+      const adminInvite = (await owner.post('/members/invitations', { email: emailOf(), firstName: 'A', lastName: 'A', roleId: world.roleId, companyIds: [world.companyId] }).expect(201)).body;
+      await owner.post(`/members/${adminInvite.userId}/deactivate`).expect(200);
+      expect((await manager.post(`/members/${adminInvite.userId}/activate`).expect(403)).body.error.code).toBe('PERMISSION_DENIED');
+      expect((await owner.get(`/members/${adminInvite.userId}`).expect(200)).body.status).toBe('INACTIVE');
+
+      const powerful = (await owner.post('/roles', { name: unique('Powerful') }).expect(201)).body.id;
+      await owner.put(`/roles/${powerful}/permissions`, { permissions: [{ action: 'manage', subject: 'all' }] }).expect(200);
+      const target = (await owner.post('/members/invitations', { email: emailOf(), firstName: 'T', lastName: 'T', roleId: staff, companyIds: [world.companyId] }).expect(201)).body;
+      await manager.patch(`/members/${target.userId}`, { roleId: powerful }).expect(403);
+    });
+
+    it('inviting an existing person echoes the names sent, not the ones registered elsewhere', async () => {
+      const other = await seedTenant(db.platform);
+      const { rows } = await db.platform.query<{ email: string }>(`SELECT u.email FROM users u JOIN memberships m ON m.user_id = u.id WHERE m.tenant_id = $1 LIMIT 1`, [other.tenantId]);
+      const invited = (await owner.post('/members/invitations', { email: rows[0]!.email, firstName: 'Sent', lastName: 'Names', roleId: staff, companyIds: [world.companyId] }).expect(201)).body;
+      expect(invited).toMatchObject({ firstName: 'Sent', lastName: 'Names' });
+    });
+
     it('a member who can edit memberships but is not an administrator cannot hand out an admin role (403)', async () => {
       const manager = await clientWith(db, app, world, [{ action: 'update', subject: 'Membership' }, { action: 'create', subject: 'Membership' }, { action: 'read', subject: 'Membership' }], unique('Manager'));
       const target = (await owner.post('/members/invitations', { email: emailOf(), firstName: 'T', lastName: 'T', roleId: staff, companyIds: [world.companyId] }).expect(201)).body;

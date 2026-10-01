@@ -258,4 +258,42 @@ describe('owner and admin rules', () => {
       expect(after[0].permissions_version).toBe(before[0].permissions_version + 1);
     });
   });
+
+  describe('full access through manage all, and revived invitations', () => {
+    async function setup() {
+      const tenant = await ownedTenant();
+      const staff = await nonAdminRole(tenant);
+      const plain = await seedMember(db.platform, tenant);
+      await db.platform.query('UPDATE memberships SET role_id = $3 WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, plain, staff]);
+      return { tenant, plain, staff };
+    }
+    const grantManageAll = (tenantId: string, roleId: string) =>
+      db.platform.query(`INSERT INTO role_permissions (tenant_id, role_id, permission_id) SELECT $1, $2, id FROM permissions WHERE action = 'manage' AND subject = 'all'`, [tenantId, roleId]);
+
+    it('a non-admin cannot move themselves to a non-admin role that holds manage all', async () => {
+      const { tenant, plain } = await setup();
+      const powerful = await nonAdminRole(tenant, 'Powerful');
+      await grantManageAll(tenant.tenantId, powerful);
+      const code = await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query('UPDATE memberships SET role_id = $3 WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, plain, powerful])));
+      expect(code).toBe(SqlState.insufficientPrivilege);
+      await asMember(tenant, tenant.userId, (tx) => tx.query('UPDATE memberships SET role_id = $3 WHERE tenant_id = $1 AND user_id = $2', [tenant.tenantId, plain, powerful]));
+    });
+
+    it('a non-admin cannot reactivate a deactivated role that holds manage all', async () => {
+      const { tenant, plain } = await setup();
+      const dormant = await nonAdminRole(tenant, 'Dormant');
+      await grantManageAll(tenant.tenantId, dormant);
+      await db.platform.query('UPDATE roles SET is_active = false WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, dormant]);
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query('UPDATE roles SET is_active = true WHERE tenant_id = $1 AND id = $2', [tenant.tenantId, dormant])))).toBe(SqlState.insufficientPrivilege);
+    });
+
+    it('a non-admin cannot revive a deactivated invitation to an admin role (INACTIVE to INVITED)', async () => {
+      const { tenant, plain } = await setup();
+      const invitee = await seedMember(db.platform, tenant);
+      await db.platform.query(`UPDATE memberships SET status = 'INVITED', joined_at = NULL WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, invitee]);
+      await db.platform.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, invitee]);
+      expect(await sqlStateOf(() => asMember(tenant, plain, (tx) => tx.query(`UPDATE memberships SET status = 'INVITED' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, invitee])))).toBe(SqlState.insufficientPrivilege);
+      await asMember(tenant, tenant.userId, (tx) => tx.query(`UPDATE memberships SET status = 'INVITED' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, invitee]));
+    });
+  });
 });

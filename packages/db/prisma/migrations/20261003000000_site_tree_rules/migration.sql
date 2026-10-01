@@ -16,6 +16,13 @@ BEGIN
   END IF;
 END
 $$;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM sites c JOIN sites p ON p.tenant_id = c.tenant_id AND p.id = c.parent_id WHERE c.level <> p.level + 1) THEN
+    RAISE EXCEPTION 'cannot enforce the site tree: some sites are not one level below their parent, fix them first';
+  END IF;
+END
+$$;
 -- Same name as the Prisma index: the schema keeps @@unique([tenantId, parentId, name]) (Prisma cannot
 -- express NULLS NOT DISTINCT, the same way as approval_members_one_group).
 DROP INDEX sites_tenant_id_parent_id_name_key;
@@ -70,6 +77,80 @@ CREATE OR REPLACE FUNCTION trg_membership_no_regress() RETURNS trigger
     END IF;
     IF NOT is_privileged_session() AND NEW.status = 'INVITED' AND NEW.joined_at IS NOT NULL THEN
       RAISE EXCEPTION 'a member who accepted the invitation cannot go back to INVITED' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+  END
+  $$;
+
+-- ===========================================================================
+-- 4. Full access also through `manage all`, and revived invitations
+-- ===========================================================================
+-- The API treats a role holding `manage all` as full access whether or not it is flagged admin, so the
+-- guards of migration 20261002 must too: otherwise someone with only `update Membership` could give
+-- themselves such a role, or reactivate a deactivated one.
+CREATE FUNCTION role_grants_full_access(p_tenant_id uuid, p_role_id uuid) RETURNS boolean
+  LANGUAGE sql STABLE SET search_path = public, pg_temp
+  AS $$
+    SELECT EXISTS (SELECT 1 FROM roles r WHERE r.tenant_id = p_tenant_id AND r.id = p_role_id AND r.is_admin)
+        OR EXISTS (
+          SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+          WHERE rp.tenant_id = p_tenant_id AND rp.role_id = p_role_id AND p.action = 'manage' AND p.subject = 'all'
+        )
+  $$;
+
+CREATE OR REPLACE FUNCTION acting_user_has_full_access(p_tenant_id uuid) RETURNS boolean
+  LANGUAGE sql STABLE SET search_path = public, pg_temp
+  AS $$
+    SELECT EXISTS (
+      SELECT 1 FROM memberships m JOIN roles r ON r.tenant_id = m.tenant_id AND r.id = m.role_id
+      WHERE m.tenant_id = p_tenant_id AND m.user_id = app_current_user() AND m.status = 'ACTIVE'
+        AND (m.is_owner OR (r.is_active AND role_grants_full_access(m.tenant_id, m.role_id)))
+    )
+  $$;
+
+CREATE OR REPLACE FUNCTION trg_guard_membership_privilege() RETURNS trigger
+  LANGUAGE plpgsql SET search_path = public, pg_temp
+  AS $$
+  BEGIN
+    IF is_privileged_session() THEN
+      RETURN NEW;
+    END IF;
+
+    -- Clearing the owner flag: only the owner themself, and it opens the transfer window.
+    IF TG_OP = 'UPDATE' AND OLD.is_owner AND NOT NEW.is_owner THEN
+      IF OLD.user_id IS DISTINCT FROM app_current_user() THEN
+        RAISE EXCEPTION 'only the owner can give up the ownership' USING ERRCODE = '42501';
+      END IF;
+      PERFORM set_config('app.ownership_transfer', NEW.tenant_id::text || ':' || OLD.user_id::text, true);
+    END IF;
+
+    -- Setting the owner flag.
+    IF NEW.is_owner AND (TG_OP = 'INSERT' OR NOT OLD.is_owner) THEN
+      IF coalesce(current_setting('app.ownership_transfer', true), '') <> NEW.tenant_id::text || ':' || coalesce(app_current_user()::text, '') THEN
+        RAISE EXCEPTION 'only the owner can transfer the ownership' USING ERRCODE = '42501';
+      END IF;
+    END IF;
+
+    -- Giving a role with full access, or bringing back (to INVITED or ACTIVE) a member of one.
+    IF TG_OP = 'INSERT' OR NEW.role_id IS DISTINCT FROM OLD.role_id
+       OR (NEW.status <> 'INACTIVE' AND OLD.status = 'INACTIVE') THEN
+      IF role_grants_full_access(NEW.tenant_id, NEW.role_id) AND NOT acting_user_has_full_access(NEW.tenant_id) THEN
+        RAISE EXCEPTION 'only an administrator can give a role with full access' USING ERRCODE = '42501';
+      END IF;
+    END IF;
+    RETURN NEW;
+  END
+  $$;
+
+CREATE OR REPLACE FUNCTION trg_guard_role_privilege() RETURNS trigger
+  LANGUAGE plpgsql SET search_path = public, pg_temp
+  AS $$
+  BEGIN
+    -- Becoming an active role with full access (created, marked admin, or reactivated) is a grant of it.
+    IF NEW.is_active AND (NEW.is_admin OR role_grants_full_access(NEW.tenant_id, NEW.id))
+       AND (TG_OP = 'INSERT' OR NOT (OLD.is_active AND (OLD.is_admin OR role_grants_full_access(OLD.tenant_id, OLD.id))))
+       AND NOT is_privileged_session() AND NOT acting_user_has_full_access(NEW.tenant_id) THEN
+      RAISE EXCEPTION 'only an administrator can create, mark or reactivate a role with full access' USING ERRCODE = '42501';
     END IF;
     RETURN NEW;
   END
