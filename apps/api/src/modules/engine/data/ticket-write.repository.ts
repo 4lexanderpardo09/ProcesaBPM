@@ -14,6 +14,8 @@ export interface LockedTicket {
   readonly companyId: string;
   readonly creatorId: string;
   readonly siteId: string | null;
+  readonly closedById: string | null;
+  readonly closedAt: Date | null;
 }
 
 export interface OpenVisitRow {
@@ -77,7 +79,8 @@ export class TicketWriteRepository {
     const rows = await tx.$queryRaw<LockedTicket[]>`
       SELECT id::text AS "id", number, status::text AS "status", workflow_version_id::text AS "workflowVersionId",
              current_step_id::text AS "currentStepId", current_loop AS "currentLoop", company_id::text AS "companyId",
-             creator_id::text AS "creatorId", site_id::text AS "siteId"
+             creator_id::text AS "creatorId", site_id::text AS "siteId",
+             closed_by_id::text AS "closedById", closed_at AS "closedAt"
       FROM tickets
       WHERE tenant_id = ${tenantId}::uuid AND id = ${ticketId}::uuid AND deleted_at IS NULL
       FOR UPDATE`;
@@ -143,6 +146,25 @@ export class TicketWriteRepository {
   /** Every incident of the ticket, as the periods its clocks stood still. */
   async findIncidentPeriods(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<IncidentPeriod[]> {
     return tx.ticketIncident.findMany({ where: { tenantId, ticketId }, select: { openedAt: true, resolvedAt: true }, orderBy: { openedAt: 'asc' } });
+  }
+
+  /** Every visit of the ticket, oldest first. */
+  findVisits(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<Array<{ id: string; stepId: string; loop: number; enteredAt: Date; exitedAt: Date | null }>> {
+    return tx.ticketStepVisit.findMany({ where: { tenantId, ticketId }, select: { id: true, stepId: true, loop: true, enteredAt: true, exitedAt: true }, orderBy: [{ enteredAt: 'asc' }, { id: 'asc' }] });
+  }
+
+  findClocksOfVisit(tx: TenantTransaction, tenantId: string, visitId: string): Promise<Array<{ responsibleId: string | null; completedAt: Date | null }>> {
+    return tx.ticketSlaClock.findMany({ where: { tenantId, visitId }, select: { responsibleId: true, completedAt: true } });
+  }
+
+  /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
+  async reopenTicket(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'OPEN', closedAt: null, closedById: null, forcedClose: false, currentStepId: stepId, currentLoop: loop } });
+  }
+
+  async insertTicketError(tx: TenantTransaction, tenantId: string, ticketId: string, error: { errorTypeId: string; errorSubtypeId: string | null; reporterId: string; responsibleId: string; description: string; isProcessError: boolean; createdAt: Date }): Promise<string> {
+    const created = await tx.ticketError.create({ data: { tenantId, ticketId, ...error }, select: { id: true } });
+    return created.id;
   }
 
   /** The clocks of the visit that are running stand still from `at`. */

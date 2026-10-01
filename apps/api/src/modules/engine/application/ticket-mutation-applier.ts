@@ -36,6 +36,7 @@ export class TicketMutationApplier {
       await this.writes.insertAssignees(tx, tenantId, ticket.id, at, assignees);
     }
     if (mutation.ticket.kind === 'current') await this.writes.moveTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
+    else if (mutation.ticket.kind === 'reopened') await this.writes.reopenTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
     else await this.writes.closeTicket(tx, tenantId, ticket.id, at, mutation.actorId, mutation.ticket.stepId);
     for (const event of mutation.events) await this.writes.insertEvent(tx, tenantId, ticket.id, at, event);
     return openVisitId;

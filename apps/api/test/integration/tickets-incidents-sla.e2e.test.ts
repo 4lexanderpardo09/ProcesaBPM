@@ -7,6 +7,7 @@ import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { TenantContext } from '../../src/infrastructure/database/tenant-context.js';
 import { CreateTicketService } from '../../src/modules/engine/application/create-ticket.service.js';
 import type { TicketActor } from '../../src/modules/engine/application/locked-ticket.js';
+import { ReopenTicketService } from '../../src/modules/engine/application/reopen-ticket.service.js';
 import { OpenIncidentService } from '../../src/modules/engine/application/open-incident.service.js';
 import { ResolveIncidentService } from '../../src/modules/engine/application/resolve-incident.service.js';
 import { TakeTicketService } from '../../src/modules/engine/application/take-ticket.service.js';
@@ -176,5 +177,19 @@ describe('incidents and the SLA: the pause moves the due date by business time',
     await as(helper.userId, () => app.get(TakeTicketService).take(actor(helper.userId), ticket.id, { visitId: ticket.openVisitId! }));
     expect((await clocks(ticket.id))[0]).toMatchObject({ responsible_id: helper.userId });
     expect((await world.clocks(ticket.id))[0]!.started_at).toEqual(bogota('2026-09-07', '09:00'));
+  });
+
+  it('H. reopening starts a fresh SLA: loop 2, due four business hours after the reopening', async () => {
+    const ticket = await create(hours4, bogota('2026-09-07', '09:00'));
+    await answer(ticket, hours4, bogota('2026-09-07', '11:00'));
+    const errorType = (await db.platform.query(`INSERT INTO error_types (tenant_id, name, is_reopening) VALUES ($1, $2, true) RETURNING id`, [world.tenant.tenantId, `Reopening ${Math.random()}`])).rows[0].id as string;
+    clock.set(bogota('2026-09-08', '09:30'));
+    await as(helper.userId, () => app.get(ReopenTicketService).reopen(actor(helper.userId), ticket.id, { errorTypeId: errorType, description: 'Wrong', assigneeId: worker.userId }));
+    const visits = await visit(ticket.id);
+    expect(visits).toHaveLength(2);
+    expect(visits[1]!.due_at).toEqual(bogota('2026-09-08', '15:30'));
+    const [, reopenedClock] = await clocks(ticket.id);
+    expect(reopenedClock).toMatchObject({ responsible_id: worker.userId, completed_at: null, paused_minutes: 0 });
+    expect(reopenedClock!.due_at).toEqual(bogota('2026-09-08', '15:30'));
   });
 });

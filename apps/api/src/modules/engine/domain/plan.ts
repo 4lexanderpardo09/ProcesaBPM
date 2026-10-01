@@ -84,6 +84,9 @@ export interface TicketMutation {
   readonly closing?: { readonly visit: ClosedVisit; readonly clocks: readonly ClosedClock[] };
   readonly arrival?: ArrivalPlan;
   /** `current` moves the ticket to a people step; `closed` ends it. */
-  readonly ticket: { readonly kind: 'current'; readonly stepId: string; readonly loop: number } | { readonly kind: 'closed'; readonly stepId: string | null };
+  readonly ticket:
+    | { readonly kind: 'current'; readonly stepId: string; readonly loop: number }
+    | { readonly kind: 'closed'; readonly stepId: string | null }
+    | { readonly kind: 'reopened'; readonly stepId: string; readonly loop: number };
   readonly events: readonly EventPlan[];
 }

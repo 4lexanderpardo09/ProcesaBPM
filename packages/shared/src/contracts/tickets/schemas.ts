@@ -53,6 +53,19 @@ export type OpenIncidentRequest = z.infer<typeof openIncidentRequestSchema>;
 export const resolveIncidentRequestSchema = z.object({ resolution: z.string().trim().min(1).max(10_000), assigneeId: uuidSchema.optional() });
 export type ResolveIncidentRequest = z.infer<typeof resolveIncidentRequestSchema>;
 
+/** Reopening a closed ticket records an error of a reopening type against whoever is responsible (by default whoever closed it). */
+export const reopenTicketRequestSchema = z.object({
+  /** A step the ticket has been through; by default the last one. */
+  stepId: uuidSchema.optional(),
+  errorTypeId: uuidSchema,
+  errorSubtypeId: uuidSchema.optional(),
+  responsibleId: uuidSchema.optional(),
+  /** Who gets the step instead of its last holders. */
+  assigneeId: uuidSchema.optional(),
+  description: z.string().trim().min(1).max(5000),
+});
+export type ReopenTicketRequest = z.infer<typeof reopenTicketRequestSchema>;
+
 export const listTicketsQuerySchema = pageQuerySchema.pick({ page: true, pageSize: true }).extend({
   view: z.enum(TICKET_VIEWS).default('assigned'),
   status: ticketStatusSchema.optional(),

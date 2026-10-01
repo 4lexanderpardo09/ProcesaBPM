@@ -6,6 +6,7 @@ import type { ResolvedCalendar } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import { decideAssignees } from '../domain/assignment-policy.js';
 import { nextLoop } from '../domain/loop-policy.js';
+import { nextReopenLoop } from '../domain/reopen-policy.js';
 import type { ArrivalPlan, ClockPlan, EventPlan } from '../domain/plan.js';
 import { AssignmentResolver } from './assignment-resolver.js';
 
@@ -23,6 +24,10 @@ export interface ArrivalRequest {
   readonly calendar: ResolvedCalendar | null;
   readonly at: Date;
   readonly chosenAssigneeId: string | undefined;
+  /** People who get the step as they are (a reopening gives it back to its last holders): the assignment mode is not asked. */
+  readonly holders?: readonly string[];
+  /** A deliberate reopening is not bound by the step's `max_loops`. */
+  readonly ignoreMaxLoops?: boolean;
 }
 
 export type Arrival =
@@ -62,16 +67,20 @@ export class ArrivalPlanner {
     @Inject(TicketWriteRepository) private readonly tickets: TicketWriteRepository,
   ) {}
 
+  private async decide(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
+    const candidates = await this.resolver.candidatesFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, at: request.at });
+    return decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: request.chosenAssigneeId });
+  }
+
   async plan(tx: TenantTransaction, request: ArrivalRequest): Promise<Arrival> {
     const route = routeThroughAutomaticBlocks(request.document, request.entryStepId, request.values);
     if (route.arrival.kind === 'END') return { kind: 'END', hops: route.hops, endStepId: route.arrival.stepId };
 
     const step = request.document.steps.find((candidate) => candidate.id === route.arrival.stepId)!;
     const previousLoops = request.ticketId === null ? [] : await this.tickets.loopsOf(tx, request.tenantId, request.ticketId, step.id);
-    const loop = nextLoop(previousLoops, step.maxLoops, step.id);
+    const loop = request.ignoreMaxLoops === true ? nextReopenLoop(previousLoops) : nextLoop(previousLoops, step.maxLoops, step.id);
     const sla = openSla(slaTermsOf(step, request.companyId), request.calendar?.calendar ?? null, request.at);
-    const candidates = await this.resolver.candidatesFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, at: request.at });
-    const decision = decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: request.chosenAssigneeId });
+    const decision = request.holders !== undefined && request.holders.length > 0 ? ({ type: 'PRIMARY', userIds: request.holders } as const) : await this.decide(tx, request, step);
 
     const clockBase = { startedAt: request.at, sla: { value: sla.value, unit: sla.unit }, calendarId: request.calendar?.id ?? null, dueAt: sla.dueAt };
     const clocks: ClockPlan[] = decision.type === 'POOL' ? [{ ...clockBase, responsibleId: null }] : decision.userIds.map((userId) => ({ ...clockBase, responsibleId: userId }));

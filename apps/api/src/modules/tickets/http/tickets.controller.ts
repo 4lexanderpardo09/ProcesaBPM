@@ -10,6 +10,8 @@ import {
   resolveIncidentRequestSchema,
   createTicketRequestSchema,
   type ListTicketsQuery,
+  type ReopenTicketRequest,
+  reopenTicketRequestSchema,
   listTicketsQuerySchema,
   type Page,
   type ReassignTicketRequest,
@@ -28,6 +30,7 @@ import { RequireAnyPermission, RequirePermission } from '../../../common/auth/ro
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
+import { ReopenTicketService } from '../../engine/application/reopen-ticket.service.js';
 import { OpenIncidentService } from '../../engine/application/open-incident.service.js';
 import { ResolveIncidentService } from '../../engine/application/resolve-incident.service.js';
 import { CloseTicketService } from '../../engine/application/close-ticket.service.js';
@@ -48,6 +51,7 @@ export class TicketsController {
     @Inject(ReassignTicketService) private readonly reassignment: ReassignTicketService,
     @Inject(TakeTicketService) private readonly taking: TakeTicketService,
     @Inject(CloseTicketService) private readonly closing: CloseTicketService,
+    @Inject(ReopenTicketService) private readonly reopening: ReopenTicketService,
     @Inject(OpenIncidentService) private readonly incidentOpening: OpenIncidentService,
     @Inject(ResolveIncidentService) private readonly incidentResolution: ResolveIncidentService,
   ) {}
@@ -122,6 +126,13 @@ export class TicketsController {
     @Body(new ZodValidationPipe(resolveIncidentRequestSchema)) body: ResolveIncidentRequest,
   ): Promise<TicketMutationResponse> {
     return this.incidentResolution.resolve(this.actor(principal, ability), id, incidentId, body);
+  }
+
+  @RequirePermission('reopen', TICKET_SUBJECT)
+  @Post(':id/reopen')
+  @HttpCode(HttpStatus.OK)
+  reopen(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(reopenTicketRequestSchema)) body: ReopenTicketRequest): Promise<TicketMutationResponse> {
+    return this.reopening.reopen(this.actor(principal, ability), id, body);
   }
 
   private actor(principal: Principal, ability: AppAbility) {

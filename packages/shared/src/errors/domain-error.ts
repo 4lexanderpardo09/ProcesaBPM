@@ -46,6 +46,9 @@ export const ERROR_CODES = {
   staleTicket: 'STALE_TICKET',
   closeRequired: 'CLOSE_REQUIRED',
   incidentNotOpen: 'INCIDENT_NOT_OPEN',
+  ticketNotClosed: 'TICKET_NOT_CLOSED',
+  invalidReopenStep: 'INVALID_REOPEN_STEP',
+  invalidErrorType: 'INVALID_ERROR_TYPE',
   assigneeRequired: 'ASSIGNEE_REQUIRED',
   extraApprovalRequired: 'EXTRA_APPROVAL_REQUIRED',
 } as const;
@@ -376,5 +379,25 @@ export class IncidentNotOpenError extends DomainError {
 export class AssigneeRequiredError extends DomainError {
   constructor(droppedAssigneeIds: readonly string[]) {
     super(ERROR_CODES.assigneeRequired, 'None of the previous assignees can take the ticket back: choose who gets it', { details: { droppedAssigneeIds } });
+  }
+}
+
+export class TicketNotClosedError extends DomainError {
+  constructor(readonly status: string) {
+    super(ERROR_CODES.ticketNotClosed, 'Only a closed ticket can be reopened', { details: { status } });
+  }
+}
+
+/** The step to reopen into is not one the ticket has been through. */
+export class InvalidReopenStepError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidReopenStep, 'The ticket can only be reopened into a step it has been through');
+  }
+}
+
+/** The error type is not an active reopening type (or the subtype does not belong to it). */
+export class InvalidErrorTypeError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidErrorType, 'Choose an active error type meant for reopening');
   }
 }

@@ -72,6 +72,14 @@ export class TicketContextRepository {
     });
   }
 
+  /** An active error type meant for reopening that does not force a close, with its subtype (if any) belonging to it and active. */
+  async findReopeningErrorType(tx: TenantTransaction, tenantId: string, errorTypeId: string, errorSubtypeId: string | undefined): Promise<{ isProcessError: boolean } | null> {
+    const type = await tx.errorType.findFirst({ where: { tenantId, id: errorTypeId, isActive: true, isReopening: true, forcesClose: false }, select: { isProcessError: true } });
+    if (type === null) return null;
+    if (errorSubtypeId !== undefined && (await tx.errorSubtype.count({ where: { tenantId, id: errorSubtypeId, errorTypeId, isActive: true } })) === 0) return null;
+    return type;
+  }
+
   async activeGroupIdsOf(tx: TenantTransaction, tenantId: string, userId: string): Promise<Set<string>> {
     const rows = await tx.groupMember.findMany({ where: { tenantId, userId, group: { isActive: true } }, select: { groupId: true } });
     return new Set(rows.map((row) => row.groupId));
