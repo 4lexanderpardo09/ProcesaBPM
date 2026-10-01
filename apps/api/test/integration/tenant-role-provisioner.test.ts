@@ -1,21 +1,24 @@
-import { Test, type TestingModule } from '@nestjs/testing';
+import type { INestApplication } from '@nestjs/common';
 import { ROLE_TEMPLATES, type RoleTemplate } from '@procesabpm/db';
 import { connectTestDatabase, withContext, type TestDatabase } from '@procesabpm/db/testing/database';
-import { insertReturningId, seedTenant } from '@procesabpm/db/testing/fixtures';
+import { insertReturningId, seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
 import { MissingCatalogPermissionError } from '@procesabpm/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlatformPrismaService } from '../../src/infrastructure/database/platform-prisma.service.js';
-import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { TenantRoleProvisioner } from '../../src/modules/platform/application/tenant-role-provisioner.js';
 import { TenantRoleRepository } from '../../src/modules/platform/data/tenant-role.repository.js';
-import { AppModule } from '../../src/app.module.js';
+import { bearer, signIn } from '../support/auth-helpers.js';
+import { seedUser } from '../support/auth-fixtures.js';
+import { createTestApp } from '../support/create-test-app.js';
+import { TenantProbeController } from '../support/test-controllers.js';
 import { useTestEnvironment } from '../support/test-environment.js';
+import request from 'supertest';
 
 useTestEnvironment();
 
 describe('TenantRoleProvisioner (platform service)', () => {
   let db: TestDatabase;
-  let moduleRef: TestingModule;
+  let app: INestApplication;
   let provisioner: TenantRoleProvisioner;
   let platform: PlatformPrismaService;
 
@@ -46,17 +49,14 @@ describe('TenantRoleProvisioner (platform service)', () => {
 
   beforeAll(async () => {
     db = connectTestDatabase();
-    moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(LOG_WRITER)
-      .useValue(() => undefined)
-      .compile();
-    await moduleRef.init();
-    provisioner = moduleRef.get(TenantRoleProvisioner);
-    platform = moduleRef.get(PlatformPrismaService);
+    const created = await createTestApp({ controllers: [TenantProbeController] });
+    app = created.app;
+    provisioner = created.moduleRef.get(TenantRoleProvisioner);
+    platform = created.moduleRef.get(PlatformPrismaService);
   });
 
   afterAll(async () => {
-    await moduleRef.close();
+    await app.close();
     await db.close();
   });
 
@@ -137,10 +137,29 @@ describe('TenantRoleProvisioner (platform service)', () => {
     expect(await rolesOf(tenantId)).toEqual([]);
   });
 
-  it('a member of the new tenant authorizes with the provisioned role', async () => {
+  it('members of a provisioned tenant authorize with the provisioned roles, end to end', async () => {
     const tenantId = await bareTenant();
-    const [admin] = await provisioner.createBaseRoles(tenantId).then((roles) => roles.filter((role) => role.systemRole === 'ADMIN'));
-    const { rows } = await db.owner.query<{ is_admin: boolean }>('SELECT is_admin FROM roles WHERE tenant_id = $1 AND id = $2', [tenantId, admin!.id]);
-    expect(rows[0]!.is_admin).toBe(true);
+    const roles = await provisioner.createBaseRoles(tenantId);
+    const roleOf = (systemRole: string) => roles.find((role) => role.systemRole === systemRole)!.id;
+    const companyId = await insertReturningId(
+      db.platform,
+      `INSERT INTO companies (tenant_id, name, is_default, country_code, currency_code, time_zone)
+       VALUES ($1, 'Main', true, 'CO', 'COP', 'America/Bogota') RETURNING id`,
+      [tenantId],
+    );
+    const tenant = { tenantId, companyId, roleId: roleOf('ADMIN'), userId: '' } as SeededTenant;
+    const admin = await seedUser(db, tenant);
+    const requester = await seedUser(db, tenant, undefined, { roleId: roleOf('REQUESTER') });
+    const adminToken = (await signIn(app, admin.email, tenantId)).accessToken;
+    const requesterToken = (await signIn(app, requester.email, tenantId)).accessToken;
+    const missingStep = '00000000-0000-4000-8000-000000000001';
+    const call = (path: string, token: string) => request(app.getHttpServer()).get(path).query({ stepId: missingStep }).set(bearer(token));
+
+    // read Company: the administrator (manage all) and the requester (catalog read) have it.
+    await call('/test/companies', adminToken).expect(200);
+    await call('/test/companies', requesterToken).expect(200);
+    // update Workflow: only the administrator.
+    await call('/test/invalid-step-change', adminToken).expect(200);
+    await call('/test/invalid-step-change', requesterToken).expect(403);
   });
 });

@@ -5,7 +5,7 @@ import { RequirePermission, RequireAnyPermission } from '../../src/common/auth/r
 import { TenantTransactionRunner } from '../../src/infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../src/modules/authorization/domain/build-ability.js';
 import { accessibleWhere, assertCanOnRecord } from '../../src/modules/authorization/domain/record-access.js';
-import { TEST_SUBJECT } from '../../src/modules/authorization/domain/test-subjects.js';
+import { TEST_SUBJECT } from './test-subjects.js';
 import { CurrentAbility } from '../../src/modules/authorization/http/current-ability.decorator.js';
 
 /** Records of the fake subject `TestDoc` (the tickets module does not exist yet); tests fill it in. */

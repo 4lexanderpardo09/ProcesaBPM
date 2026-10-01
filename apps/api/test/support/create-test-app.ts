@@ -8,7 +8,7 @@ import { APP_CONFIG } from '../../src/config/tokens.js';
 import { configureHttpApp } from '../../src/http-app.js';
 import { RATE_LIMITER, type RateLimiter } from '../../src/infrastructure/security/rate-limiter.js';
 import { SUBJECT_REGISTRY } from '../../src/modules/authorization/application/ability.service.js';
-import { testRegistry } from '../../src/modules/authorization/domain/test-subjects.js';
+import { testRegistry } from './test-subjects.js';
 
 export interface TestApp {
   readonly app: INestApplication;
