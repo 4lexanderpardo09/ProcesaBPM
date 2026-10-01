@@ -8,6 +8,8 @@ export const ERROR_CODES = {
   invalidCalendar: 'INVALID_CALENDAR',
   invalidDuration: 'INVALID_DURATION',
   invalidCondition: 'INVALID_CONDITION',
+  missingTenantContext: 'MISSING_TENANT_CONTEXT',
+  tenantContextMismatch: 'TENANT_CONTEXT_MISMATCH',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -74,5 +76,17 @@ export class InvalidDurationError extends DomainError {
 export class InvalidConditionError extends DomainError {
   constructor(message: string) {
     super(ERROR_CODES.invalidCondition, message);
+  }
+}
+
+export class MissingTenantContextError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.missingTenantContext, 'A tenant context is required to query tenant data');
+  }
+}
+
+export class TenantContextMismatchError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.tenantContextMismatch, 'The database did not confirm the requested tenant context');
   }
 }

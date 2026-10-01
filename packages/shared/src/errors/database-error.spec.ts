@@ -43,6 +43,27 @@ describe('mapDatabaseError', () => {
   });
 });
 
+describe('mapDatabaseError with Prisma driver adapter errors', () => {
+  const prismaError = (prismaCode: string, originalCode: string) =>
+    Object.assign(new Error('prisma'), {
+      code: prismaCode,
+      meta: { driverAdapterError: { name: 'DriverAdapterError', cause: { originalCode, kind: 'postgres' } } },
+    });
+
+  it.each([
+    ['P2002', '23505', DuplicateError],
+    ['P2010', '23514', InvalidStateError],
+    ['P2010', '23503', InvalidReferenceError],
+    ['P2010', '42501', PermissionDeniedError],
+  ])('maps %s carrying SQLSTATE %s', (prismaCode, originalCode, errorClass) => {
+    expect(mapDatabaseError(prismaError(prismaCode, originalCode))).toBeInstanceOf(errorClass);
+  });
+
+  it('does not map a driver error without a rule SQLSTATE', () => {
+    expect(mapDatabaseError(prismaError('P2010', '42601'))).toBeUndefined();
+  });
+});
+
 describe('extractSqlState', () => {
   it.each([
     ['direct code', pgError('23505'), '23505'],
