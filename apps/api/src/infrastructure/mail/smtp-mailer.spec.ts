@@ -37,6 +37,8 @@ describe('classifySmtpError', () => {
     [{ responseCode: 553 }, true],
     [{ responseCode: 535 }, false],
     [{ responseCode: 451 }, false],
+    [{ code: 'EENVELOPE' }, true],
+    [{ code: 'EMESSAGE' }, true],
     [{ code: 'ETIMEDOUT' }, false],
     [{ code: 'ECONNREFUSED' }, false],
     [new Error('boom'), false],

@@ -22,7 +22,9 @@ export class WebLinks {
   }
 
   private build(path: string, query?: Record<string, string>, token?: string): string {
-    const url = new URL(path, this.settings.WEB_BASE_URL);
+    // Relative to the base so that an app served under a path (https://host/app) keeps it.
+    const base = this.settings.WEB_BASE_URL.endsWith('/') ? this.settings.WEB_BASE_URL : `${this.settings.WEB_BASE_URL}/`;
+    const url = new URL(path.replace(/^\//, ''), base);
     for (const [name, value] of Object.entries(query ?? {})) url.searchParams.set(name, value);
     if (token !== undefined) url.hash = `token=${encodeURIComponent(token)}`;
     return url.toString();

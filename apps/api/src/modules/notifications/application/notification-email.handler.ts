@@ -8,6 +8,7 @@ import { renderEmail } from '../../../infrastructure/mail/layout.js';
 import { type ClaimedEvent, type ExternalEffectHandler } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { NOTIFICATION_EMAIL_EVENT } from '../data/email-outbox.repository.js';
+import { channelsFor } from '../domain/channels.js';
 import { RecipientRepository } from '../data/recipient.repository.js';
 import { TicketFactsRepository } from '../data/ticket-facts.repository.js';
 import { notificationsEs as es } from '../i18n/es.js';
@@ -45,6 +46,9 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
     const tenant = await this.facts.tenant(tx, tenantId);
     const ticket = await this.facts.ticket(tx, tenantId, ticketId);
     if (tenant === undefined || !tenant.active || ticket === undefined) return null;
+    // Someone who turned e-mail off after the fan-out must not get what was already queued.
+    const preferences = await this.recipients.preferences(tx, tenantId, [userId], [notificationType]);
+    if (!channelsFor(preferences, userId, notificationType).email) return null;
     if ((await this.readers.filter(tx, tenantId, ticketId, [userId])).length === 0) return null;
     const recipient = await this.recipients.mailRecipient(tx, userId);
     if (recipient === undefined) return null;

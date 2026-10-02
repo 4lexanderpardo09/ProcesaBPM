@@ -9,6 +9,9 @@ const boolean = (defaultValue: boolean) =>
     .transform((value) => value === 'true');
 const positiveInteger = (defaultValue: number, max: number) => z.coerce.number().int().min(1).max(max).default(defaultValue);
 
+/** Worst case allowed for one batch: half of the 5-minute lease. */
+const MAX_BATCH_PROCESSING_MS = 150_000;
+
 const settingsSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   /** Where the web app lives: the links in e-mails are built on it. */
@@ -49,6 +52,8 @@ export function loadWorkerSettings(env: Readonly<Record<string, string | undefin
     if (data.MAIL_TRANSPORT === 'smtp' && data.SMTP_HOST === undefined) problems.push('SMTP_HOST is required when MAIL_TRANSPORT is smtp');
     if (data.NODE_ENV === 'production' && data.MAIL_TRANSPORT === 'memory') problems.push('MAIL_TRANSPORT memory is not allowed in production');
     if (data.NODE_ENV === 'production' && !data.WEB_BASE_URL.startsWith('https://')) problems.push('WEB_BASE_URL must be https in production');
+    // Events are claimed for 5 minutes and processed in waves: the slowest wave must end well inside the lease.
+    if (Math.ceil(data.OUTBOX_BATCH_SIZE / data.OUTBOX_CONCURRENCY) * data.OUTBOX_TX_TIMEOUT_MS > MAX_BATCH_PROCESSING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS would outlive the claim lease');
     if ((data.SMTP_USER === undefined) !== (data.SMTP_PASSWORD === undefined)) problems.push('SMTP_USER and SMTP_PASSWORD go together');
   }
   if (problems.length > 0 || !result.success) throw new ConfigError(problems);

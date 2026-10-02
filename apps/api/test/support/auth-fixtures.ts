@@ -53,12 +53,12 @@ export async function inviteUser(db: TestDatabase, tenant: SeededTenant, email: 
                     ON CONFLICT DO NOTHING`, [tenant.tenantId, invited, tenant.roleId]);
     await tx.query(`INSERT INTO membership_companies (tenant_id, user_id, company_id) VALUES ($1, $2, $3)
                     ON CONFLICT DO NOTHING`, [tenant.tenantId, invited, tenant.companyId]);
-    await tx.query(`SELECT auth_issue_user_token($1, 'INVITATION', $2, now() + interval '7 days', NULL)`, [
-      invited,
-      sha256Hex(token),
-    ]);
     return invited;
   });
+  // Only provisioning (the platform login) issues invitation tokens: the API role cannot.
+  await withContext(db.platform, { tenantId: tenant.tenantId, userId: tenant.userId }, (tx) =>
+    tx.query(`SELECT auth_issue_user_token($1, 'INVITATION', $2, now() + interval '7 days', NULL)`, [userId, sha256Hex(token)]),
+  );
   return { userId, token };
 }
 

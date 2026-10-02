@@ -24,6 +24,7 @@ const VARIABLES = [
   'MAIL_TRANSPORT',
   'OUTBOX_POLLING_ENABLED',
   'OUTBOX_BATCH_SIZE',
+  'OUTBOX_CONCURRENCY',
 ] as const;
 
 /** Points the application configuration at the test database for the duration of a test file. */
@@ -50,6 +51,7 @@ export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[
       MAIL_TRANSPORT: 'memory',
       OUTBOX_POLLING_ENABLED: 'false',
       OUTBOX_BATCH_SIZE: '50',
+      OUTBOX_CONCURRENCY: '16',
       ...overrides,
     });
   });

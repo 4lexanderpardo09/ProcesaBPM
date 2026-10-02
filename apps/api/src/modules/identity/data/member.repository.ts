@@ -112,8 +112,4 @@ export class MemberRepository {
     });
     return role !== null;
   }
-
-  async findTenantName(tx: TenantTransaction, tenantId: string): Promise<string | undefined> {
-    return (await tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }))?.name;
-  }
 }

@@ -37,6 +37,17 @@ export class OutboxClaimsRepository {
     return rows.map(toEvent);
   }
 
+  /** Whether this worker still owns the claim (not expired, not taken by another worker): asked before an e-mail is sent. */
+  async isCurrent(tx: WorkerTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
+    const [row] =
+      source === 'tenant'
+        ? await tx.$queryRaw<Array<{ ok: boolean }>>`
+            SELECT EXISTS (SELECT 1 FROM outbox_events WHERE tenant_id = app_current_tenant() AND id = ${event.id}::uuid
+                           AND status = 'PROCESSING' AND attempts = ${event.attempt}::int AND available_at > now()) AS ok`
+        : await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT platform_outbox_claim_is_current(${event.id}::uuid, ${event.attempt}::int) AS ok`;
+    return row?.ok === true;
+  }
+
   /** False when the lease ended and another worker owns the event now. */
   async complete(tx: WorkerTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
     const [row] =

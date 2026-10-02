@@ -132,7 +132,7 @@ describe('identity security (API role)', () => {
         `INSERT INTO refresh_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '1 day')`,
         [colleagueId, hashToken(randomUUID())],
       );
-      await withContext(db.runtime, {}, (client) =>
+      await withContext(db.platform, {}, (client) =>
         client.query(`SELECT auth_issue_user_token($1, 'PASSWORD_RESET', $2, $3)`, [colleagueId, hashToken(token), inOneHour()]),
       );
 
@@ -188,7 +188,7 @@ describe('identity security (API role)', () => {
         return id;
       });
       const token = randomUUID();
-      await asMember((client) =>
+      await withContext(db.platform, { tenantId: tenant.tenantId, userId: tenant.userId }, (client) =>
         client.query(`SELECT auth_issue_user_token($1, 'INVITATION', $2, $3)`, [invitedId, hashToken(token), inOneHour()]),
       );
 
@@ -201,6 +201,13 @@ describe('identity security (API role)', () => {
         [tenant.tenantId, invitedId],
       );
       expect(rows[0]?.status).toBe('ACTIVE');
+    });
+
+    it('never let the API role issue a password reset or an invitation token (only the worker and provisioning do)', async () => {
+      for (const type of ['PASSWORD_RESET', 'INVITATION']) {
+        const issue = () => asMember((client) => client.query(`SELECT auth_issue_user_token($1, '${type}', $2, $3)`, [colleagueId, hashToken(randomUUID()), inOneHour()]));
+        expect(await sqlStateOf(issue), type).toBe(SqlState.insufficientPrivilege);
+      }
     });
 
     it('only let users request an e-mail change for themselves', async () => {
@@ -248,8 +255,10 @@ describe('identity security (API role)', () => {
           colleagueId,
           other.companyId,
         ]);
-        await client.query(`SELECT auth_issue_user_token($1, 'INVITATION', $2, $3)`, [colleagueId, hashToken(token), inOneHour()]);
       });
+      await withContext(db.platform, { tenantId: other.tenantId, userId: other.userId }, (client) =>
+        client.query(`SELECT auth_issue_user_token($1, 'INVITATION', $2, $3)`, [colleagueId, hashToken(token), inOneHour()]),
+      );
       const { rows: before } = await db.owner.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [colleagueId]);
       const consume = (newHash: string | null) =>
         withContext(db.runtime, {}, (client) =>

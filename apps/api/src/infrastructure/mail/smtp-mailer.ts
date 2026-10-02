@@ -16,7 +16,8 @@ const AUTH_FAILED = 535;
 export function classifySmtpError(error: unknown): MailDeliveryError {
   const { responseCode, code } = (error ?? {}) as { responseCode?: unknown; code?: unknown };
   const label = typeof code === 'string' ? code : typeof responseCode === 'number' ? String(responseCode) : 'SMTP';
-  const permanent = typeof responseCode === 'number' && responseCode >= 500 && responseCode < 600 && responseCode !== AUTH_FAILED;
+  // EENVELOPE / EMESSAGE are raised locally for an address or message that can never be sent.
+  const permanent = (typeof responseCode === 'number' && responseCode >= 500 && responseCode < 600 && responseCode !== AUTH_FAILED) || code === 'EENVELOPE' || code === 'EMESSAGE';
   return new MailDeliveryError(permanent, label, { cause: error });
 }
 

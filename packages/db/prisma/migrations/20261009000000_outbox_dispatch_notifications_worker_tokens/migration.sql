@@ -189,3 +189,79 @@ CREATE OR REPLACE FUNCTION enqueue_platform_event(p_type text, p_payload jsonb) 
     RETURN v_id;
   END
   $$;
+
+-- ===========================================================================
+-- 5. Review follow-ups: least privilege and the claim path
+-- ===========================================================================
+-- The API no longer issues reset or invitation tokens (the worker does), so its role must not be able to either: with
+-- SQL as app_runtime anyone could otherwise mint a reset token for any account. Only provisioning logins (app_platform)
+-- keep it for those two types; EMAIL_CHANGE stays what a member requests for themselves.
+CREATE OR REPLACE FUNCTION auth_issue_user_token(
+  p_user_id uuid,
+  p_type user_token_type,
+  p_token_hash text,
+  p_expires_at timestamptz,
+  p_payload jsonb DEFAULT NULL
+) RETURNS uuid
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+  AS $$
+  DECLARE
+    v_token_id uuid;
+    v_invited_tenant uuid;
+  BEGIN
+    IF p_expires_at <= now() THEN
+      RAISE EXCEPTION 'token expiration must be in the future' USING ERRCODE = '23514';
+    END IF;
+
+    IF p_type = 'EMAIL_CHANGE' THEN
+      IF p_user_id IS DISTINCT FROM app_current_user() THEN
+        RAISE EXCEPTION 'only the user can request an e-mail change' USING ERRCODE = '42501';
+      END IF;
+      IF p_payload ->> 'email' IS NULL THEN
+        RAISE EXCEPTION 'EMAIL_CHANGE requires payload.email' USING ERRCODE = '23514';
+      END IF;
+    ELSIF NOT pg_has_role(session_user, 'app_platform', 'MEMBER') THEN
+      RAISE EXCEPTION 'only provisioning issues % tokens (the worker issues them for e-mails)', p_type USING ERRCODE = '42501';
+    ELSIF p_type = 'INVITATION' THEN
+      v_invited_tenant := app_current_tenant();
+      IF NOT EXISTS (SELECT 1 FROM memberships WHERE tenant_id = v_invited_tenant AND user_id = p_user_id) THEN
+        RAISE EXCEPTION 'the invited user has no membership in the current tenant' USING ERRCODE = '42501';
+      END IF;
+      UPDATE user_tokens SET consumed_at = now()
+      WHERE user_id = p_user_id AND type = 'INVITATION' AND invited_tenant_id = v_invited_tenant AND consumed_at IS NULL;
+    END IF;
+
+    INSERT INTO user_tokens (user_id, type, token_hash, invited_tenant_id, payload, expires_at)
+    VALUES (p_user_id, p_type, p_token_hash, v_invited_tenant, p_payload, p_expires_at)
+    RETURNING id INTO v_token_id;
+    RETURN v_token_id;
+  END
+  $$;
+
+-- Events nobody handles (the block.* types) stay PENDING with the oldest dates: a per-type index keeps the claim from
+-- walking them on every poll.
+CREATE INDEX outbox_events_type_due ON outbox_events (type, available_at) WHERE status IN ('PENDING', 'PROCESSING');
+
+-- A person only sees their own notifications and preferences; "no user" is the worker's way of seeing the tenant, so
+-- it is only accepted from the worker role (a future API path that forgets the user sees nothing instead of everything).
+DROP POLICY own_notifications ON notifications;
+DROP POLICY own_notification_preferences ON notification_preferences;
+CREATE POLICY own_notifications ON notifications AS RESTRICTIVE
+  USING ((app_current_user() IS NULL AND pg_has_role(current_user, 'app_worker', 'MEMBER')) OR user_id = app_current_user())
+  WITH CHECK ((app_current_user() IS NULL AND pg_has_role(current_user, 'app_worker', 'MEMBER')) OR user_id = app_current_user());
+CREATE POLICY own_notification_preferences ON notification_preferences AS RESTRICTIVE
+  USING ((app_current_user() IS NULL AND pg_has_role(current_user, 'app_worker', 'MEMBER')) OR user_id = app_current_user())
+  WITH CHECK ((app_current_user() IS NULL AND pg_has_role(current_user, 'app_worker', 'MEMBER')) OR user_id = app_current_user());
+
+-- Does this worker still own the claim? The worker asks before it sends an e-mail: a prepare that outlived its lease
+-- must not send. (Tenant events are visible to the worker in the tenant's context; the platform ones only through here.)
+CREATE FUNCTION platform_outbox_claim_is_current(p_id uuid, p_attempt integer) RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+  AS $$
+    SELECT EXISTS (
+      SELECT 1 FROM platform_outbox_events
+      WHERE id = p_id AND status = 'PROCESSING' AND attempts = p_attempt AND available_at > now())
+  $$;
+ALTER FUNCTION platform_outbox_claim_is_current(uuid, integer) OWNER TO app_outbox_owner;
+REVOKE ALL ON FUNCTION platform_outbox_claim_is_current(uuid, integer) FROM PUBLIC, app_runtime;
+GRANT EXECUTE ON FUNCTION platform_outbox_claim_is_current(uuid, integer) TO app_worker;

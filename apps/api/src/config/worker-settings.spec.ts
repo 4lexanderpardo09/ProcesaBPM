@@ -31,6 +31,10 @@ describe('loadWorkerSettings', () => {
     expect(problemsOf(production)).toEqual(['WEB_BASE_URL must be https in production']);
     expect(problemsOf(secure)).toEqual([]);
   });
+  it('refuses a batch that could outlive the claim lease', () => {
+    expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '500', OUTBOX_CONCURRENCY: '1' })).toEqual([expect.stringContaining('outlive the claim lease')]);
+    expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '100', OUTBOX_CONCURRENCY: '64' })).toEqual([]);
+  });
   it('wants the SMTP credentials together', () => {
     expect(problemsOf({ ...valid, SMTP_USER: 'u' })).toEqual(['SMTP_USER and SMTP_PASSWORD go together']);
   });

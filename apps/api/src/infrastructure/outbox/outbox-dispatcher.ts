@@ -108,7 +108,11 @@ export class OutboxDispatcher {
     const external = this.registry.externalFor(source, event.type);
     if (external === undefined) throw new Error(`No handler for ${source} event type ${event.type}`);
     const parsed = { ...event, payload: parsePayload(external.schema, event.payload) } as ClaimedEvent<never>;
-    const message = await this.inScope(source, event, (tx) => external.prepare(tx, parsed), timeoutMs);
+    const message = await this.inScope(source, event, async (tx) => {
+      // A claim that outlived its lease belongs to another worker now: it, not this one, sends the e-mail.
+      if (!(await this.claims.isCurrent(tx, source, event))) throw new StaleClaimError();
+      return external.prepare(tx, parsed);
+    }, timeoutMs);
     if (message !== null) await external.perform(message as never, parsed);
     await this.inScope(source, event, (tx) => this.completeOrThrow(tx, source, event), timeoutMs);
   }

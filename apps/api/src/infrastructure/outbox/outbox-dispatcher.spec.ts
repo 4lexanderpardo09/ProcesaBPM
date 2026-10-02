@@ -13,7 +13,7 @@ import { TestClock } from '../../../test/support/test-clock.js';
 const NOW = '2026-10-02T10:00:00Z';
 const event = (overrides: Partial<ClaimedEvent<unknown>> = {}): ClaimedEvent<unknown> => ({ id: 'e1', tenantId: 't1', type: 'demo', attempt: 1, createdAt: new Date(NOW), payload: { value: 1 }, ...overrides });
 
-function setup(claimed: ClaimedEvent<unknown>[], options: { completes?: boolean; batch?: number; concurrency?: number } = {}) {
+function setup(claimed: ClaimedEvent<unknown>[], options: { completes?: boolean; current?: boolean; batch?: number; concurrency?: number } = {}) {
   let inTransaction = false;
   const calls: string[] = [];
   const fails: Array<{ error: string; retryAt: Date | null }> = [];
@@ -35,6 +35,7 @@ function setup(claimed: ClaimedEvent<unknown>[], options: { completes?: boolean;
   const claims = {
     claimTenant: async () => claimed,
     claimPlatform: async () => [],
+    isCurrent: async () => options.current ?? true,
     complete: async () => {
       calls.push('complete');
       return options.completes ?? true;
@@ -109,6 +110,14 @@ describe('OutboxDispatcher', () => {
     });
     await dispatcher.runOnce();
     expect(calls).toEqual(['prepare:true', 'perform:false', 'complete']);
+  });
+
+  it('does not even prepare an e-mail whose claim is no longer current, and records no failure', async () => {
+    const { dispatcher, registry, calls, fails } = setup([event()], { current: false });
+    registry.registerExternal({ type: 'demo', scope: 'tenant', schema, prepare: async () => (calls.push('prepare'), {}), perform: async () => void calls.push('perform') });
+    expect(await dispatcher.runOnce()).toMatchObject({ stale: 1, done: 0 });
+    expect(calls).toEqual([]);
+    expect(fails).toEqual([]);
   });
 
   it('sends nothing when prepare has nothing to send, and still completes', async () => {
