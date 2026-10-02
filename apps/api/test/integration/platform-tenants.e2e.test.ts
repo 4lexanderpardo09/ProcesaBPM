@@ -13,6 +13,7 @@ import { createTestApp } from '../support/create-test-app.js';
 import { seedPlatformAdmin, signInPlatform, type PlatformAdminUser } from '../support/platform-fixtures.js';
 import { TenantProbeController } from '../support/test-controllers.js';
 import { useTestEnvironment } from '../support/test-environment.js';
+import { MailWorker, tokenOf } from '../support/worker-mail.js';
 
 useTestEnvironment();
 
@@ -21,11 +22,7 @@ const slugOf = () => `signup-${Math.random().toString(36).slice(2, 10)}`;
 
 interface InvitationPayload {
   userId: string;
-  email: string;
   tenantId: string;
-  tenantName: string;
-  token: string;
-  expiresAt: string;
 }
 
 describe('platform tenant sign-up', () => {
@@ -48,6 +45,13 @@ describe('platform tenant sign-up', () => {
   const count = async (table: string, tenantId: string) =>
     (await db.owner.query<{ n: number }>(`SELECT count(*)::int AS n FROM ${table} WHERE tenant_id = $1`, [tenantId])).rows[0]!.n;
 
+  let mail: MailWorker;
+  /** Lets the worker deliver and returns the token of the newest link mailed to the address. */
+  const linkTokenFor = async (email: string): Promise<string> => {
+    await mail.deliver();
+    return tokenOf(mail.lastTo(email)!);
+  };
+
   const invitationEvent = async (tenantId: string) =>
     (
       await db.owner.query<{ payload: InvitationPayload }>(
@@ -61,9 +65,11 @@ describe('platform tenant sign-up', () => {
     ({ app } = await createTestApp({ controllers: [TenantProbeController] }));
     admin = await seedPlatformAdmin(db);
     adminToken = await signInPlatform(app, admin.email);
+    mail = await MailWorker.start();
   });
 
   afterAll(async () => {
+    await mail.close();
     await app.close();
     await db.close();
   });
@@ -135,9 +141,11 @@ describe('platform tenant sign-up', () => {
       expect(ownerCompanies).toEqual([{ company_id: companies[0].id }]);
 
       const [event] = await invitationEvent(tenantId);
-      expect(event!.payload).toMatchObject({ userId: ownerUserId, email: payload.owner.email, tenantId, tenantName: 'Acme Corp' });
+      expect(event!.payload).toEqual({ userId: ownerUserId, tenantId });
+      const token = await linkTokenFor(payload.owner.email);
+      expect(mail.lastTo(payload.owner.email)!.text).toContain('Acme Corp');
       const { rows: tokens } = await db.owner.query(`SELECT type, invited_tenant_id, consumed_at FROM user_tokens WHERE token_hash = $1 AND user_id = $2`, [
-        sha256Hex(event!.payload.token),
+        sha256Hex(token),
         ownerUserId,
       ]);
       expect(tokens).toEqual([{ type: 'INVITATION', invited_tenant_id: tenantId, consumed_at: null }]);
@@ -149,9 +157,7 @@ describe('platform tenant sign-up', () => {
     it('the owner accepts the invitation, signs in, sees the tenant and has full access', async () => {
       const payload = body();
       const { tenantId } = (await signUp(payload).expect(201)).body as { tenantId: string };
-      const [event] = await invitationEvent(tenantId);
-
-      await http().post('/auth/invitations/accept').send({ token: event!.payload.token, password: OWNER_PASSWORD }).expect(200);
+      await http().post('/auth/invitations/accept').send({ token: await linkTokenFor(payload.owner.email), password: OWNER_PASSWORD }).expect(200);
       const login = await http().post('/auth/login').send({ email: payload.owner.email, password: OWNER_PASSWORD }).expect(200);
       expect(login.body.organizations.map((tenant: { tenantId: string }) => tenant.tenantId)).toEqual([tenantId]);
 
@@ -280,11 +286,7 @@ describe('platform tenant sign-up', () => {
       const token = await signInPlatform(app, temporary.email);
       await http().post('/auth/password-reset/request').send({ email: temporary.email }).expect(202);
       await app.get(BackgroundTasks).whenIdle();
-      const { rows } = await db.owner.query<{ payload: { token: string } }>(
-        `SELECT payload FROM platform_outbox_events WHERE type = 'email.password_reset' AND payload ->> 'userId' = $1`,
-        [temporary.userId],
-      );
-      await http().post('/auth/password-reset/confirm').send({ token: rows[0]!.payload.token, newPassword: OWNER_PASSWORD }).expect(204);
+      await http().post('/auth/password-reset/confirm').send({ token: await linkTokenFor(temporary.email), newPassword: OWNER_PASSWORD }).expect(204);
       await signUp(body(), token).expect(401);
     });
 

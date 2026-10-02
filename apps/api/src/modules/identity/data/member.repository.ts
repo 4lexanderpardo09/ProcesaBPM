@@ -104,12 +104,6 @@ export class MemberRepository {
     await tx.membership.updateMany({ where: { tenantId, userId }, data });
   }
 
-  async issueInvitationToken(tx: TenantTransaction, token: { userId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
-    await tx.$queryRaw`
-      SELECT auth_issue_user_token(${token.userId}::uuid, 'INVITATION'::user_token_type, ${token.tokenHash},
-                                   ${token.expiresAt}::timestamptz, NULL::jsonb)::text AS id`;
-  }
-
   /** An admin role, or one holding `manage all`: whoever has it has full access. */
   async roleGrantsFullAccess(tx: TenantTransaction, tenantId: string, roleId: string): Promise<boolean> {
     const role = await tx.role.findFirst({
@@ -117,9 +111,5 @@ export class MemberRepository {
       select: { id: true },
     });
     return role !== null;
-  }
-
-  async findTenantName(tx: TenantTransaction, tenantId: string): Promise<string | undefined> {
-    return (await tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }))?.name;
   }
 }

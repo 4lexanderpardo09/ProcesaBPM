@@ -23,6 +23,7 @@
     "@procesabpm/db": "workspace:*",
     "@procesabpm/shared": "workspace:*",
     "jose": "6.2.12",
+    "nodemailer": "10.0.13",
     "pg": "8.23.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",

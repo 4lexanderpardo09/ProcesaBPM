@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationBootstrap, type BeforeApplicationShutdown } from '@nestjs/common';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { RandomDispatchJob } from './random-dispatch.job.js';
 
@@ -6,7 +6,7 @@ export const DISPATCH_CHECK_INTERVAL_MS = 60_000;
 
 /** Runs the dispatch job every minute (each step has its own interval, enforced by the database); a failing run is logged. */
 @Injectable()
-export class RandomDispatchScheduler implements OnApplicationBootstrap, OnApplicationShutdown {
+export class RandomDispatchScheduler implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private timer: NodeJS.Timeout | undefined;
   private running: Promise<void> = Promise.resolve();
 
@@ -21,7 +21,7 @@ export class RandomDispatchScheduler implements OnApplicationBootstrap, OnApplic
     }, DISPATCH_CHECK_INTERVAL_MS);
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  async beforeApplicationShutdown(): Promise<void> {
     clearInterval(this.timer);
     this.timer = undefined;
     await this.running;

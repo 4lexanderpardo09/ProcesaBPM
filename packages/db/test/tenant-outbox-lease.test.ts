@@ -17,7 +17,7 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
   const insertEvent = async (tenant: SeededTenant, type = 'test.lease') =>
     (await db.platform.query<{ id: string }>(`INSERT INTO outbox_events (tenant_id, type, payload) VALUES ($1, $2, '{}') RETURNING id`, [tenant.tenantId, type])).rows[0]!.id;
   const claim = (limit = 1000, lease = '5 minutes', maxAttempts = 10) =>
-    withoutContext(db.worker, async (client) => (await client.query<Claimed>('SELECT * FROM claim_outbox_events($1, $2::interval, $3)', [limit, lease, maxAttempts])).rows);
+    withoutContext(db.worker, async (client) => (await client.query<Claimed>('SELECT * FROM claim_outbox_events($1, NULL::text[], $2::interval, $3)', [limit, lease, maxAttempts])).rows);
   const row = async (id: string) =>
     (await db.owner.query<{ status: string; attempts: number; processed_at: Date | null; last_error: string | null; available_at: Date }>(
       'SELECT status, attempts, processed_at, last_error, available_at FROM outbox_events WHERE id = $1', [id])).rows[0]!;
@@ -130,7 +130,7 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
 
   describe('privileges', () => {
     it.each([
-      ['claim_outbox_events(10)'],
+      ['claim_outbox_events(10, NULL::text[])'],
       [`complete_outbox_event('00000000-0000-4000-8000-000000000000', 1)`],
       [`fail_outbox_event('00000000-0000-4000-8000-000000000000', 1, 'x', NULL, 10)`],
     ])('the API role cannot call %s', async (call) => {

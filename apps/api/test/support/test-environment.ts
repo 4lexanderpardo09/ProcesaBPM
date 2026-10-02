@@ -1,6 +1,8 @@
 import { inject } from 'vitest';
 import { afterAll, beforeAll } from 'vitest';
 
+export const TEST_WEB_BASE_URL = 'http://web.test';
+export const TEST_OUTBOX_TOKEN_KEY = 'outbox-test-key-with-more-than-32-bytes!!';
 export const TEST_JWT_SECRET = 'integration-test-secret-with-more-than-32-bytes';
 const VARIABLES = [
   'NODE_ENV',
@@ -17,6 +19,12 @@ const VARIABLES = [
   'STORAGE_ACCESS_KEY_ID',
   'STORAGE_SECRET_ACCESS_KEY',
   'STORAGE_FORCE_PATH_STYLE',
+  'WEB_BASE_URL',
+  'OUTBOX_TOKEN_KEY',
+  'MAIL_TRANSPORT',
+  'OUTBOX_POLLING_ENABLED',
+  'OUTBOX_BATCH_SIZE',
+  'OUTBOX_CONCURRENCY',
 ] as const;
 
 /** Points the application configuration at the test database for the duration of a test file. */
@@ -38,6 +46,12 @@ export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[
       STORAGE_ACCESS_KEY_ID: inject('storage').accessKeyId,
       STORAGE_SECRET_ACCESS_KEY: inject('storage').secretAccessKey,
       STORAGE_FORCE_PATH_STYLE: 'true',
+      WEB_BASE_URL: TEST_WEB_BASE_URL,
+      OUTBOX_TOKEN_KEY: TEST_OUTBOX_TOKEN_KEY,
+      MAIL_TRANSPORT: 'memory',
+      OUTBOX_POLLING_ENABLED: 'false',
+      OUTBOX_BATCH_SIZE: '50',
+      OUTBOX_CONCURRENCY: '16',
       ...overrides,
     });
   });

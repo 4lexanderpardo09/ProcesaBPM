@@ -44,7 +44,7 @@ export class TicketQueryRepository {
   async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }) {
     const where = { AND: [{ tenantId, deletedAt: null }, ...filters] } as never;
     // One query after another: an interactive transaction has a single connection.
-    const rows = await tx.ticket.findMany({ where, select: SUMMARY, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], ...window });
+    const rows = await tx.ticket.findMany({ where, select: SUMMARY, orderBy: { number: 'desc' }, ...window });
     return { rows, total: await tx.ticket.count({ where }) };
   }
 

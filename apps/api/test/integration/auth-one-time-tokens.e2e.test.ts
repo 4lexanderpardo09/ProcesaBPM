@@ -9,19 +9,21 @@ import { bearer, signIn } from '../support/auth-helpers.js';
 import { inviteUser, membershipStatus, seedUser, type TestUser, userRow } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
+import { MailWorker, tokenOf } from '../support/worker-mail.js';
 
 useTestEnvironment();
 
 const NEW_PASSWORD = 'a brand new passphrase';
 
 interface ResetEmail {
-  payload: { userId: string; email: string; token: string; expiresAt: string };
+  payload: { userId: string };
 }
 
 describe('one-time tokens', () => {
   let db: TestDatabase;
   let app: INestApplication;
   let tenant: SeededTenant;
+  let mail: MailWorker;
 
   const http = () => request(app.getHttpServer());
   /** The request answers at once and does its work in the background; this waits for that work. */
@@ -44,18 +46,22 @@ describe('one-time tokens', () => {
     return rows.map((row) => ({ payload: row.payload }));
   }
 
+  /** Requests a reset, lets the worker deliver it and returns the token of the link it mailed. */
   async function resetTokenFor(user: TestUser): Promise<string> {
     await requestReset(user.email);
-    return (await resetEmails(user.userId)).at(-1)!.payload.token;
+    await mail.deliver();
+    return tokenOf(mail.lastTo(user.email)!);
   }
 
   beforeAll(async () => {
     db = connectTestDatabase();
     tenant = await seedTenant(db.platform);
     ({ app } = await createTestApp());
+    mail = await MailWorker.start();
   });
 
   afterAll(async () => {
+    await mail.close();
     await app.close();
     await db.close();
   });
@@ -69,37 +75,53 @@ describe('one-time tokens', () => {
       expect(after[0].n).toBe(before[0].n);
     });
 
-    it('for an active account issues a 30-minute token and queues the e-mail with it', async () => {
+    it('queues only the user id; the worker then issues a 30-minute token and mails the link, and the clear token is stored nowhere', async () => {
       const user = await seedUser(db, tenant);
       const response = await requestReset(user.email);
       expect(response.text).toBe('');
 
-      const [email] = await resetEmails(user.userId);
-      expect(email).toMatchObject({ payload: { userId: user.userId, email: user.email } });
-      expect(email!.payload.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      const [event] = await resetEmails(user.userId);
+      expect(event!.payload).toEqual({ userId: user.userId });
+      expect((await db.platform.query('SELECT 1 FROM user_tokens WHERE user_id = $1', [user.userId])).rowCount).toBe(0);
 
-      const { rows } = await db.platform.query<{ token_hash: string; type: string; expires_at: Date }>(
-        'SELECT token_hash, type, expires_at FROM user_tokens WHERE user_id = $1',
-        [user.userId],
-      );
-      expect(rows).toEqual([{ token_hash: sha256Hex(email!.payload.token), type: 'PASSWORD_RESET', expires_at: expect.any(Date) }]);
+      await mail.deliver();
+      const message = mail.lastTo(user.email)!;
+      expect(message.subject).toBe('Restablece tu contraseña de ProcesaBPM');
+      const token = tokenOf(message);
+      expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(message.text).toContain(`http://web.test/reset-password#token=${token}`);
+
+      const { rows } = await db.platform.query<{ token_hash: string; type: string; expires_at: Date }>('SELECT token_hash, type, expires_at FROM user_tokens WHERE user_id = $1', [user.userId]);
+      expect(rows).toEqual([{ token_hash: sha256Hex(token), type: 'PASSWORD_RESET', expires_at: expect.any(Date) }]);
       expect((rows[0]!.expires_at.getTime() - Date.now()) / 60_000).toBeCloseTo(30, 0);
+      const stored = await db.owner.query(`SELECT 1 FROM platform_outbox_events WHERE payload::text LIKE $1 UNION ALL SELECT 1 FROM user_tokens WHERE token_hash = $2`, [`%${token}%`, token]);
+      expect(stored.rowCount).toBe(0);
+    });
+
+    it('a retry after a failed delivery sends the same link and issues no second token', async () => {
+      const user = await seedUser(db, tenant);
+      await requestReset(user.email);
+      mail.mailer.failNext(new Error('smtp down'));
+      await mail.deliver();
+      expect(mail.mailer.to(user.email)).toHaveLength(0);
+      await db.owner.query(`UPDATE platform_outbox_events SET available_at = now() WHERE payload ->> 'userId' = $1`, [user.userId]);
+      await mail.deliver();
+      expect(mail.mailer.to(user.email)).toHaveLength(1);
+      expect((await db.platform.query('SELECT 1 FROM user_tokens WHERE user_id = $1', [user.userId])).rowCount).toBe(1);
+      const state = await db.owner.query<{ status: string; attempts: number }>(`SELECT status, attempts FROM platform_outbox_events WHERE payload ->> 'userId' = $1`, [user.userId]);
+      expect(state.rows[0]).toEqual({ status: 'DONE', attempts: 2 });
     });
 
     it('queues the e-mail even when the user belongs to no organization', async () => {
       const user = await seedUser(db, tenant);
       await db.platform.query('DELETE FROM memberships WHERE user_id = $1', [user.userId]);
-      await requestReset(user.email);
-      const [email] = await resetEmails(user.userId);
-      expect(email!.payload.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-      await confirmReset(email!.payload.token).expect(204);
+      await confirmReset(await resetTokenFor(user)).expect(204);
     });
 
-    it('the token and the event are written together, and the API role cannot read the outbox', async () => {
+    it('the event is queued by the request and the API role cannot read the outbox', async () => {
       const user = await seedUser(db, tenant);
       await requestReset(user.email);
-      const { rows } = await db.platform.query('SELECT 1 FROM user_tokens WHERE user_id = $1', [user.userId]);
-      expect(rows).toHaveLength(1);
+      expect(await resetEmails(user.userId)).toHaveLength(1);
       await expect(db.runtime.query('SELECT * FROM platform_outbox_events')).rejects.toMatchObject({ code: '42501' });
     });
 

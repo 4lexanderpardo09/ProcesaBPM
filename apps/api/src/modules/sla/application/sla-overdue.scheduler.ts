@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationBootstrap, type BeforeApplicationShutdown } from '@nestjs/common';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { SlaOverdueJob } from './sla-overdue.job.js';
 
@@ -6,7 +6,7 @@ export const OVERDUE_CHECK_INTERVAL_MS = 60_000;
 
 /** Runs the overdue job every minute; a failing run is logged and the next one tries again. */
 @Injectable()
-export class SlaOverdueScheduler implements OnApplicationBootstrap, OnApplicationShutdown {
+export class SlaOverdueScheduler implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private timer: NodeJS.Timeout | undefined;
   private running: Promise<void> = Promise.resolve();
 
@@ -21,7 +21,7 @@ export class SlaOverdueScheduler implements OnApplicationBootstrap, OnApplicatio
     }, OVERDUE_CHECK_INTERVAL_MS);
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  async beforeApplicationShutdown(): Promise<void> {
     clearInterval(this.timer);
     this.timer = undefined;
     await this.running;

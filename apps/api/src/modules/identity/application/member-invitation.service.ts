@@ -1,19 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { type InviteMemberRequest, type MemberResponse, NotFoundError } from '@procesabpm/shared';
 import { compact } from '../../../common/crud/compact.js';
-import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { INVITATION_EVENT } from '../../../infrastructure/outbox/platform-event-types.js';
 import { PlatformOutboxRepository } from '../../../infrastructure/outbox/platform-outbox.repository.js';
-import { generateOpaqueToken, sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { MemberRepository } from '../data/member.repository.js';
-import { assertInvitationPending, INVITATION_EMAIL_EVENT, MEMBER_INVITATION_TTL_MS } from '../domain/member-policy.js';
+import { assertInvitationPending } from '../domain/member-policy.js';
 import { toMemberResponse } from './members.service.js';
 
 /**
  * Invites people into the tenant: identity without a password (or the existing one, untouched), an
- * INVITED membership, its companies and a one-time token. The clear token only travels in the platform
- * outbox payload (read by the worker, erased when the event ends); the database keeps its hash.
+ * INVITED membership, its companies and the invitation e-mail (the worker issues the one-time token).
  */
 @Injectable()
 export class MemberInvitationService {
@@ -22,7 +20,6 @@ export class MemberInvitationService {
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(MemberRepository) private readonly members: MemberRepository,
     @Inject(PlatformOutboxRepository) private readonly outbox: PlatformOutboxRepository,
-    @Inject(Clock) private readonly clock: Clock,
   ) {}
 
   /** A person who is already a member answers 409 (the membership key); a foreign role or company, 422. */
@@ -51,20 +48,9 @@ export class MemberInvitationService {
     });
   }
 
+  /** Queues the e-mail with ids only: the worker issues the one-time token (replacing earlier links) and mails it. */
   private async sendInvitation(tx: TenantTransaction, userId: string): Promise<void> {
-    const member = await this.requireMember(tx, userId);
-    const tenantName = (await this.members.findTenantName(tx, this.tenantId)) ?? '';
-    const token = generateOpaqueToken();
-    const expiresAt = new Date(this.clock.now().getTime() + MEMBER_INVITATION_TTL_MS);
-    await this.members.issueInvitationToken(tx, { userId, tokenHash: sha256Hex(token), expiresAt });
-    await this.outbox.enqueue(tx, INVITATION_EMAIL_EVENT, {
-      userId,
-      email: member.user.email,
-      tenantId: this.tenantId,
-      tenantName,
-      token,
-      expiresAt: expiresAt.toISOString(),
-    });
+    await this.outbox.enqueue(tx, INVITATION_EVENT, { tenantId: this.tenantId, userId });
   }
 
   private async requireMember(tx: TenantTransaction, userId: string) {

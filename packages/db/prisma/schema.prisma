@@ -519,6 +519,8 @@ model UserToken {
   type            UserTokenType
   tokenHash       String        @unique @map("token_hash")
   invitedTenantId String?       @map("invited_tenant_id") @db.Uuid
+  /// The outbox event that issued this token (worker-issued tokens only): a retry finds its row instead of issuing another.
+  sourceEventId   String?       @unique @map("source_event_id") @db.Uuid
   /// Extra data of the token, e.g. {"email": "new@x.com"} for EMAIL_CHANGE.
   payload         Json?
   expiresAt       DateTime      @map("expires_at") @db.Timestamptz(3)
@@ -2425,12 +2427,15 @@ model Notification {
   body      String
   readAt    DateTime?        @map("read_at") @db.Timestamptz(3)
   createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// The outbox event that produced it: one notification per person per event.
+  sourceEventId String?      @map("source_event_id") @db.Uuid
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   membership Membership @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Cascade)
   ticket     Ticket?    @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
 
   @@id([tenantId, id])
+  @@unique([tenantId, sourceEventId, userId])
   @@index([tenantId, userId, readAt, createdAt(sort: Desc)])
   @@index([tenantId, ticketId])
   @@map("notifications")

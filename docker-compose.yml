@@ -1,0 +1,39 @@
+# Development services. Every image has a fixed tag: "latest" tags disappear or change under us (MinIO stopped
+# publishing its images). Start with: docker compose up -d
+#
+# API/worker environment for this setup (see docs/arquitectura.md):
+#   STORAGE_ENDPOINT=http://localhost:8333  STORAGE_BUCKET=procesabpm  STORAGE_ACCESS_KEY_ID=devkey
+#   STORAGE_SECRET_ACCESS_KEY=devsecret  STORAGE_FORCE_PATH_STYLE=true
+#   MAIL_TRANSPORT=smtp  SMTP_HOST=localhost  SMTP_PORT=1025   (read the mails at http://localhost:8025)
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: procesabpm
+    ports: ['5432:5432']
+    volumes: ['postgres-data:/var/lib/postgresql']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d procesabpm']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # S3-compatible storage. Create the bucket once: `aws --endpoint-url http://localhost:8333 s3 mb s3://procesabpm`.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.48
+    command: ['mini', '-dir=/data', '-s3.port=8333']
+    environment:
+      AWS_ACCESS_KEY_ID: devkey
+      AWS_SECRET_ACCESS_KEY: devsecret
+    ports: ['8333:8333']
+    volumes: ['seaweedfs-data:/data']
+
+  # Catches every e-mail the worker sends: SMTP on 1025, web UI on 8025.
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports: ['1025:1025', '8025:8025']
+
+volumes:
+  postgres-data:
+  seaweedfs-data:

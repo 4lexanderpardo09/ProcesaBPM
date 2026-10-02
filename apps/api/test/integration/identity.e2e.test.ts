@@ -7,6 +7,7 @@ import { adminOf, ApiClient, clientOf, clientWith, connectTestDatabase } from '.
 import { bearer, signIn } from '../support/auth-helpers.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
+import { MailWorker, tokenOf } from '../support/worker-mail.js';
 
 useTestEnvironment();
 
@@ -15,7 +16,7 @@ const emailOf = () => `${unique('person')}@example.com`;
 const PASSWORD = 'a brand new password 123';
 
 interface InvitationEvent {
-  readonly payload: { token: string; userId: string; email: string; tenantId: string };
+  readonly payload: { userId: string; tenantId: string };
 }
 
 describe('identity API: members', () => {
@@ -24,6 +25,7 @@ describe('identity API: members', () => {
   let admin: ApiClient;
   let tenant: SeededTenant;
   let staffRoleId: string;
+  let mail: MailWorker;
 
   const http = () => request(app.getHttpServer());
   const invite = (overrides: object = {}) =>
@@ -31,14 +33,22 @@ describe('identity API: members', () => {
   const events = async (userId: string): Promise<InvitationEvent[]> =>
     (await db.owner.query<InvitationEvent>(`SELECT payload FROM platform_outbox_events WHERE type = 'email.invitation' AND payload ->> 'userId' = $1 ORDER BY created_at`, [userId])).rows;
 
+  /** Lets the worker deliver what is queued and returns the token of the newest link mailed to the address. */
+  const linkTokenFor = async (email: string): Promise<string> => {
+    await mail.deliver();
+    return tokenOf(mail.lastTo(email)!);
+  };
+
   beforeAll(async () => {
     db = connectTestDatabase();
     ({ app } = await createTestApp());
+    mail = await MailWorker.start();
     ({ admin, tenant } = await adminOf(db, app));
     staffRoleId = (await admin.post('/roles', { name: unique('Staff') }).expect(201)).body.id;
   });
 
   afterAll(async () => {
+    await mail.close();
     await app.close();
     await db.close();
   });
@@ -50,8 +60,10 @@ describe('identity API: members', () => {
       expect(invited).toMatchObject({ status: 'INVITED', email, isOwner: false, roleId: staffRoleId, companyIds: [tenant.companyId], joinedAt: null });
 
       const [event] = await events(invited.userId);
-      expect(event!.payload).toMatchObject({ email, tenantId: tenant.tenantId });
-      await http().post('/auth/invitations/accept').send({ token: event!.payload.token, password: PASSWORD }).expect(200);
+      expect(event!.payload).toEqual({ userId: invited.userId, tenantId: tenant.tenantId });
+      const message = (await mail.deliver(), mail.lastTo(email)!);
+      expect(message.subject).toBe('Te invitaron a ProcesaBPM');
+      await http().post('/auth/invitations/accept').send({ token: tokenOf(message), password: PASSWORD }).expect(200);
 
       const session = await signIn(app, email, tenant.tenantId, PASSWORD);
       const me = await http().get('/auth/me').set(bearer(session.accessToken)).expect(200);
@@ -75,20 +87,24 @@ describe('identity API: members', () => {
     });
 
     it('resending invalidates the earlier links: only the newest one can be accepted', async () => {
-      const invited = (await invite().expect(201)).body;
+      const email = emailOf();
+      const invited = (await invite({ email }).expect(201)).body;
+      const first = await linkTokenFor(email);
       await admin.post(`/members/${invited.userId}/resend-invitation`).expect(200);
-      const [first, second] = await events(invited.userId);
-      expect((await http().post('/auth/invitations/accept').send({ token: first!.payload.token, password: PASSWORD }).expect(400)).body.error.code).toBe('INVALID_TOKEN');
-      await http().post('/auth/invitations/accept').send({ token: second!.payload.token, password: PASSWORD }).expect(200);
+      const second = await linkTokenFor(email);
+      expect((await http().post('/auth/invitations/accept').send({ token: first, password: PASSWORD }).expect(400)).body.error.code).toBe('INVALID_TOKEN');
+      await http().post('/auth/invitations/accept').send({ token: second, password: PASSWORD }).expect(200);
     });
 
     it('resends a pending invitation with a new link and refuses it once accepted', async () => {
-      const invited = (await invite().expect(201)).body;
+      const email = emailOf();
+      const invited = (await invite({ email }).expect(201)).body;
+      const first = await linkTokenFor(email);
       await admin.post(`/members/${invited.userId}/resend-invitation`).expect(200);
-      const sent = await events(invited.userId);
-      expect(sent).toHaveLength(2);
-      expect(sent[1]!.payload.token).not.toBe(sent[0]!.payload.token);
-      await http().post('/auth/invitations/accept').send({ token: sent[1]!.payload.token, password: PASSWORD }).expect(200);
+      expect(await events(invited.userId)).toHaveLength(2);
+      const second = await linkTokenFor(email);
+      expect(second).not.toBe(first);
+      await http().post('/auth/invitations/accept').send({ token: second, password: PASSWORD }).expect(200);
       expect((await admin.post(`/members/${invited.userId}/resend-invitation`).expect(422)).body.error.code).toBe('INVALID_STATE');
     });
 
@@ -138,8 +154,7 @@ describe('identity API: members', () => {
     it('deactivates and reactivates; nobody deactivates themselves', async () => {
       const member = (await invite().expect(201)).body;
       const { rows } = await db.platform.query<{ email: string }>(`SELECT email FROM users WHERE id = $1`, [member.userId]);
-      const { token } = (await events(member.userId))[0]!.payload;
-      await http().post('/auth/invitations/accept').send({ token, password: PASSWORD }).expect(200);
+      await http().post('/auth/invitations/accept').send({ token: await linkTokenFor(rows[0]!.email), password: PASSWORD }).expect(200);
       expect(rows).toHaveLength(1);
 
       expect((await admin.post(`/members/${member.userId}/deactivate`).expect(200)).body.status).toBe('INACTIVE');
@@ -266,14 +281,21 @@ describe('identity API: roles, permissions and groups', () => {
   let app: INestApplication;
   let admin: ApiClient;
   let tenant: SeededTenant;
+  let mail: MailWorker;
+  const linkTokenFor = async (email: string): Promise<string> => {
+    await mail.deliver();
+    return tokenOf(mail.lastTo(email)!);
+  };
 
   beforeAll(async () => {
     db = connectTestDatabase();
     ({ app } = await createTestApp());
     ({ admin, tenant } = await adminOf(db, app));
+    mail = await MailWorker.start();
   });
 
   afterAll(async () => {
+    await mail.close();
     await app.close();
     await db.close();
   });
@@ -336,8 +358,8 @@ describe('identity API: roles, permissions and groups', () => {
       expect(member).toBeDefined();
       const email = emailOf();
       const invited = (await admin.post('/members/invitations', { email, firstName: 'L', lastName: 'L', roleId: role.id, companyIds: [tenant.companyId] }).expect(201)).body;
-      const { rows } = await db.owner.query<{ payload: { token: string } }>(`SELECT payload FROM platform_outbox_events WHERE type = 'email.invitation' AND payload ->> 'userId' = $1`, [invited.userId]);
-      await request(app.getHttpServer()).post('/auth/invitations/accept').send({ token: rows[0]!.payload.token, password: PASSWORD }).expect(200);
+      expect(invited.userId).toBeDefined();
+      await request(app.getHttpServer()).post('/auth/invitations/accept').send({ token: await linkTokenFor(email), password: PASSWORD }).expect(200);
       const session = new ApiClient(app, (await signIn(app, email, tenant.tenantId, PASSWORD)).accessToken);
 
       await session.get('/companies').expect(403);

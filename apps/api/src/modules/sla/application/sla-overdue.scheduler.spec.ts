@@ -18,7 +18,7 @@ describe('SlaOverdueScheduler', () => {
     scheduler.onApplicationBootstrap();
     await vi.advanceTimersByTimeAsync(OVERDUE_CHECK_INTERVAL_MS * 2);
     expect(job.runOnce).toHaveBeenCalledTimes(2);
-    await scheduler.onApplicationShutdown();
+    await scheduler.beforeApplicationShutdown();
     await vi.advanceTimersByTimeAsync(OVERDUE_CHECK_INTERVAL_MS * 2);
     expect(job.runOnce).toHaveBeenCalledTimes(2);
   });

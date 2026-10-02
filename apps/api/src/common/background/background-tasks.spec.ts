@@ -38,7 +38,7 @@ describe('BackgroundTasks', () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
       finished = true;
     });
-    await tasks.onApplicationShutdown();
+    await tasks.beforeApplicationShutdown();
     expect(finished).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import { JsonLogger } from '../logging/json-logger.js';
 
 /**
@@ -6,7 +6,7 @@ import { JsonLogger } from '../logging/json-logger.js';
  * the caller. Failures are logged; shutdown waits for what is still running.
  */
 @Injectable()
-export class BackgroundTasks implements OnApplicationShutdown {
+export class BackgroundTasks implements BeforeApplicationShutdown {
   private readonly pending = new Set<Promise<void>>();
 
   constructor(@Inject(JsonLogger) private readonly logger: JsonLogger) {}
@@ -23,7 +23,7 @@ export class BackgroundTasks implements OnApplicationShutdown {
     while (this.pending.size > 0) await Promise.allSettled([...this.pending]);
   }
 
-  async onApplicationShutdown(): Promise<void> {
+  async beforeApplicationShutdown(): Promise<void> {
     await this.whenIdle();
   }
 }
