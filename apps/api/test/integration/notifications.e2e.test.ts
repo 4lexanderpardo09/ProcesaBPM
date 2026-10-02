@@ -190,7 +190,7 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
       await fanOut();
       const sent = mail.mailer.to(mailbox).length;
       expect(sent).toBe(before + 1);
-      mail.mailer.failNext(new Error('smtp down'));
+      mail.mailer.failNextTo(mailbox, new Error('smtp down'));
       await create();
       await fanOut();
       expect(mail.mailer.to(mailbox).length).toBe(sent);
