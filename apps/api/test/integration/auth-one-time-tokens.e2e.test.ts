@@ -200,6 +200,8 @@ describe('one-time tokens', () => {
       const response = await accept({ token: invited.token, password: NEW_PASSWORD }).expect(200);
       expect(response.body).toEqual({ tenantId: tenant.tenantId });
       expect(await membershipStatus(db, tenant.tenantId, invited.userId)).toBe('ACTIVE');
+      // Selection tokens issued in the same second as the password change are refused (iat has whole seconds).
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
       const session = await signIn(app, email, tenant.tenantId, NEW_PASSWORD);
       await http().get('/auth/me').set(bearer(session.accessToken)).expect(200);
     });

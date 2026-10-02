@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type AccessTokenClaims,
@@ -30,7 +31,15 @@ export interface IssuedToken {
   readonly expiresIn: number;
 }
 
-const selectionClaimsSchema = z.object({ sub: uuidSchema });
+const selectionClaimsSchema = z.object({ sub: uuidSchema, jti: uuidSchema, iat: z.number().int(), exp: z.number().int() });
+
+/** The verified claims of a selection token; `jti` is consumed in the database so the token works once. */
+export interface SelectionTokenClaims {
+  readonly userId: string;
+  readonly jti: string;
+  readonly issuedAt: Date;
+  readonly expiresAt: Date;
+}
 
 /**
  * Signs and verifies the two short-lived JWTs. They use different audiences, so a selection
@@ -56,7 +65,7 @@ export class JwtTokenService {
   }
 
   issueSelectionToken(userId: string): Promise<IssuedToken> {
-    return this.sign({}, userId, SELECTION_AUDIENCE, SELECTION_TOKEN_TTL_SECONDS);
+    return this.sign({}, userId, SELECTION_AUDIENCE, SELECTION_TOKEN_TTL_SECONDS, randomUUID());
   }
 
   async verifyAccessToken(token: string): Promise<AccessTokenClaims> {
@@ -73,11 +82,11 @@ export class JwtTokenService {
     return claims.data;
   }
 
-  /** Returns the id of the user that logged in. */
-  async verifySelectionToken(token: string): Promise<string> {
+  async verifySelectionToken(token: string): Promise<SelectionTokenClaims> {
     const claims = selectionClaimsSchema.safeParse(await this.verify(token, SELECTION_AUDIENCE));
     if (!claims.success) throw new UnauthenticatedError();
-    return claims.data.sub;
+    const { sub, jti, iat, exp } = claims.data;
+    return { userId: sub, jti, issuedAt: new Date(iat * 1000), expiresAt: new Date(exp * 1000) };
   }
 
   private async sign(
@@ -85,16 +94,17 @@ export class JwtTokenService {
     subject: string,
     audience: string,
     ttlSeconds: number,
+    tokenId?: string,
   ): Promise<IssuedToken> {
     const issuedAt = Math.floor(this.clock.now().getTime() / 1000);
-    const token = await new SignJWT(claims)
+    const jwt = new SignJWT(claims)
       .setProtectedHeader({ alg: ALGORITHM })
       .setSubject(subject)
       .setIssuer(ISSUER)
       .setAudience(audience)
       .setIssuedAt(issuedAt)
-      .setExpirationTime(issuedAt + ttlSeconds)
-      .sign(this.key);
+      .setExpirationTime(issuedAt + ttlSeconds);
+    const token = await (tokenId === undefined ? jwt : jwt.setJti(tokenId)).sign(this.key);
     return { token, expiresIn: ttlSeconds };
   }
 

@@ -5,6 +5,7 @@ import { AuthTransactionRunner } from '../../../infrastructure/database/auth-tra
 import { type IssuedToken, JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import { generateOpaqueToken, sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { CredentialsRepository } from '../data/credentials.repository.js';
+import { LoginTokenRepository } from '../data/login-token.repository.js';
 import { PlatformAccessRepository } from '../data/platform-access.repository.js';
 import { SessionRepository } from '../data/session.repository.js';
 import { PLATFORM_SESSION_TTL_MS } from '../domain/auth-policy.js';
@@ -22,6 +23,7 @@ export class PlatformSessionService {
     @Inject(AuthTransactionRunner) private readonly runner: AuthTransactionRunner,
     @Inject(CredentialsRepository) private readonly credentials: CredentialsRepository,
     @Inject(SessionRepository) private readonly sessions: SessionRepository,
+    @Inject(LoginTokenRepository) private readonly loginTokens: LoginTokenRepository,
     @Inject(PlatformAccessRepository) private readonly access: PlatformAccessRepository,
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
     @Inject(Clock) private readonly clock: Clock,
@@ -29,8 +31,10 @@ export class PlatformSessionService {
 
   /** With the selection token of the login. Anyone who is not a (current, active) platform admin gets 403. */
   async open(selectionToken: string, client: ClientInfo): Promise<IssuedToken> {
-    const userId = await this.tokens.verifySelectionToken(selectionToken);
+    const selection = await this.tokens.verifySelectionToken(selectionToken);
+    const { userId } = selection;
     const sessionId = await this.runner.withUserTransaction(userId, async (tx) => {
+      if (!(await this.loginTokens.consume(tx, selection, 'TENANT_SELECTION'))) throw new UnauthenticatedError();
       if (!(await this.credentials.isPlatformAdmin(tx, userId))) throw new PlatformAccessDeniedError();
       return this.sessions.create(tx, {
         userId,

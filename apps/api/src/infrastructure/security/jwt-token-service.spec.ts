@@ -44,9 +44,18 @@ describe('JwtTokenService', () => {
     const { service, advance } = setup();
     const { token, expiresIn } = await service.issueSelectionToken(claims.sub);
     expect(expiresIn).toBe(SELECTION_TOKEN_TTL_SECONDS);
-    await expect(service.verifySelectionToken(token)).resolves.toBe(claims.sub);
+    await expect(service.verifySelectionToken(token)).resolves.toMatchObject({ userId: claims.sub });
     advance(2 * 60 + 10);
     await expect(service.verifySelectionToken(token)).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it('gives every selection token its own id and carries its issue and expiry instants', async () => {
+    const { service } = setup();
+    const first = await service.verifySelectionToken((await service.issueSelectionToken(claims.sub)).token);
+    const second = await service.verifySelectionToken((await service.issueSelectionToken(claims.sub)).token);
+    expect(first.jti).toMatch(/^[0-9a-f-]{36}$/);
+    expect(first.jti).not.toBe(second.jti);
+    expect(first.expiresAt.getTime() - first.issuedAt.getTime()).toBe(SELECTION_TOKEN_TTL_SECONDS * 1000);
   });
 
   it('never accepts a selection token as an access token, nor the other way round', async () => {

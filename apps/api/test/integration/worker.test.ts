@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { PlatformPrismaService } from '../../src/infrastructure/database/platform-prisma.service.js';
 import { PrismaService } from '../../src/infrastructure/database/prisma.service.js';
+import { connectTestDatabase } from '@procesabpm/db/testing/database';
+import { seedTenant } from '@procesabpm/db/testing/fixtures';
+import { randomUUID } from 'node:crypto';
+import { AuthTokenPurgeJob } from '../../src/modules/auth/application/auth-token-purge.job.js';
+import { seedUser } from '../support/auth-fixtures.js';
 import { WorkerModule } from '../../src/worker.module.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 
@@ -61,6 +66,28 @@ describe('worker', () => {
       expect(() => moduleRef.get(PlatformPrismaService, { strict: false })).toThrow();
     } finally {
       await moduleRef.close();
+    }
+  });
+
+  it('forgets the ids of login tokens that expired long ago and keeps the recent ones', async () => {
+    const db = connectTestDatabase();
+    const moduleRef = await Test.createTestingModule({ imports: [WorkerModule] })
+      .overrideProvider(LOG_WRITER)
+      .useValue(() => undefined)
+      .compile();
+    await moduleRef.init();
+    try {
+      const user = await seedUser(db, await seedTenant(db.platform));
+      await db.platform.query(
+        `INSERT INTO consumed_auth_tokens (jti, user_id, purpose, expires_at) VALUES
+           ($1, $3, 'TENANT_SELECTION', now() - interval '2 hours'), ($2, $3, 'TENANT_SELECTION', now() + interval '1 minute')`,
+        [randomUUID(), randomUUID(), user.userId],
+      );
+      expect(await moduleRef.get(AuthTokenPurgeJob).runOnce()).toBeGreaterThanOrEqual(1);
+      expect((await db.platform.query('SELECT 1 FROM consumed_auth_tokens WHERE user_id = $1', [user.userId])).rowCount).toBe(1);
+    } finally {
+      await moduleRef.close();
+      await db.close();
     }
   });
 });

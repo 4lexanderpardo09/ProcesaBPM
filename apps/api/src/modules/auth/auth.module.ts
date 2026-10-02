@@ -15,6 +15,7 @@ import { SessionService } from './application/session.service.js';
 import { TenantAccessService } from './application/tenant-access.service.js';
 import { TenantSelectionService } from './application/tenant-selection.service.js';
 import { CredentialsRepository } from './data/credentials.repository.js';
+import { LoginTokenRepository } from './data/login-token.repository.js';
 import { PlatformAccessRepository } from './data/platform-access.repository.js';
 import { PlatformOutboxRepository } from '../../infrastructure/outbox/platform-outbox.repository.js';
 import { ProfileRepository } from './data/profile.repository.js';
@@ -36,6 +37,7 @@ import { AuthController } from './http/auth.controller.js';
     RateLimitGuard,
     CredentialsRepository,
     SessionRepository,
+    LoginTokenRepository,
     TenantAccessRepository,
     ProfileRepository,
     PlatformOutboxRepository,
