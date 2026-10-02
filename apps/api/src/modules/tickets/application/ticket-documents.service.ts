@@ -25,7 +25,7 @@ export class TicketDocumentsService {
   }
 
   downloadUrl(ability: AppAbility, ticketId: string, fileId: string): Promise<DownloadUrlResponse> {
-    return this.readable(ability, ticketId, (tx, tenantId) => this.files.downloadUrl(tx, tenantId, ticketId, fileId));
+    return this.readable(ability, ticketId, (tx, tenantId) => this.files.locate(tx, tenantId, ticketId, fileId)).then((file) => this.files.signDownload(file));
   }
 
   private readable<T>(ability: AppAbility, ticketId: string, work: (tx: TenantTransaction, tenantId: string) => Promise<T>): Promise<T> {

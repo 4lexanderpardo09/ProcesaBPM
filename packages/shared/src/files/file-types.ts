@@ -2,6 +2,8 @@ export const MAX_FILE_BYTES = 4 * 1024 * 1024;
 export const MAX_FILES_PER_SUBMISSION = 15;
 export const MAX_SUBMISSION_BYTES = 20 * 1024 * 1024;
 export const MAX_PENDING_UPLOADS_PER_USER = 50;
+/** What one person may hold uploaded but not attached to anything (pending or confirmed), so nobody can fill the tenant's quota. */
+export const MAX_UNLINKED_BYTES_PER_USER = 5 * MAX_SUBMISSION_BYTES;
 
 export const FILE_KINDS = ['PDF', 'IMAGE', 'OFFICE', 'ZIP'] as const;
 export type FileKind = (typeof FILE_KINDS)[number];

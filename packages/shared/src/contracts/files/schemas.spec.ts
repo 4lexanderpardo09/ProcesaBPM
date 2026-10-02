@@ -30,6 +30,9 @@ describe('requestUploadsSchema', () => {
 
 describe('attachmentIdsSchema', () => {
   const id = '0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f90';
+  it('lower-cases ids so they match the stored ones', () => {
+    expect(attachmentIdsSchema.parse([id.toUpperCase()])).toEqual([id]);
+  });
   it('defaults to none and rejects repeats and more than 15', () => {
     expect(attachmentIdsSchema.parse(undefined)).toEqual([]);
     expect(attachmentIdsSchema.safeParse([id, id]).success).toBe(false);

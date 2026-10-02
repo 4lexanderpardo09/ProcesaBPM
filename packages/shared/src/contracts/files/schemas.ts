@@ -30,7 +30,7 @@ export type RequestUploadsRequest = z.infer<typeof requestUploadsSchema>;
 
 /** Ids of confirmed uploads to attach to the record being created, advanced, closed or commented. */
 export const attachmentIdsSchema = z
-  .array(uuidSchema)
+  .array(uuidSchema.transform((id) => id.toLowerCase()))
   .max(MAX_FILES_PER_SUBMISSION)
   .refine((ids) => new Set(ids).size === ids.length, 'Repeated attachments')
   .default([]);

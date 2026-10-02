@@ -3,6 +3,7 @@ import { type DownloadUrlResponse, NotFoundError, type TicketDocumentResponse } 
 import { Clock } from '../../../infrastructure/clock.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
+import type { StoredFileRow } from '../data/stored-file.repository.js';
 import { TicketDocumentRepository } from '../data/ticket-document.repository.js';
 import { dispositionOf } from '../domain/ticket-file-disposition.js';
 import { kindOf, toStoredFileResponse } from './file-responses.js';
@@ -35,10 +36,15 @@ export class TicketFileService {
     }));
   }
 
-  /** A short-lived signed URL; the browser fetches the bytes from the storage, never through the API. */
-  async downloadUrl(tx: TenantTransaction, tenantId: string, ticketId: string, fileId: string): Promise<DownloadUrlResponse> {
+  /** The file, if it really is a document of this ticket. Signing happens after the transaction (`signDownload`). */
+  async locate(tx: TenantTransaction, tenantId: string, ticketId: string, fileId: string): Promise<StoredFileRow> {
     const file = await this.documents.findFile(tx, tenantId, ticketId, fileId);
     if (file === null) throw new NotFoundError();
+    return file;
+  }
+
+  /** A short-lived signed URL; the browser fetches the bytes from the storage, never through the API. */
+  async signDownload(file: StoredFileRow): Promise<DownloadUrlResponse> {
     const signed = await this.storage.presignDownload({
       key: file.storageKey,
       fileName: file.originalName,

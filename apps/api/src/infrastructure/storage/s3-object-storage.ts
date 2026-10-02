@@ -51,6 +51,9 @@ export class S3ObjectStorage extends ObjectStorage {
       Bucket: this.settings.bucket,
       Key: input.key,
       ResponseContentType: input.contentType,
+      // The uploader chose these headers when sending the bytes (they are not signed): never let them reach the browser.
+      ResponseContentEncoding: 'identity',
+      ResponseCacheControl: 'private, no-store',
       ResponseContentDisposition: contentDisposition(input.disposition, input.fileName),
     });
     const url = await getSignedUrl(this.signer, command, { expiresIn: input.expiresInSeconds, signingDate: input.now });

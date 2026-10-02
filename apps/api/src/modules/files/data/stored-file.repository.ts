@@ -98,6 +98,12 @@ export class StoredFileRepository {
     return tx.storedFile.count({ where: { tenantId, uploadedById: uploaderId, status: 'PENDING' } });
   }
 
+  /** Bytes the person uploaded (reserved or confirmed) and has not attached yet. */
+  async unlinkedBytes(tx: TenantTransaction, tenantId: string, uploaderId: string): Promise<bigint> {
+    const { _sum } = await tx.storedFile.aggregate({ where: { tenantId, uploadedById: uploaderId, origin: 'USER', linkedAt: null, status: { in: ['PENDING', 'CONFIRMED'] } }, _sum: { sizeBytes: true } });
+    return _sum.sizeBytes ?? 0n;
+  }
+
   find(tx: TenantTransaction, tenantId: string, id: string): Promise<StoredFileRow | null> {
     return tx.storedFile.findFirst({ where: { tenantId, id }, select: STORED_FILE_SELECT });
   }

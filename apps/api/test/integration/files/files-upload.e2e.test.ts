@@ -83,6 +83,19 @@ describe('uploads: reserve, upload, confirm, quota', () => {
     });
   });
 
+  describe('unlinked bytes per person', () => {
+    it('stops one person from parking more than 100 MB of uploads nobody attached, confirmed or not', async () => {
+      const hoarder = await world.member([grant('create')]);
+      const big = (name: string) => ({ name, sizeBytes: 4 * 1024 * 1024, sha256: 'a'.repeat(64) });
+      for (let batch = 0; batch < 5; batch += 1) {
+        await hoarder.client.post('/files/uploads', { files: Array.from({ length: 5 }, (_v, index) => big(`b${batch}-${index}.pdf`)) }).expect(201);
+      }
+      const refused = await hoarder.client.post('/files/uploads', { files: [big('one-more.pdf')] }).expect(422);
+      expect(refused.body.error.code).toBe('SUBMISSION_FILES_LIMIT');
+      await world.member([grant('create')]).then((colleague) => colleague.client.post('/files/uploads', { files: [big('fine.pdf')] }).expect(201));
+    });
+  });
+
   describe('POST /files/:id/confirm', () => {
     it('verifies the bytes, confirms the file and moves the reservation to used', async () => {
       const before = await usage();

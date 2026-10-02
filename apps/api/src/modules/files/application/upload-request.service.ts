@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   allowedTypeOf,
   MAX_PENDING_UPLOADS_PER_USER,
+  MAX_UNLINKED_BYTES_PER_USER,
   type RequestUploadsRequest,
   StorageQuotaExceededError,
   SubmissionFilesLimitError,
@@ -44,6 +45,8 @@ export class UploadRequestService {
       const decision = evaluateReservation(quotaLimits(await this.usage.termsOf(tx, tenantId)), current, requested);
       if (!decision.allowed) throw new StorageQuotaExceededError();
       if ((await this.files.countPending(tx, tenantId, userId)) + declaration.files.length > MAX_PENDING_UPLOADS_PER_USER) throw new SubmissionFilesLimitError();
+
+      if ((await this.files.unlinkedBytes(tx, tenantId, userId)) + requested > BigInt(MAX_UNLINKED_BYTES_PER_USER)) throw new SubmissionFilesLimitError();
 
       const rows: StoredFileRow[] = [];
       for (const file of declaration.files) {
