@@ -49,6 +49,14 @@ describe('rate limiting', () => {
     await call().expect(429);
   });
 
+  it('limits tenant selection per selection token (a bearer route has no e-mail in the body)', async () => {
+    const select = (token: string) => request(app.getHttpServer()).post('/auth/select-tenant').set('authorization', `Bearer ${token}`).send({ tenantId: '0197e5b2-0000-7000-8000-000000000001' });
+    for (let attempt = 0; attempt < RATE_LIMITS.selectTenant.perIdentifier.limit; attempt += 1) await select('first.bearer.token').expect(401);
+    const response = await select('first.bearer.token').expect(429);
+    expect(response.body.error.code).toBe('RATE_LIMITED');
+    await select('second.bearer.token').expect(401);
+  });
+
   it('ignores X-Forwarded-For by default (TRUST_PROXY=false): it cannot be used to dodge the limit', async () => {
     const fresh = await createTestApp({ rateLimiting: true });
     try {

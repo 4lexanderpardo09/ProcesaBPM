@@ -31,7 +31,7 @@ import { ProfileService } from '../application/profile.service.js';
 import { type ClientInfo, type OpenedSession, SessionService } from '../application/session.service.js';
 import { TenantSelectionService } from '../application/tenant-selection.service.js';
 import { RATE_LIMITS } from '../domain/auth-policy.js';
-import { bearerToken } from './bearer-token.js';
+import { bearerToken } from '../../../common/auth/bearer-token.js';
 import { clearRefreshCookie, readRefreshCookie, setRefreshCookie } from './refresh-cookie.js';
 
 const USER_AGENT_MAX_LENGTH = 512;
@@ -65,6 +65,8 @@ export class AuthController {
   /** Authenticated with the selection token returned by the login (`Authorization: Bearer`). */
   @Public()
   @Post('select-tenant')
+  @RateLimit(RATE_LIMITS.selectTenant)
+  @UseGuards(RateLimitGuard)
   @HttpCode(HttpStatus.OK)
   async selectTenant(
     @Body(new ZodValidationPipe(selectTenantRequestSchema)) body: SelectTenantRequest,

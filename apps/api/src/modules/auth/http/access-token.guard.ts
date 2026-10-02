@@ -5,7 +5,7 @@ import { accessMetadataOf, classifyAccess } from '../../../common/auth/route-met
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import { PlatformSessionService } from '../application/platform-session.service.js';
 import { TenantAccessService } from '../application/tenant-access.service.js';
-import { bearerToken } from './bearer-token.js';
+import { bearerToken } from '../../../common/auth/bearer-token.js';
 
 /**
  * Every route needs a valid access token unless it is marked `@Public()` (a route that mixes `@Public`

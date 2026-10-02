@@ -17,12 +17,13 @@ class Routes {
 function setup() {
   const clock: Clock = { now: () => new Date(0) };
   const guard = new RateLimitGuard(new Reflector(), new InMemoryRateLimiter(clock));
+  let authorization: string | undefined;
   const call = (handler: keyof Routes, body: unknown, ip = '10.0.0.1') =>
     guard.canActivate({
       getHandler: () => Routes.prototype[handler],
-      switchToHttp: () => ({ getRequest: () => ({ ip, body }) }),
+      switchToHttp: () => ({ getRequest: () => ({ ip, body, header: (name: string) => (name === 'authorization' ? authorization : undefined) }) }),
     } as unknown as ExecutionContext);
-  return { call };
+  return { call, withBearer: (value: string | undefined) => (authorization = value === undefined ? undefined : `Bearer ${value}`) };
 }
 
 describe('RateLimitGuard', () => {
@@ -44,6 +45,16 @@ describe('RateLimitGuard', () => {
     await call('limited', { token: 't1' }, '10.0.0.2');
     await expect(call('limited', { token: 't1' }, '10.0.0.3')).rejects.toBeInstanceOf(RateLimitedError);
     await expect(call('limited', { token: 't2' }, '10.0.0.4')).resolves.toBe(true);
+  });
+
+  it('limits per bearer token on routes that carry no e-mail or token in the body', async () => {
+    const { call, withBearer } = setup();
+    withBearer('selection-1');
+    await call('limited', undefined, '10.0.0.1');
+    await call('limited', {}, '10.0.0.2');
+    await expect(call('limited', undefined, '10.0.0.3')).rejects.toBeInstanceOf(RateLimitedError);
+    withBearer('selection-2');
+    await expect(call('limited', undefined, '10.0.0.4')).resolves.toBe(true);
   });
 
   it('a client over its IP limit does not spend the budget of the e-mail it targets', async () => {
