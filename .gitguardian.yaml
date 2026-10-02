@@ -4,3 +4,4 @@ secret:
     # Placeholders only: connection URLs that reference ${VARIABLES} and a sample .env with "change-me" values.
     - docker-compose.prod.example.yml
     - deploy/example.env
+    - apps/api/.env.example
