@@ -3,7 +3,8 @@ import { connectTestDatabase, type TestDatabase } from '@procesabpm/db/testing/d
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
 import { loginResponseSchema } from '@procesabpm/shared';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { PasswordHasher } from '../../src/infrastructure/security/password-hasher.js';
 import { TEST_PASSWORD } from '../support/auth-helpers.js';
 import { addMembership, seedUser, type TestUser, userRow } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
@@ -127,6 +128,20 @@ describe('POST /auth/login', () => {
       await login(user.email, user.password).expect(200);
       expect(await userRow(db, user.userId)).toMatchObject({ failed_logins: 0, locked_until: null });
     });
+  });
+
+  it('a burst of parallel logins cannot test more passwords than the lockout allows', async () => {
+    const user = await seedUser(db, tenant);
+    const verify = vi.spyOn(app.get(PasswordHasher), 'verify');
+    try {
+      await Promise.all(Array.from({ length: 20 }, () => login(user.email, 'wrong password')));
+      const testedAgainstTheRealHash = verify.mock.calls.filter(([storedHash]) => storedHash !== null).length;
+      expect(testedAgainstTheRealHash).toBe(5);
+    } finally {
+      verify.mockRestore();
+    }
+    expect(await userRow(db, user.userId)).toMatchObject({ locked_until: expect.any(Date) });
+    await login(user.email, user.password).expect(401);
   });
 
   it('a successful login resets the failure counter before it locks', async () => {

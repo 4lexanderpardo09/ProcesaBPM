@@ -493,12 +493,15 @@ model User {
   lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(3)
   failedLogins       Int        @default(0) @map("failed_logins")
   lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(3)
+  /// Tokens issued before this instant are void (password reset, invitation or change). Not readable by the application role.
+  passwordChangedAt  DateTime?  @map("password_changed_at") @db.Timestamptz(3)
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships     Membership[]
   refreshSessions RefreshSession[]
   tokens          UserToken[]
+  consumedAuthTokens ConsumedAuthToken[]
   platformAdmin   PlatformAdmin?
 
   @@map("users")
@@ -540,6 +543,21 @@ model UserToken {
 
   @@index([userId, type])
   @@map("user_tokens")
+}
+
+/// Selection and MFA-challenge tokens already used (by jti), so each works once. Platform-only: no application role reads it.
+model ConsumedAuthToken {
+  jti        String   @id @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  purpose    String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime @default(now()) @map("consumed_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("consumed_auth_tokens")
 }
 
 model PlatformAdmin {

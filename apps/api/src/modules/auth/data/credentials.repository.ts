@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InvalidTokenError, type Organization } from '@procesabpm/shared';
 import type { AuthTransaction } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { LOGIN_LOCKOUT } from '../domain/auth-policy.js';
-import type { LoginCandidate } from '../domain/login-eligibility.js';
+import type { LoginCandidate } from '../domain/login-candidate.js';
 
 export type UserTokenType = 'PASSWORD_RESET' | 'INVITATION' | 'EMAIL_VERIFICATION' | 'EMAIL_CHANGE';
 
@@ -22,8 +22,7 @@ export interface ConsumedUserToken {
 export class CredentialsRepository {
   async findLoginCandidate(tx: AuthTransaction, email: string): Promise<LoginCandidate | undefined> {
     const [row] = await tx.$queryRaw<LoginCandidate[]>`
-      SELECT id, password_hash AS "passwordHash", status::text AS status,
-             locked_until AS "lockedUntil", mfa_enabled AS "mfaEnabled"
+      SELECT id, password_hash AS "passwordHash", status::text AS status, mfa_enabled AS "mfaEnabled"
       FROM auth_find_user_by_email(${email})`;
     return row;
   }
@@ -34,10 +33,19 @@ export class CredentialsRepository {
     return row?.ok === true;
   }
 
-  async registerLoginAttempt(tx: AuthTransaction, userId: string, success: boolean): Promise<void> {
-    await tx.$executeRaw`
-      SELECT auth_register_login_attempt(${userId}::uuid, ${success}, ${LOGIN_LOCKOUT.maxFailedAttempts}::int,
-                                         ${LOGIN_LOCKOUT.lockMinutes}::int)`;
+  /**
+   * Counts one login attempt, atomically, before the password is checked. `false`: the account is locked, not active or
+   * unknown, and the password must not be tested against its real hash.
+   */
+  async claimLoginAttempt(tx: AuthTransaction, userId: string): Promise<boolean> {
+    const [row] = await tx.$queryRaw<{ claimed: boolean }[]>`
+      SELECT auth_claim_login_attempt(${userId}::uuid, ${LOGIN_LOCKOUT.maxFailedAttempts}::int, ${LOGIN_LOCKOUT.lockMinutes}::int) AS claimed`;
+    return row?.claimed === true;
+  }
+
+  /** The password was right: gives the claimed attempt back; `signedIn` stamps the last login. */
+  async recordPasswordSuccess(tx: AuthTransaction, userId: string, signedIn: boolean): Promise<void> {
+    await tx.$executeRaw`SELECT auth_record_password_success(${userId}::uuid, ${signedIn})`;
   }
 
   /** Needs `app.user_id` = `userId`: the function only lists the caller's own organizations. */
