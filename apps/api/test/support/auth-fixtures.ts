@@ -22,6 +22,9 @@ export async function seedUser(
   if (options.roleId !== undefined) {
     await db.platform.query('UPDATE memberships SET role_id = $1 WHERE tenant_id = $2 AND user_id = $3', [options.roleId, tenant.tenantId, userId]);
   }
+  if (options.departmentId !== undefined) {
+    await db.platform.query('UPDATE memberships SET department_id = $1 WHERE tenant_id = $2 AND user_id = $3', [options.departmentId, tenant.tenantId, userId]);
+  }
   return { userId, email: await emailOf(db, userId), password };
 }
 
