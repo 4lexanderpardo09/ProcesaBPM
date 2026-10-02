@@ -55,6 +55,9 @@ describe('evaluateExpression', () => {
     expect(run(`{{field.DAY|date:'dd MMM yyyy'}}`)).toBe('05 mar 2026');
     expect(run(`{{field.DAY|date:'MMMM yyyy'}}`)).toBe('marzo 2026');
   });
+  it('prints a calendar date the way people write it when no formatter is given', () => {
+    expect(run('{{field.DAY}}')).toBe('05/03/2026');
+  });
   it('formats numbers and currency for es-CO', () => {
     expect(run('{{field.AMOUNT|number:2}}')).toBe('1.500.000,50');
     expect(run('{{field.AMOUNT|currency}}')).toMatch(/1\.500\.000,50/);

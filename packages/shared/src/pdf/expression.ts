@@ -200,10 +200,14 @@ function applyFormatter(value: PdfValue, formatter: Formatter, options: FormatOp
   }
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 const DEFAULT_TEXT = (value: PdfValue, options: FormatOptions): string => {
   if (value === null) return '';
   if (value instanceof Date) return formatDate(value, 'dd/MM/yyyy HH:mm', options.timeZone);
   if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  // A calendar date (how DATE fields are stored) is printed the way people write it.
+  if (typeof value === 'string' && DATE_ONLY.test(value)) return `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}`;
   return String(value);
 };
 
