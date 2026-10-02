@@ -5,6 +5,7 @@ export * from './common.js';
 export * from './files/index.js';
 export * from './ids.js';
 export * from './identity/index.js';
+export * from './notifications/index.js';
 export * from './organization/index.js';
 export * from './platform/index.js';
 export * from './tickets/index.js';

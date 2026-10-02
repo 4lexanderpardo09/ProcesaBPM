@@ -1,10 +1,9 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from '../auth/auth.module.js';
+import { AuthorizationCoreModule } from './authorization-core.module.js';
 import { ABILITY_CACHE, InMemoryAbilityCache } from './application/ability-cache.js';
 import { AbilityService, SUBJECT_REGISTRY } from './application/ability.service.js';
-import { RolePermissionRepository } from './data/role-permission.repository.js';
-import { SubjectRegistry } from './domain/subject-registry.js';
 import { PermissionGuard } from './http/permission.guard.js';
 import { RequestAuthGuard } from './http/request-auth.guard.js';
 import { RouteAccessAuditor } from './http/route-access-auditor.js';
@@ -15,11 +14,9 @@ import { ScopedActionsAuditor } from './http/scoped-actions-auditor.js';
  * register the subjects that accept conditions in the `SubjectRegistry`.
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AuthorizationCoreModule],
   providers: [
-    { provide: SUBJECT_REGISTRY, useFactory: () => new SubjectRegistry() },
     { provide: ABILITY_CACHE, useClass: InMemoryAbilityCache },
-    RolePermissionRepository,
     AbilityService,
     PermissionGuard,
     RequestAuthGuard,
@@ -27,6 +24,6 @@ import { ScopedActionsAuditor } from './http/scoped-actions-auditor.js';
     ScopedActionsAuditor,
     { provide: APP_GUARD, useExisting: RequestAuthGuard },
   ],
-  exports: [AbilityService, SUBJECT_REGISTRY],
+  exports: [AbilityService, AuthorizationCoreModule],
 })
 export class AuthorizationModule {}

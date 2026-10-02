@@ -5,12 +5,11 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { RolePermissionRepository } from '../data/role-permission.repository.js';
 import { type AppAbility, buildAbility, type RawPermissionRule } from '../domain/build-ability.js';
+import { fixedRules } from '../domain/full-access.js';
 import { SubjectRegistry } from '../domain/subject-registry.js';
 import { ABILITY_CACHE, type AbilityCache } from './ability-cache.js';
 
 export const SUBJECT_REGISTRY = Symbol('SUBJECT_REGISTRY');
-
-const FULL_ACCESS: readonly RawPermissionRule[] = [{ action: 'manage', subject: 'all', conditions: null }];
 
 @Injectable()
 export class AbilityService {
@@ -41,8 +40,8 @@ export class AbilityService {
   }
 
   private async rulesOf(principal: Principal): Promise<readonly RawPermissionRule[]> {
-    if (principal.isOwner || (principal.roleActive && principal.roleIsAdmin)) return FULL_ACCESS;
-    if (!principal.roleActive) return [];
+    const fixed = fixedRules(principal);
+    if (fixed !== undefined) return fixed;
 
     const { tenantId, roleId, userId, permissionsVersion } = principal;
     const cached = await this.cache.get(tenantId, roleId, permissionsVersion);
