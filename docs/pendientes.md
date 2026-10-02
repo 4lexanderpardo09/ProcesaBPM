@@ -161,6 +161,14 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - Condiciones: un campo vacío o ausente solo cumple `not_equals`; textos sin distinguir mayúsculas ni espacios; números escritos como texto se comparan como números; `YYYY-MM-DD` se compara por día y fecha con hora por instante.
   - `mapDatabaseError` queda como está (lee `code`, `cause` y `meta.code`); se ajusta en la prueba de concepto de Prisma (§1.3). zod se agrega al crear `contracts/`.
 
+### Orden de trabajo decidido (2026-10-02, por el usuario)
+Se termina primero el **backend** y después el frontend. Después de reportes (#14), una tarea y un PR cada una:
+1. **#15:** campos con fórmulas y bloque `CALCULATOR`, con un evaluador de expresiones seguro y compartido en `packages/shared` (sin `eval`), y el campo tabla si falta. Revisar también `WAIT`. Al terminar, quitarlos de `engine-support`.
+2. **#16:** imágenes Docker multi-stage de api, worker, web (provisional), migrate y seed, con usuario no root, healthchecks y migraciones al arrancar; un docker-compose de producción de ejemplo, el build de las imágenes en el CI y la guía de despliegue.
+3. **#17:** seguridad y cuentas: MFA TOTP con códigos de respaldo; corregir la ráfaga de logins en paralelo (contar el intento antes de verificar); token de selección de un solo uso e invalidado al cambiar la contraseña; bitácora de auditoría de acciones administrativas y de accesos a documentos; `search_path` en las funciones `auth_*` viejas; separar por tipos `PlatformTransaction` de la transacción de tenant.
+4. **#18:** tiempo real: pasarela WebSocket con el mismo JWT y las mismas habilidades CASL, que empuja notificaciones y cambios de ticket.
+5. **#19:** bloques `NOTIFICATION`, `WEBHOOK` y `EXPORT`/planos, con firma HMAC en los webhooks, reintentos por el outbox y protección contra SSRF. Estaba marcada como v2: el alcance se revisa antes de empezar.
+
 ## 1. Para poder empezar a construir
 
 ### 1.1 Alcance de la primera versión (MVP): **por definir juntos**
