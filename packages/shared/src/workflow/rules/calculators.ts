@@ -29,7 +29,10 @@ function checkUse(context: RuleContext, at: Record<string, string>, calculatorCo
       continue;
     }
     const field = fieldByCode.get(code);
-    if (field !== undefined && !INPUT_FIELD_TYPES[parameter.type].has(effectiveFieldType(field))) {
+    // Blocks report their unknown fields with the rest of the block's config (rules/steps.ts).
+    if (field === undefined) {
+      if ('fieldId' in at) problems.error('CALCULATOR_UNKNOWN_FIELD', { ...at, params: { code } });
+    } else if (!INPUT_FIELD_TYPES[parameter.type].has(effectiveFieldType(field))) {
       problems.error('CALCULATOR_INPUT_TYPE_MISMATCH', { ...at, params: { name: parameter.name, code, expected: parameter.type } });
     }
   }

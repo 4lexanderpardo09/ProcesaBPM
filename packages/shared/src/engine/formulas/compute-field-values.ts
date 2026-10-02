@@ -66,15 +66,16 @@ function dependencyOrder(codes: ReadonlySet<string>, references: ReadonlyMap<str
   const order: string[] = [];
   const state = new Map<string, 'visiting' | 'done'>();
   const cyclic = new Set<string>();
+  const path: string[] = [];
   const visit = (code: string): void => {
     state.set(code, 'visiting');
+    path.push(code);
     for (const dependency of references.get(code) ?? []) {
       if (!codes.has(dependency)) continue;
-      if (state.get(dependency) === 'visiting') {
-        cyclic.add(code);
-        cyclic.add(dependency);
-      } else if (!state.has(dependency)) visit(dependency);
+      if (state.get(dependency) === 'visiting') for (const member of path.slice(path.indexOf(dependency))) cyclic.add(member);
+      else if (!state.has(dependency)) visit(dependency);
     }
+    path.pop();
     state.set(code, 'done');
     order.push(code);
   };

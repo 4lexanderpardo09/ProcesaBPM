@@ -48,7 +48,9 @@ export const MEAL_ALLOWANCE: CalculatorDefinition = {
     const arrival = instantOf(inputs.return);
     if (departure === null || arrival === null) return null;
     if (arrival < departure) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
-    const meals = configSchema.parse(config).meals;
+    const parsed = configSchema.safeParse(config);
+    if (!parsed.success) throw new FormulaRuntimeError('INVALID_VALUE');
+    const meals = parsed.data.meals;
     const lastDay = localDateOf(arrival, context.timeZone);
     let total = Decimal.ZERO;
     let day = localDateOf(departure, context.timeZone);

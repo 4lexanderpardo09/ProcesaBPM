@@ -73,6 +73,11 @@ export class CompiledCalendar {
     return localDateOf(instantMs, this.timeZone);
   }
 
+  /** Whether the date has working time: no instant math, so it is cheap to ask thousands of times. */
+  hasWorkingTime(date: string): boolean {
+    return !this.holidays.has(date) && this.slotsByWeekday[weekdayOfLocalDate(date)]!.length > 0;
+  }
+
   /** Working intervals of a local date, ordered; empty on holidays and non-working weekdays. */
   intervalsOn(date: string): Interval[] {
     if (this.holidays.has(date)) return [];

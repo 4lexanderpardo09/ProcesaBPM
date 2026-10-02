@@ -25,6 +25,10 @@ export interface FormulaContext {
   readonly isBusinessDay?: (date: string) => boolean;
 }
 
+/** Working days one evaluation may scan in total: many `ADD_BUSINESS_DAYS` calls cannot add up to a stall. */
+const SCANNED_DAYS_BUDGET = 30_000;
+type RunContext = FormulaContext & { readonly budget: { remaining: number } };
+
 const DATE_TEXT = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function assertDate(value: string): string {
@@ -41,7 +45,7 @@ function assertDate(value: string): string {
 const dateToDays = (date: string): number => Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))) / 86_400_000;
 
 function toInteger(value: Decimal, max = 100_000): number {
-  const whole = Number(value.round(0).toPlainString());
+  const whole = Number(value.round(0, 'DOWN').toPlainString());
   if (Math.abs(whole) > max) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
   return whole;
 }
@@ -78,7 +82,11 @@ function readColumn(values: FormulaContext['values'], table: string, column: str
   });
 }
 
-const present = (list: readonly (Decimal | null)[]): Decimal[] => list.filter((entry): entry is Decimal => entry !== null);
+const present = (list: readonly (Decimal | null)[]): Decimal[] => {
+  const entries = list.filter((entry) => entry !== null);
+  if (!entries.every((entry) => entry instanceof Decimal)) throw new FormulaRuntimeError('INVALID_VALUE');
+  return entries;
+};
 
 function compareValues(left: Exclude<FormulaValue, null>, right: Exclude<FormulaValue, null>): number {
   if (left instanceof Decimal) return left.compare(right as Decimal);
@@ -114,10 +122,8 @@ function binary(operator: BinaryOperator, left: FormulaValue, right: FormulaValu
         return a.mul(b);
       case '/':
         return a.div(b);
-      default: {
-        if (b.isZero()) throw new FormulaRuntimeError('DIVISION_BY_ZERO');
-        return a.sub(b.mul(a.div(b).round(0, 'DOWN')));
-      }
+      default:
+        return a.rem(b);
     }
   });
 }
@@ -131,8 +137,10 @@ function boundedText(text: string): string {
   return text;
 }
 
-function addBusinessDays(start: string, count: number, context: FormulaContext): string {
+function addBusinessDays(start: string, count: number, context: RunContext): string {
   if (Math.abs(count) > FORMULA_LIMITS.maxBusinessDays) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
+  context.budget.remaining -= Math.abs(count) * 3 + 1;
+  if (context.budget.remaining < 0) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
   const isBusinessDay = context.isBusinessDay ?? ((date: string) => ![0, 6].includes(new Date(`${date}T00:00:00Z`).getUTCDay()));
   const step = count < 0 ? -1 : 1;
   let date = start;
@@ -145,7 +153,7 @@ function addBusinessDays(start: string, count: number, context: FormulaContext):
   return assertDate(date);
 }
 
-function callFunction(name: string, args: readonly Runtime[], context: FormulaContext): Runtime {
+function callFunction(name: string, args: readonly Runtime[], context: RunContext): Runtime {
   const list = (index: number): readonly (Decimal | null)[] => args[index] as readonly (Decimal | null)[];
   const scalar = (index: number): FormulaValue => args[index] as FormulaValue;
   switch (name) {
@@ -213,7 +221,9 @@ function callFunction(name: string, args: readonly Runtime[], context: FormulaCo
   throw new FormulaRuntimeError('INVALID_VALUE');
 }
 
-function run(node: Expression, context: FormulaContext): Runtime {
+const boundedResult = (value: Runtime): Runtime => (typeof value === 'string' ? boundedText(value) : value);
+
+function run(node: Expression, context: RunContext): Runtime {
   switch (node.kind) {
     case 'number':
     case 'text':
@@ -234,21 +244,23 @@ function run(node: Expression, context: FormulaContext): Runtime {
       if (node.name === 'IF') return run(node.args[0]!, context) === true ? run(node.args[1]!, context) : run(node.args[2]!, context);
       if (node.name === 'IFERROR') {
         try {
-          return run(node.args[0]!, context);
+          return guarded(() => run(node.args[0]!, context));
         } catch (error) {
           if (error instanceof FormulaRuntimeError) return run(node.args[1]!, context);
           throw error;
         }
       }
-      return callFunction(
-        node.name,
-        node.args.map((arg) => run(arg, context)),
-        context,
+      return boundedResult(
+        callFunction(
+          node.name,
+          node.args.map((arg) => run(arg, context)),
+          context,
+        ),
       );
   }
 }
 
 /** Evaluates a compiled formula. Throws `FormulaRuntimeError` when no value can be produced; there is no `eval` and no host access. */
 export function evaluateFormulaExpression(expression: Expression, context: FormulaContext): FormulaValue {
-  return guarded(() => run(expression, context) as FormulaValue);
+  return guarded(() => run(expression, { ...context, budget: { remaining: SCANNED_DAYS_BUDGET } }) as FormulaValue);
 }

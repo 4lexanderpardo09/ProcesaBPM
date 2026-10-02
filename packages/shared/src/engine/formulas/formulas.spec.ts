@@ -100,6 +100,36 @@ describe('formula functions', () => {
   });
 });
 
+describe('review findings', () => {
+  const listSchema: FormulaSchema = { fields: new Map([...schema.fields, ['ITEMS', { kind: 'table', columns: new Map([['AMOUNT', 'NUMBER' as const], ['NAME', 'TEXT' as const], ['DAY', 'DATE' as const]]) }]]) };
+  const issue = (source: string) => {
+    const compiled = compileFormula(source, listSchema);
+    return compiled.ok ? undefined : compiled.issues[0]!.code;
+  };
+
+  it('aggregates only number columns (COUNT takes any)', () => {
+    for (const source of ['SUM(ITEMS.NAME)', 'AVG(ITEMS.DAY)', 'MAX(ITEMS.DAY)', 'MIN(ITEMS.NAME, 3)']) expect(issue(source)).toBeDefined();
+    expect(issue('COUNT(ITEMS.NAME)')).toBeUndefined();
+  });
+
+  it('computes the remainder exactly', () => {
+    expect(run('300 % 100.000000000001')).toBe('99.999999999998');
+    expect(run('7 % 0.000000000001')).toBe('0');
+    expect(run('-7 % 3')).toBe('-1');
+  });
+
+  it('lets IFERROR recover from overflow in any function, and bounds every text result', () => {
+    expect(run('IFERROR(ROUND(999999999999999.5, 0), 7)')).toBe('7');
+    expect(() => run(`UPPER("${'ﬃ'.repeat(900)}")`)).toThrowError(expect.objectContaining({ code: 'TEXT_TOO_LONG' }));
+  });
+
+  it('truncates integer arguments and bounds the days many ADD_BUSINESS_DAYS calls scan', () => {
+    expect(run('ADD_DAYS(START, 1.9)', { START: '2026-01-15' })).toBe('2026-01-16');
+    const many = `MAX(${Array.from({ length: 12 }, () => 'DAYS_BETWEEN(START, ADD_BUSINESS_DAYS(START, 3000))').join(',')})`;
+    expect(() => run(many, { START: '2026-01-15' })).toThrowError(expect.objectContaining({ code: 'ARGUMENT_OUT_OF_RANGE' }));
+  });
+});
+
 describe('formula compilation', () => {
   it('reports typed errors with a position', () => {
     expect(issueOf('PRICE +')).toBe('SYNTAX');

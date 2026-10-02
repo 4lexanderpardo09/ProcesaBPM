@@ -2,7 +2,7 @@ import { tokenize, type Token } from './lexer.js';
 import { SIGNATURES, CONTROL_FUNCTIONS, type ParameterType } from './signatures.js';
 import { FORMULA_LIMITS, type BinaryOperator, type CompileResult, type Expression, type FormulaIssue, type FormulaSchema, type FormulaType } from './types.js';
 
-type Typed = { readonly expr: Expression; readonly type: FormulaType };
+type Typed = { readonly expr: Expression; readonly type: FormulaType; /** Of a LIST: the type of its cells. */ readonly element?: FormulaType };
 
 class Abort extends Error {
   constructor(readonly issue: FormulaIssue) {
@@ -167,7 +167,7 @@ class Parser {
     if (column.kind !== 'name') throw new Abort({ code: 'SYNTAX', position: column.position, detail: 'EXPECTED_COLUMN' });
     const columnType = shape.columns.get(column.value);
     if (columnType === undefined) throw new Abort({ code: 'UNKNOWN_COLUMN', position: column.position, detail: `${token.value}.${column.value}` });
-    return { expr: this.node({ kind: 'column', table: token.value, column: column.value, type: columnType }), type: 'LIST' };
+    return { expr: this.node({ kind: 'column', table: token.value, column: column.value, type: columnType }), type: 'LIST', element: columnType };
   }
 
   private arguments(): { typed: Typed; position: number }[] {
@@ -198,7 +198,8 @@ class Parser {
     }
     args.forEach((arg, position) => {
       const parameter = signature.parameters[position] ?? signature.rest!;
-      if (!accepts(parameter, arg.typed.type)) {
+      const cellsAreNumbers = arg.typed.type !== 'LIST' || name.value === 'COUNT' || arg.typed.element === 'NUMBER';
+      if (!accepts(parameter, arg.typed.type) || !cellsAreNumbers) {
         throw new Abort({ code: arg.typed.type === 'LIST' ? 'LIST_OUTSIDE_AGGREGATE' : 'TYPE_MISMATCH', position: arg.position, detail: `${name.value}#${position + 1}` });
       }
     });

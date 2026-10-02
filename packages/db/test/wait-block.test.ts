@@ -105,6 +105,14 @@ describe('WAIT block: parked visits and claim_due_waits', () => {
       expect(await events(visitId)).toHaveLength(2);
     });
 
+    it('queues a wake-up again when the previous event never completed (stamp older than a day)', async () => {
+      const { visitId } = await seedParked(tenantA);
+      await claim();
+      await db.platform.query(`UPDATE ticket_step_visits SET resume_enqueued_at = now() - interval '2 days' WHERE id = $1`, [visitId]);
+      await claim();
+      expect(await events(visitId)).toHaveLength(2);
+    });
+
     it('two workers at once never take the same visit', async () => {
       const seeded = [];
       for (let index = 0; index < 6; index += 1) seeded.push(await seedParked(tenantA));

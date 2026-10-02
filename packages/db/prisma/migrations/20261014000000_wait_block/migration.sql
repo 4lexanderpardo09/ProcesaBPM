@@ -16,7 +16,7 @@ CREATE FUNCTION trg_visit_wait_matches_step() RETURNS trigger
     RETURN NEW;
   END
   $$;
-CREATE TRIGGER visit_wait_matches_step BEFORE INSERT ON ticket_step_visits
+CREATE TRIGGER visit_wait_matches_step BEFORE INSERT OR UPDATE OF resume_at, step_id ON ticket_step_visits
   FOR EACH ROW EXECUTE FUNCTION trg_visit_wait_matches_step();
 
 -- A parked visit has no SLA clocks.
@@ -38,10 +38,10 @@ CREATE OR REPLACE FUNCTION trg_clock_matches_visit() RETURNS trigger
 
 -- Cross-tenant scan for the wake-up job (SQL only, like sla_clocks_due).
 CREATE INDEX step_visits_wait_due ON ticket_step_visits (resume_at)
-  WHERE exited_at IS NULL AND resume_at IS NOT NULL AND resume_enqueued_at IS NULL;
+  WHERE exited_at IS NULL AND resume_at IS NOT NULL;
 
 -- WAIT worker: wake up the parked tickets whose time has come. One atomic statement: a visit is stamped once
--- (resume_enqueued_at), several workers never take the same visit (SKIP LOCKED), and the tenant's own work (moving the
+-- (resume_enqueued_at, renewed after a day), several workers never take the same visit (SKIP LOCKED), and the tenant's own work (moving the
 -- ticket on) is done later by the outbox handler inside the tenant's context. Tickets that are not OPEN never match.
 CREATE FUNCTION claim_due_waits(p_limit integer) RETURNS integer
   LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
@@ -49,8 +49,9 @@ CREATE FUNCTION claim_due_waits(p_limit integer) RETURNS integer
     WITH due AS (
       SELECT v.tenant_id, v.id FROM ticket_step_visits v
       JOIN tickets t ON t.tenant_id = v.tenant_id AND t.id = v.ticket_id
-      WHERE v.exited_at IS NULL AND v.resume_at IS NOT NULL AND v.resume_enqueued_at IS NULL
-        AND v.resume_at <= now() AND t.status = 'OPEN'
+      WHERE v.exited_at IS NULL AND v.resume_at IS NOT NULL AND v.resume_at <= now() AND t.status = 'OPEN'
+        -- A wake-up whose event never completed (it failed for good) is queued again after a day instead of stranding the ticket.
+        AND (v.resume_enqueued_at IS NULL OR v.resume_enqueued_at < now() - interval '1 day')
       ORDER BY v.resume_at
       LIMIT p_limit
       FOR UPDATE OF v SKIP LOCKED

@@ -68,6 +68,12 @@ export class Decimal {
     return new Decimal(divide(this.scaled * ONE, other.scaled, 'HALF_UP'));
   }
 
+  /** Remainder with the sign of the dividend, exact (no rounding of the quotient). */
+  rem(other: Decimal): Decimal {
+    if (other.scaled === 0n) throw new DecimalError('DIVISION_BY_ZERO');
+    return new Decimal(this.scaled % other.scaled);
+  }
+
   negate(): Decimal {
     return new Decimal(-this.scaled);
   }

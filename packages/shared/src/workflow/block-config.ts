@@ -12,7 +12,7 @@ const recipient = z.discriminatedUnion('kind', [
 ]);
 
 const wait = z.discriminatedUnion('mode', [
-  z.object({ mode: z.literal('DURATION'), value: z.number().int().min(1), unit: z.enum(SLA_UNITS) }).strict(),
+  z.object({ mode: z.literal('DURATION'), value: z.number().int().min(1).max(3000), unit: z.enum(SLA_UNITS) }).strict(),
   z.object({ mode: z.literal('UNTIL_FIELD_DATE'), fieldCode, offsetBusinessDays: z.number().int().min(-365).max(365) }).strict(),
   z.object({ mode: z.literal('COMPANY_CUTOFF') }).strict(),
 ]);

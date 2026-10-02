@@ -114,7 +114,7 @@ export function businessMinutesBetween(input: BusinessMinutesInput): number {
 /** Whether a local `YYYY-MM-DD` date has working time in the calendar (not a holiday or a day off). Compile once, ask many times. */
 export function businessDayChecker(calendar: BusinessCalendar): (date: string) => boolean {
   const compiled = CompiledCalendar.from(calendar);
-  return (date) => compiled.intervalsOn(date).length > 0;
+  return (date) => compiled.hasWorkingTime(date);
 }
 
 /** The local date that is `count` working days after (or, negative, before) `date`; a day with no working time is not counted. */
@@ -126,7 +126,7 @@ export function addBusinessDays(calendar: BusinessCalendar, date: string, count:
   for (let scanned = 0; remaining > 0; scanned += 1) {
     if (scanned >= MAX_SCAN_DAYS) throw new InvalidDurationError('The offset does not fit in the scan horizon of the calendar');
     current = addDaysToLocalDate(current, step);
-    if (compiled.intervalsOn(current).length > 0) remaining -= 1;
+    if (compiled.hasWorkingTime(current)) remaining -= 1;
   }
   return current;
 }
