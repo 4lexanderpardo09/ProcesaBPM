@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { nameSchema, pageQuerySchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
+import { requestUploadsSchema } from '../files/schemas.js';
 import { pdfDesignSchema } from '../../pdf/design-schema.js';
 import { expressionSchema } from '../../pdf/design-schema.js';
 import { templateMappingSchema } from '../../pdf/mapping-schema.js';
@@ -27,6 +28,9 @@ export const updatePdfTemplateRequestSchema = z
   .strict()
   .refine((body) => Object.keys(body).length > 0, 'Nothing to change');
 export type UpdatePdfTemplateRequest = z.infer<typeof updatePdfTemplateRequestSchema>;
+
+/** One PDF to use as a template: it goes through the usual two-phase upload. */
+export const requestTemplateUploadSchema = requestUploadsSchema.refine((body) => body.files.length === 1 && body.files[0]!.name.toLowerCase().endsWith('.pdf'), 'Upload exactly one PDF');
 
 export const putTemplateMappingRequestSchema = templateMappingSchema;
 

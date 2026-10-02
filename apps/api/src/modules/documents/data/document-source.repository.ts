@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { AcroFieldInfo, PageBox } from '@procesabpm/shared';
 import type { DocumentMoment, WorkflowDocumentKind } from '@procesabpm/db';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { MappedFieldRow, MappedSignatureRow } from '../domain/template-resolver.js';
@@ -81,6 +82,33 @@ export class DocumentSourceRepository {
               signatures: row.template.signatures.map((signature) => ({ ...signature, mode: signature.mode, signerType: signature.signerType as MappedSignatureRow['signerType'] })),
             },
     };
+  }
+
+  /** The mapping of a template as the generation reads it. */
+  async templateMapping(tx: TenantTransaction, tenantId: string, templateId: string): Promise<Pick<TemplateSource, 'fields' | 'signatures'>> {
+    const row = await tx.pdfTemplate.findFirst({
+      where: { tenantId, id: templateId },
+      select: { fields: { orderBy: { id: 'asc' } }, signatures: { orderBy: { id: 'asc' } } },
+    });
+    return { fields: row?.fields ?? [], signatures: (row?.signatures ?? []).map((signature) => ({ ...signature, signerType: signature.signerType as MappedSignatureRow['signerType'] })) };
+  }
+
+  /** The pages and AcroForm fields found in the template PDF when it was registered. */
+  async templateShape(tx: TenantTransaction, tenantId: string, templateId: string): Promise<{ pages: PageBox[]; acroformFields: AcroFieldInfo[] }> {
+    const row = await tx.pdfTemplate.findFirst({ where: { tenantId, id: templateId }, select: { pages: true, acroformFields: true } });
+    return { pages: (row?.pages ?? []) as unknown as PageBox[], acroformFields: (row?.acroformFields ?? []) as unknown as AcroFieldInfo[] };
+  }
+
+  async activeMomentDocuments(tx: TenantTransaction, tenantId: string, workflowId: string): Promise<string[]> {
+    const rows = await tx.workflowDocument.findMany({ where: { tenantId, workflowId, isActive: true, moment: { not: null } }, select: { id: true }, orderBy: { id: 'asc' } });
+    return rows.map((row) => row.id);
+  }
+
+  /** Time zone and currency previews use: the tenant's time zone and its default company's currency. */
+  async tenantLocale(tx: TenantTransaction, tenantId: string): Promise<{ timeZone: string; currencyCode: string }> {
+    const tenant = await tx.tenant.findFirst({ where: { id: tenantId }, select: { timeZone: true } });
+    const company = await tx.company.findFirst({ where: { tenantId, isDefault: true }, select: { currencyCode: true } });
+    return { timeZone: tenant?.timeZone ?? 'UTC', currencyCode: company?.currencyCode ?? 'COP' };
   }
 
   /**

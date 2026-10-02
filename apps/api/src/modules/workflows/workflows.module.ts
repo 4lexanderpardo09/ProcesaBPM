@@ -5,6 +5,8 @@ import { DraftLock } from './application/draft-lock.js';
 import { PublishedVersionReader } from './application/published-version-reader.js';
 import { WorkflowGraphService } from './application/workflow-graph.service.js';
 import { WorkflowLinksService } from './application/workflow-links.service.js';
+import { PublicationCheckRegistry } from './application/publication-check.registry.js';
+import { WorkflowVersionQuery } from './application/workflow-version-query.js';
 import { WorkflowPublicationService } from './application/workflow-publication.service.js';
 import { WorkflowVersionsService } from './application/workflow-versions.service.js';
 import { WorkflowsService } from './application/workflows.service.js';
@@ -36,7 +38,9 @@ import { WorkflowsController } from './http/workflows.controller.js';
     DraftEditorService,
     WorkflowLinksService,
     PublishedVersionReader,
+    WorkflowVersionQuery,
+    PublicationCheckRegistry,
   ],
-  exports: [PublishedVersionReader],
+  exports: [PublishedVersionReader, WorkflowVersionQuery, PublicationCheckRegistry],
 })
 export class WorkflowsModule {}

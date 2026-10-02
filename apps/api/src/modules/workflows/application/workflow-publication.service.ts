@@ -10,6 +10,7 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
 import { WorkflowRepository } from '../data/workflow.repository.js';
+import { PublicationCheckRegistry } from './publication-check.registry.js';
 import { ReferenceValidator, validateDocument, withProblems } from './reference-validator.js';
 import { toVersionSummary } from './version-summary.js';
 
@@ -22,6 +23,7 @@ export class WorkflowPublicationService {
     @Inject(WorkflowRepository) private readonly workflows: WorkflowRepository,
     @Inject(VersionDocumentRepository) private readonly documents: VersionDocumentRepository,
     @Inject(ReferenceValidator) private readonly references: ReferenceValidator,
+    @Inject(PublicationCheckRegistry) private readonly extraChecks: PublicationCheckRegistry,
   ) {}
 
   /**
@@ -39,7 +41,7 @@ export class WorkflowPublicationService {
       if (locked.status !== 'DRAFT') throw new ImmutableDataError(`The version is ${locked.status.toLowerCase()}: only a draft is published`);
 
       const document = await this.documents.load(tx, tenantId, versionId);
-      const validation = withProblems(validateDocument(document), await this.references.check(tx, tenantId, workflowId, document));
+      const validation = withProblems(withProblems(validateDocument(document), await this.references.check(tx, tenantId, workflowId, document)), await this.extraChecks.run(tx, tenantId, workflowId, document));
       if (validation.errors.length > 0) throw new WorkflowNotPublishableError(validation);
 
       await this.workflows.archivePublished(tx, tenantId, workflowId);

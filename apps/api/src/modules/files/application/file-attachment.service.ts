@@ -45,6 +45,16 @@ export class FileAttachmentService {
     return found;
   }
 
+  /** The caller's own confirmed, unattached upload, without locking it. */
+  peekOwn(tx: TenantTransaction, tenantId: string, uploaderId: string, fileId: string): Promise<StoredFileRow | null> {
+    return this.files.findOwnAttachable(tx, tenantId, fileId, uploaderId);
+  }
+
+  /** Marks uploads as in use by something that is not a ticket (a PDF template), so the purge job leaves them alone. */
+  async linkStandalone(tx: TenantTransaction, tenantId: string, fileIds: readonly string[], companyId: string | null, at: Date): Promise<void> {
+    if ((await this.files.markLinked(tx, tenantId, fileIds, companyId, at)) !== fileIds.length) throw new InvalidStateError('A file was attached by someone else in the meantime');
+  }
+
   /** 15 files and 20 MB per submission, counting field files and attachments together. */
   assertWithinSubmissionLimits(files: ReadonlyArray<Pick<StoredFileRow, 'sizeBytes'>>): void {
     const bytes = files.reduce((total, file) => total + file.sizeBytes, 0n);

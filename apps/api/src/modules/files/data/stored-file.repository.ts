@@ -137,6 +137,11 @@ export class StoredFileRepository {
     return tx.storedFile.findFirst({ where: { tenantId, id, uploadedById: uploaderId, origin: 'USER' }, select: STORED_FILE_SELECT });
   }
 
+  /** The caller's own confirmed upload that nothing is attached to yet (not locked: `lockAttachable` does that). */
+  findOwnAttachable(tx: TenantTransaction, tenantId: string, id: string, uploaderId: string): Promise<StoredFileRow | null> {
+    return tx.storedFile.findFirst({ where: { tenantId, id, uploadedById: uploaderId, origin: 'USER', status: 'CONFIRMED', linkedAt: null }, select: STORED_FILE_SELECT });
+  }
+
   async lock(tx: TenantTransaction, tenantId: string, id: string): Promise<StoredFileRow | null> {
     const rows = await tx.$queryRaw<RawRow[]>`
       SELECT id::text AS id, storage_key, original_name, mime_type, size_bytes, sha256, status::text AS status, uploaded_by_id::text AS uploaded_by_id, created_at, confirmed_at

@@ -15,6 +15,6 @@ import { StorageUsageController } from './http/storage-usage.controller.js';
 @Module({
   controllers: [FilesController, StorageUsageController],
   providers: [StoredFileRepository, TenantUsageRepository, TicketDocumentRepository, UploadRequestService, UploadConfirmationService, StorageUsageService, FileAttachmentService, TicketFileService, SystemFileService],
-  exports: [FileAttachmentService, TicketFileService, SystemFileService],
+  exports: [FileAttachmentService, TicketFileService, SystemFileService, UploadRequestService, UploadConfirmationService],
 })
 export class FilesModule {}
