@@ -50,8 +50,9 @@ export class MailWorker {
    * transient) waits 30 s for its next attempt. A test that wants "everything delivered" must not wait for a backoff.
    */
   private async retryNow(): Promise<void> {
-    for (const table of ['outbox_events', 'platform_outbox_events']) {
-      await this.db.platform.query(`UPDATE ${table} SET available_at = now() WHERE status = 'PENDING' AND attempts > 0 AND available_at > now()`);
+    // The platform outbox is out of reach of the application roles: only the schema owner may touch it.
+    for (const [pool, table] of [[this.db.platform, 'outbox_events'], [this.db.owner, 'platform_outbox_events']] as const) {
+      await pool.query(`UPDATE ${table} SET available_at = now() WHERE status = 'PENDING' AND attempts > 0 AND available_at > now()`);
     }
   }
 
