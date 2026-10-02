@@ -114,7 +114,7 @@ describe('reopening a closed ticket', () => {
     const ticketId = await closedTicket();
     const wrong = [
       await errorTypeOf(world.tenant.tenantId, { reopening: false }),
-      await errorTypeOf(world.tenant.tenantId, { forcesClose: true }),
+      await errorTypeOf(world.tenant.tenantId, { reopening: false, forcesClose: true }),
       await errorTypeOf(world.tenant.tenantId, { active: false }),
       await errorTypeOf((await TicketWorld.create(db, app)).tenant.tenantId),
       '018f3c1e-7b2a-7c3d-9e4f-0123456789ab',

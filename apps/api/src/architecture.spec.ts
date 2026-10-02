@@ -37,6 +37,11 @@ describe('architecture', () => {
     expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/notifications/notifications-worker.module.ts', 'worker.module.ts']);
   });
 
+  it('no SQL is built from text: the unsafe raw-query helpers are never used', () => {
+    const offenders = files.filter((file) => /\$(queryRaw|executeRaw)Unsafe|\bPrisma\.raw\b|\{[^}]*\braw\b[^}]*\}\s*=\s*Prisma\b/.test(readFileSync(file, 'utf8'))).map(posix);
+    expect(offenders).toEqual([]);
+  });
+
   it('the worker never imports the controllers or the guards of the API', () => {
     const offenders = files.filter((file) => posix(file).startsWith('modules/') && /notifications-worker|documents-worker|auth-mail|file-purge/.test(posix(file))).filter((file) => importsOf(file).some((source) => /\.controller\.js$|authorization\.module\.js$|\.guard\.js$/.test(source))).map(posix);
     expect(offenders).toEqual([]);

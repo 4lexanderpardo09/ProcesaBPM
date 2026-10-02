@@ -132,7 +132,7 @@ Tipos: `text, textarea, select, currency, number, date, datetime, dias, regional
 Definición por flujo, disparada por una transición (condición) o por el cierre, con filtro JSON, columnas con origen (campo, fecha del ticket, catálogo, constante…), catálogos de traducción, formato CSV/XLSX, agrupación por empresa y corte programado (diario, semanal, mensual o cada N días) con catch-up.
 
 ### 2.8 Reportes
-KPIs globales, ranking por usuario (score de cumplimiento × calidad), distribución de tiempos, novedades, categorías, detalle por usuario, tickets abiertos por flujo y exportes Excel. Todo se calcula en vivo sobre `th_ticket_asignacion` con CTEs (réplica de `v_asignaciones_completas`).
+KPIs globales, ranking por usuario (score de cumplimiento × calidad), distribución de tiempos, novedades, categorías, detalle por usuario, tickets abiertos por flujo y exportes Excel. Todo se calcula en vivo sobre `th_ticket_asignacion` con CTEs (réplica de `v_asignaciones_completas`). **En ProcesaBPM** se calcula sobre los relojes, visitas, eventos y novedades guardados, con los minutos hábiles que guardó el motor; el puntaje es `100 × cumplimiento × calidad` (detalle en `base-de-datos.md` §8.19).
 
 ---
 

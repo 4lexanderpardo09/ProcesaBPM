@@ -65,6 +65,8 @@ export const ERROR_CODES = {
   pdfTemplateInvalid: 'PDF_TEMPLATE_INVALID',
   pdfRenderFailed: 'PDF_RENDER_FAILED',
   documentSourceInUse: 'DOCUMENT_SOURCE_IN_USE',
+  reportTooLarge: 'REPORT_TOO_LARGE',
+  reportTimeout: 'REPORT_TIMEOUT',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -518,5 +520,19 @@ export class PdfRenderFailedError extends DomainError {
 export class DocumentSourceInUseError extends DomainError {
   constructor() {
     super(ERROR_CODES.documentSourceInUse, 'A workflow document still uses it: deactivate it instead');
+  }
+}
+
+/** A report export that would not fit in a spreadsheet generated on the spot: narrow the filters. */
+export class ReportTooLargeError extends DomainError {
+  constructor(readonly maxRows: number) {
+    super(ERROR_CODES.reportTooLarge, 'The report is too large to export: narrow the filters', { details: { maxRows } });
+  }
+}
+
+/** The database gave up on a report after its time limit: the filters ask for too much at once. */
+export class ReportTimeoutError extends DomainError {
+  constructor(options?: { cause?: unknown }) {
+    super(ERROR_CODES.reportTimeout, 'The report took too long: narrow the filters', options);
   }
 }

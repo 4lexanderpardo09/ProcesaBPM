@@ -71,6 +71,8 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.pdfTemplateInvalid]: { status: 422, message: 'The PDF cannot be used as a template' },
   [ERROR_CODES.pdfRenderFailed]: { status: 422, message: 'The PDF could not be generated' },
   [ERROR_CODES.documentSourceInUse]: { status: 409, message: 'A workflow document still uses it: deactivate it instead' },
+  [ERROR_CODES.reportTooLarge]: { status: 422, message: 'The report is too large to export: narrow the filters' },
+  [ERROR_CODES.reportTimeout]: { status: 422, message: 'The report took too long: narrow the filters' },
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },
 };
