@@ -30,6 +30,17 @@ export interface StaleFile {
   readonly sizeBytes: bigint;
 }
 
+export interface SystemFileInsert {
+  readonly fileId: string;
+  readonly storageKey: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly sha256: string;
+  readonly companyId: string | null;
+  readonly at: Date;
+}
+
 export const STORED_FILE_SELECT = {
   id: true,
   storageKey: true,
@@ -94,6 +105,19 @@ export class StoredFileRepository {
     });
   }
 
+  /** A file the system produced: confirmed and linked from the start, with no uploader. The derived id makes a repeat a no-op. */
+  async insertSystemFile(tx: TenantTransaction, tenantId: string, file: SystemFileInsert): Promise<void> {
+    await tx.$executeRaw`
+      INSERT INTO stored_files (tenant_id, id, company_id, storage_key, original_name, mime_type, size_bytes, sha256, origin, status, uploaded_by_id, created_at, confirmed_at, linked_at)
+      VALUES (${tenantId}::uuid, ${file.fileId}::uuid, ${file.companyId}::uuid, ${file.storageKey}, ${file.fileName}, ${file.mimeType}, ${BigInt(file.sizeBytes)}, ${file.sha256}, 'SYSTEM', 'CONFIRMED', NULL, ${file.at}, ${file.at}, ${file.at})
+      ON CONFLICT (tenant_id, id) DO NOTHING`;
+  }
+
+  async companyOfTicket(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<string | null> {
+    const ticket = await tx.ticket.findFirst({ where: { tenantId, id: ticketId }, select: { companyId: true } });
+    return ticket?.companyId ?? null;
+  }
+
   countPending(tx: TenantTransaction, tenantId: string, uploaderId: string): Promise<number> {
     return tx.storedFile.count({ where: { tenantId, uploadedById: uploaderId, status: 'PENDING' } });
   }
@@ -140,7 +164,7 @@ export class StoredFileRepository {
     return rows.map(toRow);
   }
 
-  async markLinked(tx: TenantTransaction, tenantId: string, ids: readonly string[], companyId: string, at: Date): Promise<number> {
+  async markLinked(tx: TenantTransaction, tenantId: string, ids: readonly string[], companyId: string | null, at: Date): Promise<number> {
     const { count } = await tx.storedFile.updateMany({ where: { tenantId, id: { in: [...ids] }, linkedAt: null }, data: { linkedAt: at, companyId } });
     return count;
   }
