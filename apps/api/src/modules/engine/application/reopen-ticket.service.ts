@@ -83,6 +83,7 @@ export class ReopenTicketService {
         siteId: ticket.siteId,
         creatorId: ticket.creatorId,
         calendar,
+        timeZone: company.timeZone,
         at,
         chosenAssigneeId: undefined,
         holders,
@@ -103,7 +104,7 @@ export class ReopenTicketService {
         },
         ...arrivalEvents(arrival, actor.userId, arrival.plan.visit.loop),
       ];
-      const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, { at, actorId: actor.userId, fieldWrites: [], arrival: arrival.plan, ticket: { kind: 'reopened', stepId, loop: arrival.plan.visit.loop }, events });
+      const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, { at, actorId: actor.userId, fieldWrites: arrival.computed.fieldWrites, arrival: arrival.plan, ticket: { kind: 'reopened', stepId, loop: arrival.plan.visit.loop }, events });
       return { id: ticket.id, number: ticket.number.toString(), status: 'OPEN', currentStepId: stepId, openVisitId };
     });
   }

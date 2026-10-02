@@ -85,6 +85,7 @@ export class TransitionTicketService {
         siteId: ticket.siteId,
         creatorId: ticket.creatorId,
         calendar,
+        timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
       });
@@ -113,8 +114,8 @@ export class TransitionTicketService {
       ];
       const mutation: TicketMutation =
         arrival.kind === 'END'
-          ? { at, actorId: actor.userId, fieldWrites: submission.fieldWrites, closing: closed, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
-          : { at, actorId: actor.userId, fieldWrites: submission.fieldWrites, closing: closed, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
+          ? { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
+          : { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, mutation);
       return { id: ticket.id, number: ticket.number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId: arrival.kind === 'END' ? arrival.endStepId : arrival.step.id, openVisitId };
     });

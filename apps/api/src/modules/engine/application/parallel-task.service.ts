@@ -115,6 +115,7 @@ export class ParallelTaskService {
         siteId: ticket.siteId,
         creatorId: ticket.creatorId,
         calendar,
+        timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
       });
@@ -134,8 +135,8 @@ export class ParallelTaskService {
       );
       const mutation: TicketMutation =
         arrival.kind === 'END'
-          ? { at, actorId: actor.userId, fieldWrites: [], closing, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
-          : { at, actorId: actor.userId, fieldWrites: [], closing, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
+          ? { at, actorId: actor.userId, fieldWrites: arrival.computed.fieldWrites, closing, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
+          : { at, actorId: actor.userId, fieldWrites: arrival.computed.fieldWrites, closing, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, mutation);
       return { id: ticket.id, number: ticket.number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId: arrival.kind === 'END' ? arrival.endStepId : arrival.step.id, openVisitId };
     });

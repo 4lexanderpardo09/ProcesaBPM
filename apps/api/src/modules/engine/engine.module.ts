@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ApprovalsModule } from '../approvals/approvals.module.js';
 import { FilesModule } from '../files/files.module.js';
+import { CalculatorsModule } from '../calculators/calculators.module.js';
 import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { ArrivalPlanner } from './application/arrival-planner.js';
 import { AssignmentResolver } from './application/assignment-resolver.js';
 import { CloseTicketService } from './application/close-ticket.service.js';
+import { ComputeEnvironment } from './application/compute-environment.js';
 import { CommentTicketService } from './application/comment-ticket.service.js';
 import { CreateTicketService } from './application/create-ticket.service.js';
 import { DispatchStepService } from './application/dispatch-step.service.js';
@@ -28,7 +30,7 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
 
 /** The ticket engine: starts tickets, moves them along their workflow, resolves who is assigned and keeps their SLA clocks. */
 @Module({
-  imports: [WorkflowsModule, ApprovalsModule, FilesModule],
+  imports: [WorkflowsModule, ApprovalsModule, FilesModule, CalculatorsModule],
   providers: [
     TicketWriteRepository,
     DispatchRepository,
@@ -37,6 +39,7 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     FieldReferenceRepository,
     AssignmentResolver,
     SubmissionFilesChecker,
+    ComputeEnvironment,
     SubmissionValidator,
     ArrivalPlanner,
     LockedTicketLoader,

@@ -15,6 +15,8 @@ import {
   type WorkflowVersionDocument,
 } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { TicketContextRepository } from '../data/ticket-context.repository.js';
+import { ComputeEnvironment } from './compute-environment.js';
 import { FieldReferenceRepository } from '../data/field-reference.repository.js';
 import type { CompanyRow } from '../data/ticket-context.repository.js';
 import { localDateIn } from '../domain/local-date.js';
@@ -64,7 +66,17 @@ export class SubmissionValidator {
   constructor(
     @Inject(FieldReferenceRepository) private readonly references: FieldReferenceRepository,
     @Inject(SubmissionFilesChecker) private readonly fileChecker: SubmissionFilesChecker,
+    @Inject(TicketContextRepository) private readonly people: TicketContextRepository,
+    @Inject(ComputeEnvironment) private readonly environments: ComputeEnvironment,
   ) {}
+
+  private async recompute(tx: TenantTransaction, request: SubmissionRequest, capturedValues: Readonly<Record<string, unknown>>) {
+    const { document, company } = request;
+    if (!document.fields.some((field) => field.type === 'FORMULA' || field.type === 'CALCULATOR')) return { values: {}, failures: [] };
+    const calendar = await this.people.findBusinessCalendar(tx, request.tenantId, company.timeZone, company.calendarId, request.at);
+    const environment = await this.environments.build(tx, request.tenantId, document, { timeZone: company.timeZone, calendar, at: request.at });
+    return computeFieldValues(document.fields, { ...request.existing, ...capturedValues }, { ...environment, captured: new Set(Object.keys(capturedValues)) });
+  }
 
   async validate(tx: TenantTransaction, request: SubmissionRequest): Promise<Submission> {
     const { document, step } = request;
@@ -87,8 +99,7 @@ export class SubmissionValidator {
     });
     if (fileIssues.length > 0) throw new FieldValuesInvalidError(fileIssues);
 
-    const today = localDateIn(request.company.timeZone, request.at);
-    const computed = computeFieldValues(document.fields, { ...request.existing, ...captured.values }, { today, captured: new Set(Object.keys(captured.values)) });
+    const computed = await this.recompute(tx, request, captured.values);
     const strictFailures = computed.failures.filter((failure) => failure.strict);
     if (strictFailures.length > 0) throw new FieldValuesInvalidError(strictFailures.map((failure) => ({ code: 'FORMULA_ERROR', fieldCode: failure.fieldCode, reason: failure.reason })));
     const written = { ...captured.values, ...computed.values };
