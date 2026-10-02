@@ -207,7 +207,7 @@ export class TicketWorld {
 
   /** All tickets' events, oldest first. */
   async events(ticketId: string): Promise<Array<{ type: string; step_id: string | null; transition_id: string | null; actor_id: string | null; assignee_id: string | null; data: Record<string, unknown> | null }>> {
-    return (await this.db.platform.query(`SELECT type, step_id, transition_id, actor_id, assignee_id, data FROM ticket_events WHERE tenant_id = $1 AND ticket_id = $2 ORDER BY created_at, id`, [this.tenant.tenantId, ticketId])).rows;
+    return (await this.db.platform.query(`SELECT type, step_id, transition_id, actor_id, assignee_id, data FROM ticket_events WHERE tenant_id = $1 AND ticket_id = $2 ORDER BY seq`, [this.tenant.tenantId, ticketId])).rows;
   }
 
   async outbox(type: string, ticketId: string): Promise<Array<Record<string, unknown>>> {

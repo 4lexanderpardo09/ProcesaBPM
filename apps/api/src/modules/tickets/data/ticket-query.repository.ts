@@ -58,7 +58,7 @@ export class TicketQueryRepository {
     return tx.ticketEvent.findMany({
       where: { tenantId, ticketId },
       select: { id: true, type: true, stepId: true, transitionId: true, loop: true, actorId: true, assigneeId: true, commentHtml: true, data: true, createdAt: true },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: { seq: 'asc' },
     });
   }
 }

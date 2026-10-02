@@ -1791,6 +1791,8 @@ model TicketEvent {
   commentHtml  String?         @map("comment_html")
   data         Json?
   createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Assigned by the database (identity): the order of the timeline, whatever the clocks of the API instances say.
+  seq          BigInt          @default(autoincrement())
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ticket     Ticket      @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
@@ -1803,6 +1805,7 @@ model TicketEvent {
 
   @@id([tenantId, id])
   @@index([tenantId, ticketId, createdAt])
+  @@index([tenantId, ticketId, seq])
   @@index([tenantId, actorId, createdAt(sort: Desc)])
   @@index([tenantId, assigneeId])
   @@index([tenantId, stepId])
