@@ -89,8 +89,7 @@ for _ in $(seq 1 30); do [ "$(docker inspect -f '{{.State.Health.Status}}' "$RUN
 step "worker"
 docker run -d --name "$RUN-worker" --network "$NETWORK" "${HARDENING[@]}" "${COMMON_ENV[@]}" \
   -e "WORKER_DATABASE_URL=$(url procesabpm_worker worker)" -e WEB_BASE_URL=https://app.example.com \
-  -e OUTBOX_TOKEN_KEY=0123456789abcdef0123456789abcdef0123456789abcdef -e SMTP_HOST=smtp.invalid \
-  -e JWT_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef "$WORKER_IMAGE" >/dev/null
+  -e OUTBOX_TOKEN_KEY=0123456789abcdef0123456789abcdef0123456789abcdef -e SMTP_HOST=smtp.invalid "$WORKER_IMAGE" >/dev/null
 for _ in $(seq 1 60); do logs_contain "$RUN-worker" 'Worker started' && break; sleep 1; done
 logs_contain "$RUN-worker" 'Worker started' || fail "the worker did not start"
 docker stop --time 30 "$RUN-worker" >/dev/null

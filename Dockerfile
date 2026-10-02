@@ -70,9 +70,7 @@ CMD ["node", "main.js"]
 
 # --- worker --------------------------------------------------------------------------------------------------------
 FROM runtime AS worker
-# PORT is required by the shared configuration even though the worker listens on nothing (see docs/despliegue.md, pending items).
-ENV PORT=3000 \
-    PDF_FONT_DIR=/app/assets/fonts
+ENV PDF_FONT_DIR=/app/assets/fonts
 COPY --from=deploy-api --chown=root:root /out/api/node_modules ./node_modules
 COPY --from=build --chown=root:root /repo/dist/api ./
 COPY --from=build --chown=root:root /repo/apps/api/assets ./assets

@@ -1,18 +1,26 @@
-import { type DynamicModule, Global, Module } from '@nestjs/common';
-import { type EntryPoint, loadConfig } from './app-config.js';
-import { APP_CONFIG } from './tokens.js';
+import { type DynamicModule, Global, Module, type Provider } from '@nestjs/common';
+import { type EntryPoint, loadApiConfig, loadWorkerConfig } from './app-config.js';
+import { API_CONFIG, APP_CONFIG } from './tokens.js';
 import { loadWorkerSettings, WORKER_SETTINGS } from './worker-settings.js';
 
 @Global()
 @Module({})
 export class ConfigModule {
-  /** Reads and validates the environment of one entry point; startup fails when it is not valid. */
+  /**
+   * Reads and validates the environment of one entry point; startup fails when it is not valid. `API_CONFIG` exists in the
+   * API only, so a provider of the worker that asks for it fails at boot instead of reading a variable the worker lacks.
+   */
   static forEntry(entry: EntryPoint): DynamicModule {
-    const workerOnly = entry === 'worker' ? [{ provide: WORKER_SETTINGS, useFactory: () => loadWorkerSettings(process.env) }] : [];
-    return {
-      module: ConfigModule,
-      providers: [{ provide: APP_CONFIG, useFactory: () => loadConfig(process.env, entry) }, ...workerOnly],
-      exports: [APP_CONFIG, ...workerOnly.map((provider) => provider.provide)],
-    };
+    const providers: Provider[] =
+      entry === 'api'
+        ? [
+            { provide: API_CONFIG, useFactory: () => loadApiConfig(process.env) },
+            { provide: APP_CONFIG, useExisting: API_CONFIG },
+          ]
+        : [
+            { provide: APP_CONFIG, useFactory: () => loadWorkerConfig(process.env) },
+            { provide: WORKER_SETTINGS, useFactory: () => loadWorkerSettings(process.env) },
+          ];
+    return { module: ConfigModule, providers, exports: providers.map((provider) => (provider as { provide: symbol }).provide) };
   }
 }

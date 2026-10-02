@@ -25,6 +25,17 @@ describe('worker', () => {
     ]);
   });
 
+  it('needs neither PORT nor JWT_SECRET: the worker listens on nothing and signs no tokens', async () => {
+    delete process.env.PORT;
+    delete process.env.JWT_SECRET;
+    const moduleRef = await Test.createTestingModule({ imports: [WorkerModule] })
+      .overrideProvider(LOG_WRITER)
+      .useValue(() => undefined)
+      .compile();
+    await moduleRef.init();
+    await moduleRef.close();
+  });
+
   it('connects with the worker login (app_worker), not the API one', async () => {
     const moduleRef = await Test.createTestingModule({ imports: [WorkerModule] })
       .overrideProvider(LOG_WRITER)

@@ -4,8 +4,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module.js';
 import { Clock } from '../../src/infrastructure/clock.js';
 import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
-import type { AppConfig } from '../../src/config/app-config.js';
-import { APP_CONFIG } from '../../src/config/tokens.js';
+import type { ApiConfig } from '../../src/config/app-config.js';
+import { API_CONFIG } from '../../src/config/tokens.js';
 import { configureHttpApp } from '../../src/http-app.js';
 import { RATE_LIMITER, type RateLimiter } from '../../src/infrastructure/security/rate-limiter.js';
 import { SUBJECT_REGISTRY } from '../../src/modules/authorization/application/ability.service.js';
@@ -40,7 +40,7 @@ export async function createTestApp({ controllers = [], rateLimiting = false, cl
   if (!rateLimiting) builder = builder.overrideProvider(RATE_LIMITER).useValue(unlimited);
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();
-  configureHttpApp(app, moduleRef.get<AppConfig>(APP_CONFIG));
+  configureHttpApp(app, moduleRef.get<ApiConfig>(API_CONFIG));
   await app.init();
   return { app, moduleRef, logLines };
 }

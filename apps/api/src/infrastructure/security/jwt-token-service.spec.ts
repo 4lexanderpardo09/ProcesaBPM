@@ -1,7 +1,7 @@
 import { UnauthenticatedError } from '@procesabpm/shared';
 import { decodeProtectedHeader, decodeJwt, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
-import type { AppConfig } from '../../config/app-config.js';
+import type { ApiConfig } from '../../config/app-config.js';
 import type { Clock } from '../clock.js';
 import { ACCESS_TOKEN_TTL_SECONDS, JwtTokenService, SELECTION_TOKEN_TTL_SECONDS } from './jwt-token-service.js';
 
@@ -15,7 +15,7 @@ const claims = {
 function setup(secret = SECRET) {
   let now = new Date('2026-10-01T12:00:00Z');
   const clock: Clock = { now: () => now };
-  const service = new JwtTokenService({ JWT_SECRET: secret } as AppConfig, clock);
+  const service = new JwtTokenService({ JWT_SECRET: secret } as ApiConfig, clock);
   return { service, advance: (seconds: number) => (now = new Date(now.getTime() + seconds * 1000)) };
 }
 

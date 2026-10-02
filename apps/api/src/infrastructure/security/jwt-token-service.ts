@@ -9,8 +9,8 @@ import {
 } from '@procesabpm/shared';
 import { jwtVerify, SignJWT } from 'jose';
 import { z } from 'zod';
-import type { AppConfig } from '../../config/app-config.js';
-import { APP_CONFIG } from '../../config/tokens.js';
+import type { ApiConfig } from '../../config/app-config.js';
+import { API_CONFIG } from '../../config/tokens.js';
 import { Clock } from '../clock.js';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
@@ -41,7 +41,7 @@ export class JwtTokenService {
   private readonly key: Uint8Array;
 
   constructor(
-    @Inject(APP_CONFIG) config: AppConfig,
+    @Inject(API_CONFIG) config: ApiConfig,
     @Inject(Clock) private readonly clock: Clock,
   ) {
     this.key = new TextEncoder().encode(config.JWT_SECRET);

@@ -77,7 +77,6 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 | Variable | Obligatoria | Por defecto | Descripción |
 |---|---|---|---|
 | `WORKER_DATABASE_URL` | sí | | Login de `app_worker` |
-| `PORT`, `JWT_SECRET` | sí (hoy) | | La configuración compartida los exige aunque el worker no los usa (§10) |
 | `WEB_BASE_URL` | sí | | Dirección de la aplicación web; los enlaces de los correos se construyen con ella. En producción debe ser `https://` |
 | `OUTBOX_TOKEN_KEY` | sí | | ≥ 32 bytes |
 | `MAIL_TRANSPORT` | no | `smtp` | `smtp` o `memory` (esta última se rechaza en producción) |
@@ -149,7 +148,6 @@ Localmente: `docker build` de los tres destinos y `scripts/smoke-images.sh` (usa
 - **Almacenamiento (R2/S3):** el código usa el SDK de S3 con endpoint configurable y está probado con SeaweedFS; falta probar contra Cloudflare R2 (URL prefirmadas, `STORAGE_PUBLIC_ENDPOINT`, CORS del bucket) y decidir el proveedor.
 - **Proveedor de correo:** hoy SMTP genérico (`SMTP_*`); falta elegir el proveedor (Resend, SES, Brevo), configurar SPF/DKIM/DMARC del dominio y, si se desea, un transporte por API.
 - **Dueño del esquema sin superusuario** (bases administradas): falta definir y probar los permisos mínimos (§2).
-- **El worker exige `PORT` y `JWT_SECRET`** sin usarlos (configuración compartida): menor privilegio pide quitárselos; entra con la tarea de seguridad (#17).
 - **Healthcheck del worker:** hoy solo se vigila el proceso; un latido (archivo o puerto interno) permitiría detectar un worker colgado.
 - **Registro de imágenes, firma y escaneo de vulnerabilidades:** el CI construye pero no publica; falta decidir el registro, firmar las imágenes (cosign) y escanearlas (Trivy), y automatizar la actualización del digest de la imagen base.
 - **Imagen web:** llega con `apps/web`.
