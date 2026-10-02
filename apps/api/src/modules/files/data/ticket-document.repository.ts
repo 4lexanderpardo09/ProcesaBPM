@@ -17,6 +17,7 @@ export interface TicketDocumentRow {
   readonly eventId: string | null;
   readonly stepId: string | null;
   readonly fieldCode: string | null;
+  readonly version: number;
   readonly isCurrent: boolean;
   readonly createdAt: Date;
   readonly file: StoredFileRow;
@@ -45,6 +46,7 @@ export class TicketDocumentRepository {
         eventId: true,
         stepId: true,
         fieldCode: true,
+        version: true,
         isCurrent: true,
         createdAt: true,
         file: { select: STORED_FILE_SELECT },
