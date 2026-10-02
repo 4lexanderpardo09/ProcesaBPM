@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@procesabpm/db';
 import type { AppConfig } from '../../config/app-config.js';
@@ -14,7 +14,7 @@ const PLATFORM_POOL_MAX = 5;
  * runtime client, it never selects the sensitive columns of `users`.
  */
 @Injectable()
-export class PlatformPrismaService extends PrismaClient implements OnModuleDestroy {
+export class PlatformPrismaService extends PrismaClient implements OnApplicationShutdown {
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
     if (config.PLATFORM_DATABASE_URL === undefined) throw new Error('PLATFORM_DATABASE_URL is required by the platform services');
     super({
@@ -23,7 +23,7 @@ export class PlatformPrismaService extends PrismaClient implements OnModuleDestr
     });
   }
 
-  async onModuleDestroy(): Promise<void> {
+  async onApplicationShutdown(): Promise<void> {
     await this.$disconnect();
   }
 }

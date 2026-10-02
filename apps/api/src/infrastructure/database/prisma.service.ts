@@ -1,4 +1,4 @@
-import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@procesabpm/db';
 import { APP_CONFIG } from '../../config/tokens.js';
@@ -17,7 +17,7 @@ export const SENSITIVE_USER_COLUMNS = {
  * only reachable through `TenantTransactionRunner`, which fixes the tenant first.
  */
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleDestroy {
+export class PrismaService extends PrismaClient implements OnApplicationShutdown {
   constructor(@Inject(APP_CONFIG) config: AppConfig) {
     super({
       adapter: new PrismaPg({ connectionString: config.DATABASE_URL, max: config.DB_POOL_MAX }),
@@ -25,7 +25,8 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
     });
   }
 
-  async onModuleDestroy(): Promise<void> {
+  /** After every `beforeApplicationShutdown` hook: schedulers and background tasks finish their work first. */
+  async onApplicationShutdown(): Promise<void> {
     await this.$disconnect();
   }
 }
