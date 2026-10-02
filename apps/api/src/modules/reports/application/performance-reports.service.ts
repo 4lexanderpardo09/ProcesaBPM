@@ -66,6 +66,7 @@ export class PerformanceReportsService {
           clocks: row.clocks,
           onTime: row.onTime,
           late: row.late,
+          handedOff: row.handedOff,
           noSla: row.noSla,
           compliancePct: pct(row.onTime, row.late),
           avgMin: whole(row.avg),
@@ -161,6 +162,7 @@ export class PerformanceReportsService {
             businessMin: row.businessMin,
             pausedMin: row.pausedMin,
             result: row.result,
+            completionReason: row.completionReason,
           })),
         },
       };

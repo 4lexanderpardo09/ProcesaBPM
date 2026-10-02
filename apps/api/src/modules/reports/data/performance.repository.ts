@@ -26,6 +26,8 @@ export interface ClockStatsRow {
   readonly delivered: number;
   readonly onTime: number;
   readonly late: number;
+  /** On time, but handed over to somebody else: not a delivery. */
+  readonly handedOff: number;
   readonly noSla: number;
   readonly avg: number | null;
   readonly median: number | null;
@@ -106,7 +108,7 @@ export class PerformanceRepository {
 
   async clockResults(tx: TenantTransaction, query: ReportQuery): Promise<ResultCounts> {
     const [row] = await tx.$queryRaw<ResultCounts[]>`
-      SELECT (count(*) FILTER (WHERE k.result = 'ON_TIME'))::int AS "onTime", (count(*) FILTER (WHERE k.result = 'LATE'))::int AS late
+      SELECT (count(*) FILTER (WHERE k.result = 'ON_TIME' AND k.completion_reason <> 'REASSIGNED'))::int AS "onTime", (count(*) FILTER (WHERE k.result = 'LATE'))::int AS late
       FROM ${CLOCKS}
       WHERE ${ticketPredicate(query)} AND k.tenant_id = ${query.tenantId}::uuid AND k.completed_at IS NOT NULL AND ${inCoarsePeriod(sql`k.completed_at`, query)} AND ${inPeriod(sql`k.completed_at`, query)}
         AND ${NOT_CANCELLED_SIGNATURE}`;
@@ -144,8 +146,9 @@ export class PerformanceRepository {
     const only = responsibleId === undefined ? sql`TRUE` : sql`k.responsible_id = ${responsibleId}::uuid`;
     return tx.$queryRaw<ClockStatsRow[]>`
       SELECT k.responsible_id::text AS "userId", max(u.first_name || ' ' || u.last_name) AS name,
-        count(*)::int AS clocks, count(DISTINCT k.ticket_id)::int AS delivered,
-        (count(*) FILTER (WHERE k.result = 'ON_TIME'))::int AS "onTime", (count(*) FILTER (WHERE k.result = 'LATE'))::int AS late,
+        count(*)::int AS clocks, (count(DISTINCT k.ticket_id) FILTER (WHERE k.completion_reason <> 'REASSIGNED'))::int AS delivered,
+        (count(*) FILTER (WHERE k.result = 'ON_TIME' AND k.completion_reason <> 'REASSIGNED'))::int AS "onTime", (count(*) FILTER (WHERE k.result = 'LATE'))::int AS late,
+        (count(*) FILTER (WHERE k.result = 'ON_TIME' AND k.completion_reason = 'REASSIGNED'))::int AS "handedOff",
         (count(*) FILTER (WHERE k.result IS NULL))::int AS "noSla",
         (avg(k.business_minutes))::float8 AS avg,
         (percentile_cont(0.5) WITHIN GROUP (ORDER BY k.business_minutes))::float8 AS median,

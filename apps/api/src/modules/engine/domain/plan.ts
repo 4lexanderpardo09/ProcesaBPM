@@ -56,8 +56,12 @@ export interface EventPlan {
   readonly attachments?: AttachmentsPlan | undefined;
 }
 
+export type ClockCompletionReason = 'STEP_EXITED' | 'SIGNED' | 'REASSIGNED' | 'PARALLEL_CANCELLED';
+
 export interface ClosedClock {
   readonly clockId: string;
+  /** Why it ended: delivering the step is not the same as passing it on. */
+  readonly reason: ClockCompletionReason;
   readonly businessMinutes: number | null;
   readonly result: SlaResultValue | null;
 }

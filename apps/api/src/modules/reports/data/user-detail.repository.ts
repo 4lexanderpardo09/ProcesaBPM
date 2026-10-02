@@ -16,6 +16,7 @@ export interface UserClockDbRow {
   readonly businessMin: number | null;
   readonly pausedMin: number;
   readonly result: 'ON_TIME' | 'LATE' | null;
+  readonly completionReason: string | null;
 }
 
 /** The person's clocks that ended in the period or are still running, inside the caller's scope. */
@@ -33,7 +34,7 @@ export class UserDetailRepository {
     return tx.$queryRaw<UserClockDbRow[]>`
       SELECT t.number::text AS "ticketNumber", w.name AS "workflowName", s.name AS "stepName", k.loop AS loop,
         k.started_at AS "startedAt", k.completed_at AS "completedAt", k.due_at AS "dueAt",
-        k.business_minutes AS "businessMin", k.paused_minutes AS "pausedMin", k.result::text AS result
+        k.business_minutes AS "businessMin", k.paused_minutes AS "pausedMin", k.result::text AS result, k.completion_reason::text AS "completionReason"
       FROM ${CLOCKS_FROM}
       JOIN steps s ON s.tenant_id = k.tenant_id AND s.id = k.step_id
       JOIN workflows w ON w.tenant_id = t.tenant_id AND w.id = t.workflow_id

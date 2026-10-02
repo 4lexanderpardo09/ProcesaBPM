@@ -245,6 +245,15 @@ enum TicketEventType {
   @@map("ticket_event_type")
 }
 
+enum ClockCompletionReason {
+  STEP_EXITED
+  SIGNED
+  REASSIGNED
+  PARALLEL_CANCELLED
+
+  @@map("clock_completion_reason")
+}
+
 enum SlaResult {
   ON_TIME
   LATE
@@ -1870,6 +1879,8 @@ model TicketSlaClock {
   completedAt     DateTime?  @map("completed_at") @db.Timestamptz(3)
   businessMinutes Int?       @map("business_minutes")
   result          SlaResult?
+  /// Why it ended; set together with `completedAt`.
+  completionReason ClockCompletionReason? @map("completion_reason")
   alertedAt       DateTime?  @map("alerted_at") @db.Timestamptz(3)
 
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)

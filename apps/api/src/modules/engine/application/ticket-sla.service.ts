@@ -5,7 +5,7 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 import { closeSla } from '../../sla/domain/clock-math.js';
 import { pausePeriodsOf } from '../../sla/domain/pause-math.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
-import type { ClosedClock, ClosedVisit } from '../domain/plan.js';
+import type { ClockCompletionReason, ClosedClock, ClosedVisit } from '../domain/plan.js';
 
 /** Computes how a visit and its clocks ended: business minutes and on time / late, on the calendar they were opened with. */
 @Injectable()
@@ -24,6 +24,9 @@ export class TicketSlaService {
     clocks: readonly OpenClockRow[],
     at: Date,
     exitTransitionId: string | null,
+    reason: ClockCompletionReason = 'STEP_EXITED',
+    /** People whose signature was cancelled: their clocks end for that reason, not for the step's exit. */
+    cancelledUserIds: ReadonlySet<string> = new Set(),
   ): Promise<{ readonly visit: ClosedVisit; readonly clocks: readonly ClosedClock[] }> {
     const resolved = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, visit.calendarId, visit.enteredAt);
     const calendar = resolved?.calendar ?? null;
@@ -33,12 +36,12 @@ export class TicketSlaService {
     const closedVisit = closeSla({ startedAt: visit.enteredAt, completedAt: at, dueAt: visit.dueAt, calendar, pauses });
     return {
       visit: { visitId: visit.id, exitTransitionId, ...closedVisit },
-      clocks: clocks.map((clock) => ({ clockId: clock.id, ...closeSla({ startedAt: clock.startedAt, completedAt: at, dueAt: clock.dueAt, calendar, pauses }) })),
+      clocks: clocks.map((clock) => ({ clockId: clock.id, reason: clock.responsibleId !== null && cancelledUserIds.has(clock.responsibleId) ? 'PARALLEL_CANCELLED' : reason, ...closeSla({ startedAt: clock.startedAt, completedAt: at, dueAt: clock.dueAt, calendar, pauses }) })),
     };
   }
 
   /** Clocks only (a reassignment closes the responsible's clock and leaves the visit alone). */
-  async closeClocks(tx: TenantTransaction, tenantId: string, ticketId: string, company: { readonly timeZone: string }, visit: OpenVisitRow, clocks: readonly OpenClockRow[], at: Date): Promise<readonly ClosedClock[]> {
-    return (await this.closeVisit(tx, tenantId, ticketId, company, visit, clocks, at, null)).clocks;
+  async closeClocks(tx: TenantTransaction, tenantId: string, ticketId: string, company: { readonly timeZone: string }, visit: OpenVisitRow, clocks: readonly OpenClockRow[], at: Date, reason: ClockCompletionReason): Promise<readonly ClosedClock[]> {
+    return (await this.closeVisit(tx, tenantId, ticketId, company, visit, clocks, at, null, reason)).clocks;
   }
 }

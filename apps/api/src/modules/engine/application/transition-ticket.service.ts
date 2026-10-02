@@ -92,7 +92,7 @@ export class TransitionTicketService {
 
       // A supervisor moving a parallel step on: the signatures still pending are cancelled with it.
       const cancelled = step.assignmentMode === 'PARALLEL' ? await this.cancelPendingSignatures(tx, tenantId, ticket.id, step.id, visit.loop, at) : [];
-      const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId);
+      const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId, 'STEP_EXITED', new Set(cancelled.map((task) => task.userId)));
       const events: EventPlan[] = [
         ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { changes: submission.changes } } satisfies EventPlan]),
         ...cancelled.map((task): EventPlan => ({ type: 'PARALLEL_TASK_COMPLETED', stepId: step.id, loop: visit.loop, actorId: actor.userId, assigneeId: task.userId, data: { taskId: task.id, status: 'CANCELLED' } })),

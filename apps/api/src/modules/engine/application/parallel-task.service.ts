@@ -90,7 +90,7 @@ export class ParallelTaskService {
 
       if (outcome.kind === 'WAIT') {
         const own = current.clocks.filter((clock) => clock.responsibleId === actor.userId);
-        await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, own, at));
+        await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, own, at, 'SIGNED'));
         for (const event of events) await this.writes.insertEvent(tx, tenantId, ticket.id, at, event);
         return { id: ticket.id, number: ticket.number.toString(), status: 'OPEN', currentStepId: step.id, openVisitId: visit.id };
       }
@@ -118,7 +118,7 @@ export class ParallelTaskService {
         at,
         chosenAssigneeId: request.assigneeId,
       });
-      const closing = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.id);
+      const closing = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.id, 'STEP_EXITED', new Set(rejected ? outcome.cancelUserIds : []));
       events.push(
         {
           type: 'TRANSITIONED',

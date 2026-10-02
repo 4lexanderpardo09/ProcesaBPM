@@ -263,7 +263,7 @@ export class TicketWriteRepository {
     for (const clock of clocks) {
       await tx.ticketSlaClock.updateMany({
         where: { tenantId, id: clock.clockId, completedAt: null },
-        data: { completedAt, businessMinutes: clock.businessMinutes, result: clock.result },
+        data: { completedAt, businessMinutes: clock.businessMinutes, result: clock.result, completionReason: clock.reason },
       });
     }
   }

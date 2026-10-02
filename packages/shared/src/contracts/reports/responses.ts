@@ -32,6 +32,8 @@ export interface ResponsibleSlaRow {
   readonly clocks: number;
   readonly onTime: number;
   readonly late: number;
+  /** Clocks that ended on time because the ticket was handed to somebody else: not counted as on time or as delivered. */
+  readonly handedOff: number;
   readonly noSla: number;
   readonly compliancePct: number | null;
   readonly avgMin: Minutes;
@@ -156,6 +158,8 @@ export interface UserClockRow {
   readonly businessMin: Minutes;
   readonly pausedMin: number;
   readonly result: 'ON_TIME' | 'LATE' | null;
+  /** STEP_EXITED, SIGNED, REASSIGNED or PARALLEL_CANCELLED; `null` while it runs. */
+  readonly completionReason: string | null;
 }
 
 export interface UserDetailReport {
