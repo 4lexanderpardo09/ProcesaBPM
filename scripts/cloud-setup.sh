@@ -50,6 +50,28 @@ fi
 corepack enable >/dev/null 2>&1 || $SUDO corepack enable
 corepack prepare pnpm@11.20.0 --activate >/dev/null
 
+# --- SeaweedFS (S3-compatible storage for the integration tests) ----------------------
+# MinIO stopped publishing images and binaries, and the sandbox has no Docker daemon, so SeaweedFS (the server the
+# tests use with Docker too, image chrislusf/seaweedfs) is built from source with Go: a few minutes the first time,
+# skipped when the binary exists. The tests need an S3 that honours `If-None-Match: *` on presigned PUTs.
+SEAWEED_VERSION="4.48"
+S3_PORT=8333
+SEAWEED_BIN="$HOME/go/bin/weed"
+if [ ! -x "$SEAWEED_BIN" ] && command -v go >/dev/null 2>&1; then
+  seaweed_src="$(mktemp -d)"
+  if git clone -q --depth 1 --branch "$SEAWEED_VERSION" https://github.com/seaweedfs/seaweedfs "$seaweed_src" \
+     && (cd "$seaweed_src" && GOTOOLCHAIN=auto GOFLAGS=-mod=mod go build -o "$SEAWEED_BIN" ./weed); then :; else
+    echo "WARNING: could not build SeaweedFS; the storage tests need TEST_S3_ENDPOINT or Docker" >&2
+  fi
+  rm -rf "$seaweed_src"
+fi
+if [ -x "$SEAWEED_BIN" ] && ! curl -s -o /dev/null "http://127.0.0.1:$S3_PORT/"; then
+  mkdir -p /tmp/seaweed-data
+  AWS_ACCESS_KEY_ID=testkey AWS_SECRET_ACCESS_KEY=testsecret nohup "$SEAWEED_BIN" mini -dir=/tmp/seaweed-data -s3.port="$S3_PORT" >/tmp/seaweed.log 2>&1 &
+  for _ in $(seq 1 30); do curl -s -o /dev/null "http://127.0.0.1:$S3_PORT/" && break; sleep 1; done
+fi
+echo "S3 (SeaweedFS) on localhost:$S3_PORT. Run the API tests with: TEST_S3_ENDPOINT=http://127.0.0.1:$S3_PORT TEST_S3_ACCESS_KEY=testkey TEST_S3_SECRET_KEY=testsecret pnpm test"
+
 # --- Project dependencies (only when run inside the repository) ------------------------
 # Cloud environments run the setup script before the repository is available; in that
 # case the agent installs dependencies at the start of the session (see CLAUDE.md).

@@ -60,6 +60,12 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.rejectionNotAllowed]: { status: 422, message: 'This step has no way out for a rejection' },
   [ERROR_CODES.commentRequired]: { status: 422, message: 'A comment is required' },
   [ERROR_CODES.staleTicket]: { status: 409, message: 'The ticket changed: reload it' },
+  [ERROR_CODES.storageQuotaExceeded]: { status: 422, message: 'The storage quota of the plan is exhausted' },
+  [ERROR_CODES.fileNotUploaded]: { status: 409, message: 'The file has not been uploaded yet' },
+  [ERROR_CODES.fileRejected]: { status: 422, message: 'The uploaded file was rejected' },
+  [ERROR_CODES.attachmentsInvalid]: { status: 422, message: 'Some attachments cannot be attached' },
+  [ERROR_CODES.submissionFilesLimit]: { status: 422, message: 'Too many files or too many bytes in one submission' },
+  [ERROR_CODES.storageUnavailable]: { status: 503, message: 'The file storage is not available' },
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },
 };

@@ -13,7 +13,6 @@ describe('findEngineSupportProblems', () => {
     ['a WAIT block', { steps: [step('w', 'WAIT')] }, 'NOT_IMPLEMENTED_WAIT_BLOCK'],
     ['a CALCULATOR block', { steps: [step('c', 'CALCULATOR')] }, 'NOT_IMPLEMENTED_CALCULATOR_BLOCK'],
     ['a CUTOFF deadline', { steps: [step('t', 'TASK', { deadlineType: 'CUTOFF' })] }, 'NOT_IMPLEMENTED_CUTOFF_DEADLINE'],
-    ['a required FILE field', { fields: [field('f', 's', 'F', { type: 'FILE', isRequired: true })] }, 'NOT_IMPLEMENTED_REQUIRED_FILE_FIELD'],
   ])('rejects %s', (_name, parts, code) => expect(codes(version(parts))).toEqual([code]));
 
   it('rejects conditions and amount rules on computed fields', () => {

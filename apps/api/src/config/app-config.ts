@@ -4,6 +4,8 @@ const postgresUrl = z
   .string()
   .refine((value) => /^postgres(ql)?:\/\//.test(value), 'must be a PostgreSQL connection URL');
 
+const httpUrl = z.string().refine((value) => /^https?:\/\//.test(value), 'must be an http(s) URL');
+
 const positiveInteger = (defaultValue: number, max: number) =>
   z.coerce.number().int().min(1).max(max).default(defaultValue);
 
@@ -52,6 +54,16 @@ const envSchema = z.object({
   DB_TX_MAX_WAIT_MS: positiveInteger(5_000, 60_000),
   /** Connections of the runtime pool. */
   DB_POOL_MAX: positiveInteger(10, 200),
+  /** S3-compatible object storage (SeaweedFS in development, R2 or S3 in production). */
+  STORAGE_ENDPOINT: httpUrl,
+  /** The host browsers reach the storage at, when it differs from the one the servers use (presigned URLs). */
+  STORAGE_PUBLIC_ENDPOINT: httpUrl.optional(),
+  STORAGE_REGION: z.string().min(1).default('us-east-1'),
+  STORAGE_BUCKET: z.string().min(3),
+  STORAGE_ACCESS_KEY_ID: z.string().min(1),
+  STORAGE_SECRET_ACCESS_KEY: z.string().min(1),
+  /** `true` for SeaweedFS and MinIO (bucket in the path); virtual-hosted style otherwise. */
+  STORAGE_FORCE_PATH_STYLE: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 });
 
 type Env = z.infer<typeof envSchema>;

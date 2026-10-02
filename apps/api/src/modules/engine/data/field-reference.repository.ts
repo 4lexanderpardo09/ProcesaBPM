@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import type { ReferenceToVerify } from '@procesabpm/shared';
+import type { DataReference } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 type Check = (tx: TenantTransaction, tenantId: string, value: string, config: Readonly<Record<string, unknown>>) => Promise<boolean>;
 
 const isStringList = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string');
 
-const CHECKS: Readonly<Record<ReferenceToVerify['kind'], Check>> = {
+const CHECKS: Readonly<Record<DataReference['kind'], Check>> = {
   SITE: async (tx, tenantId, value, config) =>
     (await tx.site.count({ where: { tenantId, id: value, isActive: true, ...(typeof config.level === 'number' ? { level: config.level } : {}) } })) > 0,
   USER: async (tx, tenantId, value, config) =>
@@ -39,7 +39,7 @@ const CHECKS: Readonly<Record<ReferenceToVerify['kind'], Check>> = {
 @Injectable()
 export class FieldReferenceRepository {
   /** The field codes whose reference does not exist. */
-  async findInvalid(tx: TenantTransaction, tenantId: string, references: readonly ReferenceToVerify[]): Promise<string[]> {
+  async findInvalid(tx: TenantTransaction, tenantId: string, references: readonly DataReference[]): Promise<string[]> {
     const invalid = new Set<string>();
     for (const reference of references) {
       if (!(await CHECKS[reference.kind](tx, tenantId, reference.value, reference.config))) invalid.add(reference.fieldCode);

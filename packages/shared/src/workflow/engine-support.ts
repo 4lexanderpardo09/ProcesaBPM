@@ -20,9 +20,6 @@ export function findEngineSupportProblems(doc: WorkflowVersionDocument): Workflo
     if (step.type === 'CALCULATOR') error('NOT_IMPLEMENTED_CALCULATOR_BLOCK', at);
     if (step.deadlineType === 'CUTOFF') error('NOT_IMPLEMENTED_CUTOFF_DEADLINE', at);
   }
-  for (const field of doc.fields) {
-    if (field.type === 'FILE' && field.isRequired) error('NOT_IMPLEMENTED_REQUIRED_FILE_FIELD', { fieldId: field.id });
-  }
   for (const transition of doc.transitions) {
     for (const rule of transition.condition ?? []) {
       if (computed(rule.field)) error('NOT_IMPLEMENTED_CONDITION_ON_COMPUTED_FIELD', { transitionId: transition.id, params: { code: rule.field } });

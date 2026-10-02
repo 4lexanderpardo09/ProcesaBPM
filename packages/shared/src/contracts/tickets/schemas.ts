@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { pageQuerySchema } from '../common.js';
+import { attachmentIdsSchema } from '../files/schemas.js';
 import { uuidSchema } from '../ids.js';
 
 const values = z.record(z.string(), z.unknown()).default({});
@@ -23,6 +24,7 @@ export const createTicketRequestSchema = z.object({
   values,
   /** Who takes the first people step when that step has `manual_selection`. */
   assigneeId: uuidSchema.optional(),
+  attachments: attachmentIdsSchema,
 });
 export type CreateTicketRequest = z.infer<typeof createTicketRequestSchema>;
 
@@ -33,6 +35,7 @@ export const transitionTicketRequestSchema = z.object({
   values,
   comment,
   assigneeId: uuidSchema.optional(),
+  attachments: attachmentIdsSchema,
 });
 export type TransitionTicketRequest = z.infer<typeof transitionTicketRequestSchema>;
 
@@ -43,7 +46,7 @@ export type ReassignTicketRequest = z.infer<typeof reassignTicketRequestSchema>;
 export const takeTicketRequestSchema = z.object({ visitId: uuidSchema });
 export type TakeTicketRequest = z.infer<typeof takeTicketRequestSchema>;
 
-export const closeTicketRequestSchema = z.object({ visitId: uuidSchema, values, comment });
+export const closeTicketRequestSchema = z.object({ visitId: uuidSchema, values, comment, attachments: attachmentIdsSchema });
 export type CloseTicketRequest = z.infer<typeof closeTicketRequestSchema>;
 
 /** An incident (novedad): the ticket is paused and handed to someone else until they resolve it. */

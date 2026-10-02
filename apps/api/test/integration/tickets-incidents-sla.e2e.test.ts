@@ -42,7 +42,7 @@ describe('incidents and the SLA: the pause moves the due date by business time',
   const user = (member: Member) => ({ participantType: 'USER', userId: member.userId });
   const create = (flow: PublishedFlow, at: Date, extra: Partial<CreateTicketRequest> = {}): Promise<TicketMutationResponse> => {
     clock.set(at);
-    return as(worker.userId, () => app.get(CreateTicketService).create({ userId: worker.userId, mayCreate: () => true }, { subcategoryId: flow.subcategoryId, title: 'Request', description: '', values: {}, ...extra }));
+    return as(worker.userId, () => app.get(CreateTicketService).create({ userId: worker.userId, mayCreate: () => true }, { subcategoryId: flow.subcategoryId, title: 'Request', description: '', values: {}, attachments: [], ...extra }));
   };
   const open = async (ticket: TicketMutationResponse, at: Date, byId = worker.userId) => {
     clock.set(at);
@@ -54,7 +54,7 @@ describe('incidents and the SLA: the pause moves the due date by business time',
   };
   const answer = (ticket: TicketMutationResponse, flow: PublishedFlow, at: Date, userId = worker.userId, extra: Partial<TransitionTicketRequest> = {}) => {
     clock.set(at);
-    return as(userId, () => app.get(TransitionTicketService).transition(actor(userId), ticket.id, { transitionId: flow.transition.Done!, visitId: ticket.openVisitId!, values: {}, ...extra }));
+    return as(userId, () => app.get(TransitionTicketService).transition(actor(userId), ticket.id, { transitionId: flow.transition.Done!, visitId: ticket.openVisitId!, values: {}, attachments: [], ...extra }));
   };
   const visit = async (ticketId: string) => (await world.db.platform.query(`SELECT due_at, paused_minutes, business_minutes, result FROM ticket_step_visits WHERE ticket_id = $1 ORDER BY entered_at, id`, [ticketId])).rows;
   const clocks = async (ticketId: string) => (await world.db.platform.query(`SELECT responsible_id, due_at, paused_at, paused_minutes, business_minutes, result, alerted_at, completed_at FROM ticket_sla_clocks WHERE ticket_id = $1 ORDER BY started_at, id`, [ticketId])).rows;

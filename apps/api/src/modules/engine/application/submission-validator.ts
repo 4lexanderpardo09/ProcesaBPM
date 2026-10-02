@@ -4,6 +4,7 @@ import {
   type AmountEvaluation,
   captureFieldsFor,
   evaluateAmountRules,
+  isDataReference,
   type FieldDocument,
   FieldValuesInvalidError,
   type FieldValueIssue,
@@ -16,6 +17,7 @@ import { FieldReferenceRepository } from '../data/field-reference.repository.js'
 import type { CompanyRow } from '../data/ticket-context.repository.js';
 import { localDateIn } from '../domain/local-date.js';
 import type { FieldWrite } from '../domain/plan.js';
+import { type SubmissionFiles, SubmissionFilesChecker } from './submission-files.js';
 
 export interface SubmissionRequest {
   readonly tenantId: string;
@@ -30,6 +32,10 @@ export interface SubmissionRequest {
   /** Position of the person submitting (for amount rules scoped to a position). */
   readonly positionId: string | null;
   readonly at: Date;
+  /** The person submitting: they can only attach what they uploaded themselves. */
+  readonly uploaderId: string;
+  /** Uploads attached next to the fields (a comment's files, a closing document). */
+  readonly attachmentIds: readonly string[];
 }
 
 export interface Submission {
@@ -39,6 +45,7 @@ export interface Submission {
   /** Values this submission changed, with what they were. */
   readonly changes: ReadonlyArray<{ readonly code: string; readonly before: unknown; readonly after: unknown }>;
   readonly amounts: AmountEvaluation;
+  readonly files: SubmissionFiles;
 }
 
 const sameValue = (left: unknown, right: unknown): boolean => JSON.stringify(left) === JSON.stringify(right);
@@ -50,7 +57,10 @@ const sameValue = (left: unknown, right: unknown): boolean => JSON.stringify(lef
  */
 @Injectable()
 export class SubmissionValidator {
-  constructor(@Inject(FieldReferenceRepository) private readonly references: FieldReferenceRepository) {}
+  constructor(
+    @Inject(FieldReferenceRepository) private readonly references: FieldReferenceRepository,
+    @Inject(SubmissionFilesChecker) private readonly fileChecker: SubmissionFilesChecker,
+  ) {}
 
   async validate(tx: TenantTransaction, request: SubmissionRequest): Promise<Submission> {
     const { document, step } = request;
@@ -58,9 +68,20 @@ export class SubmissionValidator {
     const captured = validateCapturedValues({ fields, input: request.input, existing: request.existing, context: { today: localDateIn(request.company.timeZone, request.at) } });
     const issues: FieldValueIssue[] = [...captured.issues];
     if (issues.length === 0) {
-      for (const code of await this.references.findInvalid(tx, request.tenantId, captured.references)) issues.push({ code: 'NOT_FOUND', fieldCode: code });
+      for (const code of await this.references.findInvalid(tx, request.tenantId, captured.references.filter(isDataReference))) issues.push({ code: 'NOT_FOUND', fieldCode: code });
     }
     if (issues.length > 0) throw new FieldValuesInvalidError(issues);
+
+    const { files, issues: fileIssues } = await this.fileChecker.check(tx, {
+      tenantId: request.tenantId,
+      uploaderId: request.uploaderId,
+      attachmentIds: request.attachmentIds,
+      fileFieldCodes: fields.filter((field) => field.type === 'FILE').map((field) => field.code),
+      capturedValues: captured.values,
+      existing: request.existing,
+      references: captured.references,
+    });
+    if (fileIssues.length > 0) throw new FieldValuesInvalidError(fileIssues);
 
     const merged = { ...request.existing, ...captured.values };
     const fieldByCode = new Map<string, FieldDocument>(document.fields.map((field) => [field.code, field]));
@@ -76,7 +97,7 @@ export class SubmissionValidator {
       .filter(([code, value]) => !sameValue(request.existing[code], value))
       .map(([code, value]) => ({ code, before: request.existing[code] ?? null, after: value }));
     const fieldWrites = changes.map((change) => ({ fieldId: fieldByCode.get(change.code)!.id, value: change.after }));
-    return { merged, fieldWrites, changes, amounts };
+    return { merged, fieldWrites, changes, amounts, files };
   }
 }
 

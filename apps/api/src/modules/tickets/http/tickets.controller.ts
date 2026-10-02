@@ -1,6 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import {
   type CloseTicketRequest,
+  type CommentTicketRequest,
+  commentTicketRequestSchema,
+  type CommentTicketResponse,
+  type DownloadUrlResponse,
+  type TicketDocumentResponse,
   closeTicketRequestSchema,
   type CreateTicketRequest,
   type IncidentMutationResponse,
@@ -41,6 +46,8 @@ import { CreateTicketService } from '../../engine/application/create-ticket.serv
 import { ReassignTicketService } from '../../engine/application/reassign-ticket.service.js';
 import { TakeTicketService } from '../../engine/application/take-ticket.service.js';
 import { TransitionTicketService } from '../../engine/application/transition-ticket.service.js';
+import { CommentTicketService } from '../../engine/application/comment-ticket.service.js';
+import { TicketDocumentsService } from '../application/ticket-documents.service.js';
 import { ticketCreatorOf } from '../application/ticket-access.js';
 import { TicketQueriesService } from '../application/ticket-queries.service.js';
 import { TICKET_READ_ACTIONS, TICKET_SUBJECT } from '../domain/ticket-subject.js';
@@ -58,6 +65,8 @@ export class TicketsController {
     @Inject(ReopenTicketService) private readonly reopening: ReopenTicketService,
     @Inject(OpenIncidentService) private readonly incidentOpening: OpenIncidentService,
     @Inject(ResolveIncidentService) private readonly incidentResolution: ResolveIncidentService,
+    @Inject(CommentTicketService) private readonly commenting: CommentTicketService,
+    @Inject(TicketDocumentsService) private readonly documents: TicketDocumentsService,
   ) {}
 
   @RequireAnyPermission(['create', 'create_for_others'], TICKET_SUBJECT)
@@ -82,6 +91,24 @@ export class TicketsController {
   @Get(':id/timeline')
   timeline(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketEventResponse[]> {
     return this.queries.timeline(ability, id);
+  }
+
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Get(':id/documents')
+  listDocuments(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketDocumentResponse[]> {
+    return this.documents.list(ability, id);
+  }
+
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Get(':id/files/:fileId/download-url')
+  downloadUrl(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Param('fileId', ParseUUIDPipe) fileId: string): Promise<DownloadUrlResponse> {
+    return this.documents.downloadUrl(ability, id, fileId);
+  }
+
+  @RequirePermission('comment', TICKET_SUBJECT)
+  @Post(':id/comments')
+  comment(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(commentTicketRequestSchema)) body: CommentTicketRequest): Promise<CommentTicketResponse> {
+    return this.commenting.comment(this.actor(principal, ability), id, body);
   }
 
   @RequirePermission('transition', TICKET_SUBJECT)

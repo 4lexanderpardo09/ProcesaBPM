@@ -8,6 +8,10 @@ const valid = {
   DATABASE_URL: 'postgresql://api:secret@localhost:5432/procesabpm',
   PLATFORM_DATABASE_URL: 'postgres://platform:secret@localhost:5432/procesabpm',
   JWT_SECRET: 'a-test-secret-of-at-least-32-bytes!!',
+  STORAGE_ENDPOINT: 'http://localhost:9000',
+  STORAGE_BUCKET: 'procesabpm',
+  STORAGE_ACCESS_KEY_ID: 'testkey',
+  STORAGE_SECRET_ACCESS_KEY: 'testkey',
 };
 const workerUrl = 'postgresql://worker:secret@localhost:5432/procesabpm';
 
@@ -20,6 +24,8 @@ describe('loadConfig', () => {
       DB_TX_MAX_WAIT_MS: 5_000,
       DB_POOL_MAX: 10,
       TRUST_PROXY: false,
+      STORAGE_REGION: 'us-east-1',
+      STORAGE_FORCE_PATH_STYLE: false,
     });
   });
 
@@ -78,6 +84,11 @@ describe('loadConfig', () => {
     });
   });
 
+  it('reads the storage settings, with the public endpoint and path style when given', () => {
+    const config = loadConfig({ ...valid, STORAGE_PUBLIC_ENDPOINT: 'https://files.example.com', STORAGE_FORCE_PATH_STYLE: 'true', STORAGE_REGION: 'auto' });
+    expect(config).toMatchObject({ STORAGE_PUBLIC_ENDPOINT: 'https://files.example.com', STORAGE_FORCE_PATH_STYLE: true, STORAGE_REGION: 'auto' });
+  });
+
   it('reads the database tuning variables', () => {
     const config = loadConfig({ ...valid, DB_TX_TIMEOUT_MS: '20000', DB_TX_MAX_WAIT_MS: '1000', DB_POOL_MAX: '25' });
     expect(config).toMatchObject({ DB_TX_TIMEOUT_MS: 20_000, DB_TX_MAX_WAIT_MS: 1_000, DB_POOL_MAX: 25 });
@@ -112,6 +123,9 @@ describe('loadConfig', () => {
     ['PLATFORM_DATABASE_URL', 'not a url'],
     ['JWT_SECRET', 'too-short'],
     ['JWT_SECRET', 'é'.repeat(15)],
+    ['STORAGE_ENDPOINT', 'ftp://storage'],
+    ['STORAGE_PUBLIC_ENDPOINT', 'storage.example.com'],
+    ['STORAGE_FORCE_PATH_STYLE', 'yes'],
   ])('rejects %s=%s', (variable, value) => {
     const error = catchError(() => loadConfig({ ...valid, [variable]: value }));
     expect(error).toBeInstanceOf(ConfigError);

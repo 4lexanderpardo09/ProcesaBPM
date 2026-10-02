@@ -33,7 +33,15 @@ export interface OutboxIntent {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
-export type EventType = 'CREATED' | 'TRANSITIONED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED' | 'INCIDENT_OPENED' | 'INCIDENT_RESOLVED' | 'REOPENED' | 'PARALLEL_TASK_COMPLETED' | 'SYSTEM';
+export type EventType = 'CREATED' | 'TRANSITIONED' | 'COMMENTED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED' | 'INCIDENT_OPENED' | 'INCIDENT_RESOLVED' | 'REOPENED' | 'PARALLEL_TASK_COMPLETED' | 'SYSTEM';
+
+/** Uploads a movement attaches to the ticket, written right after its event (which they point to). */
+export interface AttachmentsPlan {
+  readonly stepId: string | null;
+  readonly role: 'ATTACHMENT' | 'CLOSING';
+  readonly attachmentIds: readonly string[];
+  readonly fieldFiles: ReadonlyArray<{ readonly fieldCode: string; readonly added: readonly string[]; readonly removed: readonly string[] }>;
+}
 
 export interface EventPlan {
   readonly type: EventType;
@@ -45,6 +53,7 @@ export interface EventPlan {
   readonly commentHtml?: string | null;
   readonly data?: Readonly<Record<string, unknown>>;
   readonly outbox?: readonly OutboxIntent[];
+  readonly attachments?: AttachmentsPlan | undefined;
 }
 
 export interface ClosedClock {
