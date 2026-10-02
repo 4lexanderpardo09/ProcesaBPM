@@ -1,3 +1,6 @@
+# Every secret below goes through `environment:` to keep the example short; in production use your orchestrator's secrets
+# (Docker/Swarm secrets, Kubernetes Secrets, a secret manager) and never commit the real values.
+#
 # EXAMPLE of a production-like deployment (docs/despliegue.md). A guide, not something to run as is: replace the
 # dependencies (postgres, storage, mailpit) with managed services, keep the secrets out of the repository and pin real tags.
 #
@@ -62,20 +65,11 @@ services:
   # Creates (or updates the passwords of) the three login roles the services use. Idempotent.
   roles:
     image: postgres:18-alpine
-    entrypoint:
-      - psql
-      - --no-psqlrc
-      - -v
-      - ON_ERROR_STOP=1
-      - -v
-      - api_password=${API_DB_PASSWORD:?}
-      - -v
-      - worker_password=${WORKER_DB_PASSWORD:?}
-      - -v
-      - platform_password=${PLATFORM_DB_PASSWORD:?}
-      - -f
-      - /roles.sql
+    entrypoint: [psql, --no-psqlrc, -v, ON_ERROR_STOP=1, -f, /roles.sql]
     environment:
+      API_DB_PASSWORD: ${API_DB_PASSWORD:?}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?}
       PGHOST: postgres
       PGDATABASE: procesabpm
       PGUSER: ${DB_OWNER_USER:-procesabpm_owner}

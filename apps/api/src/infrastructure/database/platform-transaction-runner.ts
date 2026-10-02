@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@procesabpm/db';
 import type { AppConfig } from '../../config/app-config.js';
 import { APP_CONFIG } from '../../config/tokens.js';
+import { applyDatabaseTimeouts, databaseTimeouts } from './database-scope.js';
 import { PlatformPrismaService } from './platform-prisma.service.js';
 
 export type PlatformTransaction = Prisma.TransactionClient;
@@ -18,6 +19,12 @@ export class PlatformTransactionRunner {
   ) {}
 
   run<T>(work: (tx: PlatformTransaction) => Promise<T>): Promise<T> {
-    return this.platform.$transaction(work, { timeout: this.config.DB_TX_TIMEOUT_MS, maxWait: this.config.DB_TX_MAX_WAIT_MS });
+    return this.platform.$transaction(
+      async (tx) => {
+        await applyDatabaseTimeouts(tx, databaseTimeouts(this.config, this.config.DB_TX_TIMEOUT_MS));
+        return work(tx);
+      },
+      { timeout: this.config.DB_TX_TIMEOUT_MS, maxWait: this.config.DB_TX_MAX_WAIT_MS },
+    );
   }
 }

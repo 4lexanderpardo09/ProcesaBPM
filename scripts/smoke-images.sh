@@ -64,7 +64,7 @@ docker run --rm --network "$NETWORK" "${HARDENING[@]}" -e "DATABASE_URL=$(url po
 step "login roles"
 # The very file the deployment guide hands out; run twice to prove it is idempotent.
 for _ in 1 2; do
-  docker exec -i "$DB_HOST" psql -U postgres -d procesabpm -v ON_ERROR_STOP=1 -v api_password=api -v worker_password=worker -v platform_password=platform \
+  docker exec -i -e API_DB_PASSWORD=api -e WORKER_DB_PASSWORD=worker -e PLATFORM_DB_PASSWORD=platform "$DB_HOST" psql -U postgres -d procesabpm -v ON_ERROR_STOP=1 \
     <"$(dirname "$0")/../deploy/roles.sql" >/dev/null
 done
 

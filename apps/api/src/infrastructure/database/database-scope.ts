@@ -17,6 +17,8 @@ export interface DatabaseScope {
 interface AppliedScope {
   tenant_id: string;
   user_id: string;
+  lock_timeout: string;
+  statement_timeout: string;
 }
 
 /**
@@ -25,19 +27,28 @@ interface AppliedScope {
  * stop the transaction before any data is read or written.
  */
 export async function applyDatabaseScope(tx: Prisma.TransactionClient, scope: DatabaseScope): Promise<void> {
+  // One round trip: the timeouts (when given) are set by the same statement, before anything else runs.
+  const lockTimeout = scope.lockTimeoutMs === undefined ? null : String(scope.lockTimeoutMs);
+  const statementTimeout = scope.statementTimeoutMs === undefined ? null : String(scope.statementTimeoutMs);
   const [applied] = await tx.$queryRaw<AppliedScope[]>`
     SELECT set_config('app.tenant_id', ${scope.tenantId}, true) AS tenant_id,
-           set_config('app.user_id', ${scope.userId}, true) AS user_id`;
+           set_config('app.user_id', ${scope.userId}, true) AS user_id,
+           set_config('lock_timeout', COALESCE(${lockTimeout}::text, current_setting('lock_timeout')), true) AS lock_timeout,
+           set_config('statement_timeout', COALESCE(${statementTimeout}::text, current_setting('statement_timeout')), true) AS statement_timeout`;
   if (applied?.tenant_id !== scope.tenantId || applied.user_id !== scope.userId) {
     throw new TenantContextMismatchError();
   }
-  if (scope.lockTimeoutMs !== undefined && scope.statementTimeoutMs !== undefined) {
-    await tx.$executeRaw`SELECT set_config('lock_timeout', ${String(scope.lockTimeoutMs)}, true), set_config('statement_timeout', ${String(scope.statementTimeoutMs)}, true)`;
-  }
+}
+
+/** Only the timeouts, for transactions that have no tenant scope (the platform login). */
+export async function applyDatabaseTimeouts(tx: Prisma.TransactionClient, timeouts: Required<Pick<DatabaseScope, 'lockTimeoutMs' | 'statementTimeoutMs'>>): Promise<void> {
+  await tx.$executeRaw`SELECT set_config('lock_timeout', ${String(timeouts.lockTimeoutMs)}, true), set_config('statement_timeout', ${String(timeouts.statementTimeoutMs)}, true)`;
 }
 
 /** The database-side bounds of a transaction that Prisma lets run for `transactionTimeoutMs`. */
-export const databaseTimeouts = (config: { readonly DB_LOCK_TIMEOUT_MS: number }, transactionTimeoutMs: number): Pick<DatabaseScope, 'lockTimeoutMs' | 'statementTimeoutMs'> => ({
-  lockTimeoutMs: config.DB_LOCK_TIMEOUT_MS,
-  statementTimeoutMs: transactionTimeoutMs,
-});
+export const databaseTimeouts = (
+  config: { readonly DB_LOCK_TIMEOUT_MS: number },
+  transactionTimeoutMs: number,
+  /** Worker handlers may wait for a lock as long as they may run: they are not interactive and a failed attempt costs a retry. */
+  lockTimeoutMs: number = config.DB_LOCK_TIMEOUT_MS,
+): Required<Pick<DatabaseScope, 'lockTimeoutMs' | 'statementTimeoutMs'>> => ({ lockTimeoutMs, statementTimeoutMs: transactionTimeoutMs });

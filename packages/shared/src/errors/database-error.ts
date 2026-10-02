@@ -26,14 +26,12 @@ const FACTORY_BY_SQL_STATE: Readonly<Record<string, DomainErrorFactory>> = {
   '23P01': (message, cause) => new OverlapError(message, { cause }),
   '42501': (message, cause) => new PermissionDeniedError(message, { cause }),
   // Transient failures: lock_timeout, statement_timeout, deadlock and serialization failure, and Prisma's own
-  // transaction timeout / write conflict / exhausted pool. The request wrote nothing and can be repeated.
+  // transaction timeout (see `isTransactionTimeout`) and write conflict. The request wrote nothing and can be repeated.
   '55P03': transient,
   '57014': transient,
   '40P01': transient,
   '40001': transient,
-  P2028: transient,
   P2034: transient,
-  P2024: transient,
 };
 
 interface ErrorShape {
@@ -65,6 +63,23 @@ export function extractSqlState(error: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Prisma's `P2028` covers more than timeouts ("transaction already closed", "not found"…); only the two timeouts mean the
+ * request wrote nothing and can be repeated: the transaction could not start in time (pool exhausted) or expired.
+ */
+const TRANSACTION_TIMEOUT_MESSAGE = /Unable to start a transaction in the given time|expired transaction|timeout for this transaction/i;
+
+export function isTransactionTimeout(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (typeof current !== 'object' || current === null) return false;
+    const node = current as ErrorShape & { message?: unknown };
+    if (node.code === 'P2028' && typeof node.message === 'string' && TRANSACTION_TIMEOUT_MESSAGE.test(node.message)) return true;
+    current = node.cause;
+  }
+  return false;
+}
+
 export function domainErrorFromSqlState(sqlState: string, message: string, cause?: unknown): DomainError | undefined {
   return FACTORY_BY_SQL_STATE[sqlState]?.(message, cause);
 }
@@ -75,6 +90,7 @@ export function domainErrorFromSqlState(sqlState: string, message: string, cause
  * docs/base-de-datos.md §7, so the caller can treat it as an unexpected failure.
  */
 export function mapDatabaseError(error: unknown): DomainError | undefined {
+  if (isTransactionTimeout(error)) return transient('Transaction timed out', error);
   const sqlState = extractSqlState(error);
   if (sqlState === undefined) return undefined;
   const message = error instanceof Error ? error.message : 'Database rule violated';

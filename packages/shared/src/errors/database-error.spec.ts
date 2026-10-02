@@ -45,14 +45,18 @@ describe('mapDatabaseError', () => {
 });
 
 describe('mapDatabaseError with transient failures', () => {
+  it('does not call every P2028 a timeout: a query on a committed transaction is a bug, not a reason to retry', () => {
+    expect(mapDatabaseError(Object.assign(new Error('Transaction API error: Transaction already closed: A query cannot be executed on a committed transaction.'), { code: 'P2028' }))).toBeUndefined();
+  });
+
   it.each([
     ['lock_timeout', pgError('55P03')],
     ['statement_timeout', pgError('57014')],
     ['a deadlock', pgError('40P01')],
     ['a serialization failure', pgError('40001')],
-    ['a Prisma transaction timeout', Object.assign(new Error('Transaction already closed'), { code: 'P2028' })],
+    ['a transaction that could not start in time (pool exhausted)', Object.assign(new Error('Transaction API error: Unable to start a transaction in the given time.'), { code: 'P2028' })],
+    ['an expired transaction', Object.assign(new Error('Transaction API error: Transaction already closed: A query cannot be executed on an expired transaction. The timeout for this transaction was 10000 ms'), { code: 'P2028' })],
     ['a Prisma write conflict', Object.assign(new Error('write conflict'), { code: 'P2034' })],
-    ['an exhausted connection pool', Object.assign(new Error('pool timeout'), { code: 'P2024' })],
     ['a lock timeout wrapped by the driver adapter', Object.assign(new Error('prisma'), { code: 'P2010', meta: { driverAdapterError: { cause: { originalCode: '55P03' } } } })],
   ])('says to try again after %s', (_label, error) => {
     const mapped = mapDatabaseError(error);

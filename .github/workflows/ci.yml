@@ -47,6 +47,8 @@ jobs:
     name: Docker images
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -60,8 +62,8 @@ jobs:
           load: true
           push: false
           tags: procesabpm-api:ci
-          cache-from: type=gha,scope=images
-          cache-to: type=gha,scope=images,mode=max
+          cache-from: type=gha,scope=images-api
+          cache-to: type=gha,scope=images-api,mode=max
 
       - name: Build worker
         uses: docker/build-push-action@v6
@@ -71,8 +73,8 @@ jobs:
           load: true
           push: false
           tags: procesabpm-worker:ci
-          cache-from: type=gha,scope=images
-          cache-to: type=gha,scope=images,mode=max
+          cache-from: type=gha,scope=images-worker
+          cache-to: type=gha,scope=images-worker,mode=max
 
       - name: Build migrate
         uses: docker/build-push-action@v6
@@ -82,8 +84,8 @@ jobs:
           load: true
           push: false
           tags: procesabpm-migrate:ci
-          cache-from: type=gha,scope=images
-          cache-to: type=gha,scope=images,mode=max
+          cache-from: type=gha,scope=images-migrate
+          cache-to: type=gha,scope=images-migrate,mode=max
 
       - name: Smoke test
         run: scripts/smoke-images.sh

@@ -13,7 +13,7 @@ function setup(applied: unknown = [{ tenant_id: scope.tenantId, user_id: scope.u
   const transaction = vi.fn(async (work: (tx: TenantTransaction) => Promise<unknown>) => work(tx));
   const prisma = { $transaction: transaction } as unknown as PrismaService;
   const context = new TenantContext();
-  const config = { DB_TX_TIMEOUT_MS: 12_345, DB_TX_MAX_WAIT_MS: 678 } as AppConfig;
+  const config = { DB_TX_TIMEOUT_MS: 12_345, DB_TX_MAX_WAIT_MS: 678, DB_LOCK_TIMEOUT_MS: 4_321 } as AppConfig;
   return { runner: new TenantTransactionRunner(prisma, context, config), context, transaction, queryRaw, tx };
 }
 
@@ -33,7 +33,9 @@ describe('TenantTransactionRunner', () => {
       order.push('set_config');
       expect(strings.join('?')).toContain("set_config('app.tenant_id', ?, true)");
       expect(strings.join('?')).toContain("set_config('app.user_id', ?, true)");
-      expect(values).toEqual([scope.tenantId, scope.userId]);
+      expect(strings.join('?')).toContain("set_config('lock_timeout'");
+      expect(strings.join('?')).toContain("set_config('statement_timeout'");
+      expect(values).toEqual([scope.tenantId, scope.userId, '4321', '12345']);
       return [{ tenant_id: scope.tenantId, user_id: scope.userId }];
     });
 

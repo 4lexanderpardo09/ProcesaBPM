@@ -50,7 +50,9 @@ export class MailWorker {
    * transient) waits 30 s for its next attempt. A test that wants "everything delivered" must not wait for a backoff.
    */
   private async retryNow(): Promise<void> {
-    await this.db.platform.query(`UPDATE outbox_events SET available_at = now() WHERE status = 'PENDING' AND attempts > 0 AND available_at > now()`);
+    for (const table of ['outbox_events', 'platform_outbox_events']) {
+      await this.db.platform.query(`UPDATE ${table} SET available_at = now() WHERE status = 'PENDING' AND attempts > 0 AND available_at > now()`);
+    }
   }
 
   /** Delivers until a message to `address` has arrived (the condition, not a fixed time); fails with a clear message otherwise. */

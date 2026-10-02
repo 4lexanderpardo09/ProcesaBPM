@@ -40,8 +40,8 @@ Cada servicio entra con **su** login, que se ejecuta como su rol de aplicación 
 | `procesabpm_worker` | `app_worker` | `worker` (`WORKER_DATABASE_URL`) | lo mismo que `app_runtime` y, además, reclamar y completar eventos del outbox |
 | `procesabpm_platform` | `app_platform` (`BYPASSRLS`) | `api` (`PLATFORM_DATABASE_URL`, solo `modules/platform`) y la carga del catálogo | alta de tenants, purgas, catálogo global; **el worker nunca lo recibe** |
 
-- `deploy/roles.sql` crea los tres logins con sus contraseñas (variables de `psql`) y es **idempotente**: se vuelve a ejecutar cuando cambia una contraseña. El CI lo ejecuta dos veces.
-- **Las credenciales llegan por variables de entorno o secretos del orquestador, nunca dentro de la imagen** (ninguna imagen contiene un `.env`). En Compose o Kubernetes, usa secretos y no las escribas en el archivo; `deploy/example.env` solo muestra los nombres. Genera cada secreto con `openssl rand -base64 48`.
+- `deploy/roles.sql` crea los tres logins con sus contraseñas (variables de `psql`) y es **idempotente**: se vuelve a ejecutar cuando cambia una contraseña. El CI lo ejecuta dos veces. También repara un login creado a mano (`LOGIN` y pertenencia a su rol).
+- **Las credenciales llegan por variables de entorno o secretos del orquestador, nunca dentro de la imagen** (ninguna imagen contiene un `.env`). En Compose o Kubernetes, usa secretos y no las escribas en el archivo; `deploy/example.env` solo muestra los nombres. Genera las contraseñas de BD con `openssl rand -hex 32` (van dentro de URL de conexión: base64 puede producir `/` o `+` y romperla) y los demás secretos con `openssl rand -base64 48`. `deploy/roles.sql` lee las contraseñas del entorno (no de la línea de comandos) y apaga el registro de sentencias de su sesión.
 - `JWT_SECRET` (firma de los tokens de acceso) y `OUTBOX_TOKEN_KEY` (deriva los tokens de los enlaces de correo; solo el worker) son distintos y de al menos 32 bytes. Rotarlos invalida las sesiones y los enlaces pendientes.
 - **Dueño del esquema: se probó con un superusuario.** Las migraciones crean roles (algunos con `BYPASSRLS`) y cambian dueños de funciones, así que hoy el dueño debe ser superusuario (o un rol con permisos equivalentes). En una base administrada sin superusuario (RDS, Cloud SQL…) hay que crear antes los cuatro roles `NOLOGIN` y dar al dueño las membresías y permisos necesarios; **no está probado** (§10).
 
@@ -108,7 +108,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 4. **Catálogo global** (`node seed/seed.js`, login de `app_platform`): permisos, planes, países, festivos. Es idempotente: puede correr en cada despliegue.
 5. **`api` y `worker`**, en cualquier orden; el API responde `/ready` cuando alcanza la BD.
 
-`docker-compose.prod.example.yml` implementa exactamente esa cadena (`postgres → migrate → roles → seed → api, worker`). Es una **guía**, no algo para correr tal cual: sustituye Postgres, almacenamiento y correo por servicios administrados, pon un proxy con TLS delante del API y fija versiones reales de las imágenes.
+`docker-compose.prod.example.yml` implementa exactamente esa cadena (`postgres → migrate → roles → seed → api, worker`). Es una **guía**, no algo para correr tal cual (el CI solo valida su sintaxis con `docker compose config`; la cadena completa se probó a mano): sustituye Postgres, almacenamiento y correo por servicios administrados, pon un proxy con TLS delante del API y fija versiones reales de las imágenes.
 
 ## 5. Migrar
 
@@ -121,7 +121,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 
 - **API:** `GET /health` (vivo; no toca la BD) y `GET /ready` (listo; comprueba la BD). El `HEALTHCHECK` de la imagen usa `/health`, para que una caída de la BD no reinicie el API en bucle; usa **`/ready` como sondeo de disponibilidad** del balanceador u orquestador.
 - **Worker:** no abre puertos; el orquestador vigila el proceso (`restart: unless-stopped`) y los registros.
-- **SIGTERM:** ambos procesos cierran de forma ordenada. El worker deja de reclamar eventos y **termina el lote en curso** (o, si no alcanza, los eventos reclamados se liberan solos al vencer su arrendamiento de 5 min y otro worker los toma); el API termina las peticiones abiertas. Salen con código 143 (Nest vuelve a lanzar la señal tras cerrar): es una parada limpia, 137 (`SIGKILL`) no.
+- **SIGTERM:** ambos procesos cierran de forma ordenada. El worker deja de reclamar eventos y **termina el lote en curso** (o, si no alcanza, los eventos reclamados se liberan solos al vencer su arrendamiento de 5 min y otro worker los toma); el API termina las peticiones abiertas. Salen con código 143 (Nest vuelve a lanzar la señal tras cerrar; 0 también es válido): es una parada limpia, 137 (`SIGKILL`) no.
 - Usa `init: true` (o `docker run --init`) y **`stop_grace_period` ≥ 120 s para el worker** y 30 s para el API; con menos, Docker mata un lote en curso.
 
 ## 7. Escalar
@@ -140,7 +140,7 @@ El trabajo `Docker images` de `.github/workflows/ci.yml` (en cada PR, sin public
 2. levanta un PostgreSQL 18, aplica las migraciones con la imagen `migrate`, crea los logins con `deploy/roles.sql` (dos veces) y carga el catálogo (dos veces);
 3. arranca el API (solo lectura, sin capacidades) y espera `/health`, `/ready` y el estado `healthy` del contenedor;
 4. arranca el worker, espera el registro «Worker started», lo detiene con SIGTERM y comprueba la parada ordenada; luego detiene el API;
-5. el mismo trabajo valida `docker-compose.prod.example.yml` con `docker compose config`.
+5. el mismo trabajo valida la sintaxis de `docker-compose.prod.example.yml` con `docker compose config` (no lo levanta).
 
 Localmente: `docker build` de los tres destinos y `scripts/smoke-images.sh` (usa `API_IMAGE`, `WORKER_IMAGE`, `MIGRATE_IMAGE` si los nombres cambian).
 

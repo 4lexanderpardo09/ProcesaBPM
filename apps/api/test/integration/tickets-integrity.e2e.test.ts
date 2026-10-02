@@ -82,7 +82,7 @@ describe('ticket integrity: concurrency, closing and version pinning', () => {
       }
     });
 
-    it('answers 503 with a retry hint, and writes nothing, when the ticket stays locked past the transaction timeout', async () => {
+    it('answers 503 with a retry hint, and writes nothing, when the ticket stays locked past the lock timeout', async () => {
       const created = await create(twoSteps).expect(201);
       const holder = await db.platform.connect();
       try {

@@ -74,7 +74,7 @@ describe('AllExceptionsFilter', () => {
   it.each([
     ['a lock timeout', prismaError('P2010', '55P03')],
     ['a deadlock', prismaError('P2010', '40P01')],
-    ['a transaction timeout', Object.assign(new Error('Unable to start a transaction in the given time'), { code: 'P2028' })],
+    ['a transaction timeout', Object.assign(new Error('Transaction API error: Unable to start a transaction in the given time'), { code: 'P2028' })],
   ])('answers %s with 503 and when to retry, never with a 4xx the client would not repeat', (_label, exception) => {
     const response = respond(exception);
     expect(response.status).toBe(503);

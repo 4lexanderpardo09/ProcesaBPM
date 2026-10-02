@@ -15,7 +15,7 @@ function setup(echo?: (values: unknown[]) => unknown) {
   const tx = { $queryRaw: queryRaw } as unknown as AuthTransaction;
   const transaction = vi.fn(async (work: (tx: AuthTransaction) => Promise<unknown>) => work(tx));
   const prisma = { $transaction: transaction } as unknown as PrismaService;
-  const config = { DB_TX_TIMEOUT_MS: 1_000, DB_TX_MAX_WAIT_MS: 500 } as AppConfig;
+  const config = { DB_TX_TIMEOUT_MS: 1_000, DB_TX_MAX_WAIT_MS: 500, DB_LOCK_TIMEOUT_MS: 250 } as AppConfig;
   return { runner: new AuthTransactionRunner(prisma, config), seen, transaction };
 }
 
@@ -23,13 +23,13 @@ describe('AuthTransactionRunner', () => {
   it('anonymous transactions set neither tenant nor user', async () => {
     const { runner, seen } = setup();
     await runner.withAnonymousTransaction(async () => undefined);
-    expect(seen).toEqual([['', '']]);
+    expect(seen).toEqual([['', '', '250', '1000']]);
   });
 
   it('user transactions set the user and leave the tenant empty', async () => {
     const { runner, seen, transaction } = setup();
     await expect(runner.withUserTransaction(userId, async () => 'ok')).resolves.toBe('ok');
-    expect(seen).toEqual([['', userId]]);
+    expect(seen).toEqual([['', userId, '250', '1000']]);
     expect(transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 1_000, maxWait: 500 });
   });
 
