@@ -167,3 +167,25 @@ CREATE POLICY own_notification_preferences ON notification_preferences AS RESTRI
 -- People only mark their notifications as read: they never edit their text nor delete them (retention does).
 REVOKE UPDATE, DELETE ON notifications FROM app_runtime;
 GRANT UPDATE (read_at) ON notifications TO app_runtime;
+
+-- ===========================================================================
+-- 4. An invitation can only be queued for the tenant the caller is acting in
+-- ===========================================================================
+-- Both callers (a tenant request and the sign-up) already carry app.tenant_id: without this check one tenant could queue
+-- the invitation e-mail of another tenant's pending member (and so replace that tenant's link).
+CREATE OR REPLACE FUNCTION enqueue_platform_event(p_type text, p_payload jsonb) RETURNS uuid
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+  AS $$
+  DECLARE
+    v_id uuid;
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM platform_event_types WHERE type = p_type) THEN
+      RAISE EXCEPTION 'unknown platform event type %', p_type USING ERRCODE = '42501';
+    END IF;
+    IF p_type = 'email.invitation' AND p_payload ->> 'tenantId' IS DISTINCT FROM app_current_tenant()::text THEN
+      RAISE EXCEPTION 'an invitation can only be queued for the tenant in context' USING ERRCODE = '42501';
+    END IF;
+    INSERT INTO platform_outbox_events (type, payload) VALUES (p_type, p_payload) RETURNING id INTO v_id;
+    RETURN v_id;
+  END
+  $$;

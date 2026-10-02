@@ -34,11 +34,14 @@ describe('what the platform needs', () => {
     asUser(asUserId, async (client) => (await client.query<{ ok: boolean }>('SELECT auth_platform_access($1, $2) AS ok', [userId, sessionId])).rows[0]!.ok);
 
   describe('the invitation e-mail', () => {
-    it('is a whitelisted platform event type that the platform login (not the API) can enqueue', async () => {
-      const call = (pool: TestDatabase['platform'] | TestDatabase['runtime']) =>
-        pool.query(`SELECT enqueue_platform_event('email.invitation', '{"userId":"u","token":"t"}'::jsonb)`);
-      await call(db.platform);
-      await call(db.runtime); // the API role may also enqueue (the password reset does)
+    it('is a whitelisted platform event type, queued only for the tenant in context', async () => {
+      const tenantId = randomUUID();
+      const enqueue = (pool: TestDatabase['platform'] | TestDatabase['runtime'], payload: object, context = tenantId) =>
+        withContext(pool, { tenantId: context }, (client) => client.query(`SELECT enqueue_platform_event('email.invitation', $1::jsonb)`, [JSON.stringify(payload)]));
+      await enqueue(db.platform, { tenantId, userId: 'u' });
+      await enqueue(db.runtime, { tenantId, userId: 'u' }); // the API role may also enqueue
+      expect(await sqlStateOf(() => enqueue(db.runtime, { tenantId: randomUUID(), userId: 'u' }))).toBe(SqlState.insufficientPrivilege);
+      expect(await sqlStateOf(() => enqueue(db.runtime, { userId: 'u' }))).toBe(SqlState.insufficientPrivilege);
       expect(await sqlStateOf(() => db.platform.query(`SELECT enqueue_platform_event('email.unknown', '{}'::jsonb)`))).toBe(SqlState.insufficientPrivilege);
     });
   });
