@@ -108,8 +108,9 @@ describe('layoutDocument', () => {
 
   it('lays out fields in columns, label then value, without splitting a row', () => {
     const laid = layoutDocument(input([{ type: 'fields', columns: 2, labelWidthPercent: 40, rows: [{ label: 'A', value: '1' }, { label: 'B', value: '2' }] }]));
-    const [a, one, b, two] = ['A', '1', 'B', '2'].map((text) => laid.commands.find((command) => command.kind === 'text' && command.text === text) as { x: number; top: number });
-    expect(one!.x).toBeGreaterThan(a.x);
+    const at = (text: string) => laid.commands.find((command) => command.kind === 'text' && command.text === text) as { x: number; top: number };
+    const [a, one, b, two] = [at('A'), at('1'), at('B'), at('2')] as [ReturnType<typeof at>, ReturnType<typeof at>, ReturnType<typeof at>, ReturnType<typeof at>];
+    expect(one.x).toBeGreaterThan(a.x);
     expect(b.x).toBeGreaterThan(one.x);
     expect(a.top).toBe(b.top);
     expect(two.x).toBeGreaterThan(b.x);
