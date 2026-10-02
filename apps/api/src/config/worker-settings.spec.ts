@@ -31,6 +31,11 @@ describe('loadWorkerSettings', () => {
     expect(problemsOf(production)).toEqual(['WEB_BASE_URL must be https in production']);
     expect(problemsOf(secure)).toEqual([]);
   });
+  it('counts the time to draw a PDF in the lease budget', () => {
+    expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '12', OUTBOX_CONCURRENCY: '1', OUTBOX_TX_TIMEOUT_MS: '10000', PDF_RENDER_TIMEOUT_MS: '30000' })).toEqual([expect.stringContaining('PDF_RENDER_TIMEOUT_MS')]);
+    expect(problemsOf({ ...valid, PDF_RENDER_TIMEOUT_MS: '500000' })).not.toEqual([]);
+  });
+
   it('refuses a batch that could outlive the claim lease', () => {
     expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '500', OUTBOX_CONCURRENCY: '1' })).toEqual([expect.stringContaining('outlive the claim lease')]);
     expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '100', OUTBOX_CONCURRENCY: '64' })).toEqual([]);

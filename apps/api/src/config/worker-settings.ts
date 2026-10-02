@@ -1,3 +1,4 @@
+import { PDF_LIMITS } from '@procesabpm/shared';
 import { z } from 'zod';
 import { ConfigError } from './app-config.js';
 
@@ -11,6 +12,8 @@ const positiveInteger = (defaultValue: number, max: number) => z.coerce.number()
 
 /** Worst case allowed for one batch: half of the 5-minute lease. */
 const MAX_BATCH_PROCESSING_MS = 150_000;
+/** With rendering included: the lease is 5 minutes and the last wave still has to record its result. */
+const MAX_BATCH_WITH_RENDERING_MS = 270_000;
 
 const settingsSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
@@ -32,6 +35,9 @@ const settingsSchema = z.object({
   OUTBOX_CONCURRENCY: positiveInteger(4, 64),
   /** Timeout of the transactions that process an event (they must end well inside the claim's lease). */
   OUTBOX_TX_TIMEOUT_MS: positiveInteger(30_000, 240_000),
+  /** How long drawing one PDF may take before the event fails for good. */
+  PDF_RENDER_TIMEOUT_MS: positiveInteger(PDF_LIMITS.defaultRenderTimeoutMs, PDF_LIMITS.maxRenderTimeoutMs),
+  PDF_MAX_OUTPUT_BYTES: positiveInteger(PDF_LIMITS.maxOutputBytes, 50 * 1024 * 1024),
 });
 
 export type WorkerSettings = Omit<z.infer<typeof settingsSchema>, 'NODE_ENV'>;
@@ -53,7 +59,9 @@ export function loadWorkerSettings(env: Readonly<Record<string, string | undefin
     if (data.NODE_ENV === 'production' && data.MAIL_TRANSPORT === 'memory') problems.push('MAIL_TRANSPORT memory is not allowed in production');
     if (data.NODE_ENV === 'production' && !data.WEB_BASE_URL.startsWith('https://')) problems.push('WEB_BASE_URL must be https in production');
     // Events are claimed for 5 minutes and processed in waves: the slowest wave must end well inside the lease.
-    if (Math.ceil(data.OUTBOX_BATCH_SIZE / data.OUTBOX_CONCURRENCY) * data.OUTBOX_TX_TIMEOUT_MS > MAX_BATCH_PROCESSING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS would outlive the claim lease');
+    const waves = Math.ceil(data.OUTBOX_BATCH_SIZE / data.OUTBOX_CONCURRENCY);
+    if (waves * data.OUTBOX_TX_TIMEOUT_MS > MAX_BATCH_PROCESSING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS would outlive the claim lease');
+    else if (waves * (data.OUTBOX_TX_TIMEOUT_MS + data.PDF_RENDER_TIMEOUT_MS) > MAX_BATCH_WITH_RENDERING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS plus PDF_RENDER_TIMEOUT_MS would outlive the claim lease');
     if ((data.SMTP_USER === undefined) !== (data.SMTP_PASSWORD === undefined)) problems.push('SMTP_USER and SMTP_PASSWORD go together');
   }
   if (problems.length > 0 || !result.success) throw new ConfigError(problems);
