@@ -191,7 +191,7 @@ function applyFormatter(value: PdfValue, formatter: Formatter, options: FormatOp
     case 'currency': {
       const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
       if (Number.isNaN(number)) return value === null ? null : String(value);
-      return new Intl.NumberFormat('es-CO', { style: 'currency', currency: options.currencyCode }).format(number);
+      return new Intl.NumberFormat('es-CO', { style: 'currency', currency: options.currencyCode, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
     }
     case 'default':
       return value === null || value === '' ? (formatter.argument ?? '') : value;

@@ -55,7 +55,7 @@ export function fieldText(field: Pick<FieldDocument, 'type' | 'config'>, raw: un
   if (field.type === 'DATE' && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}`;
   const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' && (field.type === 'NUMBER' || field.type === 'CURRENCY' || field.type === 'DAYS') ? Number(value) : Number.NaN;
   if (!Number.isNaN(number)) {
-    if (field.type === 'CURRENCY') return new Intl.NumberFormat('es-CO', { style: 'currency', currency: typeof field.config.currencyCode === 'string' ? field.config.currencyCode : options.currencyCode }).format(number);
+    if (field.type === 'CURRENCY') return new Intl.NumberFormat('es-CO', { style: 'currency', currency: typeof field.config.currencyCode === 'string' ? field.config.currencyCode : options.currencyCode, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(number);
     return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 6 }).format(number);
   }
   return String(value);
