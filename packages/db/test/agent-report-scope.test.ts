@@ -48,3 +48,23 @@ describe('the base agent role sees the reports of its own department', () => {
     expect(await conditionsOf(custom)).toBeNull();
   });
 });
+
+describe('supervisors and agents can see the error types', () => {
+  it('the templates that reopen or report errors read ErrorType, and the migration gives it to the existing ones once', async () => {
+    const db = connectTestDatabase();
+    try {
+      for (const code of ['SUPERVISOR', 'AGENT']) {
+        expect(ROLE_TEMPLATES.find((template) => template.systemRole === code)!.permissions).toContainEqual({ action: 'read', subject: 'ErrorType' });
+      }
+      const tenant = await seedTenant(db.platform);
+      const roleId = await insertReturningId(db.platform, `INSERT INTO roles (tenant_id, name, system_role) VALUES ($1, $2, 'SUPERVISOR') RETURNING id`, [tenant.tenantId, randomUUID()]);
+      const migration = readFileSync(new URL('../prisma/migrations/20261013000200_error_type_read_for_reopeners/migration.sql', import.meta.url), 'utf8');
+      const count = async () => (await db.platform.query(`SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.tenant_id = $1 AND rp.role_id = $2 AND p.subject = 'ErrorType' AND p.action = 'read'`, [tenant.tenantId, roleId])).rowCount;
+      await db.platform.query(migration);
+      await db.platform.query(migration);
+      expect(await count()).toBe(1);
+    } finally {
+      await db.close();
+    }
+  });
+});

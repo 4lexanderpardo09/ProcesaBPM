@@ -67,6 +67,7 @@ export const ERROR_CODES = {
   documentSourceInUse: 'DOCUMENT_SOURCE_IN_USE',
   reportTooLarge: 'REPORT_TOO_LARGE',
   reportTimeout: 'REPORT_TIMEOUT',
+  lastReopeningType: 'LAST_REOPENING_TYPE',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -534,5 +535,12 @@ export class ReportTooLargeError extends DomainError {
 export class ReportTimeoutError extends DomainError {
   constructor(options?: { cause?: unknown }) {
     super(ERROR_CODES.reportTimeout, 'The report took too long: narrow the filters', options);
+  }
+}
+
+/** Tickets can only be reopened under a reopening error type: the last active one cannot be switched off. */
+export class LastReopeningTypeError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.lastReopeningType, 'The last active reopening error type cannot be deactivated or changed');
   }
 }

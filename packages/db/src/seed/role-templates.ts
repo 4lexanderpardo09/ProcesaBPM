@@ -36,7 +36,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     isAdmin: false,
     permissions: [
       ...ticket('create', 'create_for_others', 'read_all', 'comment', 'transition', 'reassign', 'open_incident', 'close', 'reopen', 'report_error'),
-      ...read(...CATALOG_SUBJECTS, 'Workflow', 'Report', 'Export', 'Membership'),
+      ...read(...CATALOG_SUBJECTS, 'Workflow', 'Report', 'Export', 'Membership', 'ErrorType'),
       { action: 'export', subject: 'Report' },
       { action: 'manage', subject: 'Delegation' },
     ],
@@ -47,7 +47,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     isAdmin: false,
     permissions: [
       ...ticket('create', 'read_created', 'read_assigned', 'read_observed', 'comment', 'transition', 'open_incident', 'close', 'report_error'),
-      ...read(...CATALOG_SUBJECTS),
+      ...read(...CATALOG_SUBJECTS, 'ErrorType'),
       // Reports show people's results: an agent sees those of their own department, and nothing without one.
       { action: 'read', subject: 'Report', conditions: { departmentId: '${membership.departmentId}' } },
     ],
