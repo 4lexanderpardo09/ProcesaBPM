@@ -6,7 +6,12 @@ export interface RoleTemplate {
   systemRole: SystemRoleCode;
   name: string;
   isAdmin: boolean;
-  permissions: ReadonlyArray<Pick<PermissionSeed, 'action' | 'subject'>>;
+  permissions: ReadonlyArray<TemplatePermission>;
+}
+
+/** A grant of the catalog, optionally limited by a stored condition (placeholders such as `${membership.departmentId}` are resolved per member). */
+export interface TemplatePermission extends Pick<PermissionSeed, 'action' | 'subject'> {
+  conditions?: Readonly<Record<string, unknown>>;
 }
 
 const ticket = (...actions: string[]) => actions.map((action) => ({ action, subject: 'Ticket' }));
@@ -42,7 +47,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     isAdmin: false,
     permissions: [
       ...ticket('create', 'read_created', 'read_assigned', 'read_observed', 'comment', 'transition', 'open_incident', 'close', 'report_error'),
-      ...read(...CATALOG_SUBJECTS, 'Report'),
+      ...read(...CATALOG_SUBJECTS),
+      // Reports show people's results: an agent sees those of their own department, and nothing without one.
+      { action: 'read', subject: 'Report', conditions: { departmentId: '${membership.departmentId}' } },
     ],
   },
   {

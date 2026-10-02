@@ -42,21 +42,21 @@ export class TenantRoleProvisioner {
     await this.repository.createRolePermissions(
       tx,
       tenantId,
-      grants.flatMap(({ systemRole, permissionIds }) => permissionIds.map((permissionId) => ({ roleId: roleIdOf.get(systemRole)!, permissionId }))),
+      grants.flatMap(({ systemRole, permissions }) => permissions.map((permission) => ({ roleId: roleIdOf.get(systemRole)!, ...permission }))),
     );
-    return grants.map(({ systemRole, permissionIds }) => ({ id: roleIdOf.get(systemRole)!, systemRole, permissionCount: permissionIds.length }));
+    return grants.map(({ systemRole, permissions }) => ({ id: roleIdOf.get(systemRole)!, systemRole, permissionCount: permissions.length }));
   }
 
   /** Every permission a template names must exist in the catalog: a missing one is an error, never skipped. */
-  private resolveGrants(catalog: readonly CatalogEntry[]): Array<{ systemRole: RoleTemplate['systemRole']; permissionIds: string[] }> {
+  private resolveGrants(catalog: readonly CatalogEntry[]): Array<{ systemRole: RoleTemplate['systemRole']; permissions: Array<{ permissionId: string; conditions?: Readonly<Record<string, unknown>> }> }> {
     const idOf = new Map(catalog.map((entry) => [`${entry.action}:${entry.subject}`, entry.id]));
     const missing = new Set<string>();
     const grants = this.templates.map((template) => ({
       systemRole: template.systemRole,
-      permissionIds: template.permissions.flatMap(({ action, subject }) => {
+      permissions: template.permissions.flatMap(({ action, subject, conditions }) => {
         const id = idOf.get(`${action}:${subject}`);
         if (id === undefined) missing.add(`${action} ${subject}`);
-        return id === undefined ? [] : [id];
+        return id === undefined ? [] : [{ permissionId: id, ...(conditions === undefined ? {} : { conditions }) }];
       }),
     }));
     if (missing.size > 0) throw new MissingCatalogPermissionError([...missing].sort());

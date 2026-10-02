@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@procesabpm/db';
 import type { PlatformTransaction } from '../../../infrastructure/database/platform-transaction-runner.js';
 
 export interface NewRole {
@@ -34,8 +35,10 @@ export class TenantRoleRepository {
   async createRolePermissions(
     tx: PlatformTransaction,
     tenantId: string,
-    grants: ReadonlyArray<{ roleId: string; permissionId: string }>,
+    grants: ReadonlyArray<{ roleId: string; permissionId: string; conditions?: Readonly<Record<string, unknown>> }>,
   ): Promise<void> {
-    await tx.rolePermission.createMany({ data: grants.map((grant) => ({ tenantId, ...grant })) });
+    await tx.rolePermission.createMany({
+      data: grants.map(({ conditions, ...grant }) => ({ tenantId, ...grant, ...(conditions === undefined ? {} : { conditions: conditions as Prisma.InputJsonValue }) })),
+    });
   }
 }
