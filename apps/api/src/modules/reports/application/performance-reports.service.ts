@@ -12,13 +12,12 @@ import type {
   UserDetailReport,
 } from '@procesabpm/shared';
 import type { Page } from '@procesabpm/shared';
-import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { type ClockStatsRow, PerformanceRepository } from '../data/performance.repository.js';
 import type { ReportQuery } from '../data/report-sql.js';
 import { pct, whole } from '../data/report-sql.js';
 import { UserDetailRepository } from '../data/user-detail.repository.js';
 import { rankPeople } from '../domain/ranking-score.js';
-import { ReportRunner } from './report-runner.js';
+import { type ReportAccess, ReportRunner } from './report-runner.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 const toRankingRow = (row: ClockStatsRow, errors: number): Omit<RankingRow, 'rank' | 'compliance' | 'quality' | 'score'> & { userId: string; medianMin: number | null } => ({
@@ -40,8 +39,8 @@ export class PerformanceReportsService {
     @Inject(UserDetailRepository) private readonly userDetail: UserDetailRepository,
   ) {}
 
-  summary(ability: AppAbility, filters: ReportFilters): Promise<SummaryReport> {
-    return this.runner.run(ability, filters, async (tx, query) => {
+  summary(access: ReportAccess, filters: ReportFilters): Promise<SummaryReport> {
+    return this.runner.run(access, filters, async (tx, query) => {
       const counts = await this.repository.counts(tx, query);
       const visits = await this.repository.visitResults(tx, query);
       const clocks = await this.repository.clockResults(tx, query);
@@ -58,8 +57,8 @@ export class PerformanceReportsService {
     });
   }
 
-  responsibles(ability: AppAbility, filters: PagedReportFilters): Promise<Page<ResponsibleSlaRow>> {
-    return this.runner.run(ability, filters, async (tx, query) => {
+  responsibles(access: ReportAccess, filters: PagedReportFilters): Promise<Page<ResponsibleSlaRow>> {
+    return this.runner.run(access, filters, async (tx, query) => {
       const rows = (await this.repository.clockStats(tx, query)).map(
         (row): ResponsibleSlaRow => ({
           userId: row.userId,
@@ -79,8 +78,8 @@ export class PerformanceReportsService {
     });
   }
 
-  steps(ability: AppAbility, filters: ReportFilters): Promise<readonly StepSlaRow[]> {
-    return this.runner.run(ability, filters, async (tx, query) =>
+  steps(access: ReportAccess, filters: ReportFilters): Promise<readonly StepSlaRow[]> {
+    return this.runner.run(access, filters, async (tx, query) =>
       (await this.repository.visitStats(tx, query)).map(
         (row): StepSlaRow => ({
           workflowId: row.workflowId,
@@ -101,12 +100,12 @@ export class PerformanceReportsService {
     );
   }
 
-  ranking(ability: AppAbility, filters: RankingFilters): Promise<RankingReport> {
-    return this.runner.run(ability, filters, async (tx, query) => ({ minVolume: filters.minVolume, ...(await this.rankingOf(tx, query, filters.minVolume)) }));
+  ranking(access: ReportAccess, filters: RankingFilters): Promise<RankingReport> {
+    return this.runner.run(access, filters, async (tx, query) => ({ minVolume: filters.minVolume, ...(await this.rankingOf(tx, query, filters.minVolume)) }));
   }
 
-  timeDistribution(ability: AppAbility, filters: ReportFilters): Promise<TimeDistributionReport> {
-    return this.runner.run(ability, filters, async (tx, query) => {
+  timeDistribution(access: ReportAccess, filters: ReportFilters): Promise<TimeDistributionReport> {
+    return this.runner.run(access, filters, async (tx, query) => {
       const round = whole;
       const byStep = (await this.repository.visitStats(tx, query)).filter((row) => row.median !== null).map((row) => ({
         workflowId: row.workflowId,
@@ -136,8 +135,8 @@ export class PerformanceReportsService {
   }
 
   /** One person: their standing in the ranking (without a minimum volume) and their clocks. Outside the member's scope there is simply nothing. */
-  detail(ability: AppAbility, userId: string, filters: PagedReportFilters): Promise<UserDetailReport> {
-    return this.runner.run(ability, filters, async (tx, query) => {
+  detail(access: ReportAccess, userId: string, filters: PagedReportFilters): Promise<UserDetailReport> {
+    return this.runner.run(access, filters, async (tx, query) => {
       const { ranked, unranked } = await this.rankingOf(tx, query, 1, userId);
       const clocks = await this.userDetail.clocks(tx, query, userId, filters.page, filters.pageSize);
       return {

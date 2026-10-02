@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { insertReturningId } from '@procesabpm/db/testing/fixtures';
 import type { CreateTicketRequest, TicketMutationResponse } from '@procesabpm/shared';
+import readXlsxFile from 'read-excel-file/node';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { TenantContext } from '../../src/infrastructure/database/tenant-context.js';
 import { CreateTicketService } from '../../src/modules/engine/application/create-ticket.service.js';
@@ -192,6 +193,62 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
       for (const query of ['', 'from=2026-09-07', 'from=2026-09-09&to=2026-09-07', 'from=2025-01-01&to=2026-09-07', 'from=2026-13-01&to=2026-09-07', `${PERIOD}&companyId=nope`, `${PERIOD}&companyId=' OR 1=1 --`, `${PERIOD}&extra=1`]) {
         await reader.get(`/reports/summary?${query}`).expect(400);
       }
+    });
+  });
+
+  describe('Excel export', () => {
+    const download = async (client: ApiClient, path: string, status = 200) => {
+      const response = await client.get(`/reports/${path}`).buffer(true).parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      }).expect(status);
+      return response;
+    };
+    const sheets = async (body: Buffer) => (await readXlsxFile(body as never)) as unknown as Array<{ sheet: string; data: unknown[][] }>;
+
+    it('downloads the report as a workbook with the same numbers and a sheet with the filters', async () => {
+      const response = await download(reader, `summary/export?${PERIOD}&companyId=${world.tenant.companyId}`);
+      expect(response.headers['content-type']).toContain('spreadsheetml');
+      expect(response.headers['content-disposition']).toContain('attachment');
+      expect(response.headers['cache-control']).toBe('no-store');
+      const book = await sheets(response.body as Buffer);
+      expect(book.map((entry) => entry.sheet)).toEqual(['Resumen', 'Filtros']);
+      const summary = Object.fromEntries(book[0]!.data.slice(1).map((row) => [row[0], row[1]]));
+      expect(summary).toMatchObject({ Creados: 6, Cerrados: 5, Abiertos: 1, '% a tiempo (paso total)': 66.7, '% a tiempo (responsable)': 85.7, 'Tiempo medio de resolución (min hábiles)': 186 });
+      expect(book[1]!.data.find((row) => row[0] === 'Empresa')![1]).toBe(world.tenant.companyId);
+    });
+
+    it('every report can be exported', async () => {
+      for (const name of ['sla-responsibles', 'sla-steps', 'ranking', 'time-distribution', 'incidents', 'categories']) {
+        const body = (await download(reader, `${name}/export?${PERIOD}`)).body as Buffer;
+        expect((await sheets(body)).length).toBeGreaterThan(1);
+      }
+      expect((await sheets((await download(reader, 'backlog/export?')).body as Buffer))[0]!.sheet).toBe('Pendientes');
+      const user = await download(reader, `user-detail/export?${PERIOD}&userId=${u1.userId}`);
+      expect((await sheets(user.body as Buffer)).map((entry) => entry.sheet)).toEqual(['Usuario', 'Relojes del usuario', 'Filtros']);
+    });
+
+    it('needs export Report as well as read Report, and applies the narrowest scope of both', async () => {
+      const readOnly = await clientWith(db, app, world.tenant, [{ action: 'read', subject: 'Report' }]);
+      await readOnly.get(`/reports/summary/export?${PERIOD}`).expect(403);
+      const exportOnly = await clientWith(db, app, world.tenant, [{ action: 'export', subject: 'Report' }]);
+      await exportOnly.get(`/reports/summary/export?${PERIOD}`).expect(403);
+      const narrowed = await clientWith(db, app, world.tenant, [{ action: 'read', subject: 'Report' }, { action: 'export', subject: 'Report', conditions: { companyId: companyB } }]);
+      const book = await sheets((await download(narrowed, `summary/export?${PERIOD}`)).body as Buffer);
+      expect(Object.fromEntries(book[0]!.data.slice(1).map((row) => [row[0], row[1]])).Creados).toBe(1);
+    });
+
+    it('refuses an unknown report (400) and bad filters (400)', async () => {
+      await reader.get(`/reports/nonsense/export?${PERIOD}`).expect(400);
+      await reader.get('/reports/summary/export?from=bad&to=worse').expect(400);
+    });
+
+    it('another tenant exports only its own, empty, data', async () => {
+      const other = await TicketWorld.create(db, app);
+      const otherReader = await clientWith(db, app, other.tenant, [{ action: 'read', subject: 'Report' }, { action: 'export', subject: 'Report' }]);
+      const book = await sheets((await download(otherReader, `summary/export?${PERIOD}`)).body as Buffer);
+      expect(Object.fromEntries(book[0]!.data.slice(1).map((row) => [row[0], row[1]])).Creados).toBe(0);
     });
   });
 

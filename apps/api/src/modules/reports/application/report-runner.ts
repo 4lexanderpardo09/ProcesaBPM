@@ -12,6 +12,12 @@ export const REPORT_STATEMENT_TIMEOUT_MS = 8000;
 
 export type ReportAction = 'read' | 'export';
 
+/** The caller's ability (to read) or, for an export, the ability together with the actions that must all allow it. */
+export type ReportAccess = AppAbility | { readonly ability: AppAbility; readonly actions: readonly ReportAction[] };
+
+export const exportAccess = (ability: AppAbility): ReportAccess => ({ ability, actions: ['read', 'export'] });
+const isAbility = (access: ReportAccess): access is AppAbility => 'rulesFor' in access;
+
 export interface ReportFilterInput {
   readonly from?: string | undefined;
   readonly to?: string | undefined;
@@ -34,7 +40,7 @@ export class ReportRunner {
     @Inject(TenantContext) private readonly context: TenantContext,
   ) {}
 
-  run<T>(ability: AppAbility, filters: ReportFilterInput, work: (tx: TenantTransaction, query: ReportQuery) => Promise<T>, actions: readonly ReportAction[] = ['read']): Promise<T> {
+  run<T>(access: ReportAccess, filters: ReportFilterInput, work: (tx: TenantTransaction, query: ReportQuery) => Promise<T>): Promise<T> {
     const { tenantId } = this.context.require();
     const query: ReportQuery = {
       tenantId,
@@ -43,7 +49,7 @@ export class ReportRunner {
       workflowId: filters.workflowId,
       departmentId: filters.departmentId,
       siteId: filters.siteId,
-      scope: scopeOf(ability, actions),
+      scope: isAbility(access) ? scopeOf(access, ['read']) : scopeOf(access.ability, access.actions),
     };
     return this.runner.withTenantTransaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('statement_timeout', ${String(REPORT_STATEMENT_TIMEOUT_MS)}, true)`;

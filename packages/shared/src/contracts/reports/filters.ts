@@ -44,5 +44,7 @@ export type BacklogFilters = z.infer<typeof backlogFiltersSchema>;
 export const REPORT_NAMES = ['summary', 'sla-responsibles', 'sla-steps', 'ranking', 'time-distribution', 'incidents', 'categories', 'backlog', 'user-detail'] as const;
 export type ReportName = (typeof REPORT_NAMES)[number];
 
-export const exportQuerySchema = z.object({ ...periodShape, from: isoDateSchema.optional(), to: isoDateSchema.optional(), minVolume: rankingFiltersSchema.shape.minVolume.optional(), userId: uuidSchema.optional() }).strict();
-export type ExportQuery = z.infer<typeof exportQuerySchema>;
+export const exportReportNameSchema = z.enum(REPORT_NAMES);
+
+/** The user whose detail is exported (`user-detail` only). */
+export const userDetailExportSchema = z.object({ userId: uuidSchema });

@@ -1,12 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { BacklogFilters, BacklogReport, CategoryRow, IncidentsReport, ReportFilters } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
-import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CatalogReportRepository, type CategoryStatsRow } from '../data/catalog-report.repository.js';
 import { IncidentRepository } from '../data/incident.repository.js';
 
 import { byAssignee, byOpener, byStep, groupIncidents } from '../domain/incident-groups.js';
-import { ReportRunner } from './report-runner.js';
+import { type ReportAccess, ReportRunner } from './report-runner.js';
 
 const average = (sum: number, count: number): number | null => (count === 0 ? null : Math.round(sum / count));
 const round1 = (value: number | null): number | null => (value === null ? null : Math.round(value * 10) / 10);
@@ -44,21 +43,21 @@ export class BreakdownReportsService {
     @Inject(CatalogReportRepository) private readonly catalog: CatalogReportRepository,
   ) {}
 
-  incidentsReport(ability: AppAbility, filters: ReportFilters): Promise<IncidentsReport> {
-    return this.runner.run(ability, filters, async (tx, query) => {
+  incidentsReport(access: ReportAccess, filters: ReportFilters): Promise<IncidentsReport> {
+    return this.runner.run(access, filters, async (tx, query) => {
       const rows = await this.incidents.rows(tx, query);
       return { byStep: groupIncidents(rows, byStep), byOpener: groupIncidents(rows, byOpener), byAssignee: groupIncidents(rows, byAssignee) };
     });
   }
 
-  categories(ability: AppAbility, filters: ReportFilters): Promise<CategoryRow[]> {
-    return this.runner.run(ability, filters, async (tx, query) => withCategoryTotals(await this.catalog.categories(tx, query)));
+  categories(access: ReportAccess, filters: ReportFilters): Promise<CategoryRow[]> {
+    return this.runner.run(access, filters, async (tx, query) => withCategoryTotals(await this.catalog.categories(tx, query)));
   }
 
   /** A snapshot of now: the tickets that are not closed, with their age in calendar time. */
-  backlog(ability: AppAbility, filters: BacklogFilters): Promise<BacklogReport> {
+  backlog(access: ReportAccess, filters: BacklogFilters): Promise<BacklogReport> {
     const now = this.clock.now();
-    return this.runner.run(ability, filters, async (tx, query) => ({
+    return this.runner.run(access, filters, async (tx, query) => ({
       asOf: now.toISOString(),
       rows: (await this.catalog.backlog(tx, query, now)).map((row) => ({
         workflowId: row.workflowId,
