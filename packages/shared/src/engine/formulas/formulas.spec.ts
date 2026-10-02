@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FieldDocument } from '../../workflow/document.js';
-import { computeFormulaValues } from './compute-field-values.js';
+import { computeFieldValues } from './compute-field-values.js';
 import { FormulaRuntimeError, evaluateFormulaExpression } from './evaluate.js';
 import { compileFormula } from './parser.js';
 import { buildFormulaSchema } from './schema.js';
@@ -142,7 +142,7 @@ function field(partial: Partial<FieldDocument> & Pick<FieldDocument, 'code' | 't
   return { id: partial.code, stepId: 'S', label: partial.code, capture: 'STEP', isRequired: false, isReadOnly: false, sortOrder: 0, config: {}, dataSource: null, ...partial } as FieldDocument;
 }
 
-describe('computeFormulaValues', () => {
+describe('computeFieldValues', () => {
   const fields = [
     field({ code: 'PRICE', type: 'CURRENCY' }),
     field({ code: 'QTY', type: 'NUMBER' }),
@@ -156,12 +156,12 @@ describe('computeFormulaValues', () => {
   ];
 
   it('computes dependencies first and rounds to the declared decimals', () => {
-    const result = computeFormulaValues(fields, { PRICE: 100.5, QTY: 3 }, context);
+    const result = computeFieldValues(fields, { PRICE: 100.5, QTY: 3 }, context);
     expect(result.values).toMatchObject({ SUBTOTAL: 301.5, TOTAL: 358.79, DUE: '2026-10-05' });
   });
 
   it('reports failures, cycles and mistyped formulas without throwing', () => {
-    const result = computeFormulaValues(fields, { PRICE: 100.5, QTY: 3 }, context);
+    const result = computeFieldValues(fields, { PRICE: 100.5, QTY: 3 }, context);
     expect(result.failures).toEqual(
       expect.arrayContaining([
         { fieldCode: 'BAD', reason: 'DIVISION_BY_ZERO', strict: false },
@@ -174,13 +174,13 @@ describe('computeFormulaValues', () => {
   });
 
   it('marks as strict the failures that depend on what the person just captured', () => {
-    const result = computeFormulaValues(fields, { PRICE: 100.5, QTY: 3 }, { ...context, captured: new Set(['QTY']) });
+    const result = computeFieldValues(fields, { PRICE: 100.5, QTY: 3 }, { ...context, captured: new Set(['QTY']) });
     expect(result.failures.filter((failure) => failure.strict).map((failure) => failure.fieldCode)).toEqual(['BAD']);
     expect(result.failures.find((failure) => failure.fieldCode === 'LOOP_A')?.strict).toBe(false);
   });
 
   it('yields null when an input is missing and ignores client-sent values of computed fields', () => {
-    const result = computeFormulaValues(fields, { PRICE: 100, TOTAL: 1 }, context);
+    const result = computeFieldValues(fields, { PRICE: 100, TOTAL: 1 }, context);
     expect(result.values.SUBTOTAL).toBeNull();
     expect(result.values.TOTAL).toBeNull();
   });

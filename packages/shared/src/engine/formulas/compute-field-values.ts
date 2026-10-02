@@ -1,3 +1,4 @@
+import { findCalculator } from '../../calculators/registry.js';
 import type { FieldDocument } from '../../workflow/document.js';
 import { Decimal } from '../money/fixed-decimal.js';
 import { FormulaRuntimeError, evaluateFormulaExpression, type FormulaContext, type FormulaErrorCode } from './evaluate.js';
@@ -7,39 +8,67 @@ import type { CompiledFormula } from './types.js';
 
 export interface FormulaFailure {
   readonly fieldCode: string;
-  readonly reason: FormulaErrorCode | 'INVALID_FORMULA' | 'CYCLE';
-  /** The formula (transitively) reads a field the current submission captured: the person can fix it, so the submission is refused. */
+  readonly reason: FormulaErrorCode | 'INVALID_FORMULA' | 'CYCLE' | 'CALCULATOR_UNKNOWN' | 'CALCULATOR_NOT_CONFIGURED';
+  /** The field (transitively) reads a field the current submission captured: the person can fix it, so the submission is refused. */
   readonly strict: boolean;
 }
 
 export interface ComputedFormulas {
-  /** The computed values by field code: `null` for a formula that has no value or failed. */
+  /** The computed values by field code: `null` for a field that has no value or failed. */
   readonly values: Readonly<Record<string, unknown>>;
   readonly failures: readonly FormulaFailure[];
 }
 
+export interface ComputeContext extends Omit<FormulaContext, 'values'> {
+  /** Codes the current submission captured; failures that depend on them are `strict`. */
+  readonly captured?: ReadonlySet<string>;
+  /** Time zone of the company (calculators work with local days). */
+  readonly timeZone?: string;
+  /** Per-tenant configuration of the calculators that are switched on, by calculator code. */
+  readonly calculatorConfigs?: ReadonlyMap<string, Record<string, unknown>>;
+}
+
 /** JSON number when 15 significant digits hold it exactly, otherwise the plain decimal text. */
-function storable(value: Decimal): number | string {
+export function storableNumber(value: Decimal): number | string {
   return value.significantDigits() <= 15 ? Number(value.toPlainString()) : value.toPlainString();
 }
 
-function compileAll(formulaFields: readonly FieldDocument[], fields: readonly FieldDocument[]): Map<string, CompiledFormula | undefined> {
-  const schema = buildFormulaSchema(fields);
-  const compiled = new Map<string, CompiledFormula | undefined>();
-  for (const field of formulaFields) {
-    const result = compileFormula(String(field.config.expression ?? ''), schema);
-    compiled.set(field.code, result.ok && result.formula.type === formulaResultType(field) ? result.formula : undefined);
-  }
-  return compiled;
+type Computation = { readonly references: readonly string[]; run(values: Record<string, unknown>): unknown } | 'INVALID';
+
+function formulaComputation(field: FieldDocument, compiled: CompiledFormula | undefined, context: ComputeContext): Computation {
+  if (compiled === undefined) return 'INVALID';
+  return {
+    references: compiled.references,
+    run(values) {
+      const result = evaluateFormulaExpression(compiled.expression, { today: context.today, ...(context.isBusinessDay === undefined ? {} : { isBusinessDay: context.isBusinessDay }), values });
+      return result instanceof Decimal ? storableNumber(result.round(formulaDecimals(field))) : result;
+    },
+  };
 }
 
-function dependencyOrder(codes: ReadonlySet<string>, compiled: ReadonlyMap<string, CompiledFormula | undefined>): { order: string[]; cyclic: string[] } {
+function calculatorComputation(field: FieldDocument, context: ComputeContext): Computation | FormulaFailure['reason'] {
+  const calculator = findCalculator(String(field.config.calculatorCode ?? ''));
+  if (calculator === undefined) return 'CALCULATOR_UNKNOWN';
+  const config = context.calculatorConfigs?.get(calculator.code);
+  if (config === undefined) return 'CALCULATOR_NOT_CONFIGURED';
+  const inputs = (field.config.inputs ?? {}) as Record<string, string>;
+  return {
+    references: Object.values(inputs),
+    run(values) {
+      const named = Object.fromEntries(Object.entries(inputs).map(([name, code]) => [name, values[code]]));
+      const result = calculator.compute(named, config, { timeZone: context.timeZone ?? 'UTC' });
+      return result === null ? null : storableNumber(result.round(calculator.output === 'CURRENCY' ? 2 : 6));
+    },
+  };
+}
+
+function dependencyOrder(codes: ReadonlySet<string>, references: ReadonlyMap<string, readonly string[]>): { order: string[]; cyclic: Set<string> } {
   const order: string[] = [];
   const state = new Map<string, 'visiting' | 'done'>();
   const cyclic = new Set<string>();
   const visit = (code: string): void => {
     state.set(code, 'visiting');
-    for (const dependency of compiled.get(code)?.references ?? []) {
+    for (const dependency of references.get(code) ?? []) {
       if (!codes.has(dependency)) continue;
       if (state.get(dependency) === 'visiting') {
         cyclic.add(code);
@@ -50,28 +79,34 @@ function dependencyOrder(codes: ReadonlySet<string>, compiled: ReadonlyMap<strin
     order.push(code);
   };
   for (const code of codes) if (!state.has(code)) visit(code);
-  return { order, cyclic: [...cyclic] };
+  return { order, cyclic };
 }
 
 /**
- * Recomputes every FORMULA field from the values the ticket has, dependencies first. Pure and deterministic for
- * a given context. A formula that cannot produce a value stores `null` and is reported in `failures`; what to do
- * about it (refuse the submission or only warn) is the caller's policy.
+ * Recomputes every FORMULA and CALCULATOR field from the values the ticket has, dependencies first. Pure and
+ * deterministic for a given context. A field that cannot produce a value stores `null` and is reported in
+ * `failures`; what to do about it (refuse the submission or only record it) is the caller's policy.
  */
-export function computeFormulaValues(
-  fields: readonly FieldDocument[],
-  current: Readonly<Record<string, unknown>>,
-  context: Omit<FormulaContext, 'values'> & { readonly captured?: ReadonlySet<string> },
-): ComputedFormulas {
-  const formulaFields = fields.filter((field) => field.type === 'FORMULA');
-  if (formulaFields.length === 0) return { values: {}, failures: [] };
-  const byCode = new Map(formulaFields.map((field) => [field.code, field]));
-  const compiled = compileAll(formulaFields, fields);
-  const { order, cyclic } = dependencyOrder(new Set(byCode.keys()), compiled);
+export function computeFieldValues(fields: readonly FieldDocument[], current: Readonly<Record<string, unknown>>, context: ComputeContext): ComputedFormulas {
+  const computedFields = fields.filter((field) => field.type === 'FORMULA' || field.type === 'CALCULATOR');
+  if (computedFields.length === 0) return { values: {}, failures: [] };
+  const schema = buildFormulaSchema(fields);
+  const byCode = new Map(computedFields.map((field) => [field.code, field]));
+  const computations = new Map<string, Computation | FormulaFailure['reason']>();
+  for (const field of computedFields) {
+    if (field.type === 'CALCULATOR') computations.set(field.code, calculatorComputation(field, context));
+    else {
+      const result = compileFormula(String(field.config.expression ?? ''), schema);
+      computations.set(field.code, formulaComputation(field, result.ok && result.formula.type === formulaResultType(field) ? result.formula : undefined, context));
+    }
+  }
+  const references = new Map([...computations].map(([code, computation]) => [code, typeof computation === 'object' ? computation.references : []]));
+  const { order, cyclic } = dependencyOrder(new Set(byCode.keys()), references);
+
   const values: Record<string, unknown> = { ...current };
   const computed: Record<string, unknown> = {};
   const failures: FormulaFailure[] = [];
-  // Fields a person just captured, plus the formulas that read them: a failure there is the person's to fix.
+  // Fields a person just captured, plus the computed fields that read them: a failure there is the person's to fix.
   const tainted = new Set(context.captured ?? []);
   const fail = (fieldCode: string, reason: FormulaFailure['reason']): void => {
     computed[fieldCode] = null;
@@ -79,15 +114,14 @@ export function computeFormulaValues(
     failures.push({ fieldCode, reason, strict: tainted.has(fieldCode) });
   };
   for (const code of order) {
-    const field = byCode.get(code)!;
-    const formula = compiled.get(code);
-    if (formula?.references.some((reference) => tainted.has(reference))) tainted.add(code);
-    if (cyclic.includes(code)) fail(code, 'CYCLE');
-    else if (formula === undefined) fail(code, 'INVALID_FORMULA');
+    const computation = computations.get(code)!;
+    if (typeof computation === 'object' && computation.references.some((reference) => tainted.has(reference))) tainted.add(code);
+    if (cyclic.has(code)) fail(code, 'CYCLE');
+    else if (computation === 'INVALID') fail(code, 'INVALID_FORMULA');
+    else if (typeof computation === 'string') fail(code, computation);
     else {
       try {
-        const result = evaluateFormulaExpression(formula.expression, { today: context.today, ...(context.isBusinessDay === undefined ? {} : { isBusinessDay: context.isBusinessDay }), values });
-        const stored = result instanceof Decimal ? storable(result.round(formulaDecimals(field))) : result;
+        const stored = computation.run(values);
         computed[code] = stored;
         values[code] = stored;
       } catch (error) {

@@ -379,9 +379,43 @@ describe('validateWorkflowGraph: block config', () => {
   });
 
   it('calculator and wait blocks name fields of the version', () => {
-    expect(codes(doc('CALCULATOR', { calculatorCode: 'tax', inputs: { base: 'NOPE' }, outputFieldCode: 'TOTAL' }))).toContain('CALCULATOR_UNKNOWN_FIELD');
-    expect(codes(doc('CALCULATOR', { calculatorCode: 'tax', inputs: { base: 'TOTAL' }, outputFieldCode: 'TOTAL' }))).toEqual([]);
+    expect(codes(doc('CALCULATOR', { calculatorCode: 'MEAL_ALLOWANCE', inputs: { departure: 'NOPE', return: 'NOPE' }, outputFieldCode: 'TOTAL' }))).toContain('CALCULATOR_UNKNOWN_FIELD');
     expect(codes(doc('WAIT', { mode: 'UNTIL_FIELD_DATE', fieldCode: 'NOPE', offsetBusinessDays: 1 }))).toContain('WAIT_UNKNOWN_FIELD');
+  });
+
+  describe('calculators', () => {
+    const calculatorFlow = (config: Record<string, unknown>, outputOverrides: Record<string, unknown> = {}) =>
+      version({
+        steps: [step('start', 'START'), step('calc', 'CALCULATOR', { config }), step('end', 'END')],
+        transitions: [next('start', 'calc'), next('calc', 'end')],
+        fields: [
+          field('a', 'start', 'LEAVES', { type: 'DATETIME' }),
+          field('b', 'start', 'BACK', { type: 'DATETIME' }),
+          field('c', 'start', 'NOTE', { type: 'TEXT' }),
+          field('d', 'start', 'ALLOWANCE', { type: 'CURRENCY', isReadOnly: true, ...outputOverrides }),
+        ],
+      });
+    const valid = { calculatorCode: 'MEAL_ALLOWANCE', inputs: { departure: 'LEAVES', return: 'BACK' }, outputFieldCode: 'ALLOWANCE' };
+
+    it('accepts a wired calculator block', () => expect(codes(calculatorFlow(valid))).toEqual([]));
+    it('refuses an unknown calculator', () => expect(codes(calculatorFlow({ ...valid, calculatorCode: 'TAX' }))).toContain('CALCULATOR_UNKNOWN'));
+    it('refuses unknown and missing inputs', () => {
+      expect(codes(calculatorFlow({ ...valid, inputs: { departure: 'LEAVES', return: 'BACK', extra: 'BACK' } }))).toContain('CALCULATOR_INPUT_UNKNOWN');
+      expect(codes(calculatorFlow({ ...valid, inputs: { departure: 'LEAVES' } }))).toContain('CALCULATOR_INPUT_MISSING');
+    });
+    it('refuses an input of another type', () => expect(codes(calculatorFlow({ ...valid, inputs: { departure: 'NOTE', return: 'BACK' } }))).toContain('CALCULATOR_INPUT_TYPE_MISMATCH'));
+    it('needs a read-only numeric output', () => {
+      expect(codes(calculatorFlow(valid, { isReadOnly: false }))).toContain('CALCULATOR_OUTPUT_NOT_READ_ONLY');
+      expect(codes(calculatorFlow({ ...valid, outputFieldCode: 'NOTE' }))).toContain('CALCULATOR_OUTPUT_TYPE_MISMATCH');
+    });
+    it('checks CALCULATOR fields the same way and finds cycles through them', () => {
+      const calculatorField = (inputs: Record<string, string>) => field('x', 'start', 'ALLOWANCE', { type: 'CALCULATOR', config: { calculatorCode: 'MEAL_ALLOWANCE', inputs } });
+      const dates = [field('a', 'start', 'LEAVES', { type: 'DATETIME' }), field('b', 'start', 'BACK', { type: 'DATETIME' })];
+      expect(codes(withParts({ fields: [...dates, calculatorField({ departure: 'LEAVES', return: 'BACK' })] }))).toEqual([]);
+      expect(codes(withParts({ fields: [...dates, calculatorField({ departure: 'LEAVES' })] }))).toContain('CALCULATOR_INPUT_MISSING');
+      const loop = field('y', 'start', 'LOOP', { type: 'FORMULA', config: { expression: 'ALLOWANCE + 1', resultType: 'NUMBER' } });
+      expect(codes(withParts({ fields: [...dates, calculatorField({ departure: 'LEAVES', return: 'LOOP' }), loop] }))).toContain('FORMULA_CYCLE');
+    });
   });
 
   it('batch settings need allowsBatch', () => {

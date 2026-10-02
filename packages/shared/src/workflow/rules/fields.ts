@@ -25,6 +25,7 @@ export function checkFields({ doc, stepById, fieldByCode, problems }: RuleContex
     if (!dataSource.valid) problems.error('FIELD_DATA_SOURCE_INVALID', { ...at, params: { issues: dataSource.issues } });
   }
 
+  const isComputed = (code: string): boolean => ['FORMULA', 'CALCULATOR'].includes(fieldByCode.get(code)?.type ?? '');
   const formulaSchema = buildFormulaSchema(doc.fields);
   const formulaRefs = new Map<string, string[]>();
   for (const field of doc.fields.filter((candidate) => candidate.type === 'FORMULA')) {
@@ -39,7 +40,10 @@ export function checkFields({ doc, stepById, fieldByCode, problems }: RuleContex
     if (compiled.formula.type !== formulaResultType(field)) {
       problems.error('FORMULA_RESULT_TYPE_MISMATCH', { fieldId: field.id, params: { declared: formulaResultType(field), actual: compiled.formula.type } });
     }
-    formulaRefs.set(field.code, compiled.formula.references.filter((token) => fieldByCode.get(token)?.type === 'FORMULA'));
+    formulaRefs.set(field.code, compiled.formula.references.filter(isComputed));
+  }
+  for (const field of doc.fields.filter((candidate) => candidate.type === 'CALCULATOR')) {
+    formulaRefs.set(field.code, Object.values((field.config.inputs ?? {}) as Record<string, string>).filter(isComputed));
   }
   // Depth-first colouring (white, grey = on the current path, black = done): linear in fields and references.
   const inCycle = new Set<string>();

@@ -3,7 +3,7 @@ import {
   AmountLimitExceededError,
   type AmountEvaluation,
   captureFieldsFor,
-  computeFormulaValues,
+  computeFieldValues,
   evaluateAmountRules,
   isDataReference,
   type FieldDocument,
@@ -88,7 +88,7 @@ export class SubmissionValidator {
     if (fileIssues.length > 0) throw new FieldValuesInvalidError(fileIssues);
 
     const today = localDateIn(request.company.timeZone, request.at);
-    const computed = computeFormulaValues(document.fields, { ...request.existing, ...captured.values }, { today, captured: new Set(Object.keys(captured.values)) });
+    const computed = computeFieldValues(document.fields, { ...request.existing, ...captured.values }, { today, captured: new Set(Object.keys(captured.values)) });
     const strictFailures = computed.failures.filter((failure) => failure.strict);
     if (strictFailures.length > 0) throw new FieldValuesInvalidError(strictFailures.map((failure) => ({ code: 'FORMULA_ERROR', fieldCode: failure.fieldCode, reason: failure.reason })));
     const written = { ...captured.values, ...computed.values };
