@@ -27,6 +27,16 @@ export class CredentialsRepository {
     return row;
   }
 
+  /** Needs `app.user_id` = `userId`: the e-mail is a public column the user can always read about themselves. */
+  async findEmail(tx: AuthTransaction, userId: string): Promise<string | undefined> {
+    return (await tx.user.findUnique({ where: { id: userId }, select: { email: true } }))?.email;
+  }
+
+  /** Needs `app.user_id` = the caller; revokes every other session of the user and clears the lockout. */
+  async changeOwnPassword(tx: AuthTransaction, newPasswordHash: string, keepSessionId: string): Promise<void> {
+    await tx.$executeRaw`SELECT auth_change_own_password(${newPasswordHash}, ${keepSessionId}::uuid)`;
+  }
+
   /** Needs `app.user_id` = `userId`: a user is only told about themselves. */
   async isPlatformAdmin(tx: AuthTransaction, userId: string): Promise<boolean> {
     const [row] = await tx.$queryRaw<{ ok: boolean }[]>`SELECT auth_is_platform_admin(${userId}::uuid) AS ok`;

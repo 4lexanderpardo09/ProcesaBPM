@@ -5,6 +5,7 @@ import { TenantScopeInterceptor } from '../../common/auth/tenant-scope.intercept
 import { InMemoryRateLimiter, RATE_LIMITER } from '../../infrastructure/security/rate-limiter.js';
 import { JwtTokenService } from '../../infrastructure/security/jwt-token-service.js';
 import { PasswordHasher } from '../../infrastructure/security/password-hasher.js';
+import { ChangePasswordService } from './application/change-password.service.js';
 import { InvitationService } from './application/invitation.service.js';
 import { LoginService } from './application/login.service.js';
 import { OneTimeTokenService } from './application/one-time-token.service.js';
@@ -51,6 +52,7 @@ import { AuthController } from './http/auth.controller.js';
     PasswordResetService,
     InvitationService,
     ProfileService,
+    ChangePasswordService,
     AccessTokenGuard,
     { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],

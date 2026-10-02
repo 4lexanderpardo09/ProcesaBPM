@@ -27,6 +27,7 @@ export const RATE_LIMITS = {
     perIdentifier: { limit: 3, windowMs: 15 * MINUTE },
   },
   selectTenant: { name: 'select-tenant', perIp: { limit: 20, windowMs: 15 * MINUTE }, perIdentifier: { limit: 10, windowMs: 15 * MINUTE } },
+  passwordChange: { name: 'password-change', perIp: { limit: 10, windowMs: 15 * MINUTE }, perIdentifier: { limit: 5, windowMs: 15 * MINUTE } },
   platformSelect: { name: 'platform-select', perIp: { limit: 20, windowMs: 15 * MINUTE }, perIdentifier: { limit: 10, windowMs: 15 * MINUTE } },
   passwordResetConfirm: {
     name: 'password-reset-confirm',

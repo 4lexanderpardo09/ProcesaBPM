@@ -13,6 +13,8 @@ import {
   type PasswordResetRequest,
   passwordResetRequestSchema,
   type SelectTenantRequest,
+  changePasswordRequestSchema,
+  type ChangePasswordRequest,
   selectTenantRequestSchema,
   UnauthenticatedError,
 } from '@procesabpm/shared';
@@ -29,6 +31,7 @@ import { PlatformSessionService } from '../application/platform-session.service.
 import { PasswordResetService } from '../application/password-reset.service.js';
 import { ProfileService } from '../application/profile.service.js';
 import { type ClientInfo, type OpenedSession, SessionService } from '../application/session.service.js';
+import { ChangePasswordService } from '../application/change-password.service.js';
 import { TenantSelectionService } from '../application/tenant-selection.service.js';
 import { RATE_LIMITS } from '../domain/auth-policy.js';
 import { bearerToken } from '../../../common/auth/bearer-token.js';
@@ -49,6 +52,7 @@ export class AuthController {
     @Inject(PasswordResetService) private readonly passwordReset: PasswordResetService,
     @Inject(InvitationService) private readonly invitations: InvitationService,
     @Inject(ProfileService) private readonly profiles: ProfileService,
+    @Inject(ChangePasswordService) private readonly passwordChange: ChangePasswordService,
     @Inject(BackgroundTasks) private readonly background: BackgroundTasks,
     @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
   ) {}
@@ -153,6 +157,19 @@ export class AuthController {
     @Body(new ZodValidationPipe(acceptInvitationRequestSchema)) body: AcceptInvitationRequest,
   ): Promise<AcceptInvitationResponse> {
     return this.invitations.accept(body.token, body.password);
+  }
+
+  /** Any signed-in member may change their own password: no permission of the catalog applies. */
+  @AuthenticatedOnly()
+  @Post('password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RateLimit(RATE_LIMITS.passwordChange)
+  @UseGuards(RateLimitGuard)
+  async changePassword(
+    @CurrentPrincipal() principal: Principal,
+    @Body(new ZodValidationPipe(changePasswordRequestSchema)) body: ChangePasswordRequest,
+  ): Promise<void> {
+    await this.passwordChange.change(principal, body);
   }
 
   /** Any signed-in member may read their own profile: no permission of the catalog applies. */

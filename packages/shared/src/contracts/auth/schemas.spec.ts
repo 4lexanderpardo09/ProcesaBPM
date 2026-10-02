@@ -3,6 +3,7 @@ import { newPasswordSchema, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './p
 import {
   acceptInvitationRequestSchema,
   accessTokenClaimsSchema,
+  changePasswordRequestSchema,
   loginRequestSchema,
   meResponseSchema,
   passwordResetConfirmSchema,
@@ -56,6 +57,12 @@ describe('request schemas', () => {
   it('password reset request needs an e-mail', () => {
     expect(passwordResetRequestSchema.safeParse({ email: 'jane@example.com' }).success).toBe(true);
     expect(passwordResetRequestSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('changing the password needs the current one and applies the policy to the new one', () => {
+    expect(changePasswordRequestSchema.safeParse({ currentPassword: 'anything', newPassword: 'a-long-enough-password' }).success).toBe(true);
+    expect(changePasswordRequestSchema.safeParse({ currentPassword: '', newPassword: 'a-long-enough-password' }).success).toBe(false);
+    expect(changePasswordRequestSchema.safeParse({ currentPassword: 'anything', newPassword: 'short' }).success).toBe(false);
   });
 
   it('password reset confirmation applies the password policy and needs a long token', () => {
