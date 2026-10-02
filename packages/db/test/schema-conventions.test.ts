@@ -76,14 +76,18 @@ describe('schema conventions', () => {
     expect(rows.map((row) => row.table_name)).toEqual([]);
   });
 
-  it('runs every SECURITY DEFINER function as a platform owner with a fixed search_path', async () => {
+  it('runs every SECURITY DEFINER function as a platform owner with search_path public, pg_temp', async () => {
     // app_platform owns the general ones; app_outbox_owner owns those that touch the platform outbox, so
-    // that the BYPASSRLS login of app_platform cannot read the tokens in it. pg_temp may only come last.
+    // that the BYPASSRLS login of app_platform cannot read the tokens in it. Temp tables cannot shadow real ones.
     const { rows } = await db.owner.query<{ fn: string }>(`
-      SELECT p.proname AS fn FROM pg_proc p
-      WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef
-        AND (pg_get_userbyid(p.proowner) NOT IN ('app_platform', 'app_outbox_owner')
-             OR NOT coalesce(p.proconfig::text[] && ARRAY['search_path=public', 'search_path=public, pg_temp'], false))
+      SELECT p.oid::regprocedure::text AS fn FROM pg_proc p
+      WHERE p.prosecdef
+        AND p.pronamespace NOT IN ('pg_catalog'::regnamespace, 'information_schema'::regnamespace)
+        AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+        AND (p.pronamespace <> 'public'::regnamespace
+             OR pg_get_userbyid(p.proowner) NOT IN ('app_platform', 'app_outbox_owner')
+             OR NOT coalesce(p.proconfig @> ARRAY['search_path=public, pg_temp'], false))
+      ORDER BY 1
     `);
 
     expect(rows.map((row) => row.fn)).toEqual([]);
@@ -104,16 +108,6 @@ describe('schema conventions', () => {
       'platform_outbox_claim_is_current',
       'purge_processed_platform_outbox_events',
     ]);
-  });
-
-  it('ends the search_path of the new SECURITY DEFINER functions with pg_temp (temp tables cannot shadow real ones)', async () => {
-    const { rows } = await db.owner.query<{ fn: string }>(`
-      SELECT p.proname AS fn FROM pg_proc p
-      WHERE p.pronamespace = 'public'::regnamespace AND pg_get_userbyid(p.proowner) = 'app_outbox_owner'
-        AND NOT coalesce(p.proconfig::text[] @> ARRAY['search_path=public, pg_temp'], false)
-    `);
-
-    expect(rows.map((row) => row.fn)).toEqual([]);
   });
 
   it('does not let the application roles create temporary tables', async () => {
