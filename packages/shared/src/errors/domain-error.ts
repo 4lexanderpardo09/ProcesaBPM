@@ -279,6 +279,8 @@ export interface FieldValueIssue {
   readonly fieldCode: string;
   readonly row?: number;
   readonly column?: string;
+  /** Why a computed field failed (`FORMULA_ERROR`): `DIVISION_BY_ZERO`, `NUMBER_OVERFLOW`… */
+  readonly reason?: string;
 }
 
 export class FieldValuesInvalidError extends DomainError {

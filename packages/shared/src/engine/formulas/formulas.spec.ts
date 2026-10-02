@@ -164,13 +164,19 @@ describe('computeFormulaValues', () => {
     const result = computeFormulaValues(fields, { PRICE: 100.5, QTY: 3 }, context);
     expect(result.failures).toEqual(
       expect.arrayContaining([
-        { fieldCode: 'BAD', reason: 'DIVISION_BY_ZERO' },
-        { fieldCode: 'LOOP_A', reason: 'CYCLE' },
-        { fieldCode: 'LOOP_B', reason: 'CYCLE' },
-        { fieldCode: 'WRONG', reason: 'INVALID_FORMULA' },
+        { fieldCode: 'BAD', reason: 'DIVISION_BY_ZERO', strict: false },
+        { fieldCode: 'LOOP_A', reason: 'CYCLE', strict: false },
+        { fieldCode: 'LOOP_B', reason: 'CYCLE', strict: false },
+        { fieldCode: 'WRONG', reason: 'INVALID_FORMULA', strict: false },
       ]),
     );
     expect(result.values.BAD).toBeNull();
+  });
+
+  it('marks as strict the failures that depend on what the person just captured', () => {
+    const result = computeFormulaValues(fields, { PRICE: 100.5, QTY: 3 }, { ...context, captured: new Set(['QTY']) });
+    expect(result.failures.filter((failure) => failure.strict).map((failure) => failure.fieldCode)).toEqual(['BAD']);
+    expect(result.failures.find((failure) => failure.fieldCode === 'LOOP_A')?.strict).toBe(false);
   });
 
   it('yields null when an input is missing and ignores client-sent values of computed fields', () => {

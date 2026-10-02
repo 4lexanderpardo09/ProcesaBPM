@@ -33,7 +33,7 @@ export type TransitionCondition = z.infer<typeof transitionConditionSchema>;
 
 /** Which operators apply to which field types (the evaluator would otherwise compare apples to oranges). */
 export const OPERATOR_FIELD_TYPES: Readonly<Record<'numeric' | 'date' | 'text', ReadonlySet<string>>> = {
-  numeric: new Set(['NUMBER', 'CURRENCY', 'DAYS', 'FORMULA', 'CALCULATOR']),
+  numeric: new Set(['NUMBER', 'CURRENCY', 'DAYS']),
   date: new Set(['DATE', 'DATETIME']),
   text: new Set(['TEXT', 'TEXTAREA', 'SELECT', 'MULTI_SELECT', 'SITE', 'USER']),
 };
@@ -43,4 +43,15 @@ export function operatorAppliesTo(op: ConditionOperator, fieldType: string): boo
   if (DATE_OPERATORS.has(op)) return OPERATOR_FIELD_TYPES.date.has(fieldType);
   // equals, not_equals, starts_with, contains, in_list work on anything that holds a scalar.
   return OPERATOR_FIELD_TYPES.text.has(fieldType) || OPERATOR_FIELD_TYPES.numeric.has(fieldType) || OPERATOR_FIELD_TYPES.date.has(fieldType);
+}
+
+/**
+ * The type a field behaves as when compared or measured: a FORMULA takes its result type, a CALCULATOR is a
+ * number (every calculator produces an amount or a count). Everything else is its own type.
+ */
+export function effectiveFieldType(field: { readonly type: string; readonly config: Readonly<Record<string, unknown>> }): string {
+  if (field.type === 'CALCULATOR') return 'NUMBER';
+  if (field.type !== 'FORMULA') return field.type;
+  const result = field.config.resultType;
+  return result === 'DATE' ? 'DATE' : result === 'TEXT' ? 'TEXT' : result === 'CURRENCY' ? 'CURRENCY' : 'NUMBER';
 }

@@ -2,7 +2,7 @@ import type { FieldValueIssue } from '../../errors/domain-error.js';
 
 export type { FieldValueIssue };
 
-export type FieldIssueCode = 'REQUIRED' | 'INVALID_TYPE' | 'OUT_OF_RANGE' | 'TOO_MANY_DECIMALS' | 'NOT_AN_OPTION' | 'UNKNOWN_FIELD' | 'NOT_EDITABLE' | 'TOO_MANY_ROWS' | 'TOO_FEW_ROWS' | 'TOO_MANY_FILES' | 'FILE_NOT_ATTACHABLE' | 'FILE_TYPE_NOT_ACCEPTED';
+export type FieldIssueCode = 'REQUIRED' | 'INVALID_TYPE' | 'OUT_OF_RANGE' | 'TOO_MANY_DECIMALS' | 'NOT_AN_OPTION' | 'UNKNOWN_FIELD' | 'NOT_EDITABLE' | 'TOO_MANY_ROWS' | 'TOO_FEW_ROWS' | 'TOO_MANY_FILES' | 'FILE_NOT_ATTACHABLE' | 'FILE_TYPE_NOT_ACCEPTED' | 'FORMULA_ERROR';
 
 /** A value that must exist in the tenant's data (site, user, preset record, dataset row): the server checks it. */
 export interface ReferenceToVerify {

@@ -23,7 +23,7 @@ import { isAllowedInitiator } from '../domain/initiator-match.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { type Arrival, ArrivalPlanner, arrivalEvents } from './arrival-planner.js';
 import { attachmentsPlanOf } from './submission-files.js';
-import { diversionEdge, SubmissionValidator } from './submission-validator.js';
+import { diversionEdge, formulaFailureEvents, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 
 export interface TicketCreator {
@@ -139,6 +139,7 @@ export class CreateTicketService {
           attachments: attachmentsPlanOf(submission.files, start.id, 'ATTACHMENT'),
           outbox: [{ type: 'ticket.created', payload: { number: number.toString(), versionId: published.versionId, companyId: company.id, creatorId: requester.userId, registeredById } }],
         },
+        ...formulaFailureEvents(submission, start.id, 1),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: start.id, loop: 1, actorId: actor.userId, data: { ...warning } })),
         ...(diversion === undefined
           ? []

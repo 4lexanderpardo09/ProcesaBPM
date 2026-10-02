@@ -18,14 +18,14 @@ describe('findEngineSupportProblems', () => {
     ['a CUTOFF deadline', { steps: [step('t', 'TASK', { deadlineType: 'CUTOFF' })] }, 'NOT_IMPLEMENTED_CUTOFF_DEADLINE'],
   ])('rejects %s', (_name, parts, code) => expect(codes(version(parts))).toEqual([code]));
 
-  it('rejects conditions and amount rules on computed fields', () => {
+  it('accepts conditions and amount rules on computed fields', () => {
     const doc = version({
       steps: [step('c', 'CONDITION')],
       transitions: [transition('t', 'c', 'c', 'CONDITION', { condition: [{ field: 'TOTAL', op: 'gt', value: 1 }] })],
       fields: [field('f', 'c', 'TOTAL', { type: 'FORMULA' })],
       amountRules: [amountRule('r', 'TOTAL')],
     });
-    expect(codes(doc)).toEqual(['NOT_IMPLEMENTED_CONDITION_ON_COMPUTED_FIELD', 'NOT_IMPLEMENTED_AMOUNT_RULE_ON_COMPUTED_FIELD']);
+    expect(codes(doc)).toEqual([]);
   });
 
   describe('extra approval rules', () => {

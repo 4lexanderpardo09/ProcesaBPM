@@ -12,7 +12,7 @@ import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { assertMayLeaveByDecision } from '../domain/close-policy.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { attachmentsPlanOf } from './submission-files.js';
-import { diversionEdge, SubmissionValidator } from './submission-validator.js';
+import { diversionEdge, submissionEvents, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 import { TicketSlaService } from './ticket-sla.service.js';
 
@@ -94,7 +94,7 @@ export class TransitionTicketService {
       const cancelled = step.assignmentMode === 'PARALLEL' ? await this.cancelPendingSignatures(tx, tenantId, ticket.id, step.id, visit.loop, at) : [];
       const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId, 'STEP_EXITED', new Set(cancelled.map((task) => task.userId)));
       const events: EventPlan[] = [
-        ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { changes: submission.changes } } satisfies EventPlan]),
+        ...submissionEvents(submission, step.id, visit.loop, actor.userId),
         ...cancelled.map((task): EventPlan => ({ type: 'PARALLEL_TASK_COMPLETED', stepId: step.id, loop: visit.loop, actorId: actor.userId, assigneeId: task.userId, data: { taskId: task.id, status: 'CANCELLED' } })),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { ...warning } })),
         {

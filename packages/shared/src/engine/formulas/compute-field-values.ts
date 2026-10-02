@@ -8,6 +8,8 @@ import type { CompiledFormula } from './types.js';
 export interface FormulaFailure {
   readonly fieldCode: string;
   readonly reason: FormulaErrorCode | 'INVALID_FORMULA' | 'CYCLE';
+  /** The formula (transitively) reads a field the current submission captured: the person can fix it, so the submission is refused. */
+  readonly strict: boolean;
 }
 
 export interface ComputedFormulas {
@@ -56,7 +58,11 @@ function dependencyOrder(codes: ReadonlySet<string>, compiled: ReadonlyMap<strin
  * a given context. A formula that cannot produce a value stores `null` and is reported in `failures`; what to do
  * about it (refuse the submission or only warn) is the caller's policy.
  */
-export function computeFormulaValues(fields: readonly FieldDocument[], current: Readonly<Record<string, unknown>>, context: Omit<FormulaContext, 'values'>): ComputedFormulas {
+export function computeFormulaValues(
+  fields: readonly FieldDocument[],
+  current: Readonly<Record<string, unknown>>,
+  context: Omit<FormulaContext, 'values'> & { readonly captured?: ReadonlySet<string> },
+): ComputedFormulas {
   const formulaFields = fields.filter((field) => field.type === 'FORMULA');
   if (formulaFields.length === 0) return { values: {}, failures: [] };
   const byCode = new Map(formulaFields.map((field) => [field.code, field]));
@@ -65,19 +71,22 @@ export function computeFormulaValues(fields: readonly FieldDocument[], current: 
   const values: Record<string, unknown> = { ...current };
   const computed: Record<string, unknown> = {};
   const failures: FormulaFailure[] = [];
+  // Fields a person just captured, plus the formulas that read them: a failure there is the person's to fix.
+  const tainted = new Set(context.captured ?? []);
   const fail = (fieldCode: string, reason: FormulaFailure['reason']): void => {
     computed[fieldCode] = null;
     values[fieldCode] = null;
-    failures.push({ fieldCode, reason });
+    failures.push({ fieldCode, reason, strict: tainted.has(fieldCode) });
   };
   for (const code of order) {
     const field = byCode.get(code)!;
     const formula = compiled.get(code);
+    if (formula?.references.some((reference) => tainted.has(reference))) tainted.add(code);
     if (cyclic.includes(code)) fail(code, 'CYCLE');
     else if (formula === undefined) fail(code, 'INVALID_FORMULA');
     else {
       try {
-        const result = evaluateFormulaExpression(formula.expression, { ...context, values });
+        const result = evaluateFormulaExpression(formula.expression, { today: context.today, ...(context.isBusinessDay === undefined ? {} : { isBusinessDay: context.isBusinessDay }), values });
         const stored = result instanceof Decimal ? storable(result.round(formulaDecimals(field))) : result;
         computed[code] = stored;
         values[code] = stored;
