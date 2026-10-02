@@ -1,12 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma } from '@procesabpm/db';
 import type { AppConfig } from '../../config/app-config.js';
 import { APP_CONFIG } from '../../config/tokens.js';
 import { applyDatabaseScope, databaseTimeouts } from './database-scope.js';
 import { PrismaService } from './prisma.service.js';
 import { TenantContext } from './tenant-context.js';
+import { asScoped, type TenantTransaction } from './transaction-scope.js';
 
-export type TenantTransaction = Prisma.TransactionClient;
+export type { TenantTransaction } from './transaction-scope.js';
 
 /**
  * Runs database work for the current tenant (docs/base-de-datos.md §6.2): one interactive
@@ -27,7 +27,7 @@ export class TenantTransactionRunner {
     return this.prisma.$transaction(
       async (tx) => {
         await applyDatabaseScope(tx, { ...scope, ...databaseTimeouts(this.config, this.config.DB_TX_TIMEOUT_MS) });
-        return work(tx);
+        return work(asScoped<TenantTransaction>(tx));
       },
       { timeout: this.config.DB_TX_TIMEOUT_MS, maxWait: this.config.DB_TX_MAX_WAIT_MS },
     );

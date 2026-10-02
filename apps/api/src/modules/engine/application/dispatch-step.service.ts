@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Clock } from '../../../infrastructure/clock.js';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import { PublishedVersionReader } from '../../workflows/application/published-version-reader.js';
 import { DispatchRepository, type WaitingTicket } from '../data/dispatch.repository.js';
@@ -50,7 +50,7 @@ export class DispatchStepService {
   }
 
   /** The person the ticket went to, or `null` when it was skipped (somebody holds it already, or there is nobody eligible). */
-  private async assign(tx: WorkerTransaction, tenantId: string, stepId: string, ticket: WaitingTicket, last: string | null, at: Date): Promise<string | null> {
+  private async assign(tx: TenantTransaction, tenantId: string, stepId: string, ticket: WaitingTicket, last: string | null, at: Date): Promise<string | null> {
     if (await this.dispatches.hasHolder(tx, tenantId, ticket.id)) return null;
     const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
     const step = document.steps.find((candidate) => candidate.id === stepId);

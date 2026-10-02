@@ -46,4 +46,15 @@ describe('architecture', () => {
     const offenders = files.filter((file) => posix(file).startsWith('modules/') && /notifications-worker|documents-worker|auth-mail|file-purge/.test(posix(file))).filter((file) => importsOf(file).some((source) => /\.controller\.js$|authorization\.module\.js$|\.guard\.js$/.test(source))).map(posix);
     expect(offenders).toEqual([]);
   });
+
+  it('only the four transaction runners brand a transaction', () => {
+    const importers = files.filter((file) => /\basScoped\b/.test(readFileSync(file, 'utf8'))).map(posix);
+    expect(importers.sort()).toEqual([
+      'infrastructure/database/auth-transaction-runner.ts',
+      'infrastructure/database/platform-transaction-runner.ts',
+      'infrastructure/database/tenant-transaction-runner.ts',
+      'infrastructure/database/transaction-scope.ts',
+      'infrastructure/database/worker-transaction-runner.ts',
+    ]);
+  });
 });

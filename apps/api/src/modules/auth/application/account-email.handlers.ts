@@ -1,6 +1,6 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-settings.js';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 import { type MailMessage, Mailer } from '../../../infrastructure/mail/mailer.js';
 import { WebLinks } from '../../../infrastructure/mail/links.js';
 import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
@@ -38,7 +38,7 @@ type ResetPayload = { userId: string };
 type InvitationPayload = { tenantId: string; userId: string };
 
 @Injectable()
-export class PasswordResetEmailHandler extends AccountEmailHandler<ResetPayload> implements ExternalEffectHandler<ResetPayload, MailMessage>, OnModuleInit {
+export class PasswordResetEmailHandler extends AccountEmailHandler<ResetPayload> implements ExternalEffectHandler<ResetPayload, MailMessage, void, CrossTenantTransaction>, OnModuleInit {
   readonly type = PASSWORD_RESET_EVENT;
   readonly scope = 'platform' as const;
   readonly schema = passwordResetPayloadSchema;
@@ -58,7 +58,7 @@ export class PasswordResetEmailHandler extends AccountEmailHandler<ResetPayload>
     this.registry.registerExternal(this);
   }
 
-  async prepare(tx: WorkerTransaction, event: ClaimedEvent<ResetPayload>): Promise<MailMessage | null> {
+  async prepare(tx: CrossTenantTransaction, event: ClaimedEvent<ResetPayload>): Promise<MailMessage | null> {
     if (this.clock.now().getTime() - event.createdAt.getTime() > PASSWORD_RESET_MAX_QUEUE_AGE_MS) throw new PermanentEventError('The reset request is too old to be mailed');
     const token = this.tokenFor(event);
     const recipient = await this.tokens.issuePasswordReset(tx, { eventId: event.id, userId: event.payload.userId, tokenHash: sha256Hex(token), ttlMinutes: PASSWORD_RESET_VALIDITY_MINUTES });
@@ -68,7 +68,7 @@ export class PasswordResetEmailHandler extends AccountEmailHandler<ResetPayload>
 }
 
 @Injectable()
-export class InvitationEmailHandler extends AccountEmailHandler<InvitationPayload> implements ExternalEffectHandler<InvitationPayload, MailMessage>, OnModuleInit {
+export class InvitationEmailHandler extends AccountEmailHandler<InvitationPayload> implements ExternalEffectHandler<InvitationPayload, MailMessage, void, CrossTenantTransaction>, OnModuleInit {
   readonly type = INVITATION_EVENT;
   readonly scope = 'platform' as const;
   readonly schema = invitationPayloadSchema;
@@ -87,7 +87,7 @@ export class InvitationEmailHandler extends AccountEmailHandler<InvitationPayloa
     this.registry.registerExternal(this);
   }
 
-  async prepare(tx: WorkerTransaction, event: ClaimedEvent<InvitationPayload>): Promise<MailMessage | null> {
+  async prepare(tx: CrossTenantTransaction, event: ClaimedEvent<InvitationPayload>): Promise<MailMessage | null> {
     const token = this.tokenFor(event);
     const recipient = await this.tokens.issueInvitation(tx, { eventId: event.id, tenantId: event.payload.tenantId, userId: event.payload.userId, tokenHash: sha256Hex(token), ttlDays: INVITATION_VALIDITY_DAYS });
     if (recipient === undefined) return null;

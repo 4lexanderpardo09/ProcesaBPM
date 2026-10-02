@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { JsonLogger } from '../../common/logging/json-logger.js';
 import { WORKER_SETTINGS, type WorkerSettings } from '../../config/worker-settings.js';
 import { Clock } from '../clock.js';
-import { WorkerTransactionRunner, type WorkerTransaction } from '../database/worker-transaction-runner.js';
+import type { CrossTenantTransaction, TenantTransaction } from '../database/transaction-scope.js';
+import { WorkerTransactionRunner } from '../database/worker-transaction-runner.js';
 import { type OutboxSource, OutboxClaimsRepository } from './outbox-claims.repository.js';
 import { type ClaimedEvent, PermanentEventError, StaleClaimError } from './outbox-handler.js';
 import { OutboxHandlerRegistry } from './outbox-handler.registry.js';
@@ -99,7 +100,8 @@ export class OutboxDispatcher {
     if (transactional.length > 0) {
       const handlers = transactional.map((handler) => ({ handler, event: { ...event, payload: parsePayload(handler.schema, event.payload) } }));
       await this.inScope(source, event, async (tx) => {
-        for (const { handler, event: parsed } of handlers) await handler.handle(tx, parsed as ClaimedEvent<never>);
+        // Transactional handlers exist for tenant events only, so this scope is always a tenant one.
+        for (const { handler, event: parsed } of handlers) await handler.handle(tx as TenantTransaction, parsed as ClaimedEvent<never>);
         await this.completeOrThrow(tx, source, event);
       }, timeoutMs);
       return;
@@ -111,20 +113,20 @@ export class OutboxDispatcher {
     const message = await this.inScope(source, event, async (tx) => {
       // A claim that outlived its lease belongs to another worker now: it, not this one, sends the e-mail.
       if (!(await this.claims.isCurrent(tx, source, event))) throw new StaleClaimError();
-      return external.prepare(tx, parsed);
+      return external.prepare(tx as never, parsed);
     }, timeoutMs);
     const result = message === null ? undefined : await external.perform(message as never, parsed);
     await this.inScope(source, event, async (tx) => {
-      if (message !== null && external.record !== undefined) await external.record(tx, result as never, parsed);
+      if (message !== null && external.record !== undefined) await external.record(tx as never, result as never, parsed);
       await this.completeOrThrow(tx, source, event);
     }, timeoutMs);
   }
 
-  private async completeOrThrow(tx: WorkerTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<void> {
+  private async completeOrThrow(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<void> {
     if (!(await this.claims.complete(tx, source, event))) throw new StaleClaimError();
   }
 
-  private inScope<T>(source: OutboxSource, event: ClaimedEvent<unknown>, work: (tx: WorkerTransaction) => Promise<T>, timeoutMs: number): Promise<T> {
+  private inScope<T>(source: OutboxSource, event: ClaimedEvent<unknown>, work: (tx: TenantTransaction | CrossTenantTransaction) => Promise<T>, timeoutMs: number): Promise<T> {
     return source === 'tenant' ? this.runner.withTenant(event.tenantId!, work, { timeoutMs }) : this.runner.withoutTenant(work, { timeoutMs });
   }
 

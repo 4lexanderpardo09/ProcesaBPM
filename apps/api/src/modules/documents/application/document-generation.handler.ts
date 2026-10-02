@@ -4,7 +4,7 @@ import { PDF_LIMITS, StorageUnavailableError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-settings.js';
 import { Clock } from '../../../infrastructure/clock.js';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type ClaimedEvent, type ExternalEffectHandler, PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { PdfRenderer } from '../../../infrastructure/pdf/pdf-renderer.js';
@@ -69,7 +69,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     this.registry.registerExternal(this);
   }
 
-  async prepare(tx: WorkerTransaction, event: ClaimedEvent<DocumentGeneratePayload>): Promise<PreparedDocument | null> {
+  async prepare(tx: TenantTransaction, event: ClaimedEvent<DocumentGeneratePayload>): Promise<PreparedDocument | null> {
     const tenantId = event.tenantId!;
     const { payload } = event;
     const fileId = deriveGeneratedFileId(tenantId, event.id);
@@ -88,7 +88,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     return { fileId: prepared.fileId, storageKey: prepared.storageKey, fileName: prepared.plan.fileName, sizeBytes: stored.length, sha256: sha256Of(stored) };
   }
 
-  async record(tx: WorkerTransaction, result: GeneratedPdf, event: ClaimedEvent<DocumentGeneratePayload>): Promise<void> {
+  async record(tx: TenantTransaction, result: GeneratedPdf, event: ClaimedEvent<DocumentGeneratePayload>): Promise<void> {
     const { payload } = event;
     await this.systemFiles.recordGeneratedDocument(tx, event.tenantId!, {
       ...result,

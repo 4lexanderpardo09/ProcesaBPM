@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 
 export interface TokenRecipient {
   readonly email: string;
@@ -11,7 +11,7 @@ export interface TokenRecipient {
 @Injectable()
 export class WorkerTokenRepository {
   /** `undefined` when there is nothing to send: the account is not active, or the token was used, replaced or expired. */
-  async issuePasswordReset(tx: WorkerTransaction, input: { eventId: string; userId: string; tokenHash: string; ttlMinutes: number }): Promise<TokenRecipient | undefined> {
+  async issuePasswordReset(tx: CrossTenantTransaction, input: { eventId: string; userId: string; tokenHash: string; ttlMinutes: number }): Promise<TokenRecipient | undefined> {
     const [row] = await tx.$queryRaw<Array<{ out_email: string; out_first_name: string; out_expires_at: Date }>>`
       SELECT out_email, out_first_name, out_expires_at
       FROM worker_issue_password_reset_token(${input.eventId}::uuid, ${input.userId}::uuid, ${input.tokenHash}, make_interval(mins => ${input.ttlMinutes}::int))`;
@@ -19,7 +19,7 @@ export class WorkerTokenRepository {
   }
 
   /** `undefined` when the membership is no longer pending, the user is disabled or the organization is not active. */
-  async issueInvitation(tx: WorkerTransaction, input: { eventId: string; tenantId: string; userId: string; tokenHash: string; ttlDays: number }): Promise<(TokenRecipient & { organization: string }) | undefined> {
+  async issueInvitation(tx: CrossTenantTransaction, input: { eventId: string; tenantId: string; userId: string; tokenHash: string; ttlDays: number }): Promise<(TokenRecipient & { organization: string }) | undefined> {
     const [row] = await tx.$queryRaw<Array<{ out_email: string; out_first_name: string; out_tenant_name: string; out_expires_at: Date }>>`
       SELECT out_email, out_first_name, out_tenant_name, out_expires_at
       FROM worker_issue_invitation_token(${input.eventId}::uuid, ${input.tenantId}::uuid, ${input.userId}::uuid, ${input.tokenHash}, make_interval(days => ${input.ttlDays}::int))`;
