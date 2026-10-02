@@ -325,6 +325,16 @@ describe('assignment, pool, reassignment', () => {
       };
       const wait = { steps: [{ key: 'start', type: 'START' as const }, { key: 'w', type: 'WAIT' as const, extra: { config: { mode: 'DURATION', value: 1, unit: 'BUSINESS_DAYS' } } }, { key: 'end', type: 'END' as const }], transitions: [{ from: 'start', to: 'w', type: 'DEFAULT' as const }, { from: 'w', to: 'end', type: 'DEFAULT' as const }] };
       expect(await refusals(wait)).toContain('NOT_IMPLEMENTED_WAIT_BLOCK');
+      const ID = '0199a000-0000-7000-8000-0000000000bb';
+      const blocks = [
+        ['NOTIFICATION' as const, { recipients: [{ kind: 'CREATOR' }], channels: ['EMAIL'], subject: 's', body: 'b' }, 'NOT_IMPLEMENTED_NOTIFICATION_BLOCK'],
+        ['WEBHOOK' as const, { webhookId: ID }, 'NOT_IMPLEMENTED_WEBHOOK_BLOCK'],
+        ['EXPORT' as const, { exportDefinitionId: ID }, 'NOT_IMPLEMENTED_EXPORT_BLOCK'],
+      ];
+      for (const [type, config, code] of blocks) {
+        const flow = { steps: [{ key: 'start', type: 'START' as const }, { key: 'b', type, extra: { config } }, { key: 'end', type: 'END' as const }], transitions: [{ from: 'start', to: 'b', type: 'DEFAULT' as const }, { from: 'b', to: 'end', type: 'DEFAULT' as const }] };
+        expect(await refusals(flow)).toContain(code);
+      }
     });
 
     it('a version published before the engine refused them is not started', async () => {

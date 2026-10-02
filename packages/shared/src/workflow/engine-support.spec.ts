@@ -12,6 +12,9 @@ describe('findEngineSupportProblems', () => {
   it.each([
     ['a WAIT block', { steps: [step('w', 'WAIT')] }, 'NOT_IMPLEMENTED_WAIT_BLOCK'],
     ['a CALCULATOR block', { steps: [step('c', 'CALCULATOR')] }, 'NOT_IMPLEMENTED_CALCULATOR_BLOCK'],
+    ['a NOTIFICATION block', { steps: [step('n', 'NOTIFICATION')] }, 'NOT_IMPLEMENTED_NOTIFICATION_BLOCK'],
+    ['a WEBHOOK block', { steps: [step('h', 'WEBHOOK')] }, 'NOT_IMPLEMENTED_WEBHOOK_BLOCK'],
+    ['an EXPORT block', { steps: [step('e', 'EXPORT')] }, 'NOT_IMPLEMENTED_EXPORT_BLOCK'],
     ['a CUTOFF deadline', { steps: [step('t', 'TASK', { deadlineType: 'CUTOFF' })] }, 'NOT_IMPLEMENTED_CUTOFF_DEADLINE'],
   ])('rejects %s', (_name, parts, code) => expect(codes(version(parts))).toEqual([code]));
 

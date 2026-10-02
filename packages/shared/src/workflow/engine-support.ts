@@ -18,6 +18,9 @@ export function findEngineSupportProblems(doc: WorkflowVersionDocument): Workflo
     const at = { stepId: step.id };
     if (step.type === 'WAIT') error('NOT_IMPLEMENTED_WAIT_BLOCK', at);
     if (step.type === 'CALCULATOR') error('NOT_IMPLEMENTED_CALCULATOR_BLOCK', at);
+    if (step.type === 'NOTIFICATION') error('NOT_IMPLEMENTED_NOTIFICATION_BLOCK', at);
+    if (step.type === 'WEBHOOK') error('NOT_IMPLEMENTED_WEBHOOK_BLOCK', at);
+    if (step.type === 'EXPORT') error('NOT_IMPLEMENTED_EXPORT_BLOCK', at);
     if (step.deadlineType === 'CUTOFF') error('NOT_IMPLEMENTED_CUTOFF_DEADLINE', at);
   }
   for (const transition of doc.transitions) {
