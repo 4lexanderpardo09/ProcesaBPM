@@ -97,3 +97,54 @@ export interface AvailableCategory {
 export interface AvailableCatalogResponse {
   readonly categories: readonly AvailableCategory[];
 }
+
+// ---- Error types (what a reopening or an error report is filed under) ----
+const refineExclusive = <T extends { isReopening?: boolean | undefined; forcesClose?: boolean | undefined }>(value: T): boolean => !(value.isReopening === true && value.forcesClose === true);
+const EXCLUSIVE_MESSAGE = 'A reopening error type cannot also force the ticket to close';
+
+export const createErrorTypeRequestSchema = z
+  .object({
+    name: nameSchema,
+    description: z.string().trim().min(1).max(2000).optional(),
+    isProcessError: z.boolean().optional(),
+    forcesClose: z.boolean().optional(),
+    isReopening: z.boolean().optional(),
+  })
+  .refine(refineExclusive, EXCLUSIVE_MESSAGE);
+export type CreateErrorTypeRequest = z.infer<typeof createErrorTypeRequestSchema>;
+
+export const updateErrorTypeRequestSchema = z
+  .object({
+    name: nameSchema,
+    description: z.string().trim().min(1).max(2000).nullable(),
+    isProcessError: z.boolean(),
+    forcesClose: z.boolean(),
+    isReopening: z.boolean(),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Send at least one field')
+  .refine(refineExclusive, EXCLUSIVE_MESSAGE);
+export type UpdateErrorTypeRequest = z.infer<typeof updateErrorTypeRequestSchema>;
+
+export const errorTypeResponseSchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  description: z.string().nullable(),
+  isProcessError: z.boolean(),
+  forcesClose: z.boolean(),
+  isReopening: z.boolean(),
+  isActive: z.boolean(),
+});
+export type ErrorTypeResponse = z.infer<typeof errorTypeResponseSchema>;
+
+export const createErrorSubtypeRequestSchema = z.object({ name: nameSchema, description: z.string().trim().min(1).max(2000).optional() });
+export type CreateErrorSubtypeRequest = z.infer<typeof createErrorSubtypeRequestSchema>;
+
+export const updateErrorSubtypeRequestSchema = z
+  .object({ name: nameSchema, description: z.string().trim().min(1).max(2000).nullable() })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Send at least one field');
+export type UpdateErrorSubtypeRequest = z.infer<typeof updateErrorSubtypeRequestSchema>;
+
+export const errorSubtypeResponseSchema = z.object({ id: uuidSchema, errorTypeId: uuidSchema, name: z.string(), description: z.string().nullable(), isActive: z.boolean() });
+export type ErrorSubtypeResponse = z.infer<typeof errorSubtypeResponseSchema>;

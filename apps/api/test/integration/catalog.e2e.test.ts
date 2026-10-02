@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { insertReturningId, seedTenant, type SeededTenant, withPlatformTransaction } from '@procesabpm/db/testing/fixtures';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { adminOf, ApiClient, clientOf, connectTestDatabase } from '../support/admin-api.js';
+import { adminOf, ApiClient, clientOf, clientWith, connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 
@@ -213,6 +213,69 @@ describe('catalog API', () => {
       const { categories } = (await client.get('/catalog/available').expect(200)).body as { categories: Array<{ id: string; subcategories: Array<{ name: string }> }> };
       const filtered = categories.find((entry) => names[entry.id] === 'filtered')!;
       expect(filtered.subcategories.map((sub) => sub.name)).toEqual(['kept']);
+    });
+  });
+
+  describe('error types and subtypes', () => {
+    it('creates, reads, updates, lists, deactivates and reactivates a type, with its subtypes', async () => {
+      const name = unique('Wrong amount');
+      const created = (await admin.post('/error-types', { name, description: 'The amount does not match', isProcessError: true }).expect(201)).body;
+      expect(created).toMatchObject({ name, isProcessError: true, forcesClose: false, isReopening: false, isActive: true });
+      expect((await admin.get(`/error-types/${created.id}`).expect(200)).body.id).toBe(created.id);
+      expect((await admin.patch(`/error-types/${created.id}`, { isReopening: true, description: null }).expect(200)).body).toMatchObject({ isReopening: true, description: null });
+
+      const subtype = (await admin.post(`/error-types/${created.id}/subtypes`, { name: 'Typo' }).expect(201)).body;
+      expect(subtype).toMatchObject({ errorTypeId: created.id, name: 'Typo', isActive: true });
+      expect((await admin.patch(`/error-types/${created.id}/subtypes/${subtype.id}`, { description: 'Digits swapped' }).expect(200)).body.description).toBe('Digits swapped');
+      expect((await admin.post(`/error-types/${created.id}/subtypes/${subtype.id}/deactivate`).expect(200)).body.isActive).toBe(false);
+      expect((await admin.get(`/error-types/${created.id}/subtypes`).expect(200)).body.items).toEqual([]);
+      expect((await admin.get(`/error-types/${created.id}/subtypes?includeInactive=true`).expect(200)).body.items.map((item: { id: string }) => item.id)).toEqual([subtype.id]);
+      expect((await admin.post(`/error-types/${created.id}/subtypes/${subtype.id}/activate`).expect(200)).body.isActive).toBe(true);
+
+      expect((await admin.post(`/error-types/${created.id}/deactivate`).expect(200)).body.isActive).toBe(false);
+      const listed = (await admin.get(`/error-types?pageSize=100&search=${encodeURIComponent(name)}`).expect(200)).body.items;
+      expect(listed).toEqual([]);
+      expect((await admin.post(`/error-types/${created.id}/activate`).expect(200)).body.isActive).toBe(true);
+    });
+
+    it('refuses a type that is both a reopening and forces the close, also when only one flag changes (400 / 422)', async () => {
+      await admin.post('/error-types', { name: unique('Both'), isReopening: true, forcesClose: true }).expect(400);
+      const created = (await admin.post('/error-types', { name: unique('Reopen'), isReopening: true }).expect(201)).body;
+      await admin.patch(`/error-types/${created.id}`, { isReopening: true, forcesClose: true }).expect(400);
+      expect((await admin.patch(`/error-types/${created.id}`, { forcesClose: true }).expect(422)).body.error.code).toBe('INVALID_STATE');
+    });
+
+    it('refuses repeated names (409), empty updates (400) and unknown ids (404)', async () => {
+      const name = unique('Dup');
+      const created = (await admin.post('/error-types', { name }).expect(201)).body;
+      expect((await admin.post('/error-types', { name }).expect(409)).body.error.code).toBe('DUPLICATE');
+      await admin.post(`/error-types/${created.id}/subtypes`, { name: 'same' }).expect(201);
+      await admin.post(`/error-types/${created.id}/subtypes`, { name: 'same' }).expect(409);
+      await admin.patch(`/error-types/${created.id}`, {}).expect(400);
+      await admin.get('/error-types/0199a000-0000-7000-8000-0000000000aa').expect(404);
+      await admin.post('/error-types/0199a000-0000-7000-8000-0000000000aa/subtypes', { name: 'x' }).expect(404);
+    });
+
+    it('needs the ErrorType permissions', async () => {
+      const reader = await clientWith(db, app, tenant, [{ action: 'read', subject: 'ErrorType' }]);
+      await reader.get('/error-types').expect(200);
+      await reader.post('/error-types', { name: unique('No') }).expect(403);
+      const nobody = await clientWith(db, app, tenant, []);
+      await nobody.get('/error-types').expect(403);
+    });
+
+    it('another tenant sees none of it and cannot change it', async () => {
+      const created = (await admin.post('/error-types', { name: unique('Mine') }).expect(201)).body;
+      const subtype = (await admin.post(`/error-types/${created.id}/subtypes`, { name: 'mine' }).expect(201)).body;
+      const { admin: stranger } = await adminOf(db, app, await seedTenant(db.platform));
+      expect((await stranger.get('/error-types?pageSize=100').expect(200)).body.items.map((item: { id: string }) => item.id)).not.toContain(created.id);
+      await stranger.get(`/error-types/${created.id}`).expect(404);
+      await stranger.patch(`/error-types/${created.id}`, { name: 'taken' }).expect(404);
+      await stranger.post(`/error-types/${created.id}/deactivate`).expect(404);
+      await stranger.get(`/error-types/${created.id}/subtypes`).expect(404);
+      await stranger.post(`/error-types/${created.id}/subtypes`, { name: 'intruder' }).expect(404);
+      await stranger.patch(`/error-types/${created.id}/subtypes/${subtype.id}`, { name: 'taken' }).expect(404);
+      expect((await admin.get(`/error-types/${created.id}`).expect(200)).body.isActive).toBe(true);
     });
   });
 });
