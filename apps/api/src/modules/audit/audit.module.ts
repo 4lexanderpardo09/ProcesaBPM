@@ -1,14 +1,7 @@
-import { Global, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AuditLogQueriesService } from './application/audit-log-queries.service.js';
-import { AuditTrail } from './application/audit-trail.js';
-import { AuditLogRepository } from './data/audit-log.repository.js';
 import { AuditLogsController } from './http/audit-logs.controller.js';
 
-/** Global so the modules that audit their actions need not import it; it exports only the writer. */
-@Global()
-@Module({
-  controllers: [AuditLogsController],
-  providers: [AuditLogRepository, AuditTrail, AuditLogQueriesService],
-  exports: [AuditTrail],
-})
+/** The query side of the trail (`GET /audit-logs`): the API only. */
+@Module({ controllers: [AuditLogsController], providers: [AuditLogQueriesService] })
 export class AuditModule {}

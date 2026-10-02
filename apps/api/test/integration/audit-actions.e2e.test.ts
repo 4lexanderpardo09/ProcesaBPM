@@ -136,6 +136,12 @@ describe('administrative actions are audited in the same transaction', () => {
     expect((await rows('calculator.config_removed'))[0]!.before).toMatchObject({ calculator: 'MEAL_ALLOWANCE' });
   });
 
+  it('report exports are recorded with the report and its filters', async () => {
+    await admin.get('/reports/summary/export?from=2026-01-01&to=2026-01-31').expect(200);
+    const exported = (await rows('report.exported')).at(-1)!;
+    expect(exported).toMatchObject({ entity_type: 'Report', entity_id: null, after: { report: 'summary', filters: { from: '2026-01-01', to: '2026-01-31' } } });
+  });
+
   it('an action refused by the database leaves no row (same transaction)', async () => {
     const before = (await rows('role.created')).length;
     await admin.post('/roles', { name: unique('Boom'), isAdmin: 'yes' }).expect(400);

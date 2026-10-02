@@ -20,6 +20,7 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { PdfInspector } from '../../../infrastructure/pdf/pdf-renderer.js';
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { FileAttachmentService } from '../../files/application/file-attachment.service.js';
 import { PdfTemplateRepository, type PdfTemplateRow } from '../data/pdf-template.repository.js';
 import { DocumentSourceValidator } from './document-source.validator.js';
@@ -40,6 +41,7 @@ export class PdfTemplatesService {
     @Inject(PdfTemplateRepository) private readonly templates: PdfTemplateRepository,
     @Inject(FileAttachmentService) private readonly attachments: FileAttachmentService,
     @Inject(DocumentSourceValidator) private readonly validator: DocumentSourceValidator,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   list(workflowId: string, query: PageQuery): Promise<Page<PdfTemplateResponse>> {
@@ -118,6 +120,7 @@ export class PdfTemplatesService {
       const row = await this.require(tx, workflowId, id);
       const key = await this.templates.storageKeyOf(tx, this.tenantId, row.fileId);
       if (key === null) throw new NotFoundError();
+      await this.audit.record(tx, { action: 'pdf_template.download_url_issued', subjectType: 'PdfTemplate', subjectId: id, after: { workflowId, name: row.name } });
       return { template: row, storageKey: key };
     });
     const signed = await this.storage.presignDownload({ key: storageKey, fileName: `${template.name}.pdf`, contentType: 'application/pdf', disposition: 'inline', expiresInSeconds: DOWNLOAD_TTL_SECONDS, now: this.clock.now() });

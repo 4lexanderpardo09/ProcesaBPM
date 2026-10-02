@@ -24,7 +24,7 @@ function service(rows: number) {
   const performance = {
     steps: async () => Array.from({ length: rows }, (_v, index) => ({ workflowId: 'w', workflowName: 'W', stepName: `S${index}`, visits: 1, onTime: 1, late: 0, noSla: 0, compliancePct: 100, avgMin: 1, medianMin: 1, p90Min: 1, avgPausedMin: 0, reprocesses: 0 })),
   } as unknown as PerformanceReportsService;
-  return { writer, exporter: new ReportExportService(performance, {} as BreakdownReportsService, writer, new TestClock('2026-09-08T14:00:00Z')) };
+  return { writer, exporter: new ReportExportService(performance, {} as BreakdownReportsService, writer, new TestClock('2026-09-08T14:00:00Z'), { withTenantTransaction: (work: (tx: object) => unknown) => work({}) } as never, { record: () => Promise.resolve() } as never) };
 }
 
 describe('ReportExportService', () => {

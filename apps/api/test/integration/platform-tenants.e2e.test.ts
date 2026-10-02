@@ -159,6 +159,8 @@ describe('platform tenant sign-up', () => {
 
       const { rows: audit } = await db.owner.query(`SELECT actor_user_id, action FROM platform_audit_logs WHERE target_tenant_id = $1`, [tenantId]);
       expect(audit).toEqual([{ actor_user_id: admin.userId, action: 'tenant.created' }]);
+      const { rows: origin } = await db.owner.query<{ ip_address: string | null }>(`SELECT ip_address FROM platform_audit_logs WHERE target_tenant_id = $1`, [tenantId]);
+      expect(origin[0]?.ip_address).toBeTruthy();
     });
 
     it('the owner accepts the invitation, signs in, sees the tenant and has full access', async () => {

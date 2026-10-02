@@ -10,8 +10,10 @@ import {
   ValidationFailedError,
 } from '@procesabpm/shared';
 import type { z } from 'zod';
+import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { SpreadsheetWriter, type Sheet } from '../../../infrastructure/spreadsheet/spreadsheet-writer.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { reportsEs as es } from '../i18n/es.js';
 import { backlogSheets, categoriesSheets, distributionSheets, incidentsSheets, rankingSheets, responsiblesSheets, rowCount, stepsSheets, summarySheets, userDetailSheets } from '../domain/report-sheets.js';
@@ -46,6 +48,8 @@ export class ReportExportService {
     @Inject(BreakdownReportsService) private readonly breakdown: BreakdownReportsService,
     @Inject(SpreadsheetWriter) private readonly writer: SpreadsheetWriter,
     @Inject(Clock) private readonly clock: Clock,
+    @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   async export(ability: AppAbility, report: ReportName, query: Query): Promise<ExportedReport> {
@@ -54,6 +58,8 @@ export class ReportExportService {
     const sheets = await this.sheetsOf(access, report, query);
     if (rowCount(sheets) > EXPORT_ROW_CAP) throw new ReportTooLargeError(EXPORT_ROW_CAP);
     const buffer = await this.writer.write([...sheets, this.filtersSheet(query)]);
+    // Recorded before the workbook is handed over: if the trail cannot be written, nothing is delivered.
+    await this.runner.withTenantTransaction((tx) => this.audit.record(tx, { action: 'report.exported', subjectType: 'Report', subjectId: null, after: { report, filters: query } }));
     return { buffer, fileName: `reporte-${report}-${this.clock.now().toISOString().slice(0, 10)}.xlsx` };
   }
 

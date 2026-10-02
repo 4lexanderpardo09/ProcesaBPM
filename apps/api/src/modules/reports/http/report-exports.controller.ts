@@ -1,6 +1,7 @@
 import { Controller, Get, Inject, Param, Query, Res, StreamableFile } from '@nestjs/common';
 import { exportReportNameSchema, type ReportName } from '@procesabpm/shared';
 import type { Response } from 'express';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { contentDisposition } from '../../../infrastructure/storage/content-disposition.js';
@@ -17,6 +18,7 @@ export class ReportExportsController {
   /** The same filters as the report itself. Needs `export Report` on top of `read Report`. */
   @RequirePermission('export', 'Report')
   @Get(':report/export')
+  @Audited('report.exported')
   async export(
     @CurrentAbility() ability: AppAbility,
     @Param('report', new ZodValidationPipe(exportReportNameSchema)) report: ReportName,

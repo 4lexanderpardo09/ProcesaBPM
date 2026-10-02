@@ -3,6 +3,7 @@ import { type DownloadUrlResponse, NotFoundError, type TicketDocumentResponse } 
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { TicketFileService } from '../../files/application/ticket-file.service.js';
 import { TicketQueryRepository } from '../data/ticket-query.repository.js';
 import { readableTickets } from './ticket-access.js';
@@ -18,6 +19,7 @@ export class TicketDocumentsService {
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(TicketQueryRepository) private readonly tickets: TicketQueryRepository,
     @Inject(TicketFileService) private readonly files: TicketFileService,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   list(ability: AppAbility, ticketId: string): Promise<TicketDocumentResponse[]> {
@@ -25,7 +27,12 @@ export class TicketDocumentsService {
   }
 
   downloadUrl(ability: AppAbility, ticketId: string, fileId: string): Promise<DownloadUrlResponse> {
-    return this.readable(ability, ticketId, (tx, tenantId) => this.files.locate(tx, tenantId, ticketId, fileId)).then((file) => this.files.signDownload(file));
+    // The access is recorded in the transaction that decided it, before any URL exists: a refused request leaves no row.
+    return this.readable(ability, ticketId, async (tx, tenantId) => {
+      const file = await this.files.locate(tx, tenantId, ticketId, fileId);
+      await this.audit.record(tx, { action: 'file.download_url_issued', subjectType: 'StoredFile', subjectId: fileId, after: { ticketId, fileName: file.originalName } });
+      return file;
+    }).then((file) => this.files.signDownload(file));
   }
 
   private readable<T>(ability: AppAbility, ticketId: string, work: (tx: TenantTransaction, tenantId: string) => Promise<T>): Promise<T> {
