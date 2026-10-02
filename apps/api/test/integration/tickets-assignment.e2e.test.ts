@@ -308,7 +308,7 @@ describe('assignment, pool, reassignment', () => {
   });
 
   describe('features the engine does not run yet', () => {
-    it('refuses to publish a workflow with a WAIT block', async () => {
+    it('refuses to publish a workflow with a WAIT block that waits for the company cutoff', async () => {
       const refusals = async (spec: FlowSpec) => {
         const category = (await world.admin.post('/categories', { name: unique('Cat') }).expect(201)).body.id;
         const subcategoryId = (await world.admin.post('/subcategories', { categoryId: category, name: unique('Sub') }).expect(201)).body.id;
@@ -324,8 +324,8 @@ describe('assignment, pool, reassignment', () => {
         const published = await world.admin.post(`${base}/publish`, {}).expect(422);
         return (published.body.error.details.errors as Array<{ code: string }>).map((problem) => problem.code);
       };
-      const wait = { steps: [{ key: 'start', type: 'START' as const }, { key: 'w', type: 'WAIT' as const, extra: { config: { mode: 'DURATION', value: 1, unit: 'BUSINESS_DAYS' } } }, { key: 'end', type: 'END' as const }], transitions: [{ from: 'start', to: 'w', type: 'DEFAULT' as const }, { from: 'w', to: 'end', type: 'DEFAULT' as const }] };
-      expect(await refusals(wait)).toContain('NOT_IMPLEMENTED_WAIT_BLOCK');
+      const wait = { steps: [{ key: 'start', type: 'START' as const }, { key: 'w', type: 'WAIT' as const, extra: { config: { mode: 'COMPANY_CUTOFF' } } }, { key: 'end', type: 'END' as const }], transitions: [{ from: 'start', to: 'w', type: 'DEFAULT' as const }, { from: 'w', to: 'end', type: 'DEFAULT' as const }] };
+      expect(await refusals(wait)).toContain('NOT_IMPLEMENTED_WAIT_COMPANY_CUTOFF');
       const ID = '0199a000-0000-7000-8000-0000000000bb';
       const blocks: Array<[StepType, Record<string, unknown>, string]> = [
         ['NOTIFICATION', { recipients: [{ kind: 'CREATOR' }], channels: ['EMAIL'], subject: 's', body: 'b' }, 'NOT_IMPLEMENTED_NOTIFICATION_BLOCK'],
