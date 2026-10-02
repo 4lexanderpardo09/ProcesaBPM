@@ -15,7 +15,7 @@ import { SlaModule } from './modules/sla/sla.module.js';
 import { WorkerLifecycle } from './worker-lifecycle.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('worker'), LoggingModule, ClockModule, DatabaseModule, StorageModule, SlaModule, DispatchModule, WaitModule, FilePurgeModule, OutboxDispatcherModule, AuthMailModule, NotificationsWorkerModule, DocumentsWorkerModule],
+  imports: [ConfigModule.forEntry('worker'), LoggingModule, ClockModule, DatabaseModule.forEntry('worker'), StorageModule, SlaModule, DispatchModule, WaitModule, FilePurgeModule, OutboxDispatcherModule, AuthMailModule, NotificationsWorkerModule, DocumentsWorkerModule],
   providers: [WorkerLifecycle],
 })
 export class WorkerModule {}
