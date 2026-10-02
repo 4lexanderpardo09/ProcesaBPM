@@ -66,7 +66,8 @@ describe('prisma/orm#30374: answers after a database error inside an interactive
         await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
         return work(tx);
       },
-      timeout === undefined ? undefined : { timeout },
+      // Many workers share a pool of one connection: waiting for it is expected, so the wait must outlast the whole suite running in parallel.
+      { maxWait: 120_000, ...(timeout === undefined ? {} : { timeout }) },
     );
 
   async function failingTransaction(prisma: PrismaClient, tenant: SeededTenant, label: string, mode: Mode, failure: Failure) {

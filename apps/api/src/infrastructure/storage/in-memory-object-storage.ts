@@ -1,13 +1,20 @@
-import { ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput } from './object-storage.js';
+import { ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput, type PutObjectInput } from './object-storage.js';
 
-/** Test double: keeps objects in memory; "uploading" is `put`, standing in for the browser's PUT. */
+/** Test double: keeps objects in memory. */
 export class InMemoryObjectStorage extends ObjectStorage {
   private readonly objects = new Map<string, Uint8Array>();
   readonly presignedUploads: PresignUploadInput[] = [];
 
-  put(key: string, content: Uint8Array): void {
+  /** Stands in for the browser's PUT in tests. */
+  seed(key: string, content: Uint8Array): void {
     if (this.objects.has(key)) throw new Error(`Object ${key} already exists`);
     this.objects.set(key, content);
+  }
+
+  async put(input: PutObjectInput): Promise<'created' | 'exists'> {
+    if (this.objects.has(input.key)) return 'exists';
+    this.objects.set(input.key, input.body);
+    return 'created';
   }
 
   has(key: string): boolean {

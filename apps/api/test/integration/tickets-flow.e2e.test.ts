@@ -153,7 +153,7 @@ describe('ticket flow (create, advance, close)', () => {
       const moved = await move(reviewer, created.body.id, purchases.transition['Send to approval']!, created.body.openVisitId, { comment: '<b>ok</b><script>x</script>' }).expect(200);
       const empty = await move(approver, created.body.id, purchases.transition.Approve!, moved.body.openVisitId, { comment: '<script>x</script>' }).expect(200);
       expect(empty.body.currentStepId).toBeDefined();
-      const comments = (await world.db.platform.query(`SELECT comment_html FROM ticket_events WHERE ticket_id = $1 AND type = 'TRANSITIONED' AND actor_id IS NOT NULL ORDER BY created_at, id`, [created.body.id])).rows.map((row) => row.comment_html);
+      const comments = (await world.db.platform.query(`SELECT comment_html FROM ticket_events WHERE ticket_id = $1 AND type = 'TRANSITIONED' AND actor_id IS NOT NULL ORDER BY seq`, [created.body.id])).rows.map((row) => row.comment_html);
       expect(comments).toEqual(['<b>ok</b>', null]);
     });
   });

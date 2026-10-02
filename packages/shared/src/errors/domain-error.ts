@@ -60,6 +60,11 @@ export const ERROR_CODES = {
   attachmentsInvalid: 'ATTACHMENTS_INVALID',
   submissionFilesLimit: 'SUBMISSION_FILES_LIMIT',
   storageUnavailable: 'STORAGE_UNAVAILABLE',
+  pdfDesignInvalid: 'PDF_DESIGN_INVALID',
+  pdfMappingInvalid: 'PDF_MAPPING_INVALID',
+  pdfTemplateInvalid: 'PDF_TEMPLATE_INVALID',
+  pdfRenderFailed: 'PDF_RENDER_FAILED',
+  documentSourceInUse: 'DOCUMENT_SOURCE_IN_USE',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -471,5 +476,47 @@ export class SubmissionFilesLimitError extends DomainError {
 export class StorageUnavailableError extends DomainError {
   constructor(options?: { cause?: unknown }) {
     super(ERROR_CODES.storageUnavailable, 'The file storage is not available', options);
+  }
+}
+
+export interface PdfProblemDetail {
+  readonly code: string;
+  readonly path: string;
+  readonly detail?: string | undefined;
+}
+
+/** A designer format does not fit the workflow it belongs to (or is not a valid design at all). */
+export class PdfDesignInvalidError extends DomainError {
+  constructor(readonly problems: readonly PdfProblemDetail[]) {
+    super(ERROR_CODES.pdfDesignInvalid, 'The PDF format is not valid', { details: { problems } });
+  }
+}
+
+export class PdfMappingInvalidError extends DomainError {
+  constructor(readonly problems: readonly PdfProblemDetail[]) {
+    super(ERROR_CODES.pdfMappingInvalid, 'The PDF field mapping is not valid', { details: { problems } });
+  }
+}
+
+export type PdfTemplateRejection = 'NOT_PDF' | 'ENCRYPTED' | 'TOO_MANY_PAGES' | 'TOO_COMPLEX' | 'MALFORMED' | 'PAGE_SIZE';
+
+/** The uploaded PDF cannot be used as a template. */
+export class PdfTemplateInvalidError extends DomainError {
+  constructor(readonly reason: PdfTemplateRejection) {
+    super(ERROR_CODES.pdfTemplateInvalid, 'The PDF cannot be used as a template', { details: { reason } });
+  }
+}
+
+/** The preview could not be drawn (nothing is stored). */
+export class PdfRenderFailedError extends DomainError {
+  constructor(options?: { cause?: unknown }) {
+    super(ERROR_CODES.pdfRenderFailed, 'The PDF could not be generated', options);
+  }
+}
+
+/** A format or template that a workflow still uses: deactivate it instead of deleting it. */
+export class DocumentSourceInUseError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.documentSourceInUse, 'A workflow document still uses it: deactivate it instead');
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentDisposition } from './s3-object-storage.js';
+import { contentDisposition } from './content-disposition.js';
 
 describe('contentDisposition', () => {
   it('quotes a plain name', () => {

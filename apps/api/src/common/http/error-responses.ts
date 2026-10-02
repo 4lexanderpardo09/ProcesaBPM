@@ -66,6 +66,11 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.attachmentsInvalid]: { status: 422, message: 'Some attachments cannot be attached' },
   [ERROR_CODES.submissionFilesLimit]: { status: 422, message: 'Too many files or too many bytes in one submission' },
   [ERROR_CODES.storageUnavailable]: { status: 503, message: 'The file storage is not available' },
+  [ERROR_CODES.pdfDesignInvalid]: { status: 422, message: 'The PDF format is not valid' },
+  [ERROR_CODES.pdfMappingInvalid]: { status: 422, message: 'The PDF field mapping is not valid' },
+  [ERROR_CODES.pdfTemplateInvalid]: { status: 422, message: 'The PDF cannot be used as a template' },
+  [ERROR_CODES.pdfRenderFailed]: { status: 422, message: 'The PDF could not be generated' },
+  [ERROR_CODES.documentSourceInUse]: { status: 409, message: 'A workflow document still uses it: deactivate it instead' },
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },
 };

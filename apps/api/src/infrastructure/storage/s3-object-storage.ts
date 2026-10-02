@@ -1,7 +1,8 @@
 import { DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { StorageUnavailableError } from '@procesabpm/shared';
-import { ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput } from './object-storage.js';
+import { contentDisposition } from './content-disposition.js';
+import { ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput, type PutObjectInput } from './object-storage.js';
 
 export interface S3StorageSettings {
   readonly endpoint: string;
@@ -60,6 +61,16 @@ export class S3ObjectStorage extends ObjectStorage {
     return { url, expiresAt: new Date(input.now.getTime() + input.expiresInSeconds * 1000) };
   }
 
+  async put(input: PutObjectInput): Promise<'created' | 'exists'> {
+    try {
+      await this.client.send(new PutObjectCommand({ Bucket: this.settings.bucket, Key: input.key, Body: input.body, ContentType: input.contentType, ContentLength: input.body.length, IfNoneMatch: '*' }));
+      return 'created';
+    } catch (error) {
+      if ((error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode === 412) return 'exists';
+      throw new StorageUnavailableError({ cause: error });
+    }
+  }
+
   async head(key: string): Promise<{ sizeBytes: number } | null> {
     try {
       const result = await this.client.send(new HeadObjectCommand({ Bucket: this.settings.bucket, Key: key }));
@@ -103,11 +114,4 @@ export class S3ObjectStorage extends ObjectStorage {
     }
     return { failed };
   }
-}
-
-/** RFC 6266 / 5987: an ASCII fallback plus the UTF-8 name, never trusting the stored name's characters. */
-export function contentDisposition(disposition: 'inline' | 'attachment', fileName: string): string {
-  const fallback = fileName.replace(/[^\x20-\x7e]|["\\%;]/g, '_');
-  const encoded = encodeURIComponent(fileName).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }

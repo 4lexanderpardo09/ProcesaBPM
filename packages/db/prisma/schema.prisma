@@ -1791,6 +1791,8 @@ model TicketEvent {
   commentHtml  String?         @map("comment_html")
   data         Json?
   createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Assigned by the database (identity): the order of the timeline, whatever the clocks of the API instances say.
+  seq          BigInt          @default(autoincrement())
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ticket     Ticket      @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
@@ -1803,6 +1805,7 @@ model TicketEvent {
 
   @@id([tenantId, id])
   @@index([tenantId, ticketId, createdAt])
+  @@index([tenantId, ticketId, seq])
   @@index([tenantId, actorId, createdAt(sort: Desc)])
   @@index([tenantId, assigneeId])
   @@index([tenantId, stepId])
@@ -2199,8 +2202,11 @@ model PdfTemplate {
   name        String
   pages       Json
   hasAcroform Boolean  @default(false) @map("has_acroform")
+  /// The AcroForm fields found in the PDF when it was registered: `[{name, type, page, rect}]`.
+  acroformFields Json  @default("[]") @map("acroform_fields")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant     Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workflow   Workflow               @relation(fields: [tenantId, workflowId], references: [tenantId, id], onDelete: Cascade)
@@ -2276,7 +2282,8 @@ model WorkflowDocument {
   kind       WorkflowDocumentKind
   formatId   String?              @map("format_id") @db.Uuid
   templateId String?              @map("template_id") @db.Uuid
-  moment     DocumentMoment
+  /// NULL: produced only by a DOCUMENT block.
+  moment     DocumentMoment?
   isActive   Boolean              @default(true) @map("is_active")
 
   tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)

@@ -41,6 +41,13 @@ describe('S3ObjectStorage against a real S3 server', () => {
     expect(Buffer.from(await storage.read(key, 1000)).toString()).toBe('%PDF-1.4 hello');
   });
 
+  it('put writes server-side once and reports an existing key without overwriting it', async () => {
+    const key = newKey();
+    expect(await storage.put({ key, body: pdf, contentType: 'application/pdf' })).toBe('created');
+    expect(await storage.put({ key, body: new TextEncoder().encode('%PDF-other'), contentType: 'application/pdf' })).toBe('exists');
+    expect(Buffer.from(await storage.read(key, 1000)).toString()).toBe('%PDF-1.4 hello');
+  });
+
   it('refuses an upload whose length differs from the signed one', async () => {
     const key = newKey();
     const response = await upload(key, new TextEncoder().encode('%PDF-1.4 hello, but much longer'), pdf.length);

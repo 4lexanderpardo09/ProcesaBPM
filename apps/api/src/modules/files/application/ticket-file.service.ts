@@ -30,6 +30,7 @@ export class TicketFileService {
       eventId: row.eventId,
       stepId: row.stepId,
       fieldCode: row.fieldCode,
+      version: row.version,
       isCurrent: row.isCurrent,
       createdAt: row.createdAt.toISOString(),
       file: toStoredFileResponse(row.file),

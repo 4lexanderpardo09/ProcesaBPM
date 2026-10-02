@@ -76,6 +76,7 @@ export interface TicketDocumentResponse {
   readonly eventId: string | null;
   readonly stepId: string | null;
   readonly fieldCode: string | null;
+  readonly version: number;
   readonly isCurrent: boolean;
   readonly createdAt: string;
   readonly file: StoredFileResponse;

@@ -5,7 +5,7 @@ import type { ExternalEffectHandler, TransactionalHandler } from './outbox-handl
 @Injectable()
 export class OutboxHandlerRegistry {
   private readonly transactional = new Map<string, TransactionalHandler<never>[]>();
-  private readonly external = new Map<string, ExternalEffectHandler<never, never>>();
+  private readonly external = new Map<string, ExternalEffectHandler<never, never, never>>();
 
   registerTransactional<P>(handler: TransactionalHandler<P>): void {
     const handlers = this.transactional.get(handler.type) ?? [];
@@ -14,19 +14,19 @@ export class OutboxHandlerRegistry {
   }
 
   /** One external effect per type: two would each send their own e-mail on every retry of the other. */
-  registerExternal<P, M>(handler: ExternalEffectHandler<P, M>): void {
+  registerExternal<P, M, R>(handler: ExternalEffectHandler<P, M, R>): void {
     const key = `${handler.scope}:${handler.type}`;
     if (this.external.has(key) || (handler.scope === 'tenant' && this.transactional.has(handler.type))) {
       throw new Error(`An event of type ${handler.type} already has a handler with an external effect`);
     }
-    this.external.set(key, handler as ExternalEffectHandler<never, never>);
+    this.external.set(key, handler as unknown as ExternalEffectHandler<never, never, never>);
   }
 
   transactionalFor(type: string): readonly TransactionalHandler<never>[] {
     return this.transactional.get(type) ?? [];
   }
 
-  externalFor(scope: 'tenant' | 'platform', type: string): ExternalEffectHandler<never, never> | undefined {
+  externalFor(scope: 'tenant' | 'platform', type: string): ExternalEffectHandler<never, never, never> | undefined {
     return this.external.get(`${scope}:${type}`);
   }
 
