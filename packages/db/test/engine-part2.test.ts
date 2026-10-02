@@ -87,7 +87,7 @@ describe('parallel cancellation and random dispatch', () => {
       const paused = await dispatchTicket(tenant);
       await db.platform.query(`UPDATE ticket_sla_clocks SET paused_at = now() WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, paused.clockId]);
       const done = await dispatchTicket(tenant);
-      await db.platform.query(`UPDATE ticket_sla_clocks SET completed_at = now() WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, done.clockId]);
+      await db.platform.query(`UPDATE ticket_sla_clocks SET completed_at = now(), completion_reason = 'STEP_EXITED' WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, done.clockId]);
       const steps = (await claim()).map((row) => row.out_step_id);
       for (const ticket of [assigned, paused, done]) expect(steps).not.toContain(ticket.taskStepId);
     });

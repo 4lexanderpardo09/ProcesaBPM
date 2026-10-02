@@ -61,7 +61,7 @@ describe('claim_overdue_sla_clocks', () => {
   it('skips clocks that are not due yet, completed or paused', async () => {
     const future = await seedClock(tenantA, '1 hour');
     const paused = await seedClock(tenantA, '-1 hour', ', paused_at|, now()');
-    const completed = await seedClock(tenantA, '-1 hour', ', completed_at, result|, now(), \'LATE\'');
+    const completed = await seedClock(tenantA, '-1 hour', ', completed_at, result, completion_reason|, now(), \'LATE\', \'STEP_EXITED\'');
     await claim();
     for (const { clockId } of [future, paused, completed]) {
       expect(await alerted(clockId)).toBeNull();

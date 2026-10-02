@@ -1841,6 +1841,10 @@ model TicketStepVisit {
   pausedMinutes    Int        @default(0) @map("paused_minutes")
   businessMinutes  Int?       @map("business_minutes")
   result           SlaResult?
+  /// A ticket parked on a WAIT block is woken up at this time (no SLA, no clocks, no assignees).
+  resumeAt         DateTime?  @map("resume_at") @db.Timestamptz(3)
+  /// The wake-up event was queued at this time (once).
+  resumeEnqueuedAt DateTime?  @map("resume_enqueued_at") @db.Timestamptz(3)
 
   tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ticket         Ticket           @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
