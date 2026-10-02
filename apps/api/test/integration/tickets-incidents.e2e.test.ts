@@ -5,6 +5,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, simpleFlow, SUPERVISOR_GRANTS, TicketWorld, unique, WORKER_GRANTS } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -144,7 +145,7 @@ describe('incidents (novedades): pause, hand over, resolve', () => {
       expect((await resolve(worker, asOpener.id, ids.get(asOpener.id)!)).status).toBe(200);
       expect((await resolve(supervisor, asBoss.id, ids.get(asBoss.id)!)).status).toBe(200);
       const denied = await resolve(stranger, refused.id, ids.get(refused.id)!);
-      expect(denied.status).toBe(404);
+      expectStatus(denied, 404);
       const readerOnly = await world.member([grant('read_all')]);
       expect((await resolve(readerOnly, refused.id, ids.get(refused.id)!)).status).toBe(403);
     });

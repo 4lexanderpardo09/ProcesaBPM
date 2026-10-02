@@ -5,6 +5,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, TicketWorld, WORKER_GRANTS, unique } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -164,7 +165,7 @@ describe('ticket flow (create, advance, close)', () => {
       const send = purchases.transition['Send to approval']!;
       expect((await move(approver, created.body.id, send, created.body.openVisitId)).status).toBe(404);
       const requesterTry = await move(requester, created.body.id, send, created.body.openVisitId);
-      expect(requesterTry.status).toBe(403);
+      expectStatus(requesterTry, 403);
       await move(reviewer, created.body.id, send, created.body.openVisitId).expect(200);
     });
 

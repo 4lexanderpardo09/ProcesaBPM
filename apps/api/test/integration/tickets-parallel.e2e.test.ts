@@ -5,6 +5,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type FlowSpec, type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, SUPERVISOR_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -82,7 +83,7 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
     it('resolves a position to its least loaded holder, repeats a person once, and a signer nobody can be fails everything', async () => {
       const position = await world.position();
       const [busy, free] = [await world.member(WORKER_GRANTS, { positionId: position }), await world.member(WORKER_GRANTS, { positionId: position })];
-      await create(await publishFlow(world.admin, spec([signer(busy)], { sla: false }))).then((r) => expect(r.status).toBe(201));
+      await create(await publishFlow(world.admin, spec([signer(busy)], { sla: false }))).then((r) => expectStatus(r, 201));
       const positional = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: position }, { signerType: 'CREATOR' }, signer(a), signer(a)]));
       const ticket = (await create(positional)).body;
       const people = (await tasks(ticket.id)).map((task) => task.user_id).sort();
@@ -101,7 +102,7 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
     it('everybody must sign: each signature closes only the signer\'s clock, the last one advances the step', async () => {
       const ticket = (await create(flow)).body;
       const first = await sign(a, ticket, { comment: 'Fine' });
-      expect(first.status).toBe(200);
+      expectStatus(first, 200);
       expect(first.body).toMatchObject({ currentStepId: flow.step.sign, openVisitId: ticket.openVisitId });
       expect(await taskStatus(ticket.id, a)).toBe('SIGNED');
       expect(await world.assignees(ticket.id)).toEqual([{ user_id: b.userId, type: 'PARALLEL' }]);
@@ -208,9 +209,9 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
     it('a supervisor can move a parallel step on, cancelling what is pending; a signer cannot use transition', async () => {
       const ticket = (await create(flow)).body;
       const asSigner = await a.client.post(`/tickets/${ticket.id}/transition`, { transitionId: flow.transition.Signed, visitId: ticket.openVisitId });
-      expect(asSigner.status).toBe(403);
+      expectStatus(asSigner, 403);
       const moved = await supervisor.client.post(`/tickets/${ticket.id}/transition`, { transitionId: flow.transition.Signed, visitId: ticket.openVisitId });
-      expect(moved.status).toBe(200);
+      expectStatus(moved, 200);
       expect(moved.body.currentStepId).toBe(flow.step.next);
       expect((await tasks(ticket.id)).map((task) => task.status)).toEqual(['CANCELLED', 'CANCELLED']);
       expect((await world.events(ticket.id)).find((event) => event.type === 'TRANSITIONED' && event.actor_id === supervisor.userId)?.data).toMatchObject({ parallelOverride: true });

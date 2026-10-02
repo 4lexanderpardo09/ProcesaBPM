@@ -5,6 +5,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type Member, unique, publishFlow, type PublishedFlow, REQUESTER_GRANTS, simpleFlow, SUPERVISOR_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -232,7 +233,7 @@ describe('reading tickets: per-record authorization, listings, timeline and tena
 
     it('a transition id of another tenant\'s workflow is not one of this ticket\'s', async () => {
       const refused = await creator.client.post(`/tickets/${ticketId}/transition`, { visitId, transitionId: foreignFlow.transition.Done });
-      expect(refused.status).toBe(403);
+      expectStatus(refused, 403);
       const asAssignee = await assignee.client.post(`/tickets/${ticketId}/transition`, { visitId, transitionId: foreignFlow.transition.Done });
       expect([asAssignee.status, asAssignee.body.error.code]).toEqual([422, 'INVALID_TRANSITION']);
     });

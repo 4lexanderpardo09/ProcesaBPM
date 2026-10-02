@@ -7,6 +7,7 @@ import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type Member, publishFlow, type PublishedFlow, simpleFlow, TicketWorld, unique } from '../support/ticket-world.js';
 import { MailWorker } from '../support/worker-mail.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -306,7 +307,7 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
 
     it('needs a signed-in user', async () => {
       const response = await (await import('supertest')).default(app.getHttpServer()).get('/notifications');
-      expect(response.status).toBe(401);
+      expectStatus(response, 401);
     });
   });
 

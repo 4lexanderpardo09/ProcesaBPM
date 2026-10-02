@@ -7,6 +7,7 @@ import { createTestApp } from '../../support/create-test-app.js';
 import { declare, pdf, png, putToStorage, reserve, sha256Of, uploadFile } from '../../support/file-uploads.js';
 import { useTestEnvironment } from '../../support/test-environment.js';
 import { type Member, TicketWorld, unique } from '../../support/ticket-world.js';
+import { expectStatus } from '../../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -185,10 +186,10 @@ describe('uploads: reserve, upload, confirm, quota', () => {
       // The tenant has two members (the administrator and this one) but no per-user storage.
       expect((await reserveBytes(1000)).body.quota).toEqual({ overLimit: false });
       const margin = await reserveBytes(50);
-      expect(margin.status).toBe(201);
+      expectStatus(margin, 201);
       expect(margin.body.quota).toEqual({ overLimit: true });
       const refused = await reserveBytes(1);
-      expect(refused.status).toBe(422);
+      expectStatus(refused, 422);
       expect(refused.body.error.code).toBe('STORAGE_QUOTA_EXCEEDED');
       expect((await quotaUsage()).bytes_reserved).toBe('1050');
     });
