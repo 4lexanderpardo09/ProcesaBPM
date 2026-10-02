@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3';
-import { MinioContainer, type StartedMinioContainer } from '@testcontainers/minio';
+import { GenericContainer, type StartedTestContainer, Wait } from 'testcontainers';
 import type { TestProject } from 'vitest/node';
 
 export interface TestStorageSettings {
@@ -17,27 +17,39 @@ declare module 'vitest' {
   }
 }
 
-const MINIO_IMAGE = 'minio/minio:RELEASE.2025-09-07T16-13-09Z';
+const S3_IMAGE = 'chrislusf/seaweedfs:4.48';
+const S3_PORT = 8333;
+const S3_CREDENTIALS = { accessKeyId: 'testkey', secretAccessKey: 'testsecret' } as const;
 
-let container: StartedMinioContainer | undefined;
+let container: StartedTestContainer | undefined;
 
 /**
- * Real MinIO: Testcontainers when Docker is available; otherwise (cloud sandbox) an already running server
- * given by TEST_S3_ENDPOINT, TEST_S3_ACCESS_KEY and TEST_S3_SECRET_KEY. Every run gets its own bucket.
+ * A real S3-compatible server (SeaweedFS: MinIO stopped publishing images and binaries). Testcontainers when Docker
+ * is available; otherwise (cloud sandbox) an already running server given by TEST_S3_ENDPOINT, TEST_S3_ACCESS_KEY and
+ * TEST_S3_SECRET_KEY. Every run gets its own bucket. The server must honour `If-None-Match: *` on a presigned PUT.
  */
 export async function setupTestStorage(project: TestProject): Promise<void> {
   const settings = process.env.TEST_S3_ENDPOINT ? fromEnvironment() : await startContainer();
-  await new S3Client({
-    region: settings.region,
-    endpoint: settings.endpoint,
-    forcePathStyle: true,
-    credentials: { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey },
-  }).send(new CreateBucketCommand({ Bucket: settings.bucket }));
+  await createBucket(settings);
   project.provide('storage', settings);
 }
 
 export async function teardownTestStorage(): Promise<void> {
   await container?.stop();
+}
+
+/** The server answers a few seconds after its port opens, so the first attempts may fail. */
+async function createBucket(settings: TestStorageSettings): Promise<void> {
+  const client = new S3Client({ region: settings.region, endpoint: settings.endpoint, forcePathStyle: true, credentials: { accessKeyId: settings.accessKeyId, secretAccessKey: settings.secretAccessKey } });
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await client.send(new CreateBucketCommand({ Bucket: settings.bucket }));
+      return;
+    } catch (error) {
+      if (attempt >= 30) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
 }
 
 const newBucket = (): string => `test-${randomUUID()}`;
@@ -47,18 +59,17 @@ function fromEnvironment(): TestStorageSettings {
     endpoint: process.env.TEST_S3_ENDPOINT!,
     region: 'us-east-1',
     bucket: newBucket(),
-    accessKeyId: process.env.TEST_S3_ACCESS_KEY ?? 'minioadmin',
-    secretAccessKey: process.env.TEST_S3_SECRET_KEY ?? 'minioadmin',
+    accessKeyId: process.env.TEST_S3_ACCESS_KEY ?? 'testkey',
+    secretAccessKey: process.env.TEST_S3_SECRET_KEY ?? 'testsecret',
   };
 }
 
 async function startContainer(): Promise<TestStorageSettings> {
-  container = await new MinioContainer(MINIO_IMAGE).start();
-  return {
-    endpoint: container.getConnectionUrl(),
-    region: 'us-east-1',
-    bucket: newBucket(),
-    accessKeyId: container.getUsername(),
-    secretAccessKey: container.getPassword(),
-  };
+  container = await new GenericContainer(S3_IMAGE)
+    .withCommand(['mini', '-dir=/data', `-s3.port=${S3_PORT}`])
+    .withEnvironment({ AWS_ACCESS_KEY_ID: S3_CREDENTIALS.accessKeyId, AWS_SECRET_ACCESS_KEY: S3_CREDENTIALS.secretAccessKey })
+    .withExposedPorts(S3_PORT)
+    .withWaitStrategy(Wait.forListeningPorts())
+    .start();
+  return { endpoint: `http://${container.getHost()}:${container.getMappedPort(S3_PORT)}`, region: 'us-east-1', bucket: newBucket(), ...S3_CREDENTIALS };
 }

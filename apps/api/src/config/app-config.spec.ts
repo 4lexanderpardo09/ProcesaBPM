@@ -10,8 +10,8 @@ const valid = {
   JWT_SECRET: 'a-test-secret-of-at-least-32-bytes!!',
   STORAGE_ENDPOINT: 'http://localhost:9000',
   STORAGE_BUCKET: 'procesabpm',
-  STORAGE_ACCESS_KEY_ID: 'minioadmin',
-  STORAGE_SECRET_ACCESS_KEY: 'minioadmin',
+  STORAGE_ACCESS_KEY_ID: 'testkey',
+  STORAGE_SECRET_ACCESS_KEY: 'testkey',
 };
 const workerUrl = 'postgresql://worker:secret@localhost:5432/procesabpm';
 

@@ -14,7 +14,7 @@ ProcesaBPM/
 │   └── shared/           # 🚧 en curso: lógica de dominio pura (engine/business-time, engine/conditions, errors); falta contracts, workflow, formulas, calculators, permissions
 ├── docs/                 # documentación (español)
 ├── scripts/              # cloud-setup.sh y utilidades
-├── docker-compose.yml    # desarrollo: postgres 18, minio, redis, mailpit
+├── docker-compose.yml    # desarrollo: postgres 18, seaweedfs (S3), redis, mailpit
 └── pnpm-workspace.yaml
 ```
 **Dependencias permitidas:** `web → shared`; `api → shared, db`; `shared → (nada del proyecto)`; `db → (nada del proyecto)`. El front **nunca** importa `db` ni `api`.
@@ -46,7 +46,7 @@ apps/api/
 │   │                            #   filtro de errores (mapea SQLSTATE → HTTP), paginación, logger con tenant_id
 │   ├── infrastructure/          # adaptadores técnicos, sin reglas de negocio
 │   │   ├── database/            #   PrismaService + extensión de contexto de tenant + helper de transacción
-│   │   ├── storage/             #   StorageProvider S3-compatible (MinIO/R2)
+│   │   ├── storage/             #   StorageProvider S3-compatible (SeaweedFS/R2)
 │   │   ├── queue/               #   BullMQ + outbox dispatcher
 │   │   ├── mail/                #   proveedor de correo
 │   │   ├── crypto/              #   AES-256-GCM (secretos de webhooks y MFA)
@@ -144,7 +144,7 @@ Reglas:
 | Componentes | Vitest + Testing Library | `*.test.tsx` junto al componente |
 | Flujos completos en el navegador | Playwright | `apps/web/e2e` |
 | Base de datos | Vitest + Testcontainers / `TEST_DATABASE_URL` | `packages/db/test` ✅ |
-| Almacenamiento S3 | MinIO real: Testcontainers, o sin Docker `TEST_S3_ENDPOINT` (+ `TEST_S3_ACCESS_KEY`/`TEST_S3_SECRET_KEY`); `scripts/cloud-setup.sh` compila MinIO con Go (no hay binarios) y lo arranca en `:9000` | `apps/api/test/integration/files` ✅ |
+| Almacenamiento S3 | SeaweedFS real (imagen `chrislusf/seaweedfs:4.48`) con Testcontainers, o sin Docker `TEST_S3_ENDPOINT` (+ `TEST_S3_ACCESS_KEY`/`TEST_S3_SECRET_KEY`); `scripts/cloud-setup.sh` lo compila con Go y lo arranca en `:8333`. El servidor debe respetar `If-None-Match: *` en un PUT prefirmado | `apps/api/test/integration/files` ✅ |
 
 ## 6. Orden de construcción sugerido
 1. `packages/shared` (contratos base + `business-time` + `conditions` con sus pruebas). **Hecho:** `business-time`, `conditions` y `errors` (130 pruebas unitarias); faltan los contratos zod.

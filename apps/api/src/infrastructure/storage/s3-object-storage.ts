@@ -22,7 +22,7 @@ const isNotFound = (error: unknown): boolean => {
   return name === 'NotFound' || name === 'NoSuchKey' || status === 404;
 };
 
-/** Adapter for any S3-compatible service (MinIO, Cloudflare R2, AWS S3). */
+/** Adapter for any S3-compatible service (SeaweedFS, MinIO, Cloudflare R2, AWS S3). */
 export class S3ObjectStorage extends ObjectStorage {
   private readonly client: S3Client;
   private readonly signer: S3Client;

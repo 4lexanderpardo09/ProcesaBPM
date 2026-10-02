@@ -44,7 +44,7 @@ Recomendación: el SaaS se construye como **proyecto nuevo con un modelo de dato
 | Retención | Los archivos **se guardan siempre**: el borrado es solo lógico, sin purga. |
 | Cuota | Cuota por tenant según su plan (**tabla aprobada**, §7.4.2). Los PDFs del sistema **cuentan**, los borrados **cuentan** y hay **5 % de gracia**. |
 | Reportes de SLA | Miden **ambos**: el SLA de cada responsable y el tiempo total del paso. |
-| Proveedor de archivos | Aún no hay. Se programa contra la API S3, en desarrollo se usa MinIO y en producción se recomienda Cloudflare R2 (§7.4.3). |
+| Proveedor de archivos | Aún no hay. Se programa contra la API S3, en desarrollo se usa SeaweedFS (MinIO dejó de publicar imágenes y binarios) y en producción se recomienda Cloudflare R2 (§7.4.3). |
 | Despliegue | **Imágenes Docker**, sin atarse a ningún hosting (se elige después): ver §9. |
 | Nombre del producto | **ProcesaBPM**. |
 | Planos | Función **estándar** del SaaS (no es un complemento de pago). |
@@ -426,7 +426,7 @@ Respondidas el 2026-09-30 (segunda ronda): vencimiento en días hábiles, pausa 
   - Las imágenes y los PDF se sirven con `Content-Type` correcto y `X-Content-Type-Options: nosniff`; el resto como descarga (`attachment`).
 - **Borrado (decidido: se guardan siempre):** solo borrado lógico (`deleted_at`) y el objeto nunca se elimina del bucket. Excepción técnica: los `pendiente` que nunca se confirmaron (subidas abandonadas) sí se purgan a las 24 h, porque no pertenecen a nada. Para bajar costos más adelante, S3 permite una regla de ciclo de vida que pasa los objetos viejos a una clase de almacenamiento más barata.
 - **Descarga:** siempre por un endpoint que valida el acceso al ticket (S1) y responde con una **URL firmada de 1 a 5 minutos**. `Content-Disposition` con `filename*=UTF-8''…` (RFC 5987).
-- **Un solo `StorageProvider`** (`put/get/signedUrl/delete/exists`) sobre S3-compatible: **MinIO en desarrollo** para tener paridad con producción y sin modo "disco local" ni rutas absolutas. pdf-lib trabaja siempre con buffers.
+- **Un solo `StorageProvider`** (`put/get/signedUrl/delete/exists`) sobre S3-compatible: **SeaweedFS en desarrollo** para tener paridad con producción y sin modo "disco local" ni rutas absolutas. pdf-lib trabaja siempre con buffers.
 - **Cuota por tenant**: ver §7.4.
 
 ### 7.3 Documentos PDF: dos mecanismos (decisión 0.1)
@@ -504,10 +504,10 @@ Lo que muestra el mercado: (1) el plan gratis o de entrada da **2 a 5 GB**; (2) 
 
 #### 7.4.3 Proveedor de almacenamiento (aún no hay ninguno contratado)
 - **El código no se casa con ningún proveedor:** se programa contra la **API S3** (`@aws-sdk/client-s3`, ya usada hoy), que hablan S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces y Wasabi. Cambiar de proveedor es cambiar 4 variables de entorno (`STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`) y copiar los objetos (`rclone sync`).
-- **Desarrollo: MinIO en Docker** (gratis, local, S3-compatible), levantado con el `docker-compose` junto a PostgreSQL. Así el entorno local se comporta igual que producción, y se elimina el modo "disco local".
+- **Desarrollo: SeaweedFS en Docker** (`chrislusf/seaweedfs`, versión fija; MinIO ya no publica imágenes) (gratis, local, S3-compatible), levantado con el `docker-compose` junto a PostgreSQL. Así el entorno local se comporta igual que producción, y se elimina el modo "disco local".
 - **Producción, recomendado: Cloudflare R2** para empezar. Da 10 GB/mes gratis, luego USD 0,015/GB-mes, **no cobra la descarga** (importante con las URLs firmadas), es compatible con S3 y se crea con tarjeta en minutos. Alternativa más barata a gran escala: Backblaze B2 (USD 0,007/GB). S3 solo si el resto de la infraestructura termina en AWS.
 - **Datos personales (Ley 1581 de Colombia):** los adjuntos llevan datos personales (cédulas, soportes). R2 y B2 guardan fuera de Colombia, como también AWS, que no tiene región en Colombia. Hay que declararlo en la política de tratamiento de datos y en el contrato con el cliente (transferencia/transmisión internacional). No bloquea la elección, pero debe quedar escrito.
-- **Momento de la decisión:** no hace falta contratar nada hasta el primer despliegue; hasta entonces todo corre con MinIO.
+- **Momento de la decisión:** no hace falta contratar nada hasta el primer despliegue; hasta entonces todo corre con SeaweedFS.
 
 ---
 
@@ -560,7 +560,7 @@ El hosting no está definido; por eso todo se empaqueta en **imágenes Docker** 
 Imágenes versionadas por **tag de git/semver** (no solo `latest`), construidas y escaneadas (p. ej. Trivy) en CI y publicadas en un registro (GitHub Container Registry, gratis para empezar).
 
 ### 9.2 Servicios de apoyo
-- **Desarrollo (`docker-compose.yml`)**: `postgres:18`, `minio` (+ creación del bucket al arrancar), `redis` (colas BullMQ, caché de permisos, adaptador de WebSocket) y `mailpit` (para ver los correos sin enviarlos).
+- **Desarrollo (`docker-compose.yml`)**: `postgres:18`, `seaweedfs` (`weed mini`, S3 en el puerto 8333; + creación del bucket al arrancar), `redis` (colas BullMQ, caché de permisos, adaptador de WebSocket) y `mailpit` (para ver los correos sin enviarlos).
 - **Producción**: los mismos servicios, pero **gestionados** cuando el hosting lo ofrezca (PostgreSQL gestionado con backups y PITR, Redis gestionado, R2/B2 para archivos). Si al principio es un VPS, pueden correr en el mismo Compose con volúmenes y backups programados (`pg_dump` diario a R2).
 
 ### 9.3 Reglas para que la imagen sea portable

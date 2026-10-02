@@ -178,7 +178,7 @@ Propuesta base para discutir:
 Ya se creó la raíz del monorepo (`package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`) y `packages/db`, porque la BD lo necesitaba. Si prefieres otra estructura, se mueve sin problema.
 - Monorepo con pnpm workspaces + Turborepo: `apps/api` (NestJS + Prisma), `apps/web` (React + Vite + React Flow), `packages/shared` (tipos, esquemas zod, motor de SLA y fórmulas compartidos).
 - CI con GitHub Actions: lint, typecheck, tests (incluido el **test de fuga entre tenants**) y build de imágenes Docker en cada PR.
-- `docker-compose` de desarrollo: PostgreSQL 18, MinIO, Redis y Mailpit.
+- `docker-compose` de desarrollo: PostgreSQL 18, SeaweedFS (S3), Redis y Mailpit.
 
 ### 1.3 Verificación técnica antes de escribir código
 - [x] Issue de Prisma [#30374](https://github.com/prisma/orm/issues/30374): **no se reproduce en 7.10.0** (2026-10-01); se fija la versión exacta 7.10.0, la prueba de concepto queda en el CI y el runner de transacciones verifica el contexto fijado. Detalle y regla para subir de versión en [base-de-datos.md §13.3](base-de-datos.md). El 8.0 RC solo existe para el CLI (`prisma@8.0.0-rc.19`); el cliente y el adaptador no tienen versión 8.0.x en npm (solo `8.1.0-dev.*`), así que la prueba contra el 8.0 queda pendiente hasta que salga el 8.0 estable.

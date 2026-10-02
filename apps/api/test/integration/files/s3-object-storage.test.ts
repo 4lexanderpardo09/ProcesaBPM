@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { StorageUnavailableError } from '@procesabpm/shared';
 import { S3ObjectStorage } from '../../../src/infrastructure/storage/s3-object-storage.js';
 
-describe('S3ObjectStorage against a real MinIO', () => {
+describe('S3ObjectStorage against a real S3 server', () => {
   const settings = inject('storage');
   const storage = new S3ObjectStorage({ ...settings, forcePathStyle: true });
   const pdf = new TextEncoder().encode('%PDF-1.4 hello');
