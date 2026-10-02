@@ -9,6 +9,8 @@ export interface VisitPlan {
   readonly sla: SlaTerms;
   readonly calendarId: string | null;
   readonly dueAt: Date | null;
+  /** A visit to a WAIT block: the ticket stays parked until this moment (no SLA, clocks or assignees). */
+  readonly resumeAt?: Date;
 }
 
 export interface ClockPlan {
@@ -94,7 +96,8 @@ export interface FieldWrite {
  */
 export interface TicketMutation {
   readonly at: Date;
-  readonly actorId: string;
+  /** `null` when the system moves the ticket (a WAIT block that elapsed). */
+  readonly actorId: string | null;
   readonly fieldWrites: readonly FieldWrite[];
   readonly closing?: { readonly visit: ClosedVisit; readonly clocks: readonly ClosedClock[] };
   readonly arrival?: ArrivalPlan;

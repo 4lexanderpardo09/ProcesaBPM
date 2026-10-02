@@ -11,6 +11,7 @@ import { CommentTicketService } from './application/comment-ticket.service.js';
 import { CreateTicketService } from './application/create-ticket.service.js';
 import { DispatchStepService } from './application/dispatch-step.service.js';
 import { ParallelTaskService } from './application/parallel-task.service.js';
+import { ResumeWaitService } from './application/resume-wait.service.js';
 import { ReopenTicketService } from './application/reopen-ticket.service.js';
 import { OpenIncidentService } from './application/open-incident.service.js';
 import { ResolveIncidentService } from './application/resolve-incident.service.js';
@@ -56,7 +57,8 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     ReopenTicketService,
     ParallelTaskService,
     DispatchStepService,
+    ResumeWaitService,
   ],
-  exports: [CreateTicketService, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchStepService, DispatchRepository],
+  exports: [CreateTicketService, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchStepService, DispatchRepository, ResumeWaitService],
 })
 export class EngineModule {}

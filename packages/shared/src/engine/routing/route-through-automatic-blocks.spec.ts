@@ -41,11 +41,37 @@ describe('routeThroughAutomaticBlocks', () => {
     expect(routeThroughAutomaticBlocks(doc, 'mail', {}).hops.map((hop) => hop.blockType)).toEqual(['NOTIFICATION', 'DOCUMENT']);
   });
 
-  it('still refuses WAIT blocks, and CALCULATOR blocks when it has no context to run them', () => {
+  it('refuses WAIT and CALCULATOR blocks when it has no context to run them', () => {
     for (const type of ['WAIT', 'CALCULATOR'] as const) {
       const doc = version({ steps: [step('b', type), step('t', 'TASK')], transitions: [next('b', 't')] });
       expect(() => routeThroughAutomaticBlocks(doc, 'b', {})).toThrow(NotImplementedError);
     }
+  });
+
+  describe('WAIT blocks', () => {
+    const calendar = { timeZone: 'America/Bogota', slots: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, startTime: '08:00', endTime: '18:00' })), holidays: [] as string[] };
+    const at = new Date('2026-10-09T15:00:00.000Z');
+    const context = { today: '2026-10-09', timeZone: 'America/Bogota', calendar, at };
+    const flow = (config: Record<string, unknown>) =>
+      version({
+        steps: [step('start', 'START'), step('wait', 'WAIT', { config }), step('task', 'TASK')],
+        transitions: [next('start', 'wait'), next('wait', 'task')],
+      });
+
+    it('parks the ticket on the block until the wake-up time', () => {
+      const result = routeThroughAutomaticBlocks(flow({ mode: 'DURATION', value: 2, unit: 'BUSINESS_HOURS' }), 'start', {}, context);
+      expect(result.arrival).toEqual({ stepId: 'wait', kind: 'WAIT', resumeAt: new Date('2026-10-09T17:00:00.000Z') });
+      expect(result.hops.map((hop) => hop.blockType)).toEqual(['START']);
+    });
+
+    it('lets the ticket through, saying why, when the field is blank or the moment has passed', () => {
+      const config = { mode: 'UNTIL_FIELD_DATE', fieldCode: 'DUE', offsetBusinessDays: 0 };
+      const blank = routeThroughAutomaticBlocks(flow(config), 'start', {}, context);
+      expect(blank.arrival).toEqual({ stepId: 'task', kind: 'PEOPLE' });
+      expect(blank.hops[1]).toMatchObject({ blockType: 'WAIT', data: { skipped: 'FIELD_BLANK' } });
+      const past = routeThroughAutomaticBlocks(flow(config), 'start', { DUE: '2026-10-09T14:00:00.000Z' }, context);
+      expect(past.hops[1]).toMatchObject({ blockType: 'WAIT', data: { elapsed: true, waitedUntil: '2026-10-09T14:00:00.000Z' } });
+    });
   });
 
   describe('CALCULATOR blocks', () => {

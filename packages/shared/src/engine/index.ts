@@ -5,3 +5,4 @@ export * from './fields/index.js';
 export * from './formulas/index.js';
 export * from './money/index.js';
 export * from './routing/index.js';
+export * from './wait/index.js';

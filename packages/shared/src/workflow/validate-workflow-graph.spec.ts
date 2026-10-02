@@ -381,6 +381,7 @@ describe('validateWorkflowGraph: block config', () => {
   it('calculator and wait blocks name fields of the version', () => {
     expect(codes(doc('CALCULATOR', { calculatorCode: 'MEAL_ALLOWANCE', inputs: { departure: 'NOPE', return: 'NOPE' }, outputFieldCode: 'TOTAL' }))).toContain('CALCULATOR_UNKNOWN_FIELD');
     expect(codes(doc('WAIT', { mode: 'UNTIL_FIELD_DATE', fieldCode: 'NOPE', offsetBusinessDays: 1 }))).toContain('WAIT_UNKNOWN_FIELD');
+    expect(codes(doc('WAIT', { mode: 'UNTIL_FIELD_DATE', fieldCode: 'TOTAL', offsetBusinessDays: 1 }))).toContain('WAIT_FIELD_NOT_DATE');
   });
 
   describe('calculators', () => {

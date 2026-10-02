@@ -11,7 +11,7 @@ ProcesaBPM/
 │   └── web/              # React + Vite: la aplicación del cliente
 ├── packages/
 │   ├── db/               # ✅ hecho: Prisma, migraciones, semilla, pruebas de BD
-│   └── shared/           # 🚧 en curso: lógica de dominio pura (engine/business-time, engine/conditions, errors); falta contracts, workflow, formulas, calculators, permissions
+│   └── shared/           # 🚧 en curso: lógica de dominio pura (engine/business-time, conditions, formulas, wait, fields, routing; calculators; workflow; contracts; errors)
 ├── docs/                 # documentación (español)
 ├── scripts/              # cloud-setup.sh y utilidades
 ├── docker-compose.yml    # desarrollo: postgres 18, seaweedfs (S3), redis, mailpit
@@ -27,8 +27,11 @@ packages/shared/src/
 ├── engine/               # lógica pura del motor, sin I/O:
 │   ├── business-time/    #   cálculo de vencimiento y minutos hábiles (calendario, franjas, festivos, zona)
 │   ├── conditions/       #   evaluador de condiciones (igual, distinto, empieza_con, contiene, en_lista, >, <, fechas)
-│   ├── formulas/         #   motor de fórmulas (SUMA, DIAS_HABILES, SI…) y campo tabla
-│   └── calculators/      #   calculadoras integradas (alimentación, saldo de viáticos)
+│   ├── formulas/         #   ✅ lenguaje de fórmulas (analizador, tipos, evaluador, orden de dependencias)
+│   ├── money/            #   ✅ Decimal exacto (escala 10^12)
+│   ├── wait/             #   ✅ cuándo despierta un bloque WAIT
+│   └── fields/           #   ✅ validación de valores, totales de tablas
+├── calculators/          # ✅ calculadoras integradas (MEAL_ALLOWANCE); el saldo de viáticos es una fórmula
 ├── permissions/          # acciones y sujetos CASL (tipos compartidos)
 └── errors/               # ✅ errores de dominio tipados y mapeo de SQLSTATE de la BD (23001, 23514, 23503, 23505, 23P01, 42501)
 ```

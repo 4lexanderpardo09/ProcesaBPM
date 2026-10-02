@@ -10,12 +10,14 @@ describe('findEngineSupportProblems', () => {
   it.each(['PARALLEL', 'RANDOM_DISPATCH'] as const)('accepts %s assignment now', (mode) => expect(codes(version({ steps: [step('t', 'TASK', { assignmentMode: mode })] }))).toEqual([]));
 
   it.each([
-    ['a WAIT block', { steps: [step('w', 'WAIT')] }, 'NOT_IMPLEMENTED_WAIT_BLOCK'],
+    ['a WAIT block waiting for the company cutoff', { steps: [step('w', 'WAIT', { config: { mode: 'COMPANY_CUTOFF' } })] }, 'NOT_IMPLEMENTED_WAIT_COMPANY_CUTOFF'],
     ['a NOTIFICATION block', { steps: [step('n', 'NOTIFICATION')] }, 'NOT_IMPLEMENTED_NOTIFICATION_BLOCK'],
     ['a WEBHOOK block', { steps: [step('h', 'WEBHOOK')] }, 'NOT_IMPLEMENTED_WEBHOOK_BLOCK'],
     ['an EXPORT block', { steps: [step('e', 'EXPORT')] }, 'NOT_IMPLEMENTED_EXPORT_BLOCK'],
     ['a CUTOFF deadline', { steps: [step('t', 'TASK', { deadlineType: 'CUTOFF' })] }, 'NOT_IMPLEMENTED_CUTOFF_DEADLINE'],
   ])('rejects %s', (_name, parts, code) => expect(codes(version(parts))).toEqual([code]));
+
+  it.each([{ mode: 'DURATION', value: 1, unit: 'BUSINESS_DAYS' }, { mode: 'UNTIL_FIELD_DATE', fieldCode: 'DUE', offsetBusinessDays: 0 }])('accepts a WAIT block with %j', (config) => expect(codes(version({ steps: [step('w', 'WAIT', { config })] }))).toEqual([]));
 
   it('accepts conditions and amount rules on computed fields', () => {
     const doc = version({

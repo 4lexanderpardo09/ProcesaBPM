@@ -106,11 +106,15 @@ function normalizeFiles(raw: unknown, config: Config): Normalized {
   return good(ids, ids.map((value) => ({ kind: 'FILE' as const, value, config: { accept: config.accept } })));
 }
 
-interface TableColumn {
+export interface TableColumn {
   readonly code: string;
   readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT';
   readonly required?: boolean;
   readonly options?: unknown;
+  readonly decimals?: number;
+  readonly min?: number;
+  readonly max?: number;
+  readonly showTotal?: boolean;
 }
 
 export interface TableCell {
@@ -145,7 +149,7 @@ export function normalizeTable(raw: unknown, config: Config, context: Validation
         if (column.required === true) cells.push({ rowIndex, column: column.code, code: 'REQUIRED' });
         continue;
       }
-      const result = normalizeValue(column.type, { options: column.options }, null, cell, context);
+      const result = normalizeValue(column.type, { options: column.options, decimals: column.decimals, min: column.min, max: column.max }, null, cell, context);
       if (result.ok) row[column.code] = result.value;
       else cells.push({ rowIndex, column: column.code, code: result.code });
     }

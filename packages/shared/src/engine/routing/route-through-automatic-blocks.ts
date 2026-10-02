@@ -2,6 +2,9 @@ import { findCalculator } from '../../calculators/registry.js';
 import { InvalidStateError, NoMatchingBranchError, NotImplementedError } from '../../errors/domain-error.js';
 import { PEOPLE_STEP_TYPES, type StepType } from '../../workflow/constants.js';
 import type { StepDocument, TransitionDocument, WorkflowVersionDocument } from '../../workflow/document.js';
+import { parseBlockConfig } from '../../workflow/block-config.js';
+import type { BusinessCalendar } from '../business-time/types.js';
+import { planWait, type WaitConfig } from '../wait/plan-wait.js';
 import { evaluateConditions } from '../conditions/evaluate-conditions.js';
 import { computeFieldValues, storableNumber, type ComputeContext, type FormulaFailure } from '../formulas/compute-field-values.js';
 import { FormulaRuntimeError } from '../formulas/evaluate.js';
@@ -16,11 +19,24 @@ export interface RouteHop {
   readonly blockType: StepType;
   readonly transitionId: string;
   readonly toStepId: string;
+  /** What the block did beyond choosing an exit (a WAIT that let the ticket straight through says why). */
+  readonly data?: Readonly<Record<string, unknown>>;
 }
+
+/** What the routing needs beyond the values: the computed-field environment and, for WAIT blocks, the company's calendar and the current moment. */
+export interface RouteContext extends ComputeContext {
+  readonly calendar?: BusinessCalendar | null;
+  readonly at?: Date;
+}
+
+export type RouteArrival =
+  | { readonly stepId: string; readonly kind: 'PEOPLE' | 'END' }
+  /** The ticket parks on a WAIT block until `resumeAt`. */
+  | { readonly stepId: string; readonly kind: 'WAIT'; readonly resumeAt: Date };
 
 export interface RouteResult {
   readonly hops: readonly RouteHop[];
-  readonly arrival: { readonly stepId: string; readonly kind: 'PEOPLE' | 'END' };
+  readonly arrival: RouteArrival;
   /** The ticket's values once the CALCULATOR blocks on the way have run (the input values when none did). */
   readonly values: Readonly<Record<string, unknown>>;
   /** What the blocks changed, by field code. */
@@ -62,24 +78,36 @@ function runCalculatorBlock(config: CalculatorBlockConfig, values: Record<string
  * the next block reads them. A WAIT block stops the whole operation: it is not implemented yet, so the
  * ticket never silently skips it.
  */
-export function routeThroughAutomaticBlocks(doc: WorkflowVersionDocument, entryStepId: string, values: Readonly<Record<string, unknown>>, context?: ComputeContext): RouteResult {
+export function routeThroughAutomaticBlocks(doc: WorkflowVersionDocument, entryStepId: string, values: Readonly<Record<string, unknown>>, context?: RouteContext): RouteResult {
   const steps = new Map<string, StepDocument>(doc.steps.map((step) => [step.id, step]));
   const hops: RouteHop[] = [];
   const current: Record<string, unknown> = { ...values };
   const failures: FormulaFailure[] = [];
-  const result = (arrival: RouteResult['arrival']): RouteResult => ({ hops, arrival, values: current, changed: changedOf(values, current), failures });
+  const result = (arrival: RouteArrival): RouteResult => ({ hops, arrival, values: current, changed: changedOf(values, current), failures });
   let step = steps.get(entryStepId);
   while (step !== undefined) {
     if (step.type === 'END') return result({ stepId: step.id, kind: 'END' });
     if (PEOPLE_STEP_TYPES.has(step.type)) return result({ stepId: step.id, kind: 'PEOPLE' });
-    if (step.type === 'WAIT' || (step.type === 'CALCULATOR' && context === undefined)) throw new NotImplementedError(`${step.type} blocks`);
+    if (context === undefined && (step.type === 'WAIT' || step.type === 'CALCULATOR')) throw new NotImplementedError(`${step.type} blocks`);
     if (hops.length >= MAX_HOPS) throw new InvalidStateError('The workflow loops through automatic blocks without reaching a person');
     if (step.type === 'CALCULATOR') recalculateAfter(doc, step, current, context!, failures);
+    let data: RouteHop['data'];
+    if (step.type === 'WAIT') {
+      const wait = planWait({ config: waitConfigOf(step), values: current, calendar: context!.calendar ?? null, timeZone: context!.timeZone ?? 'UTC', at: context!.at ?? new Date() });
+      if (wait.kind === 'PARK') return result({ stepId: step.id, kind: 'WAIT', resumeAt: wait.resumeAt });
+      data = wait.reason === 'FIELD_BLANK' ? { skipped: 'FIELD_BLANK' } : { elapsed: true, waitedUntil: wait.waitedUntil!.toISOString() };
+    }
     const exit = pickExit(doc, step, current);
-    hops.push({ stepId: step.id, blockType: step.type, transitionId: exit.id, toStepId: exit.toStepId });
+    hops.push({ stepId: step.id, blockType: step.type, transitionId: exit.id, toStepId: exit.toStepId, ...(data === undefined ? {} : { data }) });
     step = steps.get(exit.toStepId);
   }
   throw new InvalidStateError('The workflow points to a block that does not exist');
+}
+
+function waitConfigOf(step: StepDocument): WaitConfig {
+  const parsed = parseBlockConfig('WAIT', step.config);
+  if (!parsed.valid) throw new InvalidStateError(`The WAIT block ${step.id} has an invalid configuration`);
+  return parsed.config as unknown as WaitConfig;
 }
 
 function recalculateAfter(doc: WorkflowVersionDocument, step: StepDocument, current: Record<string, unknown>, context: ComputeContext, failures: FormulaFailure[]): void {

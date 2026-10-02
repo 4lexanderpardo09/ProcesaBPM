@@ -44,7 +44,9 @@ export interface ArrivalComputed {
 
 export type Arrival =
   | { readonly kind: 'END'; readonly hops: readonly RouteHop[]; readonly endStepId: string; readonly computed: ArrivalComputed }
-  | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly plan: ArrivalPlan; readonly assigneeType: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; readonly computed: ArrivalComputed };
+  | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly plan: ArrivalPlan; readonly assigneeType: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; readonly computed: ArrivalComputed }
+  /** The ticket is parked on a WAIT block until `resumeAt`: a visit with nobody assigned and no clocks. */
+  | { readonly kind: 'WAIT'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly plan: ArrivalPlan; readonly resumeAt: Date; readonly computed: ArrivalComputed };
 
 const SIDE_EFFECT_OUTBOX: Readonly<Record<string, string>> = { DOCUMENT: 'block.document', NOTIFICATION: 'block.notification', WEBHOOK: 'block.webhook', EXPORT: 'block.export' };
 
@@ -83,7 +85,7 @@ export function hopEvents(hops: readonly RouteHop[], loop: number): EventPlan[] 
     transitionId: hop.transitionId,
     loop,
     actorId: null,
-    data: { automatic: true, blockType: hop.blockType },
+    data: { automatic: true, blockType: hop.blockType, ...hop.data },
     ...(SIDE_EFFECT_OUTBOX[hop.blockType] === undefined ? {} : { outbox: [{ type: SIDE_EFFECT_OUTBOX[hop.blockType]!, payload: { stepId: hop.stepId } }] }),
   }));
 }
@@ -111,14 +113,21 @@ export class ArrivalPlanner {
     return decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: request.chosenAssigneeId });
   }
 
+  /** A WAIT block holds the ticket without a person, an SLA or a loop limit: it is the clock of the workflow, not of anyone. */
+  private park(request: ArrivalRequest, hops: readonly RouteHop[], step: StepDocument, resumeAt: Date, previousLoops: readonly number[], computed: ArrivalComputed): Arrival {
+    const visit = { stepId: step.id, loop: nextReopenLoop(previousLoops), enteredAt: request.at, sla: { value: null, unit: null }, calendarId: null, dueAt: null, resumeAt };
+    return { kind: 'WAIT', hops, step, resumeAt, computed, plan: { visit, clocks: [], assignees: [], parallelTasks: [] } };
+  }
+
   async plan(tx: TenantTransaction, request: ArrivalRequest): Promise<Arrival> {
     const environment = await this.environments.build(tx, request.tenantId, request.document, { timeZone: request.timeZone, calendar: request.calendar, at: request.at });
-    const route = routeThroughAutomaticBlocks(request.document, request.entryStepId, request.values, environment);
+    const route = routeThroughAutomaticBlocks(request.document, request.entryStepId, request.values, { ...environment, calendar: request.calendar?.calendar ?? null, at: request.at });
     const computed = computedOf(request, route);
     if (route.arrival.kind === 'END') return { kind: 'END', hops: route.hops, endStepId: route.arrival.stepId, computed };
 
     const step = request.document.steps.find((candidate) => candidate.id === route.arrival.stepId)!;
     const previousLoops = request.ticketId === null ? [] : await this.tickets.loopsOf(tx, request.tenantId, request.ticketId, step.id);
+    if (route.arrival.kind === 'WAIT') return this.park(request, route.hops, step, route.arrival.resumeAt, previousLoops, computed);
     const loop = request.ignoreMaxLoops === true ? nextReopenLoop(previousLoops) : nextLoop(previousLoops, step.maxLoops, step.id);
     const sla = openSla(slaTermsOf(step, request.companyId), request.calendar?.calendar ?? null, request.at);
     const decision: { type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; userIds: readonly string[] } =
@@ -146,6 +155,7 @@ export class ArrivalPlanner {
 export function arrivalEvents(arrival: Arrival, actorId: string | null, hopLoop: number): EventPlan[] {
   const events = [...hopEvents(arrival.hops, hopLoop), ...computedEvents(arrival.computed, hopLoop)];
   if (arrival.kind === 'END') return events;
+  if (arrival.kind === 'WAIT') return [...events, { type: 'SYSTEM', stepId: arrival.step.id, loop: arrival.plan.visit.loop, actorId: null, data: { kind: 'WAITING', resumeAt: arrival.resumeAt.toISOString() } }];
   const { step, plan, assigneeType } = arrival;
   if (assigneeType === 'DISPATCH') return [...events, { type: 'SYSTEM', stepId: step.id, loop: plan.visit.loop, actorId: null, data: { kind: 'AWAITING_DISPATCH' } }];
   return [

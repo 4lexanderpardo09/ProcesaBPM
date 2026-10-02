@@ -68,6 +68,7 @@ export const ERROR_CODES = {
   reportTooLarge: 'REPORT_TOO_LARGE',
   reportTimeout: 'REPORT_TIMEOUT',
   lastReopeningType: 'LAST_REOPENING_TYPE',
+  ticketWaiting: 'TICKET_WAITING',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -351,6 +352,13 @@ export class NoMatchingBranchError extends DomainError {
 export class MaxLoopsReachedError extends DomainError {
   constructor(stepId: string, maxLoops: number) {
     super(ERROR_CODES.maxLoopsReached, 'The step cannot be visited again', { details: { stepId, maxLoops } });
+  }
+}
+
+/** The ticket is parked on a WAIT block: nobody holds it, so nobody can act on it until it wakes up. */
+export class TicketWaitingError extends DomainError {
+  constructor(readonly resumeAt: Date) {
+    super(ERROR_CODES.ticketWaiting, 'The ticket is waiting and cannot be acted on until it resumes', { details: { resumeAt: resumeAt.toISOString() } });
   }
 }
 
