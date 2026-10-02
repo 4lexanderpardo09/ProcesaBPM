@@ -12,6 +12,7 @@ En construcción. **Hecho:** la base de datos (`packages/db`), la lógica compar
 - [docs/base-de-datos.md](docs/base-de-datos.md): **referencia de la BD**: modelo, aislamiento, reglas de integridad, contrato para el API, pruebas, cambios y despliegue.
 - [docs/revision-bd.md](docs/revision-bd.md): registro de la revisión de integridad (aplicada).
 - [docs/arquitectura.md](docs/arquitectura.md): organización de carpetas del back, el front y el código compartido.
+- [docs/despliegue.md](docs/despliegue.md): imágenes Docker, variables de entorno, roles de BD, orden de arranque, migraciones y escalado.
 - [docs/pendientes.md](docs/pendientes.md): qué falta por definir y el alcance propuesto para v1/v2.
 
 ## Stack decidido
