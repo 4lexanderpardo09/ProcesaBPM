@@ -69,6 +69,7 @@ export const ERROR_CODES = {
   reportTimeout: 'REPORT_TIMEOUT',
   lastReopeningType: 'LAST_REOPENING_TYPE',
   ticketWaiting: 'TICKET_WAITING',
+  temporarilyUnavailable: 'TEMPORARILY_UNAVAILABLE',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -200,6 +201,19 @@ export class RateLimitedError extends DomainError {
 export interface ValidationIssue {
   readonly path: string;
   readonly message: string;
+}
+
+/**
+ * The database could not serve the request in time (a lock wait, a deadlock, a serialization failure, a statement or
+ * transaction timeout, no connection in the pool). Nothing was written and the same request can be sent again.
+ */
+export class TemporarilyUnavailableError extends DomainError {
+  constructor(
+    readonly retryAfterSeconds: number,
+    options?: { cause?: unknown },
+  ) {
+    super(ERROR_CODES.temporarilyUnavailable, 'The service is busy: try again', options);
+  }
 }
 
 export class ValidationFailedError extends DomainError {

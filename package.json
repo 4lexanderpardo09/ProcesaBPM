@@ -7,6 +7,10 @@
   },
   "scripts": {
     "test": "pnpm -r --workspace-concurrency=1 test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "build": "node scripts/bundle.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.27.7"
   }
 }

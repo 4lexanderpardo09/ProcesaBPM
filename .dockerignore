@@ -1,0 +1,25 @@
+# Everything the images do not need: the build context stays small and nothing sensitive can end up in a layer.
+.git
+.github
+.claude
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+# Tests, documentation and development files are not part of any image.
+**/test
+**/*.spec.ts
+**/*.test.ts
+**/vitest.config.ts
+docs
+**/*.md
+!apps/api/assets/**/*.md
+docker-compose*.yml
+Dockerfile
+.dockerignore
+scripts/cloud-setup.sh
+# The Prisma client is generated inside the build.
+packages/db/src/generated

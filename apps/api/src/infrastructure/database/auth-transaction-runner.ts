@@ -3,7 +3,7 @@ import type { Prisma } from '@procesabpm/db';
 import { InvalidTenantContextError, isUuid } from '@procesabpm/shared';
 import type { AppConfig } from '../../config/app-config.js';
 import { APP_CONFIG } from '../../config/tokens.js';
-import { applyDatabaseScope, type DatabaseScope } from './database-scope.js';
+import { applyDatabaseScope, databaseTimeouts, type DatabaseScope } from './database-scope.js';
 import { PrismaService } from './prisma.service.js';
 
 export type AuthTransaction = Prisma.TransactionClient;
@@ -36,7 +36,7 @@ export class AuthTransactionRunner {
   private run<T>(scope: DatabaseScope, work: (tx: AuthTransaction) => Promise<T>): Promise<T> {
     return this.prisma.$transaction(
       async (tx) => {
-        await applyDatabaseScope(tx, scope);
+        await applyDatabaseScope(tx, { ...scope, ...databaseTimeouts(this.config, this.config.DB_TX_TIMEOUT_MS) });
         return work(tx);
       },
       { timeout: this.config.DB_TX_TIMEOUT_MS, maxWait: this.config.DB_TX_MAX_WAIT_MS },

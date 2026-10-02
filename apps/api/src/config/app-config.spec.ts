@@ -22,6 +22,7 @@ describe('loadConfig', () => {
       PORT: 3000,
       DB_TX_TIMEOUT_MS: 10_000,
       DB_TX_MAX_WAIT_MS: 5_000,
+      DB_LOCK_TIMEOUT_MS: 5_000,
       DB_POOL_MAX: 10,
       TRUST_PROXY: false,
       STORAGE_REGION: 'us-east-1',

@@ -1,0 +1,139 @@
+# Every secret below goes through `environment:` to keep the example short; in production use your orchestrator's secrets
+# (Docker/Swarm secrets, Kubernetes Secrets, a secret manager) and never commit the real values.
+#
+# EXAMPLE of a production-like deployment (docs/despliegue.md). A guide, not something to run as is: replace the
+# dependencies (postgres, storage, mailpit) with managed services, keep the secrets out of the repository and pin real tags.
+#
+#   cp deploy/example.env .env && $EDITOR .env      # every ${VAR:?} below must be set
+#   docker compose -f docker-compose.prod.example.yml up -d
+#
+# Order of startup, enforced with depends_on:  postgres -> migrate -> roles -> seed -> api, worker.
+name: procesabpm
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ['/tmp']
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  init: true
+  restart: unless-stopped
+
+x-storage: &storage
+  STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:?}
+  STORAGE_BUCKET: ${STORAGE_BUCKET:?}
+  STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?}
+  STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?}
+  STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-false}
+
+services:
+  # --- Example dependencies: use managed services in production ------------------------------------------------------
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${DB_OWNER_USER:-procesabpm_owner}
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?}
+      POSTGRES_DB: procesabpm
+    volumes: ['postgres-data:/var/lib/postgresql']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d procesabpm -h 127.0.0.1']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # Catches every e-mail the worker sends (web UI on 8025). Replace with your SMTP provider (SMTP_* below).
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports: ['127.0.0.1:8025:8025']
+    restart: unless-stopped
+
+  # --- One-shot jobs ---------------------------------------------------------------------------------------------------
+  # The schema owner applies the migrations. It is the only service that holds that credential.
+  migrate:
+    image: procesabpm-migrate:${IMAGE_TAG:-latest}
+    build: { context: ., target: migrate }
+    environment:
+      DATABASE_URL: postgresql://${DB_OWNER_USER:-procesabpm_owner}:${DB_OWNER_PASSWORD:?}@postgres:5432/procesabpm
+    depends_on:
+      postgres: { condition: service_healthy }
+    read_only: true
+    tmpfs: ['/tmp']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    restart: 'no'
+
+  # Creates (or updates the passwords of) the three login roles the services use. Idempotent.
+  roles:
+    image: postgres:18-alpine
+    entrypoint: [psql, --no-psqlrc, -v, ON_ERROR_STOP=1, -f, /roles.sql]
+    environment:
+      API_DB_PASSWORD: ${API_DB_PASSWORD:?}
+      WORKER_DB_PASSWORD: ${WORKER_DB_PASSWORD:?}
+      PLATFORM_DB_PASSWORD: ${PLATFORM_DB_PASSWORD:?}
+      PGHOST: postgres
+      PGDATABASE: procesabpm
+      PGUSER: ${DB_OWNER_USER:-procesabpm_owner}
+      PGPASSWORD: ${DB_OWNER_PASSWORD:?}
+    volumes: ['./deploy/roles.sql:/roles.sql:ro']
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: 'no'
+
+  # Loads the global catalog (permissions, plans, countries, holidays). Safe to run on every deployment.
+  seed:
+    image: procesabpm-migrate:${IMAGE_TAG:-latest}
+    command: ['node', 'seed/seed.js']
+    environment:
+      DATABASE_URL: postgresql://procesabpm_platform:${PLATFORM_DB_PASSWORD:?}@postgres:5432/procesabpm
+    depends_on:
+      roles: { condition: service_completed_successfully }
+    read_only: true
+    tmpfs: ['/tmp']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    restart: 'no'
+
+  # --- Long-running services ---------------------------------------------------------------------------------------------
+  api:
+    image: procesabpm-api:${IMAGE_TAG:-latest}
+    build: { context: ., target: api }
+    <<: *hardening
+    ports: ['127.0.0.1:3000:3000']   # put your reverse proxy / TLS terminator in front
+    environment:
+      <<: *storage
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PORT: '3000'
+      TRUST_PROXY: ${TRUST_PROXY:-1}   # number of proxies in front of the API: the client IP drives rate limits and sessions
+      DATABASE_URL: postgresql://procesabpm_api:${API_DB_PASSWORD:?}@postgres:5432/procesabpm
+      PLATFORM_DATABASE_URL: postgresql://procesabpm_platform:${PLATFORM_DB_PASSWORD:?}@postgres:5432/procesabpm
+      JWT_SECRET: ${JWT_SECRET:?}
+      # STORAGE_PUBLIC_ENDPOINT: https://files.example.com   # only when browsers reach the storage at another address
+    depends_on:
+      seed: { condition: service_completed_successfully }
+    stop_grace_period: 30s
+
+  worker:
+    image: procesabpm-worker:${IMAGE_TAG:-latest}
+    build: { context: ., target: worker }
+    <<: *hardening
+    environment:
+      <<: *storage
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WORKER_DATABASE_URL: postgresql://procesabpm_worker:${WORKER_DB_PASSWORD:?}@postgres:5432/procesabpm
+      JWT_SECRET: ${JWT_SECRET:?}   # required by the shared configuration; the worker does not use it (see docs/despliegue.md)
+      WEB_BASE_URL: ${WEB_BASE_URL:?}
+      OUTBOX_TOKEN_KEY: ${OUTBOX_TOKEN_KEY:?}
+      MAIL_FROM: ${MAIL_FROM:-ProcesaBPM <no-reply@procesabpm.local>}
+      MAIL_MESSAGE_ID_DOMAIN: ${MAIL_MESSAGE_ID_DOMAIN:-procesabpm.local}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      # SMTP_USER: ...        # set both or none: an empty value is rejected
+      # SMTP_PASSWORD: ...
+    depends_on:
+      seed: { condition: service_completed_successfully }
+    # A batch of events in flight finishes (or is released) on SIGTERM; give it longer than OUTBOX_TX_TIMEOUT_MS.
+    stop_grace_period: 120s
+
+volumes:
+  postgres-data:

@@ -1,0 +1,11 @@
+{
+  "name": "@procesabpm/migrate",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What the migrate image needs at runtime: the Prisma CLI (migrate deploy) and the pg driver of the seed. No code.",
+  "type": "module",
+  "dependencies": {
+    "pg": "8.23.1",
+    "prisma": "7.10.0"
+  }
+}
