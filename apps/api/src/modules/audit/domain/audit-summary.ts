@@ -1,7 +1,8 @@
 const SECRET_KEY = /pass|secret|token|hash|otp|credential|api[-_]?key|private[-_]?key|backup/i;
 const MAX_STRING = 200;
 const MAX_DEPTH = 4;
-const MAX_BYTES = 8192;
+/** Below the 8 KiB CHECK of the table: PostgreSQL's `jsonb::text` adds a space after every `:` and `,`, so it is longer than `JSON.stringify`. */
+const MAX_BYTES = 6144;
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 

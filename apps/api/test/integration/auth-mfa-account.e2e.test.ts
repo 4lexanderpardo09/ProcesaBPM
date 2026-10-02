@@ -64,9 +64,9 @@ describe('two-step verification from the account', () => {
       expect(begun.body).toMatchObject({ issuer: 'ProcesaBPM', accountName: user.email, algorithm: 'SHA1', digits: 6, period: 30 });
       const secret = base32Decode(begun.body.secret as string);
 
-      const wrong = await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: '000000' }).expect(401);
+      const wrong = await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: '000000', currentPassword: user.password }).expect(401);
       expect(wrong.body.error.code).toBe('INVALID_MFA_CODE');
-      const confirmed = await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(secret) }).expect(200);
+      const confirmed = await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(secret), currentPassword: user.password }).expect(200);
       expect(confirmed.body.backupCodes).toHaveLength(10);
 
       const status = (await call('get', '/auth/mfa', session.accessToken).expect(200)).body;
@@ -78,12 +78,12 @@ describe('two-step verification from the account', () => {
     });
 
     it('starting over replaces the pending secret: the first one no longer confirms', async () => {
-      const { session } = await sessionOf(false);
+      const { user, session } = await sessionOf(false);
       const first = base32Decode((await call('post', '/auth/mfa/enrollment', session.accessToken).expect(200)).body.secret as string);
       const second = base32Decode((await call('post', '/auth/mfa/enrollment', session.accessToken).expect(200)).body.secret as string);
-      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(first) }).expect(401);
+      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(first), currentPassword: user.password }).expect(401);
       clock.advanceSeconds(30);
-      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(second) }).expect(200);
+      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(second), currentPassword: user.password }).expect(200);
     });
 
     it('is refused when MFA is already on', async () => {
@@ -93,8 +93,18 @@ describe('two-step verification from the account', () => {
     });
 
     it('cannot be confirmed without a pending secret', async () => {
-      const { session } = await sessionOf(false);
-      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: '123456' }).expect(401);
+      const { user, session } = await sessionOf(false);
+      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: '123456', currentPassword: user.password }).expect(401);
+    });
+
+    it('needs the password: a stolen access token cannot take over the second factor', async () => {
+      const { user, session } = await sessionOf(false);
+      const secret = base32Decode((await call('post', '/auth/mfa/enrollment', session.accessToken).expect(200)).body.secret as string);
+      const refused = await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(secret), currentPassword: 'not the password' }).expect(401);
+      expect(refused.body.error.code).toBe('INVALID_CREDENTIALS');
+      expect((await call('get', '/auth/mfa', session.accessToken).expect(200)).body.enabled).toBe(false);
+      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(secret) }).expect(400);
+      await call('post', '/auth/mfa/enrollment/confirm', session.accessToken, { code: codeNow(secret), currentPassword: user.password }).expect(200);
     });
   });
 
@@ -112,6 +122,8 @@ describe('two-step verification from the account', () => {
 
       clock.advanceSeconds(30); // the sign-in already used this step
       await disable({ password: user.password, code: codeNow(mfa!.secret) }).expect(204);
+      // A right password gives its claimed attempt back (the failed guesses above were the only ones counted).
+      expect((await db.owner.query<{ failed_logins: number }>('SELECT failed_logins FROM users WHERE id = $1', [user.userId])).rows[0]?.failed_logins).toBe(0);
       expect((await call('get', '/auth/mfa', session.accessToken).expect(200)).body.enabled).toBe(false);
       await call('get', '/auth/me', session.accessToken).expect(200);
       await http().post('/auth/refresh').set('cookie', other.refreshCookie).expect(401);

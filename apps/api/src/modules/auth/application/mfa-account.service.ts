@@ -43,7 +43,8 @@ export class MfaAccountService {
   }
 
   /** The first code from the app turns MFA on. The other sessions of the user are signed out; this one keeps working, verified. */
-  async confirmEnrollment(principal: Principal, code: string): Promise<BackupCodesResponse> {
+  async confirmEnrollment(principal: Principal, code: string, currentPassword: string): Promise<BackupCodesResponse> {
+    await this.currentPassword.verify(principal.userId, currentPassword);
     const backupCodes = this.enrollment.newBackupCodes();
     await this.verifier.verify(principal.userId, { code }, false, (tx) => this.mfa.enable(tx, backupCodes.hashes, principal.sessionId));
     await this.audit.record(principal, 'account.mfa_enabled');

@@ -4,6 +4,8 @@ import {
   disableMfaRequestSchema,
   type DisableMfaRequest,
   mfaCodeSchema,
+  mfaEnrollmentConfirmRequestSchema,
+  type MfaEnrollmentConfirmRequest,
   type MfaCode,
   type MfaEnrollment,
   type MfaStatusResponse,
@@ -40,8 +42,8 @@ export class MfaController {
   @HttpCode(HttpStatus.OK)
   @RateLimit(RATE_LIMITS.mfaAccount)
   @UseGuards(RateLimitGuard)
-  confirmEnrollment(@CurrentPrincipal() principal: Principal, @Body(new ZodValidationPipe(mfaCodeSchema)) body: MfaCode): Promise<BackupCodesResponse> {
-    return this.account.confirmEnrollment(principal, body.code);
+  confirmEnrollment(@CurrentPrincipal() principal: Principal, @Body(new ZodValidationPipe(mfaEnrollmentConfirmRequestSchema)) body: MfaEnrollmentConfirmRequest): Promise<BackupCodesResponse> {
+    return this.account.confirmEnrollment(principal, body.code, body.currentPassword);
   }
 
   @Post('disable')

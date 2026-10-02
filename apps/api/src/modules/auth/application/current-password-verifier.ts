@@ -24,5 +24,7 @@ export class CurrentPasswordVerifier {
     const claimed = candidate !== undefined && (await this.runner.withAnonymousTransaction((tx) => this.credentials.claimLoginAttempt(tx, candidate.id)));
     const matches = await this.hasher.verify(claimed ? candidate.passwordHash : null, password);
     if (!claimed || !matches) throw new InvalidCredentialsError();
+    // The password was right: give the claimed attempt back, or every sensitive change would leave one failure behind.
+    await this.runner.withAnonymousTransaction((tx) => this.credentials.recordPasswordSuccess(tx, candidate.id, false));
   }
 }

@@ -29,7 +29,14 @@ describe('sanitizeAuditSummary', () => {
     expect(sanitizeAuditSummary({ a: { b: { c: { d: { e: 1 } } } } })).toEqual({ a: { b: { c: {} } } });
   });
 
-  it('replaces a summary above 8 KiB by a marker', () => {
+  it('stays under the table limit once PostgreSQL writes it as jsonb text (spaces after : and ,)', () => {
+    const ids = Array.from({ length: 400 }, () => '0199a000-0000-7000-8000-000000000001');
+    const kept = sanitizeAuditSummary({ userIds: ids });
+    const pgText = JSON.stringify(kept).replace(/([:,])/g, '$1 ');
+    expect(Buffer.byteLength(pgText, 'utf8')).toBeLessThanOrEqual(8192);
+  });
+
+  it('replaces a summary above 6 KiB by a marker', () => {
     const big = Object.fromEntries(Array.from({ length: 400 }, (_, index) => [`field${index}`, 'x'.repeat(100)]));
     expect(sanitizeAuditSummary(big)).toEqual({ truncated: true });
   });

@@ -72,6 +72,10 @@ const totpCodeSchema = z.string().regex(/^\d{6}$/, 'must be 6 digits');
 const backupCodeSchema = z.string().min(16).max(24);
 
 export const mfaCodeSchema = z.object({ code: totpCodeSchema });
+
+/** Enrolling from a signed-in session also needs the password: a stolen access token alone cannot take over the account's second factor. */
+export const mfaEnrollmentConfirmRequestSchema = z.object({ code: totpCodeSchema, currentPassword: z.string().min(1).max(PASSWORD_MAX_LENGTH) });
+export type MfaEnrollmentConfirmRequest = z.infer<typeof mfaEnrollmentConfirmRequestSchema>;
 export type MfaCode = z.infer<typeof mfaCodeSchema>;
 
 /** Exactly one of the two: the code of the authenticator app, or one of the backup codes. */
