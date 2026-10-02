@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { KEY_ID_PATTERN, type KeyringKey } from '../infrastructure/crypto/aes-gcm-keyring.js';
 
 const postgresUrl = z
   .string()
@@ -34,6 +35,29 @@ const trustProxySchema = z
     return z.NEVER;
   });
 
+/**
+ * `id:base64` pairs separated by commas; the first key encrypts and every key decrypts (rotation: prepend a new key and
+ * keep the old one until no secret uses it). Each key is 32 random bytes (`openssl rand -base64 32`).
+ */
+const mfaKeyringSchema = z.string().transform((value, context): readonly KeyringKey[] => {
+  const keys: KeyringKey[] = [];
+  const problem = (message: string) => {
+    context.addIssue({ code: 'custom', message });
+    return z.NEVER;
+  };
+  for (const entry of value.split(',').map((item) => item.trim())) {
+    const separator = entry.indexOf(':');
+    const id = entry.slice(0, separator);
+    const encoded = entry.slice(separator + 1);
+    if (separator < 0 || !KEY_ID_PATTERN.test(id)) return problem('must be a comma-separated list of id:base64 (id: letters, digits, - or _, up to 32 characters)');
+    if (keys.some((key) => key.id === id)) return problem('has a repeated key id');
+    const key = Buffer.from(encoded, 'base64');
+    if (key.length !== 32 || key.toString('base64') !== encoded) return problem('keys must be base64 of exactly 32 bytes');
+    keys.push({ id, key });
+  }
+  return keys;
+});
+
 /** What every process needs: logging, database tuning, object storage. */
 const commonSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
@@ -66,6 +90,8 @@ const apiSchema = commonSchema.extend({
   PLATFORM_DATABASE_URL: postgresUrl,
   /** Signing key of the access and selection tokens (HS256): at least 32 bytes. */
   JWT_SECRET: z.string().refine((value) => Buffer.byteLength(value, 'utf8') >= 32, 'must be at least 32 bytes long'),
+  /** AES-256 keys of the stored MFA secrets. Only the API decrypts them: the worker never receives this variable. */
+  MFA_ENCRYPTION_KEYS: mfaKeyringSchema,
   /** Which proxies may set X-Forwarded-For; the client IP (rate limits, sessions) depends on it. */
   TRUST_PROXY: trustProxySchema,
 });
@@ -82,7 +108,7 @@ const workerSchema = commonSchema.extend({
 export type AppConfig = z.infer<typeof commonSchema> & { readonly DATABASE_URL: string };
 
 /** The API only: the worker listens on nothing, signs no tokens and never carries the BYPASSRLS platform login. */
-export type ApiConfig = AppConfig & Pick<z.infer<typeof apiSchema>, 'PORT' | 'JWT_SECRET' | 'TRUST_PROXY' | 'PLATFORM_DATABASE_URL'>;
+export type ApiConfig = AppConfig & Pick<z.infer<typeof apiSchema>, 'PORT' | 'JWT_SECRET' | 'TRUST_PROXY' | 'PLATFORM_DATABASE_URL' | 'MFA_ENCRYPTION_KEYS'>;
 
 export type EntryPoint = 'api' | 'worker';
 

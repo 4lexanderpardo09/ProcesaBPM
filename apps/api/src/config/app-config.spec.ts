@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadApiConfig, loadWorkerConfig } from './app-config.js';
 
+const KEY_A = Buffer.alloc(32, 1).toString('base64');
+const KEY_B = Buffer.alloc(32, 2).toString('base64');
+
 const valid = {
   NODE_ENV: 'test',
   PORT: '3000',
@@ -8,6 +11,7 @@ const valid = {
   DATABASE_URL: 'postgresql://api:secret@localhost:5432/procesabpm',
   PLATFORM_DATABASE_URL: 'postgres://platform:secret@localhost:5432/procesabpm',
   JWT_SECRET: 'a-test-secret-of-at-least-32-bytes!!',
+  MFA_ENCRYPTION_KEYS: `current:${KEY_A}`,
   STORAGE_ENDPOINT: 'http://localhost:9000',
   STORAGE_BUCKET: 'procesabpm',
   STORAGE_ACCESS_KEY_ID: 'testkey',
@@ -19,6 +23,7 @@ describe('loadApiConfig / loadWorkerConfig', () => {
   it('parses a complete environment and fills the documented defaults', () => {
     expect(loadApiConfig(valid)).toEqual({
       ...valid,
+      MFA_ENCRYPTION_KEYS: [{ id: 'current', key: Buffer.alloc(32, 1) }],
       PORT: 3000,
       DB_TX_TIMEOUT_MS: 10_000,
       DB_TX_MAX_WAIT_MS: 5_000,
@@ -44,6 +49,36 @@ describe('loadApiConfig / loadWorkerConfig', () => {
   it.each(['true', 'yes', '10.0.0.0/8,evil.example.com', '-1', ''])('rejects TRUST_PROXY=%j', (value) => {
     const error = catchError(() => loadApiConfig({ ...valid, TRUST_PROXY: value }));
     expect(error.problems).toEqual([expect.stringContaining('TRUST_PROXY')]);
+  });
+
+  describe('MFA_ENCRYPTION_KEYS', () => {
+    it('reads the keys in order: the first one encrypts', () => {
+      const keys = loadApiConfig({ ...valid, MFA_ENCRYPTION_KEYS: `new:${KEY_B}, old:${KEY_A}` }).MFA_ENCRYPTION_KEYS;
+      expect(keys.map((key) => key.id)).toEqual(['new', 'old']);
+      expect(keys[0]!.key).toEqual(Buffer.alloc(32, 2));
+    });
+
+    it.each([
+      ['empty', ''],
+      ['no id', KEY_A],
+      ['bad id', `bad id!:${KEY_A}`],
+      ['repeated id', `a:${KEY_A},a:${KEY_B}`],
+      ['not base64', 'a:not-base64!!'],
+      ['31 bytes', `a:${Buffer.alloc(31, 1).toString('base64')}`],
+      ['33 bytes', `a:${Buffer.alloc(33, 1).toString('base64')}`],
+    ])('rejects %s', (_label, value) => {
+      const error = catchError(() => loadApiConfig({ ...valid, MFA_ENCRYPTION_KEYS: value }));
+      expect(error.problems).toEqual([expect.stringContaining('MFA_ENCRYPTION_KEYS')]);
+    });
+
+    it('is not part of the worker configuration', () => {
+      expect(loadWorkerConfig({ ...valid, WORKER_DATABASE_URL: workerUrl })).not.toHaveProperty('MFA_ENCRYPTION_KEYS');
+    });
+
+    it('never prints a key', () => {
+      const error = catchError(() => loadApiConfig({ ...valid, MFA_ENCRYPTION_KEYS: `a:${KEY_A}x` }));
+      expect(error.message).not.toContain(KEY_A);
+    });
   });
 
   describe('entry points', () => {

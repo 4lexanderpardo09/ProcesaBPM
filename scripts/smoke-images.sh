@@ -78,7 +78,8 @@ COMMON_ENV=(-e LOG_LEVEL=info -e STORAGE_ENDPOINT=http://storage.invalid:8333 -e
 step "api"
 docker run -d --name "$RUN-api" --network "$NETWORK" "${HARDENING[@]}" "${COMMON_ENV[@]}" \
   -e "DATABASE_URL=$(url procesabpm_api api)" -e "PLATFORM_DATABASE_URL=$(url procesabpm_platform platform)" \
-  -e JWT_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef "$API_IMAGE" >/dev/null
+  -e JWT_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef \
+  -e "MFA_ENCRYPTION_KEYS=smoke:$(head -c 32 /dev/zero | base64)" "$API_IMAGE" >/dev/null
 probe() { docker exec "$RUN-api" node -e "fetch('http://127.0.0.1:3000/$1').then(async (r) => { console.log(r.status, await r.text()); process.exit(r.ok ? 0 : 1); }, (e) => { console.error(e.message); process.exit(1); })"; }
 for _ in $(seq 1 60); do probe ready >/dev/null 2>&1 && break; sleep 1; done
 [[ "$(probe health)" == *'"ok"'* ]] || fail "/health did not answer ok"
@@ -95,6 +96,12 @@ logs_contain "$RUN-worker" 'Worker started' || fail "the worker did not start"
 docker stop --time 30 "$RUN-worker" >/dev/null
 stopped_by_sigterm "$RUN-worker"
 logs_contain "$RUN-worker" 'Worker stopped (SIGTERM)' || fail "the worker did not log an orderly shutdown"
+
+step "api refuses to start without MFA_ENCRYPTION_KEYS"
+missing_output="$(docker run --rm --network "$NETWORK" "${HARDENING[@]}" "${COMMON_ENV[@]}" \
+  -e "DATABASE_URL=$(url procesabpm_api api)" -e "PLATFORM_DATABASE_URL=$(url procesabpm_platform platform)" \
+  -e JWT_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef "$API_IMAGE" 2>&1 || true)"
+[[ "$missing_output" == *"MFA_ENCRYPTION_KEYS is required"* ]] || fail "the API started (or failed for another reason) without MFA_ENCRYPTION_KEYS: $missing_output"
 
 step "api shutdown"
 docker stop --time 30 "$RUN-api" >/dev/null

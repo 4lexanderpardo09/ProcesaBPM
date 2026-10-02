@@ -107,6 +107,7 @@ services:
       DATABASE_URL: postgresql://procesabpm_api:${API_DB_PASSWORD:?}@postgres:5432/procesabpm
       PLATFORM_DATABASE_URL: postgresql://procesabpm_platform:${PLATFORM_DB_PASSWORD:?}@postgres:5432/procesabpm
       JWT_SECRET: ${JWT_SECRET:?}
+      MFA_ENCRYPTION_KEYS: ${MFA_ENCRYPTION_KEYS:?}   # only the API decrypts the MFA secrets; the worker never gets it
       # STORAGE_PUBLIC_ENDPOINT: https://files.example.com   # only when browsers reach the storage at another address
     depends_on:
       seed: { condition: service_completed_successfully }

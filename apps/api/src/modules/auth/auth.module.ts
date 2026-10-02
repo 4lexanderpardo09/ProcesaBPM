@@ -4,6 +4,7 @@ import { RateLimitGuard } from '../../common/auth/rate-limit.js';
 import { TenantScopeInterceptor } from '../../common/auth/tenant-scope.interceptor.js';
 import { InMemoryRateLimiter, RATE_LIMITER } from '../../infrastructure/security/rate-limiter.js';
 import { JwtTokenService } from '../../infrastructure/security/jwt-token-service.js';
+import { MfaSecretCipher } from '../../infrastructure/security/mfa-secret-cipher.js';
 import { PasswordHasher } from '../../infrastructure/security/password-hasher.js';
 import { ChangePasswordService } from './application/change-password.service.js';
 import { InvitationService } from './application/invitation.service.js';
@@ -33,6 +34,7 @@ import { AuthController } from './http/auth.controller.js';
   controllers: [AuthController],
   providers: [
     PasswordHasher,
+    MfaSecretCipher,
     JwtTokenService,
     { provide: RATE_LIMITER, useClass: InMemoryRateLimiter },
     RateLimitGuard,

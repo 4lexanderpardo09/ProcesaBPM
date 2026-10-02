@@ -58,6 +58,7 @@ Las obligatorias son las que no tienen valor por defecto. Un valor inválido o f
 | `DATABASE_URL` | sí | | Login de `app_runtime` |
 | `PLATFORM_DATABASE_URL` | sí | | Login de `app_platform` |
 | `JWT_SECRET` | sí | | ≥ 32 bytes |
+| `MFA_ENCRYPTION_KEYS` | sí | | Llaves AES-256 con las que se cifran los secretos TOTP, `id:base64` separadas por comas (32 bytes cada una, p. ej. `echo "k$(date +%Y%m):$(openssl rand -base64 32)"`). La primera cifra y todas descifran. Solo el API la recibe; el worker no. Ver «Rotar la llave de MFA» |
 | `TRUST_PROXY` | no | `false` | `false`, número de proxies delante del API (`1`) o lista de direcciones/CIDR separadas por comas. Del cliente IP dependen los límites de intentos y las sesiones; `true` se rechaza |
 | `DB_POOL_MAX` | no | `10` (máx. 200) | Conexiones del API a la BD |
 | `DB_TX_TIMEOUT_MS` | no | `10000` (máx. 120000) | Duración máxima de una transacción; también `statement_timeout` de la BD |

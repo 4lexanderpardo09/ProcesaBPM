@@ -3,6 +3,7 @@ import { afterAll, beforeAll } from 'vitest';
 
 export const TEST_WEB_BASE_URL = 'http://web.test';
 export const TEST_OUTBOX_TOKEN_KEY = 'outbox-test-key-with-more-than-32-bytes!!';
+export const TEST_MFA_ENCRYPTION_KEYS = `test:${Buffer.alloc(32, 7).toString('base64')}`;
 export const TEST_JWT_SECRET = 'integration-test-secret-with-more-than-32-bytes';
 const VARIABLES = [
   'NODE_ENV',
@@ -12,6 +13,7 @@ const VARIABLES = [
   'WORKER_DATABASE_URL',
   'PLATFORM_DATABASE_URL',
   'JWT_SECRET',
+  'MFA_ENCRYPTION_KEYS',
   'TRUST_PROXY',
   'STORAGE_ENDPOINT',
   'STORAGE_REGION',
@@ -40,6 +42,7 @@ export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[
       WORKER_DATABASE_URL: inject('workerUrl'),
       PLATFORM_DATABASE_URL: inject('platformUrl'),
       JWT_SECRET: TEST_JWT_SECRET,
+      MFA_ENCRYPTION_KEYS: TEST_MFA_ENCRYPTION_KEYS,
       STORAGE_ENDPOINT: inject('storage').endpoint,
       STORAGE_REGION: inject('storage').region,
       STORAGE_BUCKET: inject('storage').bucket,
