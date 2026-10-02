@@ -1962,6 +1962,7 @@ model TicketIncident {
   @@index([tenantId, assignedToId])
   @@index([tenantId, createdById])
   @@index([tenantId, stepId])
+  @@index([tenantId, openedAt])
   @@map("ticket_incidents")
 }
 
@@ -2028,6 +2029,7 @@ model TicketError {
   @@index([tenantId, errorSubtypeId])
   @@index([tenantId, errorTypeId])
   @@index([tenantId, reporterId])
+  @@index([tenantId, createdAt])
   @@map("ticket_errors")
 }
 
