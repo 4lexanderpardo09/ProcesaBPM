@@ -120,11 +120,6 @@ describe('login attempts and one-use tokens', () => {
       expect(await consume({ jti, userId })).toBe(false);
     });
 
-    it('refuses an expired token', async () => {
-      const userId = await newUser();
-      expect(await consume({ userId, expiresAt: new Date(Date.now() - 1_000) })).toBe(false);
-    });
-
     it('refuses a token issued before, or in the same instant as, the last password change', async () => {
       const userId = await newUser();
       await db.owner.query(`UPDATE users SET password_changed_at = now() WHERE id = $1`, [userId]);

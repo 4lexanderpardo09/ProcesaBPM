@@ -56,13 +56,13 @@ ALTER TABLE consumed_auth_tokens FORCE ROW LEVEL SECURITY;
 
 -- Consumes a token once. Also enforces "issued after the last password change" and an ACTIVE account. FOR SHARE orders a
 -- concurrent password change against this consumption: either the change waits, or this call sees the new timestamp.
+-- Expiry is the JWT's business (checked with the application clock before this is called); expires_at is kept only so rows can be purged.
 -- The comparison is strict: `iat` has whole seconds, so a token issued in the same second as the change is refused.
 CREATE FUNCTION auth_consume_login_token(p_jti uuid, p_user_id uuid, p_purpose text, p_issued_at timestamptz, p_expires_at timestamptz)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
   BEGIN
-    IF p_expires_at <= now() THEN RETURN false; END IF;
     PERFORM 1 FROM users
       WHERE id = p_user_id AND status = 'ACTIVE'
         AND (password_changed_at IS NULL OR p_issued_at > password_changed_at)

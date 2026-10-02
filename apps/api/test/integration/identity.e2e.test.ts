@@ -64,6 +64,8 @@ describe('identity API: members', () => {
       const message = await mail.waitForMail(email);
       expect(message.subject).toBe('Te invitaron a ProcesaBPM');
       await http().post('/auth/invitations/accept').send({ token: tokenOf(message), password: PASSWORD }).expect(200);
+      // Selection tokens issued in the same second as the password change are refused (iat has whole seconds).
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
 
       const session = await signIn(app, email, tenant.tenantId, PASSWORD);
       const me = await http().get('/auth/me').set(bearer(session.accessToken)).expect(200);
@@ -360,6 +362,8 @@ describe('identity API: roles, permissions and groups', () => {
       const invited = (await admin.post('/members/invitations', { email, firstName: 'L', lastName: 'L', roleId: role.id, companyIds: [tenant.companyId] }).expect(201)).body;
       expect(invited.userId).toBeDefined();
       await request(app.getHttpServer()).post('/auth/invitations/accept').send({ token: await linkTokenFor(email), password: PASSWORD }).expect(200);
+      // Selection tokens issued in the same second as the password change are refused (iat has whole seconds).
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
       const session = new ApiClient(app, (await signIn(app, email, tenant.tenantId, PASSWORD)).accessToken);
 
       await session.get('/companies').expect(403);
