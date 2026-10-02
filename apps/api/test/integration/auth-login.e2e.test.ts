@@ -152,15 +152,6 @@ describe('POST /auth/login', () => {
     expect(await userRow(db, user.userId)).toMatchObject({ failed_logins: 4, locked_until: null });
   });
 
-  it('answers 501 MFA_NOT_IMPLEMENTED only after the right password of an MFA user', async () => {
-    const user = await seedUser(db, tenant);
-    await db.platform.query('UPDATE users SET mfa_enabled = true WHERE id = $1', [user.userId]);
-    const right = await login(user.email, user.password).expect(501);
-    expect(right.body.error.code).toBe('MFA_NOT_IMPLEMENTED');
-    const wrong = await login(user.email, 'wrong password').expect(401);
-    expect(wrong.body.error.code).toBe('INVALID_CREDENTIALS');
-  });
-
   it('lists only the organizations where the membership is not inactive', async () => {
     const user = await seedUser(db, tenant);
     const other = await seedTenant(db.platform);

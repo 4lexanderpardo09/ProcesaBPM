@@ -489,6 +489,11 @@ model User {
   /// TOTP secret encrypted by the application (AES-256-GCM); never stored in clear text.
   mfaSecretEncrypted Bytes?     @map("mfa_secret_encrypted")
   mfaEnabled         Boolean    @default(false) @map("mfa_enabled")
+  mfaEnabledAt       DateTime?  @map("mfa_enabled_at") @db.Timestamptz(3)
+  /// The last accepted TOTP time step (replay protection). Not readable by the application role.
+  mfaLastStep        BigInt?    @map("mfa_last_step")
+  mfaFailedAttempts  Int        @default(0) @map("mfa_failed_attempts")
+  mfaLockedUntil     DateTime?  @map("mfa_locked_until") @db.Timestamptz(3)
   emailVerifiedAt    DateTime?  @map("email_verified_at") @db.Timestamptz(3)
   lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(3)
   failedLogins       Int        @default(0) @map("failed_logins")
@@ -502,6 +507,7 @@ model User {
   refreshSessions RefreshSession[]
   tokens          UserToken[]
   consumedAuthTokens ConsumedAuthToken[]
+  mfaBackupCodes     UserMfaBackupCode[]
   platformAdmin   PlatformAdmin?
 
   @@map("users")
@@ -515,6 +521,8 @@ model RefreshSession {
   expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
   revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
   replacedBy     String?   @map("replaced_by") @db.Uuid
+  /// The second factor was verified when this session was opened (or MFA was enrolled in it).
+  mfaVerified    Boolean   @default(false) @map("mfa_verified")
   ipAddress      String?   @map("ip_address")
   userAgent      String?   @map("user_agent")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -560,6 +568,19 @@ model ConsumedAuthToken {
   @@map("consumed_auth_tokens")
 }
 
+/// Single-use recovery codes of the second factor (SHA-256 of 80-bit codes). Platform-only: reached through functions.
+model UserMfaBackupCode {
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, codeHash])
+  @@map("user_mfa_backup_codes")
+}
+
 model PlatformAdmin {
   userId    String   @id @map("user_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -592,6 +613,8 @@ model Tenant {
   name              String
   status            TenantStatus @default(ACTIVE)
   planId            String       @map("plan_id") @db.Uuid
+  /// Members must use two-step verification (changed by an administrator).
+  mfaRequired       Boolean      @default(false) @map("mfa_required")
   countryCode       String       @map("country_code") @db.Char(2)
   timeZone          String       @map("time_zone")
   extraStorageBytes BigInt       @default(0) @map("extra_storage_bytes")

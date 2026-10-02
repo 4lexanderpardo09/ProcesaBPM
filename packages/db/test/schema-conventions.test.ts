@@ -117,7 +117,7 @@ describe('schema conventions', () => {
   });
 
   it('gives the application roles no privilege on the platform-only tables', async () => {
-    const platformOnly = ['platform_admins', 'user_tokens', 'consumed_auth_tokens', 'platform_outbox_events', 'platform_event_types'];
+    const platformOnly = ['platform_admins', 'user_tokens', 'consumed_auth_tokens', 'user_mfa_backup_codes', 'platform_outbox_events', 'platform_event_types'];
     const { rows } = await db.owner.query<{ grant: string }>(
       `
       SELECT r.rolname || ' on ' || c.relname AS grant

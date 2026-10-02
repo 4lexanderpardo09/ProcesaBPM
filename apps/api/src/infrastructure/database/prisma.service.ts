@@ -11,6 +11,10 @@ export const SENSITIVE_USER_COLUMNS = {
   failedLogins: true,
   lockedUntil: true,
   passwordChangedAt: true,
+  mfaEnabledAt: true,
+  mfaLastStep: true,
+  mfaFailedAttempts: true,
+  mfaLockedUntil: true,
 } as const;
 
 /**
