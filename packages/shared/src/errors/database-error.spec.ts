@@ -8,6 +8,7 @@ import {
   InvalidStateError,
   OverlapError,
   PermissionDeniedError,
+  TemporarilyUnavailableError,
 } from './domain-error.js';
 
 const pgError = (code: string, message = 'boom') => Object.assign(new Error(message), { code });
@@ -32,7 +33,7 @@ describe('mapDatabaseError', () => {
   });
 
   it.each([
-    ['an unknown SQLSTATE', pgError('40001')],
+    ['an unknown SQLSTATE', pgError('22012')],
     ['P0001 (raise_exception) without mapping', pgError('P0001')],
     ['a code inherited from Object.prototype', pgError('toString')],
     ['an error without code', new Error('plain')],
@@ -40,6 +41,24 @@ describe('mapDatabaseError', () => {
     ['null', null],
   ])('returns undefined for %s', (_label, error) => {
     expect(mapDatabaseError(error)).toBeUndefined();
+  });
+});
+
+describe('mapDatabaseError with transient failures', () => {
+  it.each([
+    ['lock_timeout', pgError('55P03')],
+    ['statement_timeout', pgError('57014')],
+    ['a deadlock', pgError('40P01')],
+    ['a serialization failure', pgError('40001')],
+    ['a Prisma transaction timeout', Object.assign(new Error('Transaction already closed'), { code: 'P2028' })],
+    ['a Prisma write conflict', Object.assign(new Error('write conflict'), { code: 'P2034' })],
+    ['an exhausted connection pool', Object.assign(new Error('pool timeout'), { code: 'P2024' })],
+    ['a lock timeout wrapped by the driver adapter', Object.assign(new Error('prisma'), { code: 'P2010', meta: { driverAdapterError: { cause: { originalCode: '55P03' } } } })],
+  ])('says to try again after %s', (_label, error) => {
+    const mapped = mapDatabaseError(error);
+    expect(mapped).toBeInstanceOf(TemporarilyUnavailableError);
+    expect(mapped?.code).toBe('TEMPORARILY_UNAVAILABLE');
+    expect((mapped as TemporarilyUnavailableError).retryAfterSeconds).toBeGreaterThan(0);
   });
 });
 

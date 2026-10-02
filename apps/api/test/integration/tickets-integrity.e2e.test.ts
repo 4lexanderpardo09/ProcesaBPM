@@ -71,7 +71,7 @@ describe('ticket integrity: concurrency, closing and version pinning', () => {
       for (let round = 0; round < 10; round += 1) {
         const created = await create(twoSteps).expect(201);
         const attempts = await Promise.all([move(worker, created.body.id, twoSteps.transition.Next!, created.body.openVisitId), move(worker, created.body.id, twoSteps.transition.Next!, created.body.openVisitId)]);
-        expect(attempts.map((attempt) => attempt.status).sort(), `round ${round}`).toEqual([200, 409]);
+        expect(attempts.map((attempt) => attempt.status).sort(), `round ${round}: ${JSON.stringify(attempts.map((attempt) => attempt.body))}`).toEqual([200, 409]);
         expect(attempts.find((attempt) => attempt.status === 409)!.body.error.code).toBe('STALE_TICKET');
 
         const visits = await world.visits(created.body.id);
@@ -81,6 +81,25 @@ describe('ticket integrity: concurrency, closing and version pinning', () => {
         expect(await world.assignees(created.body.id)).toHaveLength(1);
       }
     });
+
+    it('answers 503 with a retry hint, and writes nothing, when the ticket stays locked past the transaction timeout', async () => {
+      const created = await create(twoSteps).expect(201);
+      const holder = await db.platform.connect();
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT id FROM tickets WHERE tenant_id = $1 AND id = $2 FOR UPDATE', [world.tenant.tenantId, created.body.id]);
+        const blocked = await move(worker, created.body.id, twoSteps.transition.Next!, created.body.openVisitId);
+        expect(blocked.status).toBe(503);
+        expect(blocked.body.error.code).toBe('TEMPORARILY_UNAVAILABLE');
+        expect(blocked.headers['retry-after']).toBe('1');
+      } finally {
+        await holder.query('ROLLBACK');
+        holder.release();
+      }
+      expect((await world.visits(created.body.id)).map((visit) => visit.exited_at)).toEqual([null]);
+      // The same request, repeated once the lock is gone, succeeds: that is what "try again" promises.
+      await move(worker, created.body.id, twoSteps.transition.Next!, created.body.openVisitId).expect(200);
+    }, 40_000);
 
     it('a transition that loops onto its own step does not apply twice either', async () => {
       const created = await create(twoSteps).expect(201);

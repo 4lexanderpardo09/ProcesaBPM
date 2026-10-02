@@ -160,7 +160,7 @@ Reglas:
 
 ## 7. Cómo se accede a los datos en `apps/api` (hecho)
 - `TenantContext` guarda `{ tenantId, userId }` en un `AsyncLocalStorage`. En HTTP lo fija `TenantScopeInterceptor` con el principal que verificó el guard (§8); en los jobs, quien los ejecute. Rechaza ids que no sean UUID (`InvalidTenantContextError`).
-- La transacción usa `DB_TX_TIMEOUT_MS` (10 s) y `DB_TX_MAX_WAIT_MS` (5 s), y el pool del rol runtime `DB_POOL_MAX` (10); los tres son opcionales y se validan con zod.
+- La transacción usa `DB_TX_TIMEOUT_MS` (10 s) y `DB_TX_MAX_WAIT_MS` (5 s), `DB_LOCK_TIMEOUT_MS` (5 s: cuánto espera una sentencia un bloqueo antes de que la BD la cancele y la petición responda 503) y el pool del rol runtime `DB_POOL_MAX` (10); los cuatro son opcionales y se validan con zod.
 - Todo acceso a datos de un tenant pasa por `TenantTransactionRunner.withTenantTransaction(work)`: abre una transacción, fija `app.tenant_id` y `app.user_id` como locales a la transacción, verifica que la BD los confirmó y ejecuta `work`. Sin contexto lanza `MissingTenantContextError` y no consulta nada.
 - `DatabaseModule` **no exporta** `PrismaService` (el cliente del rol `app_runtime`, con `omit` de las columnas sensibles de `users`): los repositorios solo reciben el `tx` del runner.
 - El cliente de plataforma (rol `app_platform`, ignora RLS) vive en `PlatformDatabaseModule` (`infrastructure/database/platform-*`), que solo importa `modules/platform` y que el worker no tiene. Se usa únicamente mediante `PlatformTransactionRunner.run(tx => …)` y toda fila se escribe con `tenant_id` explícito. `src/architecture.spec.ts` falla si otro módulo importa esos archivos.

@@ -52,6 +52,8 @@ const envSchema = z.object({
   DB_TX_TIMEOUT_MS: positiveInteger(10_000, 120_000),
   /** How long a transaction may wait for a free connection (Prisma's own default is 2 s). */
   DB_TX_MAX_WAIT_MS: positiveInteger(5_000, 60_000),
+  /** How long a statement may wait for a row or table lock before the database cancels it (the request then answers 503). */
+  DB_LOCK_TIMEOUT_MS: positiveInteger(5_000, 60_000),
   /** Connections of the runtime pool. */
   DB_POOL_MAX: positiveInteger(10, 200),
   /** S3-compatible object storage (SeaweedFS in development, R2 or S3 in production). */

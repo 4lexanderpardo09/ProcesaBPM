@@ -1,5 +1,5 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Inject } from '@nestjs/common';
-import { DomainError, mapDatabaseError, RateLimitedError } from '@procesabpm/shared';
+import { DomainError, mapDatabaseError, RateLimitedError, TemporarilyUnavailableError } from '@procesabpm/shared';
 import type { Response } from 'express';
 import { JsonLogger } from '../logging/json-logger.js';
 import { RequestContext } from '../logging/request-context.js';
@@ -70,7 +70,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       code: domainError.code,
       message,
       details: domainError.details,
-      ...(domainError instanceof RateLimitedError
+      ...(domainError instanceof RateLimitedError || domainError instanceof TemporarilyUnavailableError
         ? { headers: { 'Retry-After': String(domainError.retryAfterSeconds) } }
         : {}),
     };

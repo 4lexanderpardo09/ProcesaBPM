@@ -71,6 +71,18 @@ describe('AllExceptionsFilter', () => {
     });
   });
 
+  it.each([
+    ['a lock timeout', prismaError('P2010', '55P03')],
+    ['a deadlock', prismaError('P2010', '40P01')],
+    ['a transaction timeout', Object.assign(new Error('Unable to start a transaction in the given time'), { code: 'P2028' })],
+  ])('answers %s with 503 and when to retry, never with a 4xx the client would not repeat', (_label, exception) => {
+    const response = respond(exception);
+    expect(response.status).toBe(503);
+    expect(response.body.error.code).toBe('TEMPORARILY_UNAVAILABLE');
+    expect(response.headers['Retry-After']).toBe('1');
+    expect(JSON.stringify(response.body)).not.toContain('secret_table');
+  });
+
   it('tells a rate-limited client when to retry', () => {
     const response = respond(new RateLimitedError(42));
     expect(response.status).toBe(429);

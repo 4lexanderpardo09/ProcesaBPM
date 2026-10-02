@@ -5,6 +5,13 @@ import { TenantContextMismatchError } from '@procesabpm/shared';
 export interface DatabaseScope {
   readonly tenantId: string;
   readonly userId: string;
+  /**
+   * Upper bounds the database itself enforces for this transaction: how long a statement may wait for a lock and how long
+   * any one statement may run. Prisma's transaction timeout alone cannot cancel a statement stuck behind a row lock, so
+   * without these a stuck lock holds the request (and a pool connection) until it is released.
+   */
+  readonly lockTimeoutMs?: number;
+  readonly statementTimeoutMs?: number;
 }
 
 interface AppliedScope {
@@ -24,4 +31,13 @@ export async function applyDatabaseScope(tx: Prisma.TransactionClient, scope: Da
   if (applied?.tenant_id !== scope.tenantId || applied.user_id !== scope.userId) {
     throw new TenantContextMismatchError();
   }
+  if (scope.lockTimeoutMs !== undefined && scope.statementTimeoutMs !== undefined) {
+    await tx.$executeRaw`SELECT set_config('lock_timeout', ${String(scope.lockTimeoutMs)}, true), set_config('statement_timeout', ${String(scope.statementTimeoutMs)}, true)`;
+  }
 }
+
+/** The database-side bounds of a transaction that Prisma lets run for `transactionTimeoutMs`. */
+export const databaseTimeouts = (config: { readonly DB_LOCK_TIMEOUT_MS: number }, transactionTimeoutMs: number): Pick<DatabaseScope, 'lockTimeoutMs' | 'statementTimeoutMs'> => ({
+  lockTimeoutMs: config.DB_LOCK_TIMEOUT_MS,
+  statementTimeoutMs: transactionTimeoutMs,
+});

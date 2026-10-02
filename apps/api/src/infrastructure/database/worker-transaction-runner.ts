@@ -3,7 +3,7 @@ import type { Prisma } from '@procesabpm/db';
 import { InvalidTenantContextError, isUuid } from '@procesabpm/shared';
 import type { AppConfig } from '../../config/app-config.js';
 import { APP_CONFIG } from '../../config/tokens.js';
-import { applyDatabaseScope } from './database-scope.js';
+import { applyDatabaseScope, databaseTimeouts } from './database-scope.js';
 import { PrismaService } from './prisma.service.js';
 
 export type WorkerTransaction = Prisma.TransactionClient;
@@ -34,7 +34,7 @@ export class WorkerTransactionRunner {
     if (!isUuid(tenantId)) return Promise.reject(new InvalidTenantContextError());
     return this.prisma.$transaction(
       async (tx) => {
-        await applyDatabaseScope(tx, { tenantId, userId: '' });
+        await applyDatabaseScope(tx, { tenantId, userId: '', ...databaseTimeouts(this.config, options.timeoutMs ?? this.config.DB_TX_TIMEOUT_MS) });
         return work(tx);
       },
       { timeout: options.timeoutMs ?? this.config.DB_TX_TIMEOUT_MS, maxWait: this.config.DB_TX_MAX_WAIT_MS },
@@ -44,7 +44,7 @@ export class WorkerTransactionRunner {
   withoutTenant<T>(work: (tx: WorkerTransaction) => Promise<T>, options: TransactionOptions = {}): Promise<T> {
     return this.prisma.$transaction(
       async (tx) => {
-        await applyDatabaseScope(tx, { tenantId: '', userId: '' });
+        await applyDatabaseScope(tx, { tenantId: '', userId: '', ...databaseTimeouts(this.config, options.timeoutMs ?? this.config.DB_TX_TIMEOUT_MS) });
         return work(tx);
       },
       { timeout: options.timeoutMs ?? this.config.DB_TX_TIMEOUT_MS, maxWait: this.config.DB_TX_MAX_WAIT_MS },

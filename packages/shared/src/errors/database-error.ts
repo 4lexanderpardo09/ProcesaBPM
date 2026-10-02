@@ -6,11 +6,17 @@ import {
   InvalidStateError,
   OverlapError,
   PermissionDeniedError,
+  TemporarilyUnavailableError,
 } from './domain-error.js';
 
 const MAX_CAUSE_DEPTH = 8;
 
 type DomainErrorFactory = (message: string, cause: unknown) => DomainError;
+
+/** Seconds a client should wait before sending the same request again after a transient database failure. */
+export const TRANSIENT_RETRY_AFTER_SECONDS = 1;
+
+const transient: DomainErrorFactory = (_message, cause) => new TemporarilyUnavailableError(TRANSIENT_RETRY_AFTER_SECONDS, { cause });
 
 const FACTORY_BY_SQL_STATE: Readonly<Record<string, DomainErrorFactory>> = {
   '23001': (message, cause) => new ImmutableDataError(message, { cause }),
@@ -19,6 +25,15 @@ const FACTORY_BY_SQL_STATE: Readonly<Record<string, DomainErrorFactory>> = {
   '23505': (message, cause) => new DuplicateError(message, { cause }),
   '23P01': (message, cause) => new OverlapError(message, { cause }),
   '42501': (message, cause) => new PermissionDeniedError(message, { cause }),
+  // Transient failures: lock_timeout, statement_timeout, deadlock and serialization failure, and Prisma's own
+  // transaction timeout / write conflict / exhausted pool. The request wrote nothing and can be repeated.
+  '55P03': transient,
+  '57014': transient,
+  '40P01': transient,
+  '40001': transient,
+  P2028: transient,
+  P2034: transient,
+  P2024: transient,
 };
 
 interface ErrorShape {
