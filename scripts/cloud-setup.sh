@@ -50,6 +50,26 @@ fi
 corepack enable >/dev/null 2>&1 || $SUDO corepack enable
 corepack prepare pnpm@11.20.0 --activate >/dev/null
 
+# --- MinIO (S3-compatible storage for the integration tests) --------------------------
+# MinIO no longer publishes binaries (dl.min.io answers 410) and the sandbox has no Docker daemon, so it is
+# built from source with Go (several minutes the first time; skipped when the binary already exists).
+MINIO_VERSION="v0.0.0-20260212201848-7aac2a2c5b7c"
+MINIO_PORT=9000
+if ! command -v minio >/dev/null 2>&1 && [ ! -x "$HOME/go/bin/minio" ]; then
+  if command -v go >/dev/null 2>&1; then
+    GOTOOLCHAIN=auto go install "github.com/minio/minio@$MINIO_VERSION" || echo "WARNING: could not build MinIO; the storage tests need TEST_S3_ENDPOINT or Docker" >&2
+  else
+    echo "WARNING: Go is not installed, so MinIO was not built; the storage tests need TEST_S3_ENDPOINT or Docker" >&2
+  fi
+fi
+MINIO_BIN="$(command -v minio || echo "$HOME/go/bin/minio")"
+if [ -x "$MINIO_BIN" ] && ! curl -fs "http://127.0.0.1:$MINIO_PORT/minio/health/live" >/dev/null 2>&1; then
+  mkdir -p /tmp/minio-data
+  MINIO_ROOT_USER=minioadmin MINIO_ROOT_PASSWORD=minioadmin nohup "$MINIO_BIN" server /tmp/minio-data --address "127.0.0.1:$MINIO_PORT" >/tmp/minio.log 2>&1 &
+  for _ in $(seq 1 15); do curl -fs "http://127.0.0.1:$MINIO_PORT/minio/health/live" >/dev/null 2>&1 && break; sleep 1; done
+fi
+echo "MinIO on localhost:$MINIO_PORT (minioadmin/minioadmin). Run the API tests with: TEST_S3_ENDPOINT=http://127.0.0.1:$MINIO_PORT pnpm test"
+
 # --- Project dependencies (only when run inside the repository) ------------------------
 # Cloud environments run the setup script before the repository is available; in that
 # case the agent installs dependencies at the start of the session (see CLAUDE.md).
