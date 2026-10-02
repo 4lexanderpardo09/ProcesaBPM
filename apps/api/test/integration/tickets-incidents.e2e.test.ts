@@ -198,11 +198,13 @@ describe('incidents (novedades): pause, hand over, resolve', () => {
       }
     });
 
-    it('two resolutions at the same time: one 200, one 409', async () => {
+    it('two resolutions at the same time: one 200, the other loses (409, or 404 when the first one already took away its access)', async () => {
       const ticket = (await create(single)).body;
       const { incidentId } = (await open(worker, ticket).expect(201)).body;
       const results = await Promise.all([resolve(helper, ticket.id, incidentId), resolve(supervisor, ticket.id, incidentId)]);
-      expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
+      const statuses = results.map((result) => result.status).sort();
+      expect(statuses[0]).toBe(200);
+      expect([404, 409]).toContain(statuses[1]);
     });
 
     it('another tenant cannot open or resolve, and cannot name foreign people', async () => {

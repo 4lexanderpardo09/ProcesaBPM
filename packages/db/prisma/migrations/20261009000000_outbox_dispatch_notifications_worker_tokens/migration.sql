@@ -18,6 +18,8 @@ CREATE FUNCTION worker_issue_password_reset_token(p_event_id uuid, p_user_id uui
     v_user users%ROWTYPE;
     v_token user_tokens%ROWTYPE;
   BEGIN
+    -- Two events of the same person (a resend) are issued one after the other, so the later link replaces the earlier.
+    PERFORM pg_advisory_xact_lock(hashtextextended('user-token:' || p_user_id::text, 0));
     SELECT * INTO v_user FROM users WHERE id = p_user_id AND status = 'ACTIVE';
     IF NOT FOUND THEN
       RETURN;
@@ -56,6 +58,7 @@ CREATE FUNCTION worker_issue_invitation_token(p_event_id uuid, p_tenant_id uuid,
     v_tenant_name text;
     v_token user_tokens%ROWTYPE;
   BEGIN
+    PERFORM pg_advisory_xact_lock(hashtextextended('user-token:' || p_user_id::text, 0));
     SELECT t.name INTO v_tenant_name FROM tenants t WHERE t.id = p_tenant_id AND t.status = 'ACTIVE';
     IF NOT FOUND THEN
       RETURN;

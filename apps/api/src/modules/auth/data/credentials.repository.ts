@@ -49,15 +49,6 @@ export class CredentialsRepository {
       ORDER BY tenant_name, tenant_id`;
   }
 
-  async issueToken(
-    tx: AuthTransaction,
-    token: { userId: string; type: UserTokenType; tokenHash: string; expiresAt: Date },
-  ): Promise<void> {
-    await tx.$queryRaw`
-      SELECT auth_issue_user_token(${token.userId}::uuid, ${token.type}::user_token_type, ${token.tokenHash},
-                                   ${token.expiresAt}::timestamptz, NULL::jsonb)::text AS id`;
-  }
-
   /** Only tokens that can still be used. */
   async findUsableToken(tx: AuthTransaction, tokenHash: string, now: Date): Promise<StoredUserToken | undefined> {
     const [row] = await tx.$queryRaw<StoredUserToken[]>`

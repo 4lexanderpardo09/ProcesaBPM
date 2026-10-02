@@ -15,9 +15,7 @@ export const REFRESH_REUSE_GRACE_MS = 10_000;
 /** Lifetime of a platform session; there is no refresh token for it. */
 export const PLATFORM_SESSION_TTL_MS = 15 * 60 * 1000;
 
-export const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 
-export const PASSWORD_RESET_EMAIL_EVENT = 'email.password_reset';
 
 const MINUTE = 60_000;
 

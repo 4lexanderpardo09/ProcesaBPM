@@ -1,11 +1,6 @@
 import { InvalidStateError } from '@procesabpm/shared';
 import type { MemberStatusValue } from '../data/member.repository.js';
 
-/** The invitation link of a new member lives a week. */
-export const MEMBER_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-export const INVITATION_EMAIL_EVENT = 'email.invitation';
-
 export interface MemberState {
   readonly status: MemberStatusValue;
   readonly joinedAt: Date | null;

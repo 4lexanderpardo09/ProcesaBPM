@@ -27,11 +27,4 @@ export class TenantOwnerRepository {
     });
     await tx.membershipCompany.create({ data: { tenantId: owner.tenantId, userId: owner.userId, companyId: owner.companyId } });
   }
-
-  /** The membership must exist first: the function ties the token to the tenant of the scope. */
-  async issueInvitationToken(tx: PlatformTransaction, token: { userId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
-    await tx.$queryRaw`
-      SELECT auth_issue_user_token(${token.userId}::uuid, 'INVITATION'::user_token_type, ${token.tokenHash},
-                                   ${token.expiresAt}::timestamptz, NULL::jsonb)::text AS id`;
-  }
 }
