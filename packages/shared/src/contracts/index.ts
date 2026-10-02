@@ -1,3 +1,4 @@
+export * from './audit/index.js';
 export * from './approvals/index.js';
 export * from './auth/index.js';
 export * from './calculators/index.js';

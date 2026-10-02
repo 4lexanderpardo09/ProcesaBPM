@@ -11,6 +11,7 @@ import type { Principal } from '../../../common/auth/principal.js';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { CredentialsRepository } from '../data/credentials.repository.js';
 import { MfaRepository } from '../data/mfa.repository.js';
+import { AccountAudit } from './account-audit.js';
 import { CurrentPasswordVerifier } from './current-password-verifier.js';
 import { MfaEnrollmentService } from './mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './mfa-factor-verifier.js';
@@ -25,6 +26,7 @@ export class MfaAccountService {
     @Inject(MfaEnrollmentService) private readonly enrollment: MfaEnrollmentService,
     @Inject(MfaFactorVerifier) private readonly verifier: MfaFactorVerifier,
     @Inject(CurrentPasswordVerifier) private readonly currentPassword: CurrentPasswordVerifier,
+    @Inject(AccountAudit) private readonly audit: AccountAudit,
   ) {}
 
   async status(principal: Principal): Promise<MfaStatusResponse> {
@@ -44,6 +46,7 @@ export class MfaAccountService {
   async confirmEnrollment(principal: Principal, code: string): Promise<BackupCodesResponse> {
     const backupCodes = this.enrollment.newBackupCodes();
     await this.verifier.verify(principal.userId, { code }, false, (tx) => this.mfa.enable(tx, backupCodes.hashes, principal.sessionId));
+    await this.audit.record(principal, 'account.mfa_enabled');
     return { backupCodes: backupCodes.displayed };
   }
 
@@ -59,6 +62,7 @@ export class MfaAccountService {
     await this.currentPassword.verify(userId, request.password);
     const factor = 'code' in request ? { code: request.code } : { backupCode: request.backupCode };
     await this.verifier.verify(userId, factor, true, (tx) => this.mfa.disable(tx, principal.sessionId));
+    await this.audit.record(principal, 'account.mfa_disabled');
   }
 
   /** Replaces the ten backup codes; the old ones stop working. Needs a current TOTP code. */
@@ -68,6 +72,7 @@ export class MfaAccountService {
     if (!enabled) throw new MfaNotEnabledError();
     const backupCodes = this.enrollment.newBackupCodes();
     await this.verifier.verify(userId, { code }, true, (tx) => this.mfa.replaceBackupCodes(tx, backupCodes.hashes));
+    await this.audit.record(principal, 'account.mfa_backup_codes_regenerated');
     return { backupCodes: backupCodes.displayed };
   }
 

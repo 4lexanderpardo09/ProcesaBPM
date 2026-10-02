@@ -8,6 +8,7 @@ import {
   type MfaEnrollment,
   type MfaStatusResponse,
 } from '@procesabpm/shared';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { RateLimit, RateLimitGuard } from '../../../common/auth/rate-limit.js';
 import { AuthenticatedOnly } from '../../../common/auth/route-access.js';
@@ -35,6 +36,7 @@ export class MfaController {
   }
 
   @Post('enrollment/confirm')
+  @Audited('account.mfa_enabled')
   @HttpCode(HttpStatus.OK)
   @RateLimit(RATE_LIMITS.mfaAccount)
   @UseGuards(RateLimitGuard)
@@ -43,6 +45,7 @@ export class MfaController {
   }
 
   @Post('disable')
+  @Audited('account.mfa_disabled')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RateLimit(RATE_LIMITS.mfaAccount)
   @UseGuards(RateLimitGuard)
@@ -51,6 +54,7 @@ export class MfaController {
   }
 
   @Post('backup-codes')
+  @Audited('account.mfa_backup_codes_regenerated')
   @HttpCode(HttpStatus.OK)
   @RateLimit(RATE_LIMITS.mfaAccount)
   @UseGuards(RateLimitGuard)

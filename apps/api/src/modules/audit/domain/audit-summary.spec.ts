@@ -1,0 +1,36 @@
+import { describe, expect, it } from 'vitest';
+import { sanitizeAuditSummary } from './audit-summary.js';
+
+describe('sanitizeAuditSummary', () => {
+  it('keeps ids, names and flags', () => {
+    expect(sanitizeAuditSummary({ id: 'a', name: 'Admin', isAdmin: true, count: 3, at: new Date('2026-10-01T00:00:00Z'), none: null })).toEqual({
+      id: 'a',
+      name: 'Admin',
+      isAdmin: true,
+      count: 3,
+      at: '2026-10-01T00:00:00.000Z',
+      none: null,
+    });
+  });
+
+  it.each(['password', 'newPassword', 'passwordHash', 'secret', 'mfaSecretEncrypted', 'accessToken', 'selectionToken', 'backupCodes', 'apiKey', 'otp'])('drops the key %s at any depth', (key) => {
+    expect(sanitizeAuditSummary({ [key]: 'x', nested: { deeper: { [key]: 'x', ok: 1 } } })).toEqual({ nested: { deeper: { ok: 1 } } });
+  });
+
+  it('cuts long strings', () => {
+    expect((sanitizeAuditSummary({ note: 'x'.repeat(500) }) as { note: string }).note).toHaveLength(201);
+  });
+
+  it('limits the depth', () => {
+    expect(sanitizeAuditSummary({ a: { b: { c: { d: { e: 1 } } } } })).toEqual({ a: { b: { c: {} } } });
+  });
+
+  it('replaces a summary above 8 KiB by a marker', () => {
+    const big = Object.fromEntries(Array.from({ length: 400 }, (_, index) => [`field${index}`, 'x'.repeat(100)]));
+    expect(sanitizeAuditSummary(big)).toEqual({ truncated: true });
+  });
+
+  it('has nothing to keep for undefined', () => {
+    expect(sanitizeAuditSummary(undefined)).toBeUndefined();
+  });
+});

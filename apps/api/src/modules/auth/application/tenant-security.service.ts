@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { MfaNotVerifiedError, type TenantSecuritySettings, type TenantSecuritySettingsResponse } from '@procesabpm/shared';
 import type { Principal } from '../../../common/auth/principal.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { TenantSecurityRepository } from '../data/tenant-security.repository.js';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class TenantSecurityService {
   constructor(
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(TenantSecurityRepository) private readonly security: TenantSecurityRepository,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   get(principal: Principal): Promise<TenantSecuritySettingsResponse> {
@@ -23,7 +25,9 @@ export class TenantSecurityService {
     return this.runner.withTenantTransaction(async (tx) => {
       const { tenantId } = principal;
       if (settings.mfaRequired && !(await this.security.sessionMfaVerified(tx, principal.sessionId))) throw new MfaNotVerifiedError();
+      const before = await this.security.mfaRequired(tx, tenantId);
       await this.security.setMfaRequired(tx, tenantId, settings.mfaRequired);
+      await this.audit.record(tx, { action: 'tenant.security_policy_updated', subjectType: 'Setting', subjectId: tenantId, before: { mfaRequired: before }, after: { mfaRequired: settings.mfaRequired } });
       return this.read(tx, tenantId);
     });
   }

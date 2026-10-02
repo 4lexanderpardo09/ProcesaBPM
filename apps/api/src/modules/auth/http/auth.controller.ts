@@ -39,6 +39,7 @@ import { PasswordResetService } from '../application/password-reset.service.js';
 import { ProfileService } from '../application/profile.service.js';
 import { type ClientInfo, type OpenedSession, SessionService } from '../application/session.service.js';
 import { MfaLoginService } from '../application/mfa-login.service.js';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { ChangePasswordService } from '../application/change-password.service.js';
 import { TenantSelectionService } from '../application/tenant-selection.service.js';
 import { RATE_LIMITS } from '../domain/auth-policy.js';
@@ -201,6 +202,7 @@ export class AuthController {
   /** Any signed-in member may change their own password: no permission of the catalog applies. */
   @AuthenticatedOnly()
   @Post('password')
+  @Audited('account.password_changed')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RateLimit(RATE_LIMITS.passwordChange)
   @UseGuards(RateLimitGuard)

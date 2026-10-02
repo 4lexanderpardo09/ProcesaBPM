@@ -1,5 +1,6 @@
 import type { INestApplication, Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module.js';
 import { Clock } from '../../src/infrastructure/clock.js';
@@ -9,6 +10,7 @@ import { API_CONFIG } from '../../src/config/tokens.js';
 import { configureHttpApp } from '../../src/http-app.js';
 import { RATE_LIMITER, type RateLimiter } from '../../src/infrastructure/security/rate-limiter.js';
 import { SUBJECT_REGISTRY } from '../../src/modules/authorization/application/ability.service.js';
+import { AuditCoverageInterceptor } from './audit-coverage.interceptor.js';
 import { testRegistry } from './test-subjects.js';
 
 export interface TestApp {
@@ -30,7 +32,7 @@ const unlimited: RateLimiter = { hit: () => Promise.resolve({ allowed: true, ret
 
 export async function createTestApp({ controllers = [], rateLimiting = false, clock }: TestAppOptions = {}): Promise<TestApp> {
   const logLines: string[] = [];
-  let builder = Test.createTestingModule({ imports: [AppModule], controllers })
+  let builder = Test.createTestingModule({ imports: [AppModule], controllers, providers: [{ provide: APP_INTERCEPTOR, useClass: AuditCoverageInterceptor }] })
     .overrideProvider(LOG_WRITER)
     .useValue((line: string) => logLines.push(line))
     // The fake subject stands in for the tickets module, which registers its own later.

@@ -11,6 +11,7 @@ import { CurrentPasswordVerifier } from './application/current-password-verifier
 import { MfaAccountService } from './application/mfa-account.service.js';
 import { TenantSecurityService } from './application/tenant-security.service.js';
 import { TenantSecurityRepository } from './data/tenant-security.repository.js';
+import { AccountAudit } from './application/account-audit.js';
 import { MfaEnrollmentService } from './application/mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './application/mfa-factor-verifier.js';
 import { MfaLoginService } from './application/mfa-login.service.js';
@@ -71,6 +72,7 @@ import { AuthController } from './http/auth.controller.js';
     MfaEnrollmentService,
     MfaLoginService,
     MfaAccountService,
+    AccountAudit,
     TenantSecurityService,
     TenantSecurityRepository,
     CurrentPasswordVerifier,
