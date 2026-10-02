@@ -2,7 +2,8 @@ import { BadRequestException, type ArgumentsHost } from '@nestjs/common';
 import {
   InvalidCredentialsError,
   InvalidStateError,
-  MfaNotImplementedError,
+  InvalidMfaCodeError,
+  MfaRequiredError,
   MissingTenantContextError,
   RateLimitedError,
   ValidationFailedError,
@@ -54,7 +55,8 @@ describe('AllExceptionsFilter', () => {
 
   it.each([
     ['invalid credentials', new InvalidCredentialsError(), 401, 'INVALID_CREDENTIALS'],
-    ['MFA not implemented', new MfaNotImplementedError(), 501, 'MFA_NOT_IMPLEMENTED'],
+    ['an invalid MFA code', new InvalidMfaCodeError(), 401, 'INVALID_MFA_CODE'],
+    ['a missing second factor', new MfaRequiredError(), 403, 'MFA_REQUIRED'],
   ])('answers %s', (_label, exception, status, code) => {
     const response = respond(exception);
     expect(response.status).toBe(status);

@@ -13,6 +13,7 @@ export interface StoredSession {
   readonly expiresAt: Date;
   readonly revokedAt: Date | null;
   readonly replacedBy: string | null;
+  readonly mfaVerified: boolean;
 }
 
 export interface NewSession {
@@ -23,6 +24,8 @@ export interface NewSession {
   readonly expiresAt: Date;
   readonly ipAddress: string | null;
   readonly userAgent: string | null;
+  /** The second factor was verified in the sign-in that opened this session. */
+  readonly mfaVerified: boolean;
 }
 
 /** `refresh_sessions`: only the SHA-256 of each refresh token is stored. */
@@ -39,7 +42,7 @@ export class SessionRepository {
   async findById(tx: AuthTransaction, id: string): Promise<StoredSession | undefined> {
     const session = await tx.refreshSession.findUnique({
       where: { id },
-      select: { id: true, userId: true, activeTenantId: true, expiresAt: true, revokedAt: true, replacedBy: true },
+      select: { id: true, userId: true, activeTenantId: true, expiresAt: true, revokedAt: true, replacedBy: true, mfaVerified: true },
     });
     return session ?? undefined;
   }
@@ -48,7 +51,7 @@ export class SessionRepository {
   async findByIdForUpdate(tx: AuthTransaction, id: string): Promise<StoredSession | undefined> {
     const [row] = await tx.$queryRaw<StoredSession[]>`
       SELECT id, user_id AS "userId", active_tenant_id AS "activeTenantId", expires_at AS "expiresAt",
-             revoked_at AS "revokedAt", replaced_by AS "replacedBy"
+             revoked_at AS "revokedAt", replaced_by AS "replacedBy", mfa_verified AS "mfaVerified"
       FROM refresh_sessions WHERE id = ${id}::uuid FOR UPDATE`;
     return row;
   }

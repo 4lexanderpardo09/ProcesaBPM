@@ -3,7 +3,8 @@ import { afterAll, beforeAll } from 'vitest';
 
 export const TEST_WEB_BASE_URL = 'http://web.test';
 export const TEST_OUTBOX_TOKEN_KEY = 'outbox-test-key-with-more-than-32-bytes!!';
-export const TEST_MFA_ENCRYPTION_KEYS = `test:${Buffer.alloc(32, 7).toString('base64')}`;
+export const TEST_MFA_KEY = { id: 'test', key: Buffer.alloc(32, 7) };
+export const TEST_MFA_ENCRYPTION_KEYS = `${TEST_MFA_KEY.id}:${TEST_MFA_KEY.key.toString('base64')}`;
 export const TEST_JWT_SECRET = 'integration-test-secret-with-more-than-32-bytes';
 const VARIABLES = [
   'NODE_ENV',

@@ -4,6 +4,8 @@ import {
   acceptInvitationRequestSchema,
   accessTokenClaimsSchema,
   changePasswordRequestSchema,
+  disableMfaRequestSchema,
+  mfaFactorSchema,
   loginRequestSchema,
   meResponseSchema,
   passwordResetConfirmSchema,
@@ -24,6 +26,26 @@ describe('newPasswordSchema', () => {
     ['empty', '', false],
   ])('%s', (_label, password, valid) => {
     expect(newPasswordSchema.safeParse(password).success).toBe(valid);
+  });
+});
+
+describe('MFA contracts', () => {
+  it.each([
+    [{ code: '123456' }, true],
+    [{ backupCode: 'ABCD-EFGH-JKMN-PQRS' }, true],
+    [{ code: '12345' }, false],
+    [{ code: '12345a' }, false],
+    [{ code: '123456', backupCode: 'ABCD-EFGH-JKMN-PQRS' }, false],
+    [{}, false],
+  ])('a second factor %j is valid: %s', (input, valid) => {
+    expect(mfaFactorSchema.safeParse(input).success).toBe(valid);
+  });
+
+  it('disabling needs the password and exactly one factor', () => {
+    expect(disableMfaRequestSchema.safeParse({ password: 'x', code: '123456' }).success).toBe(true);
+    expect(disableMfaRequestSchema.safeParse({ password: 'x', backupCode: 'ABCD-EFGH-JKMN-PQRS' }).success).toBe(true);
+    expect(disableMfaRequestSchema.safeParse({ code: '123456' }).success).toBe(false);
+    expect(disableMfaRequestSchema.safeParse({ password: 'x' }).success).toBe(false);
   });
 });
 

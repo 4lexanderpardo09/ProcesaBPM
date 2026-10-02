@@ -14,6 +14,13 @@ import {
   passwordResetRequestSchema,
   type SelectTenantRequest,
   changePasswordRequestSchema,
+  mfaCodeSchema,
+  mfaFactorSchema,
+  type MfaCode,
+  type MfaEnrollment,
+  type MfaEnrollmentConfirmedResponse,
+  type MfaFactor,
+  type MfaLoginResponse,
   type ChangePasswordRequest,
   selectTenantRequestSchema,
   UnauthenticatedError,
@@ -31,6 +38,7 @@ import { PlatformSessionService } from '../application/platform-session.service.
 import { PasswordResetService } from '../application/password-reset.service.js';
 import { ProfileService } from '../application/profile.service.js';
 import { type ClientInfo, type OpenedSession, SessionService } from '../application/session.service.js';
+import { MfaLoginService } from '../application/mfa-login.service.js';
 import { ChangePasswordService } from '../application/change-password.service.js';
 import { TenantSelectionService } from '../application/tenant-selection.service.js';
 import { RATE_LIMITS } from '../domain/auth-policy.js';
@@ -52,6 +60,7 @@ export class AuthController {
     @Inject(PasswordResetService) private readonly passwordReset: PasswordResetService,
     @Inject(InvitationService) private readonly invitations: InvitationService,
     @Inject(ProfileService) private readonly profiles: ProfileService,
+    @Inject(MfaLoginService) private readonly mfaLogin: MfaLoginService,
     @Inject(ChangePasswordService) private readonly passwordChange: ChangePasswordService,
     @Inject(BackgroundTasks) private readonly background: BackgroundTasks,
     @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
@@ -64,6 +73,36 @@ export class AuthController {
   @UseGuards(RateLimitGuard)
   logIn(@Body(new ZodValidationPipe(loginRequestSchema)) body: LoginRequest): Promise<LoginResponse> {
     return this.login.login(body);
+  }
+
+  /** With the challenge token the login returned (`Authorization: Bearer`): a right code completes the sign-in. */
+  @Public()
+  @Post('login/mfa')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(RATE_LIMITS.mfaLogin)
+  @UseGuards(RateLimitGuard)
+  verifyMfa(@Req() request: Request, @Body(new ZodValidationPipe(mfaFactorSchema)) body: MfaFactor): Promise<MfaLoginResponse> {
+    return this.mfaLogin.verify(this.challengeOf(request), body);
+  }
+
+  /** The account must enroll: a new secret for the authenticator app (QR data and the key to type). */
+  @Public()
+  @Post('login/mfa/enrollment')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(RATE_LIMITS.mfaLogin)
+  @UseGuards(RateLimitGuard)
+  beginMfaEnrollment(@Req() request: Request): Promise<MfaEnrollment> {
+    return this.mfaLogin.beginEnrollment(this.challengeOf(request));
+  }
+
+  /** The first code from the app: MFA is on, the backup codes come back once, and the sign-in completes. */
+  @Public()
+  @Post('login/mfa/enrollment/confirm')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(RATE_LIMITS.mfaLogin)
+  @UseGuards(RateLimitGuard)
+  confirmMfaEnrollment(@Req() request: Request, @Body(new ZodValidationPipe(mfaCodeSchema)) body: MfaCode): Promise<MfaEnrollmentConfirmedResponse> {
+    return this.mfaLogin.confirmEnrollment(this.challengeOf(request), body.code);
   }
 
   /** Authenticated with the selection token returned by the login (`Authorization: Bearer`). */
@@ -177,6 +216,12 @@ export class AuthController {
   @Get('me')
   me(@CurrentPrincipal() principal: Principal): Promise<MeResponse> {
     return this.profiles.me(principal);
+  }
+
+  private challengeOf(request: Request): string {
+    const token = bearerToken(request.header('authorization'));
+    if (token === undefined) throw new UnauthenticatedError();
+    return token;
   }
 
   private deliver(session: OpenedSession, response: Response): AccessTokenResponse {

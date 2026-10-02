@@ -7,6 +7,11 @@ import { JwtTokenService } from '../../infrastructure/security/jwt-token-service
 import { MfaSecretCipher } from '../../infrastructure/security/mfa-secret-cipher.js';
 import { PasswordHasher } from '../../infrastructure/security/password-hasher.js';
 import { ChangePasswordService } from './application/change-password.service.js';
+import { MfaEnrollmentService } from './application/mfa-enrollment.service.js';
+import { MfaFactorVerifier } from './application/mfa-factor-verifier.js';
+import { MfaLoginService } from './application/mfa-login.service.js';
+import { SelectionIssuer } from './application/selection-issuer.js';
+import { MfaRepository } from './data/mfa.repository.js';
 import { InvitationService } from './application/invitation.service.js';
 import { LoginService } from './application/login.service.js';
 import { OneTimeTokenService } from './application/one-time-token.service.js';
@@ -55,6 +60,11 @@ import { AuthController } from './http/auth.controller.js';
     InvitationService,
     ProfileService,
     ChangePasswordService,
+    SelectionIssuer,
+    MfaFactorVerifier,
+    MfaEnrollmentService,
+    MfaLoginService,
+    MfaRepository,
     AccessTokenGuard,
     { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],

@@ -38,6 +38,7 @@ export interface SignedIn {
 
 export async function logIn(app: INestApplication, email: string, password = TEST_PASSWORD): Promise<string> {
   const response = await request(app.getHttpServer()).post('/auth/login').send({ email, password }).expect(200);
+  expect(response.body.step).toBe('SELECT_ORGANIZATION');
   return response.body.selectionToken as string;
 }
 

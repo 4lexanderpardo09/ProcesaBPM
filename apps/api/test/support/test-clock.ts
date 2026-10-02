@@ -20,6 +20,10 @@ export class TestClock extends Clock {
     this.current = new Date(instant);
   }
 
+  advanceSeconds(seconds: number): void {
+    this.current = new Date(this.current.getTime() + seconds * 1000);
+  }
+
   advanceMinutes(minutes: number): void {
     this.current = new Date(this.current.getTime() + minutes * 60_000);
   }

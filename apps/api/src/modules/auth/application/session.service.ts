@@ -23,7 +23,7 @@ export interface OpenedSession {
 }
 
 type RefreshCheck =
-  | { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date }
+  | { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date; readonly mfaVerified: boolean }
   | { readonly kind: 'invalid' | 'reused' };
 
 type Rotation =
@@ -52,7 +52,7 @@ export class SessionService {
     const refreshExpiresAt = new Date(this.clock.now().getTime() + REFRESH_SESSION_TTL_MS);
     const sessionId = await this.runner.withUserTransaction(userId, async (tx) => {
       if (!(await this.loginTokens.consume(tx, selection, 'TENANT_SELECTION'))) throw new UnauthenticatedError();
-      return this.sessions.create(tx, { userId, activeTenantId: tenantId, tokenHash: sha256Hex(refreshToken), expiresAt: refreshExpiresAt, ...client });
+      return this.sessions.create(tx, { userId, activeTenantId: tenantId, tokenHash: sha256Hex(refreshToken), expiresAt: refreshExpiresAt, mfaVerified: selection.mfa, ...client });
     });
     return { accessToken: await this.issueAccessToken(userId, tenantId, sessionId), refreshToken, refreshExpiresAt };
   }
@@ -103,7 +103,7 @@ export class SessionService {
     if (session.revokedAt !== null || session.expiresAt.getTime() <= now || session.activeTenantId === null) {
       return { kind: 'invalid' };
     }
-    return { kind: 'valid', tenantId: session.activeTenantId, expiresAt: session.expiresAt };
+    return { kind: 'valid', tenantId: session.activeTenantId, expiresAt: session.expiresAt, mfaVerified: session.mfaVerified };
   }
 
   /**
@@ -120,6 +120,7 @@ export class SessionService {
         activeTenantId: tenantId,
         tokenHash: sha256Hex(refreshToken),
         expiresAt: check.expiresAt,
+        mfaVerified: check.mfaVerified,
         ...client,
       });
       await this.sessions.markReplaced(tx, sessionId, id, this.clock.now());

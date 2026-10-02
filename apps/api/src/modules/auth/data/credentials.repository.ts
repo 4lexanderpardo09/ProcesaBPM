@@ -58,11 +58,17 @@ export class CredentialsRepository {
     await tx.$executeRaw`SELECT auth_record_password_success(${userId}::uuid, ${signedIn})`;
   }
 
+  /** Needs `app.user_id` = `userId`: does an ACTIVE membership sit in an organization that requires two-step verification? */
+  async requiresMfaByMembership(tx: AuthTransaction, userId: string): Promise<boolean> {
+    const [row] = await tx.$queryRaw<{ required: boolean }[]>`SELECT auth_mfa_required_by_membership(${userId}::uuid) AS required`;
+    return row?.required === true;
+  }
+
   /** Needs `app.user_id` = `userId`: the function only lists the caller's own organizations. */
   listOrganizations(tx: AuthTransaction, userId: string): Promise<Organization[]> {
     return tx.$queryRaw<Organization[]>`
       SELECT tenant_id AS "tenantId", tenant_slug AS slug, tenant_name AS name,
-             membership_status::text AS "membershipStatus"
+             membership_status::text AS "membershipStatus", tenant_mfa_required AS "mfaRequired"
       FROM auth_list_memberships(${userId}::uuid)
       ORDER BY tenant_name, tenant_id`;
   }

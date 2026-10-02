@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bearer, logIn } from '../support/auth-helpers.js';
 import { seedUser } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
+import { logInWithMfa } from '../support/mfa-fixtures.js';
 import { seedPlatformAdmin } from '../support/platform-fixtures.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 
@@ -67,11 +68,11 @@ describe('the selection token works once and dies with a password change', () =>
 
   it('the platform session works once too, and not after a password change', async () => {
     const admin = await seedPlatformAdmin(db);
-    const token = await logIn(app, admin.email, admin.password);
+    const token = await logInWithMfa(app, db, admin, admin.mfa);
     await selectPlatform(token).expect(200);
     await selectPlatform(token).expect(401);
 
-    const stale = await logIn(app, admin.email, admin.password);
+    const stale = await logInWithMfa(app, db, admin, admin.mfa);
     await changePasswordNow(admin.userId);
     await selectPlatform(stale).expect(401);
   });

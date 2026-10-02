@@ -1,7 +1,8 @@
-import { InvalidCredentialsError, MfaNotImplementedError } from '@procesabpm/shared';
+import { InvalidCredentialsError } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import type { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
+import type { SelectionIssuer } from './selection-issuer.js';
 import type { PasswordHasher } from '../../../infrastructure/security/password-hasher.js';
 import type { CredentialsRepository } from '../data/credentials.repository.js';
 import type { LoginCandidate } from '../domain/login-candidate.js';
@@ -13,6 +14,7 @@ const active: LoginCandidate = {
   status: 'ACTIVE',
   mfaEnabled: false,
 };
+const SELECTION = { step: 'SELECT_ORGANIZATION', organizations: [], selectionToken: 'selection', expiresIn: 120, platformAdmin: false } as const;
 
 function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, claimed = true) {
   const tx = {};
@@ -28,8 +30,8 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
       return Promise.resolve(claimed);
     }),
     recordPasswordSuccess: vi.fn().mockResolvedValue(undefined),
-    listOrganizations: vi.fn().mockResolvedValue([]),
     isPlatformAdmin: vi.fn().mockResolvedValue(false),
+    requiresMfaByMembership: vi.fn().mockResolvedValue(false),
   };
   const hasher = {
     verify: vi.fn(() => {
@@ -37,23 +39,26 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
       return Promise.resolve(passwordMatches);
     }),
   };
-  const tokens = { issueSelectionToken: vi.fn().mockResolvedValue({ token: 'selection', expiresIn: 120 }) };
+  const tokens = { issueMfaChallenge: vi.fn().mockResolvedValue({ token: 'challenge', expiresIn: 300 }) };
+  const selection = { issue: vi.fn().mockResolvedValue(SELECTION) };
   const service = new LoginService(
     runner,
     credentials as unknown as CredentialsRepository,
     hasher as unknown as PasswordHasher,
     tokens as unknown as JwtTokenService,
+    selection as unknown as SelectionIssuer,
   );
-  return { service, credentials, hasher, calls };
+  return { service, credentials, hasher, calls, tokens, selection };
 }
 
 const request = { email: 'jane@example.com', password: 'secret password' };
 
 describe('LoginService', () => {
   it('a correct password returns the organizations and the selection token, and gives the claimed attempt back', async () => {
-    const { service, credentials } = setup(active, true);
-    await expect(service.login(request)).resolves.toEqual({ organizations: [], selectionToken: 'selection', expiresIn: 120, platformAdmin: false });
+    const { service, credentials, selection } = setup(active, true);
+    await expect(service.login(request)).resolves.toEqual(SELECTION);
     expect(credentials.recordPasswordSuccess).toHaveBeenCalledWith(expect.anything(), active.id, true);
+    expect(selection.issue).toHaveBeenCalledWith(active.id, false);
   });
 
   it('claims the attempt before the password is verified', async () => {
@@ -83,21 +88,33 @@ describe('LoginService', () => {
     expect(userId).not.toBe(active.id);
   });
 
-  it('tells a platform administrator that they may open a platform session', async () => {
-    const { service, credentials } = setup(active, true);
-    credentials.isPlatformAdmin.mockResolvedValue(true);
-    await expect(service.login(request)).resolves.toMatchObject({ platformAdmin: true });
-  });
-
-  it('never asks (and never tells) anything about platform rights when the login fails', async () => {
+  it('tells nobody about platform rights when the login fails', async () => {
     const { service, credentials } = setup(undefined, false);
     await expect(service.login(request)).rejects.toBeInstanceOf(InvalidCredentialsError);
     expect(credentials.isPlatformAdmin).not.toHaveBeenCalled();
   });
 
-  it('an MFA account with the right password gets MFA_NOT_IMPLEMENTED and no session', async () => {
-    const { service, credentials } = setup({ ...active, mfaEnabled: true }, true);
-    await expect(service.login(request)).rejects.toBeInstanceOf(MfaNotImplementedError);
-    expect(credentials.listOrganizations).not.toHaveBeenCalled();
+  describe('after the right password', () => {
+    it('an account with MFA gets a verification challenge and no selection token; the sign-in is not complete', async () => {
+      const { service, credentials, tokens, selection } = setup({ ...active, mfaEnabled: true }, true);
+      await expect(service.login(request)).resolves.toEqual({ step: 'MFA_REQUIRED', challengeToken: 'challenge', expiresIn: 300, methods: ['TOTP', 'BACKUP_CODE'] });
+      expect(tokens.issueMfaChallenge).toHaveBeenCalledWith(active.id, 'VERIFY');
+      expect(selection.issue).not.toHaveBeenCalled();
+      expect(credentials.recordPasswordSuccess).toHaveBeenCalledWith(expect.anything(), active.id, false);
+    });
+
+    it('a platform administrator without MFA must enroll first', async () => {
+      const { service, credentials, tokens } = setup(active, true);
+      credentials.isPlatformAdmin.mockResolvedValue(true);
+      await expect(service.login(request)).resolves.toEqual({ step: 'MFA_ENROLLMENT_REQUIRED', challengeToken: 'challenge', expiresIn: 300, reason: 'PLATFORM_ADMIN' });
+      expect(tokens.issueMfaChallenge).toHaveBeenCalledWith(active.id, 'ENROLL');
+    });
+
+    it('a member of an organization that requires MFA must enroll first', async () => {
+      const { service, credentials } = setup(active, true);
+      credentials.requiresMfaByMembership.mockResolvedValue(true);
+      await expect(service.login(request)).resolves.toMatchObject({ step: 'MFA_ENROLLMENT_REQUIRED', reason: 'TENANT_POLICY' });
+      expect(credentials.recordPasswordSuccess).toHaveBeenCalledWith(expect.anything(), active.id, false);
+    });
   });
 });

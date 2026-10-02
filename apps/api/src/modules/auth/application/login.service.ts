@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidCredentialsError, type LoginRequest, type LoginResponse, MfaNotImplementedError } from '@procesabpm/shared';
+import { InvalidCredentialsError, type LoginRequest, type LoginResponse } from '@procesabpm/shared';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import { PasswordHasher } from '../../../infrastructure/security/password-hasher.js';
 import { CredentialsRepository } from '../data/credentials.repository.js';
+import type { LoginCandidate } from '../domain/login-candidate.js';
+import { decideLoginStep } from '../domain/login-step.js';
+import { SelectionIssuer } from './selection-issuer.js';
 
 @Injectable()
 export class LoginService {
@@ -13,6 +16,7 @@ export class LoginService {
     @Inject(CredentialsRepository) private readonly credentials: CredentialsRepository,
     @Inject(PasswordHasher) private readonly hasher: PasswordHasher,
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
+    @Inject(SelectionIssuer) private readonly selection: SelectionIssuer,
   ) {}
 
   /**
@@ -32,14 +36,27 @@ export class LoginService {
     const usable = claimed && candidate !== undefined;
     const passwordMatches = await this.hasher.verify(usable ? candidate.passwordHash : null, request.password);
     if (!usable || !passwordMatches) throw new InvalidCredentialsError();
-    if (candidate.mfaEnabled) throw new MfaNotImplementedError();
+    return this.nextStep(candidate);
+  }
 
-    await this.runner.withAnonymousTransaction((tx) => this.credentials.recordPasswordSuccess(tx, candidate.id, true));
-    const { organizations, platformAdmin } = await this.runner.withUserTransaction(candidate.id, async (tx) => ({
-      organizations: await this.credentials.listOrganizations(tx, candidate.id),
-      platformAdmin: await this.credentials.isPlatformAdmin(tx, candidate.id),
+  /** After a correct password: the second factor, the enrollment it forces, or the organization picker. */
+  private async nextStep(candidate: LoginCandidate): Promise<LoginResponse> {
+    const { id } = candidate;
+    const facts = await this.runner.withUserTransaction(id, async (tx) => ({
+      mfaEnabled: candidate.mfaEnabled,
+      platformAdmin: await this.credentials.isPlatformAdmin(tx, id),
+      tenantRequiresMfa: await this.credentials.requiresMfaByMembership(tx, id),
     }));
-    const selection = await this.tokens.issueSelectionToken(candidate.id);
-    return { organizations, selectionToken: selection.token, expiresIn: selection.expiresIn, platformAdmin };
+    const step = decideLoginStep(facts);
+    // `last_login_at` is stamped when the sign-in is complete; a pending second factor gives the password slot back only.
+    await this.runner.withAnonymousTransaction((tx) => this.credentials.recordPasswordSuccess(tx, id, step.kind === 'SELECT_ORGANIZATION'));
+
+    if (step.kind === 'SELECT_ORGANIZATION') return this.selection.issue(id, false);
+    if (step.kind === 'MFA_REQUIRED') {
+      const challenge = await this.tokens.issueMfaChallenge(id, 'VERIFY');
+      return { step: 'MFA_REQUIRED', challengeToken: challenge.token, expiresIn: challenge.expiresIn, methods: ['TOTP', 'BACKUP_CODE'] };
+    }
+    const challenge = await this.tokens.issueMfaChallenge(id, 'ENROLL');
+    return { step: 'MFA_ENROLLMENT_REQUIRED', challengeToken: challenge.token, expiresIn: challenge.expiresIn, reason: step.reason };
   }
 }

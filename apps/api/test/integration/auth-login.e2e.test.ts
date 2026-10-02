@@ -42,10 +42,11 @@ describe('POST /auth/login', () => {
     const user = await seedUser(db, tenant);
     const response = await login(user.email, user.password).expect(200);
     const body = loginResponseSchema.parse(response.body);
-    expect(body.organizations).toEqual([
-      expect.objectContaining({ tenantId: tenant.tenantId, membershipStatus: 'ACTIVE' }),
-    ]);
-    expect(body.expiresIn).toBe(120);
+    expect(body).toMatchObject({
+      step: 'SELECT_ORGANIZATION',
+      expiresIn: 120,
+      organizations: [expect.objectContaining({ tenantId: tenant.tenantId, membershipStatus: 'ACTIVE', mfaRequired: false })],
+    });
     expect(response.headers['set-cookie']).toBeUndefined();
   });
 
