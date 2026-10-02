@@ -7,6 +7,7 @@ export interface TicketFacts {
   readonly creatorId: string;
   readonly registeredById: string | null;
   readonly workflowId: string;
+  readonly closedAt: Date | null;
 }
 
 export interface TenantFacts {
@@ -23,12 +24,12 @@ export class TicketFactsRepository {
   }
 
   async ticket(tx: WorkerTransaction, tenantId: string, ticketId: string): Promise<TicketFacts | undefined> {
-    const ticket = await tx.ticket.findFirst({ where: { tenantId, id: ticketId, deletedAt: null }, select: { number: true, title: true, creatorId: true, registeredById: true, workflowId: true } });
-    return ticket === null ? undefined : { number: ticket.number.toString(), title: ticket.title, creatorId: ticket.creatorId, registeredById: ticket.registeredById, workflowId: ticket.workflowId };
+    const ticket = await tx.ticket.findFirst({ where: { tenantId, id: ticketId, deletedAt: null }, select: { number: true, title: true, creatorId: true, registeredById: true, workflowId: true, closedAt: true } });
+    return ticket === null ? undefined : { number: ticket.number.toString(), title: ticket.title, creatorId: ticket.creatorId, registeredById: ticket.registeredById, workflowId: ticket.workflowId, closedAt: ticket.closedAt };
   }
 
-  async eventActor(tx: WorkerTransaction, tenantId: string, eventId: string): Promise<string | null> {
-    return (await tx.ticketEvent.findFirst({ where: { tenantId, id: eventId }, select: { actorId: true } }))?.actorId ?? null;
+  async event(tx: WorkerTransaction, tenantId: string, eventId: string): Promise<{ actorId: string | null; createdAt: Date } | undefined> {
+    return (await tx.ticketEvent.findFirst({ where: { tenantId, id: eventId }, select: { actorId: true, createdAt: true } })) ?? undefined;
   }
 
   async assignees(tx: WorkerTransaction, tenantId: string, ticketId: string): Promise<Array<{ userId: string; type: string }>> {

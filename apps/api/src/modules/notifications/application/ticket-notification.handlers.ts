@@ -68,7 +68,10 @@ export class TicketNotificationHandlers implements OnModuleInit {
 
     const eventFacts = await this.eventFacts(tx, tenantId, kind, payload, ticket);
     if (eventFacts === undefined) return;
-    const actorId = payload.eventId === undefined ? null : await this.facts.eventActor(tx, tenantId, payload.eventId);
+    const source = payload.eventId === undefined ? undefined : await this.facts.event(tx, tenantId, payload.eventId);
+    // A movement that ends the ticket emits both `ticket.transitioned` and `ticket.closed`: the person hears it once.
+    if (kind === 'ticket.transitioned' && ticket.closedAt !== null && source?.createdAt.getTime() === ticket.closedAt.getTime()) return;
+    const actorId = source?.actorId ?? null;
     const chosen = chooseRecipients(candidatesFor(kind, eventFacts), actorId);
     const readerIds = new Set(await this.readers.filter(tx, tenantId, payload.ticketId, chosen.map((candidate) => candidate.userId)));
     const recipients = chosen.filter((candidate) => readerIds.has(candidate.userId));

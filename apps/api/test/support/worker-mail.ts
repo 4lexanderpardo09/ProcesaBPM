@@ -25,9 +25,9 @@ export class MailWorker {
     return new MailWorker(module, module.get(OutboxDispatcher), module.get(Mailer) as InMemoryMailer);
   }
 
-  /** Delivers everything that is due now (rounds repeat while batches come back full). */
+  /** Delivers everything that is due now, including the events that handlers queue while running (rounds repeat until one finds nothing). */
   async deliver(): Promise<void> {
-    for (let round = 0; round < 20; round += 1) if (!(await this.dispatcher.runOnce()).full) return;
+    for (let round = 0; round < 500; round += 1) if ((await this.dispatcher.runOnce()).claimed === 0) return;
   }
 
   /** The last message sent to an address. */
