@@ -70,7 +70,7 @@ export class SessionService {
     if (check.kind === 'reused') await this.revokeEverySession(owner.userId);
     if (check.kind !== 'valid') throw new UnauthenticatedError();
 
-    await this.tenantAccess.verify({ userId: owner.userId, tenantId: check.tenantId });
+    await this.tenantAccess.verify({ userId: owner.userId, tenantId: check.tenantId, mfaVerified: check.mfaVerified });
     return this.rotate(owner.id, owner.userId, check.tenantId, client);
   }
 

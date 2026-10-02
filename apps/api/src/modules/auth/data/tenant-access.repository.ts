@@ -17,12 +17,15 @@ export interface TenantAccess {
   readonly userStatus: 'ACTIVE' | 'LOCKED' | 'DISABLED' | undefined;
   readonly membershipStatus: 'INVITED' | 'ACTIVE' | 'INACTIVE' | undefined;
   readonly tenantStatus: 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'DELETED' | undefined;
+  /** The organization requires two-step verification from its members. */
+  readonly tenantMfaRequired: boolean;
 }
 
 export interface SessionState {
   readonly activeTenantId: string | null;
   readonly expiresAt: Date;
   readonly revokedAt: Date | null;
+  readonly mfaVerified: boolean;
 }
 
 /** Runs inside the tenant transaction of the user being checked. */
@@ -41,12 +44,13 @@ export class TenantAccessRepository {
         role: { select: { isActive: true, isAdmin: true, permissionsVersion: true } },
       },
     });
-    const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { status: true } });
+    const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { status: true, mfaRequired: true } });
     const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true } });
     return {
       userStatus: user?.status,
       membershipStatus: membership?.status,
       tenantStatus: tenant?.status,
+      tenantMfaRequired: tenant?.mfaRequired ?? false,
       membership:
         membership === null
           ? undefined
@@ -66,7 +70,7 @@ export class TenantAccessRepository {
   async findSession(tx: TenantTransaction, sessionId: string): Promise<SessionState | undefined> {
     const session = await tx.refreshSession.findUnique({
       where: { id: sessionId },
-      select: { activeTenantId: true, expiresAt: true, revokedAt: true },
+      select: { activeTenantId: true, expiresAt: true, revokedAt: true, mfaVerified: true },
     });
     return session ?? undefined;
   }

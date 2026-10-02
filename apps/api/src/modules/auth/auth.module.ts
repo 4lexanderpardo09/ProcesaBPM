@@ -9,6 +9,8 @@ import { PasswordHasher } from '../../infrastructure/security/password-hasher.js
 import { ChangePasswordService } from './application/change-password.service.js';
 import { CurrentPasswordVerifier } from './application/current-password-verifier.js';
 import { MfaAccountService } from './application/mfa-account.service.js';
+import { TenantSecurityService } from './application/tenant-security.service.js';
+import { TenantSecurityRepository } from './data/tenant-security.repository.js';
 import { MfaEnrollmentService } from './application/mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './application/mfa-factor-verifier.js';
 import { MfaLoginService } from './application/mfa-login.service.js';
@@ -31,6 +33,7 @@ import { ProfileRepository } from './data/profile.repository.js';
 import { SessionRepository } from './data/session.repository.js';
 import { TenantAccessRepository } from './data/tenant-access.repository.js';
 import { AccessTokenGuard } from './http/access-token.guard.js';
+import { TenantSecurityController } from './http/tenant-security.controller.js';
 import { MfaController } from './http/mfa.controller.js';
 import { AuthController } from './http/auth.controller.js';
 
@@ -39,7 +42,7 @@ import { AuthController } from './http/auth.controller.js';
  * by the authorization module, which orders the two.
  */
 @Module({
-  controllers: [AuthController, MfaController],
+  controllers: [AuthController, MfaController, TenantSecurityController],
   providers: [
     PasswordHasher,
     MfaSecretCipher,
@@ -68,6 +71,8 @@ import { AuthController } from './http/auth.controller.js';
     MfaEnrollmentService,
     MfaLoginService,
     MfaAccountService,
+    TenantSecurityService,
+    TenantSecurityRepository,
     CurrentPasswordVerifier,
     MfaRepository,
     AccessTokenGuard,
