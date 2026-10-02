@@ -43,6 +43,18 @@ Cada servicio entra con **su** login, que se ejecuta como su rol de aplicación 
 - `deploy/roles.sql` crea los tres logins con sus contraseñas (variables de `psql`) y es **idempotente**: se vuelve a ejecutar cuando cambia una contraseña. El CI lo ejecuta dos veces. También repara un login creado a mano (`LOGIN` y pertenencia a su rol).
 - **Las credenciales llegan por variables de entorno o secretos del orquestador, nunca dentro de la imagen** (ninguna imagen contiene un `.env`). En Compose o Kubernetes, usa secretos y no las escribas en el archivo; `deploy/example.env` solo muestra los nombres. Genera las contraseñas de BD con `openssl rand -hex 32` (van dentro de URL de conexión: base64 puede producir `/` o `+` y romperla) y los demás secretos con `openssl rand -base64 48`. `deploy/roles.sql` lee las contraseñas del entorno (no de la línea de comandos) y apaga el registro de sentencias de su sesión.
 - `JWT_SECRET` (firma de los tokens de acceso) y `OUTBOX_TOKEN_KEY` (deriva los tokens de los enlaces de correo; solo el worker) son distintos y de al menos 32 bytes. Rotarlos invalida las sesiones y los enlaces pendientes.
+- `MFA_ENCRYPTION_KEYS` (llaves AES-256 con las que se cifran los secretos TOTP; solo el API). Guárdala en el gestor de secretos **con copia de respaldo**: si se pierde, ningún TOTP se puede verificar (los códigos de respaldo siguen sirviendo). Los respaldos de la BD solos no sirven para descifrar nada.
+
+#### Rotar la llave de MFA
+1. Genera otra: `echo "k$(date +%Y%m):$(openssl rand -base64 32)"`.
+2. Despliega con `MFA_ENCRYPTION_KEYS="nueva:…,vieja:…"` (**la primera cifra**, todas descifran). Las altas nuevas usan la nueva, y cada verificación correcta de un TOTP cifrado con una llave vieja lo vuelve a cifrar con la primera.
+3. Cuando ninguna fila use la vieja, quítala. Consulta, como dueño del esquema:
+   ```sql
+   SELECT convert_from(substring(mfa_secret_encrypted FROM 3 FOR get_byte(mfa_secret_encrypted, 1)), 'UTF8') AS key_id, count(*)
+   FROM users WHERE mfa_secret_encrypted IS NOT NULL GROUP BY 1;
+   ```
+   Si quitas una llave antes de tiempo, el TOTP de esas personas falla con 500 (`auth.mfa_secret_undecryptable` en el registro); sus códigos de respaldo siguen sirviendo.
+- **Reloj:** el TOTP tolera ±30 s de diferencia. Los servidores del API deben sincronizar la hora (NTP/chrony).
 - **Dueño del esquema: se probó con un superusuario.** Las migraciones crean roles (algunos con `BYPASSRLS`) y cambian dueños de funciones, así que hoy el dueño debe ser superusuario (o un rol con permisos equivalentes). En una base administrada sin superusuario (RDS, Cloud SQL…) hay que crear antes los cuatro roles `NOLOGIN` y dar al dueño las membresías y permisos necesarios; **no está probado** (§10).
 
 ## 3. Variables de entorno
@@ -131,26 +143,61 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 - **Conexiones:** cada proceso abre un pool de `DB_POOL_MAX` (10) conexiones, y el API además un pequeño pool de plataforma. El total (réplicas × pool) debe quedar por debajo de `max_connections` de Postgres. Con muchas réplicas conviene PgBouncer (§10).
 
 ## 8. Endurecimiento recomendado
-`read_only: true` con `tmpfs: /tmp`, `cap_drop: [ALL]`, `no-new-privileges`, `init: true`, usuario no root (ya viene en la imagen), el API detrás de un proxy con TLS (`TRUST_PROXY` con el número de proxies), la BD y el almacenamiento solo en la red interna. El script de humo ejecuta los tres servicios con ese endurecimiento.
+Sincroniza la hora (NTP) en todos los hosts. `read_only: true` con `tmpfs: /tmp`, `cap_drop: [ALL]`, `no-new-privileges`, `init: true`, usuario no root (ya viene en la imagen), el API detrás de un proxy con TLS (`TRUST_PROXY` con el número de proxies), la BD y el almacenamiento solo en la red interna. El script de humo ejecuta los tres servicios con ese endurecimiento.
 
 ## 9. CI y prueba de humo
 
 El trabajo `Docker images` de `.github/workflows/ci.yml` (en cada PR, sin publicar nada): construye los tres destinos con `buildx` y la caché de GitHub Actions y ejecuta `scripts/smoke-images.sh`, que
 1. comprueba que las imágenes no corren como root, no llevan `.env`, pruebas ni código fuente y que las fuentes del PDF están;
 2. levanta un PostgreSQL 18, aplica las migraciones con la imagen `migrate`, crea los logins con `deploy/roles.sql` (dos veces) y carga el catálogo (dos veces);
-3. arranca el API (solo lectura, sin capacidades) y espera `/health`, `/ready` y el estado `healthy` del contenedor;
-4. arranca el worker, espera el registro «Worker started», lo detiene con SIGTERM y comprueba la parada ordenada; luego detiene el API;
+3. comprueba que el API **no arranca** sin `MFA_ENCRYPTION_KEYS` (falla con «MFA_ENCRYPTION_KEYS is required»), y luego lo arranca (solo lectura, sin capacidades) y espera `/health`, `/ready` y el estado `healthy` del contenedor;
+4. arranca el worker **sin `PORT` ni `JWT_SECRET`**, espera el registro «Worker started», lo detiene con SIGTERM y comprueba la parada ordenada; luego detiene el API;
 5. el mismo trabajo valida la sintaxis de `docker-compose.prod.example.yml` con `docker compose config` (no lo levanta).
 
 Localmente: `docker build` de los tres destinos y `scripts/smoke-images.sh` (usa `API_IMAGE`, `WORKER_IMAGE`, `MIGRATE_IMAGE` si los nombres cambian).
 
 ## 10. Pendientes
 - **PgBouncer** (o el pooler del proveedor): modo transacción es compatible con la forma de trabajar (`set_config(..., true)` dentro de la transacción); falta probarlo y fijar el tamaño de los pools.
-- **Almacenamiento (R2/S3):** el código usa el SDK de S3 con endpoint configurable y está probado con SeaweedFS; falta probar contra Cloudflare R2 (URL prefirmadas, `STORAGE_PUBLIC_ENDPOINT`, CORS del bucket) y decidir el proveedor.
+- **Almacenamiento (AWS S3, decidido):** el código usa el SDK de S3 con endpoint configurable y está probado con SeaweedFS; falta probarlo contra S3 real (URL prefirmadas, CORS del bucket; ver «AWS (pruebas)»).
 - **Proveedor de correo:** hoy SMTP genérico (`SMTP_*`); falta elegir el proveedor (Resend, SES, Brevo), configurar SPF/DKIM/DMARC del dominio y, si se desea, un transporte por API.
 - **Dueño del esquema sin superusuario** (bases administradas): falta definir y probar los permisos mínimos (§2).
+- **Auditoría:** retención y purga, y los registros de acceso del bucket (la descarga no pasa por el API); ver `pendientes.md`.
 - **Healthcheck del worker:** hoy solo se vigila el proceso; un latido (archivo o puerto interno) permitiría detectar un worker colgado.
 - **Registro de imágenes, firma y escaneo de vulnerabilidades:** el CI construye pero no publica; falta decidir el registro, firmar las imágenes (cosign) y escanearlas (Trivy), y automatizar la actualización del digest de la imagen base.
 - **Imagen web:** llega con `apps/web`.
 - **Observabilidad:** métricas, trazas y alertas (el registro JSON ya incluye `requestId`).
 - **Respaldos y recuperación** de la BD y del bucket, y la retención de datos de un cliente que se va (analisis.md §12).
+
+## 11. AWS (pruebas)
+Para las pruebas se usa una cuenta gratuita de AWS. **Ninguna credencial va en el repositorio**: las claves se crean en AWS y se pasan por variables de entorno o secretos del orquestador (§2).
+
+- **Servidor:** una instancia **EC2** con Docker y Docker Compose; corre `api`, `worker` y **PostgreSQL 18 en contenedor en la misma instancia** (`docker-compose.prod.example.yml` es el punto de partida). *Alternativa:* **Amazon RDS for PostgreSQL**, que ya ofrece la versión 18 (confírmalo en la consola para la región elegida). RDS no da superusuario: antes hay que resolver el «dueño del esquema sin superusuario» (§2 y §10). Para pruebas el contenedor es lo más simple.
+- **Bucket S3 privado** (en la misma región que la instancia):
+  - *Block Public Access* **activado** (las cuatro opciones).
+  - Cifrado en reposo **SSE-S3** (AES-256, el predeterminado).
+  - **Versionado desactivado**: nunca se sobrescribe un objeto (la clave de almacenamiento es inmutable y la subida usa `If-None-Match: *`).
+  - **CORS** solo para el origen de la web, métodos `PUT` y `GET`, y los encabezados firmados `content-type`, `content-length` e `if-none-match` (más `ETag` expuesto si hace falta):
+    ```json
+    [{ "AllowedOrigins": ["https://app.ejemplo.com"], "AllowedMethods": ["PUT", "GET"],
+       "AllowedHeaders": ["content-type", "content-length", "if-none-match"], "ExposeHeaders": ["ETag"], "MaxAgeSeconds": 3000 }]
+    ```
+  - S3 soporta `If-None-Match: *` en `PUT` (escrituras condicionales): si el objeto ya existe, la subida falla con 412 y no lo reemplaza.
+  - Variables: `STORAGE_ENDPOINT=https://s3.<región>.amazonaws.com`, `STORAGE_REGION=<región>`, `STORAGE_BUCKET`, `STORAGE_FORCE_PATH_STYLE=false`, y las claves del usuario IAM.
+- **Usuario IAM** exclusivo de la aplicación, con una política mínima limitada al bucket (`s3:ListBucket` solo si el `HEAD`/listado lo necesita):
+  ```json
+  { "Version": "2012-10-17", "Statement": [
+    { "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"], "Resource": "arn:aws:s3:::BUCKET/*" },
+    { "Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": "arn:aws:s3:::BUCKET" } ] }
+  ```
+  Sin acceso de consola y con las claves rotadas periódicamente.
+- **Correo: Amazon SES**, en modo *sandbox* al inicio (solo envía a direcciones verificadas): verifica el dominio (SPF/DKIM/DMARC) y pide salir del sandbox antes de la producción. El worker lo usa por SMTP (`SMTP_*`).
+- Abre solo los puertos 80/443 (proxy con TLS) y el SSH restringido; la BD no se publica.
+
+## 12. Contabo (producción)
+Cuando termine la etapa de pruebas, la producción corre en **Contabo**:
+
+- **Servidor:** un VPS con Docker Compose: `api`, `worker` y PostgreSQL 18 (más el proxy). Los **archivos siguen en AWS S3** (mismo bucket y política de la sección anterior, con claves propias de producción).
+- **Respaldos de PostgreSQL:** `pg_dump` programado (diario) y/o archivado de WAL hacia un bucket S3 **distinto** del de los adjuntos y con versionado y retención; probar la restauración periódicamente. La llave `MFA_ENCRYPTION_KEYS` y los demás secretos se respaldan aparte (§2).
+- **TLS:** un proxy inverso (**Caddy** o **Traefik**) termina HTTPS con certificados automáticos y reenvía al API; `TRUST_PROXY=1` (§3).
+- **Firewall:** solo 80/443 (y SSH restringido por IP o clave); la BD y el worker no se exponen; actualizaciones del sistema y hora sincronizada (NTP).
+- **Latencia hacia S3:** la distancia entre Contabo y AWS no afecta a las subidas ni a las descargas, porque el navegador sube y baja **directo** con la URL firmada; el API solo firma y confirma.
