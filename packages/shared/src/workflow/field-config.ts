@@ -40,7 +40,7 @@ export const FIELD_CONFIG_SCHEMAS: Readonly<Record<FieldType, z.ZodType<Record<s
     })
     .strict(),
   FILE: z.object({ maxFiles: z.number().int().min(1).max(15).default(1), accept: z.array(z.enum(['PDF', 'IMAGE', 'OFFICE', 'ZIP'])).min(1).default(['PDF', 'IMAGE', 'OFFICE', 'ZIP']) }).strict(),
-  FORMULA: z.object({ expression: z.string().min(1).max(2000), resultType: z.enum(['NUMBER', 'CURRENCY', 'DATE', 'TEXT']) }).strict(),
+  FORMULA: z.object({ expression: z.string().min(1).max(2000), resultType: z.enum(['NUMBER', 'CURRENCY', 'DATE', 'TEXT']), decimals: z.number().int().min(0).max(6).optional() }).strict(),
   CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100) }).strict(),
 };
 

@@ -264,9 +264,11 @@ describe('validateWorkflowGraph: fields', () => {
   it('formulas reference existing fields and no cycles', () => {
     const formula = (id: string, code: string, expression: string) => field(id, 'start', code, { type: 'FORMULA', config: { expression, resultType: 'NUMBER' } });
     expect(codes(withParts({ fields: [formula('1', 'TOTAL', 'PRICE * 2')] }))).toContain('FORMULA_UNKNOWN_FIELD');
-    expect(codes(withParts({ fields: [field('p', 'start', 'PRICE', { type: 'NUMBER' }), formula('1', 'TOTAL', 'SUM(PRICE) * 2')] }))).toEqual([]);
+    expect(codes(withParts({ fields: [field('p', 'start', 'PRICE', { type: 'NUMBER' }), formula('1', 'TOTAL', 'ROUND(PRICE) * 2')] }))).toEqual([]);
     expect(codes(withParts({ fields: [formula('1', 'A', 'B + 1'), formula('2', 'B', 'A + 1')] }))).toContain('FORMULA_CYCLE');
     expect(codes(withParts({ fields: [formula('1', 'A', 'A + 1')] }))).toContain('FORMULA_CYCLE');
+    expect(codes(withParts({ fields: [formula('1', 'A', '1 +')] }))).toContain('FORMULA_INVALID');
+    expect(codes(withParts({ fields: [formula('1', 'A', '"text"')] }))).toContain('FORMULA_RESULT_TYPE_MISMATCH');
   });
 });
 
