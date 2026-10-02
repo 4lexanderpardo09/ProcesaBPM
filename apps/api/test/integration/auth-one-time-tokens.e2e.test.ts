@@ -49,7 +49,7 @@ describe('one-time tokens', () => {
   /** Requests a reset, lets the worker deliver it and returns the token of the link it mailed. */
   async function resetTokenFor(user: TestUser): Promise<string> {
     await requestReset(user.email);
-    await mail.deliver();
+    await mail.deliver({ retries: true });
     return tokenOf(mail.lastTo(user.email)!);
   }
 

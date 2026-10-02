@@ -48,7 +48,7 @@ describe('platform tenant sign-up', () => {
   let mail: MailWorker;
   /** Lets the worker deliver and returns the token of the newest link mailed to the address. */
   const linkTokenFor = async (email: string): Promise<string> => {
-    await mail.deliver();
+    await mail.deliver({ retries: true });
     return tokenOf(mail.lastTo(email)!);
   };
 

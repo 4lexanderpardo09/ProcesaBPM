@@ -35,7 +35,7 @@ describe('identity API: members', () => {
 
   /** Lets the worker deliver what is queued and returns the token of the newest link mailed to the address. */
   const linkTokenFor = async (email: string): Promise<string> => {
-    await mail.deliver();
+    await mail.deliver({ retries: true });
     return tokenOf(mail.lastTo(email)!);
   };
 
@@ -61,7 +61,7 @@ describe('identity API: members', () => {
 
       const [event] = await events(invited.userId);
       expect(event!.payload).toEqual({ userId: invited.userId, tenantId: tenant.tenantId });
-      const message = (await mail.deliver(), mail.lastTo(email)!);
+      const message = await mail.waitForMail(email);
       expect(message.subject).toBe('Te invitaron a ProcesaBPM');
       await http().post('/auth/invitations/accept').send({ token: tokenOf(message), password: PASSWORD }).expect(200);
 
@@ -283,7 +283,7 @@ describe('identity API: roles, permissions and groups', () => {
   let tenant: SeededTenant;
   let mail: MailWorker;
   const linkTokenFor = async (email: string): Promise<string> => {
-    await mail.deliver();
+    await mail.deliver({ retries: true });
     return tokenOf(mail.lastTo(email)!);
   };
 
