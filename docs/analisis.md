@@ -58,6 +58,9 @@ Recomendación: el SaaS se construye como **proyecto nuevo con un modelo de dato
 | Constructor de flujos | **Visual, al estilo del Flow Builder de Truora**, con **React Flow** (confirmado): ver §13. |
 | Facturación | Sin definir todavía. El modelo deja listas las tablas `plan`/`suscripcion` para agregarla después sin rediseñar. |
 | PDF con formulario | **Sí**: además de coordenadas se soportan PDFs con campos de formulario (AcroForm) que se llenan por nombre. |
+| Fórmulas y calculadoras (#15, **por confirmar**) | Lenguaje de fórmulas propio y seguro (sin `eval`), con decimales exactos y valor vacío que se propaga; funciones con nombres en inglés (`IF`, `SUM`, `ADD_BUSINESS_DAYS`…); redondeo comercial (mitad hacia arriba), 2 decimales por defecto. Se recalculan todos los campos calculados en cada envío; un fallo causado por lo que la persona acaba de capturar se rechaza (422) y cualquier otro se guarda vacío con un evento. Calculadoras solo integradas en el código, con parámetros por tenant (hoy `MEAL_ALLOWANCE`: se paga cada comida cuyo inicio de ventana cubre el viaje). |
+| Bloque WAIT (#15, **por confirmar**) | Estaciona el ticket en una visita sin SLA, relojes ni asignados; nadie puede actuar hasta que despierta (el worker lo despierta una sola vez). Una duración en días hábiles termina al cierre del N-ésimo día hábil; un campo fecha vacío o ya pasado deja pasar. El modo `COMPANY_CUTOFF` queda para cuando se diseñen los plazos `CUTOFF`. Si al despertar falla la configuración, se reintenta cada hora. |
+| Reloj reasignado (D12, **por confirmar**) | El reloj de quien pierde el ticket por reasignación se cierra con su resultado a tiempo/tarde y el motivo `REASSIGNED`; en el ranking no es una entrega y solo cuenta en contra si ya estaba vencido. |
 
 ---
 

@@ -28,6 +28,8 @@ export interface OpenVisitRow {
   readonly slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' | null;
   readonly calendarId: string | null;
   readonly pausedMinutes: number;
+  /** Set while the ticket is parked on a WAIT block. */
+  readonly resumeAt: Date | null;
 }
 
 export interface OpenClockRow {
@@ -127,7 +129,7 @@ export class TicketWriteRepository {
   async findOpenVisit(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<OpenVisitRow | null> {
     return tx.ticketStepVisit.findFirst({
       where: { tenantId, ticketId, exitedAt: null },
-      select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, slaValue: true, slaUnit: true, calendarId: true, pausedMinutes: true },
+      select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, slaValue: true, slaUnit: true, calendarId: true, pausedMinutes: true, resumeAt: true },
     });
   }
 
@@ -249,7 +251,7 @@ export class TicketWriteRepository {
     return new Map(rows.map((row) => [row.fieldId, row.value]));
   }
 
-  async upsertFieldValues(tx: TenantTransaction, tenantId: string, ticketId: string, versionId: string, actorId: string, writes: readonly FieldWrite[]): Promise<void> {
+  async upsertFieldValues(tx: TenantTransaction, tenantId: string, ticketId: string, versionId: string, actorId: string | null, writes: readonly FieldWrite[]): Promise<void> {
     for (const write of writes) {
       await tx.ticketFieldValue.upsert({
         where: { tenantId_ticketId_fieldId: { tenantId, ticketId, fieldId: write.fieldId } },
@@ -259,11 +261,16 @@ export class TicketWriteRepository {
     }
   }
 
+  /** Postpones the wake-up of a parked visit and lets the worker claim it again (the retry after a configuration error). */
+  async rescheduleWait(tx: TenantTransaction, tenantId: string, visitId: string, resumeAt: Date): Promise<void> {
+    await tx.ticketStepVisit.updateMany({ where: { tenantId, id: visitId, exitedAt: null, resumeAt: { not: null } }, data: { resumeAt, resumeEnqueuedAt: null } });
+  }
+
   async closeClocks(tx: TenantTransaction, tenantId: string, completedAt: Date, clocks: readonly ClosedClock[]): Promise<void> {
     for (const clock of clocks) {
       await tx.ticketSlaClock.updateMany({
         where: { tenantId, id: clock.clockId, completedAt: null },
-        data: { completedAt, businessMinutes: clock.businessMinutes, result: clock.result },
+        data: { completedAt, businessMinutes: clock.businessMinutes, result: clock.result, completionReason: clock.reason },
       });
     }
   }
@@ -300,6 +307,7 @@ export class TicketWriteRepository {
         slaUnit: visit.sla.unit,
         calendarId: visit.calendarId,
         dueAt: visit.dueAt,
+        ...(visit.resumeAt === undefined ? {} : { resumeAt: visit.resumeAt }),
       },
       select: { id: true },
     });
@@ -335,7 +343,7 @@ export class TicketWriteRepository {
   }
 
   /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
-  async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string, stepId: string | null): Promise<void> {
+  async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string | null, stepId: string | null): Promise<void> {
     await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, ...(stepId === null ? {} : { currentStepId: stepId }) } });
   }
 

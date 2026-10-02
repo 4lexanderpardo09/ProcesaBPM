@@ -107,6 +107,7 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect(await world.assignees(ticket.id)).toEqual([{ user_id: b.userId, type: 'PARALLEL' }]);
       const clocks = await world.clocks(ticket.id);
       expect(clocks.map((clock) => [clock.responsible_id === a.userId, clock.completed_at !== null, clock.result !== null])).toContainEqual([true, true, true]);
+      expect(clocks.find((clock) => clock.responsible_id === a.userId)!.completion_reason).toBe('SIGNED');
       expect(clocks.find((clock) => clock.responsible_id === b.userId)!.completed_at).toBeNull();
 
       const last = await sign(b, ticket).expect(200);
@@ -165,6 +166,9 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect([await taskStatus(ticket.id, a), await taskStatus(ticket.id, b)]).toEqual(['REJECTED', 'CANCELLED']);
       expect(await world.assignees(ticket.id)).toEqual([{ user_id: requester.userId, type: 'PRIMARY' }]);
       expect((await world.clocks(ticket.id)).filter((clock) => clock.step_id === flow.step.sign).every((clock) => clock.completed_at !== null)).toBe(true);
+      // The one who rejected delivered the step; the other was cancelled and delivered nothing.
+      const reasons = Object.fromEntries((await world.clocks(ticket.id)).filter((clock) => clock.step_id === flow.step.sign).map((clock) => [clock.responsible_id, clock.completion_reason]));
+      expect(reasons).toEqual({ [a.userId]: 'STEP_EXITED', [b.userId]: 'PARALLEL_CANCELLED' });
       expect((await world.visits(ticket.id))[0]).toMatchObject({ exit_transition_id: flow.transition.Rejected });
       const events = await world.events(ticket.id);
       expect(events.filter((event) => event.type === 'PARALLEL_TASK_COMPLETED').map((event) => event.data?.status).sort()).toEqual(['CANCELLED', 'REJECTED']);

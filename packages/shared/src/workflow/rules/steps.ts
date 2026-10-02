@@ -1,4 +1,5 @@
 import { isAutomaticStep } from '../constants.js';
+import { effectiveFieldType } from '../transition-condition.js';
 import { parseBlockConfig } from '../block-config.js';
 import { type RuleContext } from './context.js';
 
@@ -54,8 +55,10 @@ export function checkSteps({ doc, fieldByCode, problems }: RuleContext): void {
       for (const code of Object.values((config.config.inputs ?? {}) as Record<string, string>).concat(typeof config.config.outputFieldCode === 'string' ? [config.config.outputFieldCode] : [])) {
         if (!fieldByCode.has(code)) problems.error('CALCULATOR_UNKNOWN_FIELD', { ...at, params: { code } });
       }
-      if (step.type === 'WAIT' && config.config.mode === 'UNTIL_FIELD_DATE' && !fieldByCode.has(String(config.config.fieldCode))) {
-        problems.error('WAIT_UNKNOWN_FIELD', { ...at, params: { code: String(config.config.fieldCode) } });
+      if (step.type === 'WAIT' && config.config.mode === 'UNTIL_FIELD_DATE') {
+        const waitField = fieldByCode.get(String(config.config.fieldCode));
+        if (waitField === undefined) problems.error('WAIT_UNKNOWN_FIELD', { ...at, params: { code: String(config.config.fieldCode) } });
+        else if (!['DATE', 'DATETIME'].includes(effectiveFieldType(waitField))) problems.error('WAIT_FIELD_NOT_DATE', { ...at, params: { code: waitField.code } });
       }
     }
   }

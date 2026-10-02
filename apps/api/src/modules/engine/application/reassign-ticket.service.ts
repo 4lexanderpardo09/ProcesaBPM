@@ -47,7 +47,7 @@ export class ReassignTicketService {
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, visit.calendarId, at);
       const opened = openSla({ value: visit.slaValue, unit: visit.slaUnit }, calendar?.calendar ?? null, at);
-      const closedClocks = await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, current.clocks, at);
+      const closedClocks = await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, current.clocks, at, 'REASSIGNED');
 
       const visitPlan: VisitPlan = { stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt, sla: { value: visit.slaValue, unit: visit.slaUnit }, calendarId: visit.calendarId, dueAt: visit.dueAt };
       await this.writes.closeClocks(tx, tenantId, at, closedClocks);
@@ -83,7 +83,7 @@ export class ReassignTicketService {
     const opened = openSla({ value: visit.slaValue, unit: visit.slaUnit }, calendar?.calendar ?? null, at);
     const visitPlan: VisitPlan = { stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt, sla: { value: visit.slaValue, unit: visit.slaUnit }, calendarId: visit.calendarId, dueAt: visit.dueAt };
     const own = current.clocks.filter((clock) => clock.responsibleId === source.userId);
-    await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, own, at));
+    await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, own, at, 'REASSIGNED'));
     await this.writes.moveParallelTask(tx, tenantId, source.id, target.userId);
     await this.writes.deleteAssignees(tx, tenantId, ticket.id, source.userId);
     await this.writes.insertAssignees(tx, tenantId, ticket.id, at, [{ userId: target.userId, type: 'PARALLEL' }]);

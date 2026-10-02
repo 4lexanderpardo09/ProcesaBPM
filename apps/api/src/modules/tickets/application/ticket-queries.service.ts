@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type ListTicketsQuery, NotFoundError, type Page, type TicketDetailResponse, type TicketEventResponse, type TicketSummaryResponse } from '@procesabpm/shared';
+import { type ListTicketsQuery, NotFoundError, type Page, tableColumnTotals, type TicketDetailResponse, type TicketEventResponse, type TicketSummaryResponse } from '@procesabpm/shared';
 import type { Principal } from '../../../common/auth/principal.js';
 import { pageWindow } from '../../../common/crud/pagination.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -26,6 +26,15 @@ const toSummary = (row: SummaryRow): TicketSummaryResponse => ({
   closedAt: row.closedAt?.toISOString() ?? null,
 });
 
+/** The column totals of the TABLE fields that ask for them, by field code. */
+const totalsOf = (fieldValues: DetailRow['fieldValues']): Record<string, Record<string, string>> =>
+  Object.fromEntries(
+    fieldValues
+      .filter((entry) => entry.field.type === 'TABLE')
+      .map((entry) => [entry.field.code, tableColumnTotals(entry.field.config as Record<string, unknown>, entry.value)] as const)
+      .filter(([, totals]) => Object.keys(totals).length > 0),
+  );
+
 const toDetail = (row: DetailRow): TicketDetailResponse => {
   const visit = row.stepVisits[0];
   return {
@@ -44,7 +53,9 @@ const toDetail = (row: DetailRow): TicketDetailResponse => {
     parallelTasks: row.parallelTasks.filter((task) => task.stepId === row.currentStepId && task.loop === row.currentLoop).map((task) => ({ id: task.id, userId: task.userId, status: task.status, completedAt: task.completedAt?.toISOString() ?? null })),
     openIncident: row.incidents[0] === undefined ? null : { id: row.incidents[0].id, assignedToId: row.incidents[0].assignedToId, createdById: row.incidents[0].createdById, openedAt: row.incidents[0].openedAt.toISOString(), descriptionHtml: row.incidents[0].description },
     assignees: row.assignees.map((assignee) => ({ userId: assignee.userId, type: assignee.type, assignedAt: assignee.assignedAt.toISOString() })),
+    waitingUntil: visit?.resumeAt?.toISOString() ?? null,
     values: Object.fromEntries(row.fieldValues.map((entry) => [entry.field.code, entry.value])),
+    totals: totalsOf(row.fieldValues),
   };
 };
 

@@ -44,6 +44,12 @@ function offsetMs(instantMs: number, timeZone: string): number {
 
 const pad = (value: number): string => String(value).padStart(2, '0');
 
+/** Minutes since local midnight at that instant. */
+export function localMinuteOfDay(instantMs: number, timeZone: string): number {
+  const p = localParts(instantMs, timeZone);
+  return p.hour! * 60 + p.minute!;
+}
+
 export function localDateOf(instantMs: number, timeZone: string): string {
   const p = localParts(instantMs, timeZone);
   return `${p.year}-${pad(p.month!)}-${pad(p.day!)}`;

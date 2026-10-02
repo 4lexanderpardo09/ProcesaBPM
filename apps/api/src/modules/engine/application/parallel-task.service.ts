@@ -90,7 +90,7 @@ export class ParallelTaskService {
 
       if (outcome.kind === 'WAIT') {
         const own = current.clocks.filter((clock) => clock.responsibleId === actor.userId);
-        await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, own, at));
+        await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, own, at, 'SIGNED'));
         for (const event of events) await this.writes.insertEvent(tx, tenantId, ticket.id, at, event);
         return { id: ticket.id, number: ticket.number.toString(), status: 'OPEN', currentStepId: step.id, openVisitId: visit.id };
       }
@@ -115,10 +115,11 @@ export class ParallelTaskService {
         siteId: ticket.siteId,
         creatorId: ticket.creatorId,
         calendar,
+        timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
       });
-      const closing = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.id);
+      const closing = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.id, 'STEP_EXITED', new Set(rejected ? outcome.cancelUserIds : []));
       events.push(
         {
           type: 'TRANSITIONED',
@@ -134,8 +135,8 @@ export class ParallelTaskService {
       );
       const mutation: TicketMutation =
         arrival.kind === 'END'
-          ? { at, actorId: actor.userId, fieldWrites: [], closing, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
-          : { at, actorId: actor.userId, fieldWrites: [], closing, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
+          ? { at, actorId: actor.userId, fieldWrites: arrival.computed.fieldWrites, closing, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
+          : { at, actorId: actor.userId, fieldWrites: arrival.computed.fieldWrites, closing, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, mutation);
       return { id: ticket.id, number: ticket.number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId: arrival.kind === 'END' ? arrival.endStepId : arrival.step.id, openVisitId };
     });

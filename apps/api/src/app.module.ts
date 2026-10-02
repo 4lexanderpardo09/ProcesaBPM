@@ -10,6 +10,7 @@ import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { StorageModule } from './infrastructure/storage/storage.module.js';
 import { ApprovalsModule } from './modules/approvals/approvals.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { CalculatorsModule } from './modules/calculators/calculators.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
 import { ReportsModule } from './modules/reports/reports.module.js';
@@ -23,7 +24,7 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule, StorageModule, HealthModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, FilesModule, DocumentsModule, NotificationsModule, TicketsModule, ReportsModule],
+  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule, StorageModule, HealthModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, TicketsModule, ReportsModule],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

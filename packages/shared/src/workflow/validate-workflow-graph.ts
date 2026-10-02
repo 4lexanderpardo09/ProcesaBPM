@@ -2,6 +2,7 @@ import { type WorkflowVersionDocument } from './document.js';
 import { ProblemCollector, type WorkflowValidation } from './problems.js';
 import { checkAssignmentModes } from './rules/parallel.js';
 import { checkAmountRules } from './rules/amount-rules.js';
+import { checkCalculators } from './rules/calculators.js';
 import { checkConditions } from './rules/conditions.js';
 import { buildContext } from './rules/context.js';
 import { checkFields } from './rules/fields.js';
@@ -24,6 +25,7 @@ export function validateWorkflowGraph(doc: WorkflowVersionDocument): WorkflowVal
   checkSteps(context);
   checkLoops(context);
   checkFields(context);
+  checkCalculators(context);
   checkConditions(context);
   checkAmountRules(context);
   checkAssignmentModes(context);

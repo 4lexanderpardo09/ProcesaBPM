@@ -12,8 +12,25 @@ const options = z
   .refine((list) => new Set(list.map((entry) => entry.value)).size === list.length, 'Option values must be unique');
 
 const tableColumn = z
-  .object({ code, label: z.string().min(1).max(200), type: z.enum(['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT']), required: z.boolean().default(false), options: options.optional() })
-  .strict();
+  .object({
+    code,
+    label: z.string().min(1).max(200),
+    type: z.enum(['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT']),
+    required: z.boolean().default(false),
+    options: options.optional(),
+    /** NUMBER columns: digits after the point (CURRENCY always has two). */
+    decimals: z.number().int().min(0).max(6).optional(),
+    min: z.number().optional(),
+    max: z.number().optional(),
+    /** NUMBER and CURRENCY columns: the ticket shows the total of the column under the table. */
+    showTotal: z.boolean().default(false),
+  })
+  .strict()
+  .superRefine((column, context) => {
+    const numeric = column.type === 'NUMBER' || column.type === 'CURRENCY';
+    if (!numeric && (column.showTotal || column.min !== undefined || column.max !== undefined)) context.addIssue({ code: 'custom', message: 'min, max and showTotal only apply to number and currency columns' });
+    if (column.type !== 'NUMBER' && column.decimals !== undefined) context.addIssue({ code: 'custom', message: 'decimals only applies to number columns' });
+  });
 
 /** `config` of a field by type. No user-supplied regex (ReDoS), no ids of this version. */
 export const FIELD_CONFIG_SCHEMAS: Readonly<Record<FieldType, z.ZodType<Record<string, unknown>>>> = {
@@ -40,8 +57,8 @@ export const FIELD_CONFIG_SCHEMAS: Readonly<Record<FieldType, z.ZodType<Record<s
     })
     .strict(),
   FILE: z.object({ maxFiles: z.number().int().min(1).max(15).default(1), accept: z.array(z.enum(['PDF', 'IMAGE', 'OFFICE', 'ZIP'])).min(1).default(['PDF', 'IMAGE', 'OFFICE', 'ZIP']) }).strict(),
-  FORMULA: z.object({ expression: z.string().min(1).max(2000), resultType: z.enum(['NUMBER', 'CURRENCY', 'DATE', 'TEXT']) }).strict(),
-  CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100) }).strict(),
+  FORMULA: z.object({ expression: z.string().min(1).max(2000), resultType: z.enum(['NUMBER', 'CURRENCY', 'DATE', 'TEXT']), decimals: z.number().int().min(0).max(6).optional() }).strict(),
+  CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100), inputs: z.record(z.string().min(1).max(100), code).default({}) }).strict(),
 };
 
 /** Where a field takes its values from (a preset list, an uploaded dataset or a calculator). */

@@ -99,7 +99,8 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
       const ticket = await create();
       await fanOut();
       const other = await world.member([grant('read_assigned'), grant('transition')]);
-      await supervisor.client.post(`/tickets/${ticket.id}/reassign`, { toUserId: other.userId, visitId: ticket.openVisitId }).expect(200);
+      const reassigned = await supervisor.client.post(`/tickets/${ticket.id}/reassign`, { toUserId: other.userId, visitId: ticket.openVisitId });
+      expect([reassigned.status, reassigned.body.error?.code]).toEqual([200, undefined]);
       await fanOut();
       expect(await typesOf(other, ticket.id)).toEqual(['TICKET_ASSIGNED']);
       expect(await typesOf(supervisor, ticket.id)).toEqual([]);

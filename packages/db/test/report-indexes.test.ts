@@ -42,6 +42,14 @@ describe('report support: indexes and error type rule', () => {
     }
   });
 
+  it('a clock has a completion reason exactly when it has ended', async () => {
+    const column = await db.platform.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'ticket_sla_clocks' AND column_name = 'completion_reason'`);
+    expect(column.rowCount).toBe(1);
+    const constraint = await db.platform.query(`SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = 'ticket_sla_clocks_completion_reason'`);
+    expect(constraint.rows[0]!.definition).toContain('completed_at IS NULL');
+    expect(constraint.rows[0]!.definition).toContain('completion_reason IS NULL');
+  });
+
   describe('an error type is not both a reopening and a forced close', () => {
     const insert = (isReopening: boolean, forcesClose: boolean) =>
       db.platform.query(`INSERT INTO error_types (tenant_id, name, is_reopening, forces_close) VALUES ($1, $2, $3, $4)`, [tenant.tenantId, randomUUID(), isReopening, forcesClose]);

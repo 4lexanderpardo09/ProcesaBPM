@@ -59,6 +59,12 @@ export class ErrorTypeRepository {
     await tx.errorType.updateMany({ where: { tenantId, id }, data });
   }
 
+  /** Locks (in id order) the active reopening types, so that two deactivations at once cannot both leave the tenant without one. */
+  async lockActiveReopening(tx: TenantTransaction, tenantId: string): Promise<string[]> {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`SELECT id::text AS id FROM error_types WHERE tenant_id = ${tenantId}::uuid AND is_reopening AND is_active ORDER BY id FOR UPDATE`;
+    return rows.map((row) => row.id);
+  }
+
   async listSubtypes(tx: TenantTransaction, tenantId: string, errorTypeId: string, query: PageQuery): Promise<{ rows: ErrorSubtypeRow[]; total: number }> {
     const where = { tenantId, errorTypeId, ...nameFilter(query) };
     const [rows, total] = await Promise.all([tx.errorSubtype.findMany({ where, select: SUBTYPE_SELECT, orderBy: [{ name: 'asc' }, { id: 'asc' }], ...pageWindow(query) }), tx.errorSubtype.count({ where })]);

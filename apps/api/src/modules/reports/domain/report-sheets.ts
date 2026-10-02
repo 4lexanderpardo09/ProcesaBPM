@@ -36,8 +36,8 @@ export const summarySheets = (report: SummaryReport): Sheet[] => [
 export const responsiblesSheets = (rows: readonly ResponsibleSlaRow[]): Sheet[] => [
   {
     name: es.responsibles.sheet,
-    headers: [es.responsibles.user, es.responsibles.clocks, es.responsibles.onTime, es.responsibles.late, es.responsibles.noSla, es.responsibles.compliance, es.responsibles.avg, es.responsibles.median, es.responsibles.paused],
-    rows: rows.map((row) => [row.name ?? es.responsibles.pool, row.clocks, row.onTime, row.late, row.noSla, row.compliancePct, row.avgMin, row.medianMin, row.avgPausedMin]),
+    headers: [es.responsibles.user, es.responsibles.clocks, es.responsibles.onTime, es.responsibles.late, es.responsibles.handedOff, es.responsibles.noSla, es.responsibles.compliance, es.responsibles.avg, es.responsibles.median, es.responsibles.paused],
+    rows: rows.map((row) => [row.name ?? es.responsibles.pool, row.clocks, row.onTime, row.late, row.handedOff, row.noSla, row.compliancePct, row.avgMin, row.medianMin, row.avgPausedMin]),
   },
 ];
 
@@ -98,8 +98,8 @@ export const userDetailSheets = (report: UserDetailReport): Sheet[] => [
   ...(report.summary === null ? [] : [{ name: es.user.summarySheet, headers: rankingHeaders, rows: [rankingRow(report.summary)] }]),
   {
     name: es.user.clocksSheet,
-    headers: [es.user.ticket, es.user.workflow, es.user.step, es.user.loop, es.user.startedAt, es.user.completedAt, es.user.dueAt, es.user.business, es.user.paused, es.user.result],
-    rows: report.clocks.items.map((row) => [row.ticketNumber, row.workflowName, row.stepName, row.loop, new Date(row.startedAt), row.completedAt === null ? null : new Date(row.completedAt), row.dueAt === null ? null : new Date(row.dueAt), row.businessMin, row.pausedMin, result(row.result)]),
+    headers: [es.user.ticket, es.user.workflow, es.user.step, es.user.loop, es.user.startedAt, es.user.completedAt, es.user.dueAt, es.user.business, es.user.paused, es.user.result, es.user.reason],
+    rows: report.clocks.items.map((row) => [row.ticketNumber, row.workflowName, row.stepName, row.loop, new Date(row.startedAt), row.completedAt === null ? null : new Date(row.completedAt), row.dueAt === null ? null : new Date(row.dueAt), row.businessMin, row.pausedMin, result(row.result), row.completionReason]),
   },
 ];
 

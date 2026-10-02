@@ -67,6 +67,8 @@ export const ERROR_CODES = {
   documentSourceInUse: 'DOCUMENT_SOURCE_IN_USE',
   reportTooLarge: 'REPORT_TOO_LARGE',
   reportTimeout: 'REPORT_TIMEOUT',
+  lastReopeningType: 'LAST_REOPENING_TYPE',
+  ticketWaiting: 'TICKET_WAITING',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -278,6 +280,8 @@ export interface FieldValueIssue {
   readonly fieldCode: string;
   readonly row?: number;
   readonly column?: string;
+  /** Why a computed field failed (`FORMULA_ERROR`): `DIVISION_BY_ZERO`, `NUMBER_OVERFLOW`… */
+  readonly reason?: string;
 }
 
 export class FieldValuesInvalidError extends DomainError {
@@ -348,6 +352,13 @@ export class NoMatchingBranchError extends DomainError {
 export class MaxLoopsReachedError extends DomainError {
   constructor(stepId: string, maxLoops: number) {
     super(ERROR_CODES.maxLoopsReached, 'The step cannot be visited again', { details: { stepId, maxLoops } });
+  }
+}
+
+/** The ticket is parked on a WAIT block: nobody holds it, so nobody can act on it until it wakes up. */
+export class TicketWaitingError extends DomainError {
+  constructor(readonly resumeAt: Date) {
+    super(ERROR_CODES.ticketWaiting, 'The ticket is waiting and cannot be acted on until it resumes', { details: { resumeAt: resumeAt.toISOString() } });
   }
 }
 
@@ -534,5 +545,12 @@ export class ReportTooLargeError extends DomainError {
 export class ReportTimeoutError extends DomainError {
   constructor(options?: { cause?: unknown }) {
     super(ERROR_CODES.reportTimeout, 'The report took too long: narrow the filters', options);
+  }
+}
+
+/** Tickets can only be reopened under a reopening error type: the last active one cannot be switched off. */
+export class LastReopeningTypeError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.lastReopeningType, 'The last active reopening error type cannot be deactivated or changed');
   }
 }

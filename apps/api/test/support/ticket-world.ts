@@ -53,6 +53,7 @@ export interface FieldSpec {
   readonly type: string;
   readonly capture?: 'CREATION' | 'STEP' | 'BOTH';
   readonly isRequired?: boolean;
+  readonly isReadOnly?: boolean;
   readonly config?: Record<string, unknown>;
   readonly dataSource?: Record<string, unknown>;
 }
@@ -122,7 +123,7 @@ export async function publishVersion(admin: ApiClient, workflowId: string, versi
   }
   for (const field of spec.fields ?? []) {
     await admin
-      .post(`${base}/fields`, { stepId: id(field.step), code: field.code, label: field.code, type: field.type, capture: field.capture ?? 'BOTH', isRequired: field.isRequired ?? false, config: field.config ?? {}, dataSource: field.dataSource ?? null })
+      .post(`${base}/fields`, { stepId: id(field.step), code: field.code, label: field.code, type: field.type, capture: field.capture ?? 'BOTH', isRequired: field.isRequired ?? false, isReadOnly: field.isReadOnly ?? false, config: field.config ?? {}, dataSource: field.dataSource ?? null })
       .expect(201);
   }
   for (const rule of spec.rules ?? []) {
@@ -220,8 +221,8 @@ export class TicketWorld {
   }
 
   async clocks(ticketId: string) {
-    return (await this.db.platform.query<{ responsible_id: string | null; completed_at: Date | null; result: string | null; due_at: Date | null; started_at: Date; business_minutes: number | null; loop: number; step_id: string; sla_value: number | null; sla_unit: string | null }>(
-      `SELECT responsible_id, completed_at, result, due_at, started_at, business_minutes, loop, step_id, sla_value, sla_unit FROM ticket_sla_clocks WHERE tenant_id = $1 AND ticket_id = $2 ORDER BY started_at, id`, [this.tenant.tenantId, ticketId])).rows;
+    return (await this.db.platform.query<{ responsible_id: string | null; completed_at: Date | null; result: string | null; due_at: Date | null; started_at: Date; business_minutes: number | null; loop: number; step_id: string; sla_value: number | null; sla_unit: string | null; completion_reason: string | null }>(
+      `SELECT responsible_id, completed_at, result, completion_reason, due_at, started_at, business_minutes, loop, step_id, sla_value, sla_unit FROM ticket_sla_clocks WHERE tenant_id = $1 AND ticket_id = $2 ORDER BY started_at, id`, [this.tenant.tenantId, ticketId])).rows;
   }
 
   async assignees(ticketId: string) {

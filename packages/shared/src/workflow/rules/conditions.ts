@@ -1,4 +1,4 @@
-import { operatorAppliesTo, transitionConditionSchema } from '../transition-condition.js';
+import { effectiveFieldType, operatorAppliesTo, transitionConditionSchema } from '../transition-condition.js';
 import { type RuleContext } from './context.js';
 
 /**
@@ -26,7 +26,7 @@ export function checkConditions({ doc, graph, stepById, fieldByCode, reachable, 
         problems.error('CONDITION_UNKNOWN_FIELD', { ...at, params: { code: rule.field } });
         continue;
       }
-      if (!operatorAppliesTo(rule.op, field.type)) problems.error('CONDITION_OPERATOR_TYPE_MISMATCH', { ...at, params: { code: rule.field, operator: rule.op, fieldType: field.type } });
+      if (!operatorAppliesTo(rule.op, effectiveFieldType(field))) problems.error('CONDITION_OPERATOR_TYPE_MISMATCH', { ...at, params: { code: rule.field, operator: rule.op, fieldType: effectiveFieldType(field) } });
       if (!stepById.has(field.stepId) || !reachable.has(transition.fromStepId)) continue;
       if (graph.dominates(field.stepId, transition.fromStepId)) continue;
       if (ancestorsOf(transition.fromStepId).has(field.stepId)) problems.warning('CONDITION_FIELD_MAYBE_UNSET', { ...at, params: { code: rule.field } });

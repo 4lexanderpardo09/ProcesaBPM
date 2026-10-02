@@ -121,6 +121,13 @@ describe('platform tenant sign-up', () => {
       );
       expect(roles.map((role) => role.system_role).sort()).toEqual(ROLE_TEMPLATES.map((template) => template.systemRole).sort());
 
+      const { rows: agentReports } = await db.owner.query<{ conditions: unknown }>(
+        `SELECT rp.conditions FROM role_permissions rp JOIN roles r ON r.tenant_id = rp.tenant_id AND r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
+         WHERE rp.tenant_id = $1 AND r.system_role = 'AGENT' AND p.action = 'read' AND p.subject = 'Report'`,
+        [tenantId],
+      );
+      expect(agentReports).toEqual([{ conditions: { departmentId: '${membership.departmentId}' } }]);
+
       const { rows: groupTypes } = await db.owner.query(`SELECT name, is_default FROM approval_group_types WHERE tenant_id = $1`, [tenantId]);
       expect(groupTypes).toEqual([{ name: 'General', is_default: true }]);
 

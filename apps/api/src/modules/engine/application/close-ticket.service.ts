@@ -11,7 +11,7 @@ import type { EventPlan } from '../domain/plan.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { assertMayClose } from '../domain/close-policy.js';
 import { attachmentsPlanOf } from './submission-files.js';
-import { diversionEdge, SubmissionValidator } from './submission-validator.js';
+import { diversionEdge, submissionEvents, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 import { TicketSlaService } from './ticket-sla.service.js';
 
@@ -63,7 +63,7 @@ export class CloseTicketService {
       assertMayClose(step, diversion !== undefined && !(await this.writes.hasVisited(tx, tenantId, ticket.id, diversion.toStepId)));
       const closing = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, null);
       const events: EventPlan[] = [
-        ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { changes: submission.changes } } satisfies EventPlan]),
+        ...submissionEvents(submission, step.id, visit.loop, actor.userId),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { ...warning } })),
         {
           type: 'CLOSED',

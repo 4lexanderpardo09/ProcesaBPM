@@ -1,9 +1,7 @@
 import { FIELD_CODE_PATTERN, isAutomaticStep } from '../constants.js';
+import { buildFormulaSchema, compileFormula, formulaResultType } from '../../engine/formulas/index.js';
 import { checkFieldDataSource, parseFieldConfig } from '../field-config.js';
 import { type RuleContext } from './context.js';
-
-/** Upper-case words that are not followed by `(`: field codes (a call such as SUM(...) is a function). */
-const FORMULA_TOKEN = /\b[A-Z][A-Z0-9_]*\b(?!\s*\()/g;
 
 /** Field codes, where fields live, their `config` and data source, and formula references. */
 export function checkFields({ doc, stepById, fieldByCode, problems }: RuleContext): void {
@@ -27,13 +25,25 @@ export function checkFields({ doc, stepById, fieldByCode, problems }: RuleContex
     if (!dataSource.valid) problems.error('FIELD_DATA_SOURCE_INVALID', { ...at, params: { issues: dataSource.issues } });
   }
 
+  const isComputed = (code: string): boolean => ['FORMULA', 'CALCULATOR'].includes(fieldByCode.get(code)?.type ?? '');
+  const formulaSchema = buildFormulaSchema(doc.fields);
   const formulaRefs = new Map<string, string[]>();
   for (const field of doc.fields.filter((candidate) => candidate.type === 'FORMULA')) {
-    const expression = typeof field.config.expression === 'string' ? field.config.expression : '';
-    const refs = [...new Set(expression.match(FORMULA_TOKEN) ?? [])];
-    const unknown = refs.filter((token) => !fieldByCode.has(token));
-    if (unknown.length > 0) problems.error('FORMULA_UNKNOWN_FIELD', { fieldId: field.id, params: { codes: unknown } });
-    formulaRefs.set(field.code, refs.filter((token) => fieldByCode.get(token)?.type === 'FORMULA'));
+    const compiled = compileFormula(typeof field.config.expression === 'string' ? field.config.expression : '', formulaSchema);
+    if (!compiled.ok) {
+      const issue = compiled.issues[0]!;
+      const code = issue.code === 'UNKNOWN_FIELD' ? 'FORMULA_UNKNOWN_FIELD' : 'FORMULA_INVALID';
+      problems.error(code, { fieldId: field.id, params: { issue: issue.code, position: issue.position, detail: issue.detail ?? '' } });
+      formulaRefs.set(field.code, []);
+      continue;
+    }
+    if (compiled.formula.type !== formulaResultType(field)) {
+      problems.error('FORMULA_RESULT_TYPE_MISMATCH', { fieldId: field.id, params: { declared: formulaResultType(field), actual: compiled.formula.type } });
+    }
+    formulaRefs.set(field.code, compiled.formula.references.filter(isComputed));
+  }
+  for (const field of doc.fields.filter((candidate) => candidate.type === 'CALCULATOR')) {
+    formulaRefs.set(field.code, Object.values((field.config.inputs ?? {}) as Record<string, string>).filter(isComputed));
   }
   // Depth-first colouring (white, grey = on the current path, black = done): linear in fields and references.
   const inCycle = new Set<string>();

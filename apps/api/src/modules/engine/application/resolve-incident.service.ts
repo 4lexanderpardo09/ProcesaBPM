@@ -87,7 +87,7 @@ export class ResolveIncidentService {
       // Every clock runs again first, with its due date moved by the pause: the ones that end here are judged against that date, not the stale one.
       for (const clock of clocks) await this.writes.resumeClock(tx, tenantId, clock.id, resumedClock(clock));
       const resumedEnding = ending.map((clock) => ({ ...clock, ...resumedClock(clock), pausedAt: null }));
-      await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, resumedEnding, at));
+      await this.writes.closeClocks(tx, tenantId, at, await this.sla.closeClocks(tx, tenantId, ticket.id, company, visit, resumedEnding, at, 'REASSIGNED'));
       if (backToQueue) for (const clock of dropped) await this.writes.releaseClock(tx, tenantId, clock.id);
       await this.writes.updateVisitPause(tx, tenantId, visit.id, resumedVisit);
       await this.writes.deleteAssignees(tx, tenantId, ticket.id);

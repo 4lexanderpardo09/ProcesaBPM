@@ -1,9 +1,11 @@
 import type { RouteHop, StepDocument } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { type Arrival, arrivalEvents, hopEvents, slaTermsOf } from './arrival-planner.js';
+import { type Arrival, arrivalEvents, computedEvents, hopEvents, slaTermsOf } from './arrival-planner.js';
 import { diversionEdge } from './submission-validator.js';
 
 const step = (overrides: Partial<StepDocument> = {}) => ({ id: 's', slaValue: 8, slaUnit: 'BUSINESS_HOURS', slaOverrides: [], ...overrides }) as unknown as StepDocument;
+
+const NO_COMPUTED = { fieldWrites: [], changes: [], failures: [], stepId: undefined } as const;
 
 describe('slaTermsOf', () => {
   it('uses the SLA of the step', () => expect(slaTermsOf(step(), 'c1')).toEqual({ value: 8, unit: 'BUSINESS_HOURS' }));
@@ -34,6 +36,7 @@ describe('events of an arrival', () => {
       hops,
       step: step({ id: 'task' }),
       assigneeType: 'POOL',
+      computed: NO_COMPUTED,
       plan: { visit: { stepId: 'task', loop: 2, enteredAt: new Date(), sla: { value: null, unit: null }, calendarId: null, dueAt: null }, clocks: [], assignees: [{ userId: 'a', type: 'POOL' }, { userId: 'b', type: 'POOL' }], parallelTasks: [] },
     };
     const events = arrivalEvents(arrival, 'actor', 1);
@@ -41,7 +44,19 @@ describe('events of an arrival', () => {
     expect(events[2]).toMatchObject({ stepId: 'task', loop: 2, actorId: 'actor', assigneeId: 'a', data: { assigneeType: 'POOL' }, outbox: [{ type: 'ticket.assigned' }] });
   });
 
-  it('reaching the end only records the blocks passed', () => expect(arrivalEvents({ kind: 'END', hops, endStepId: 'end' }, 'actor', 1)).toHaveLength(2));
+  it('reaching the end only records the blocks passed', () => expect(arrivalEvents({ kind: 'END', hops, endStepId: 'end', computed: NO_COMPUTED }, 'actor', 1)).toHaveLength(2));
+});
+
+describe('computedEvents', () => {
+  it('records what the CALCULATOR blocks set and what failed, without actor', () => {
+    const events = computedEvents({ fieldWrites: [], changes: [{ code: 'ALLOWANCE', before: null, after: 15000 }], failures: [{ fieldCode: 'DOUBLE', reason: 'DIVISION_BY_ZERO', strict: false }], stepId: 'calc' }, 2);
+    expect(events).toEqual([
+      { type: 'FIELDS_UPDATED', stepId: 'calc', loop: 2, actorId: null, data: { changes: [{ code: 'ALLOWANCE', before: null, after: 15000 }], source: 'SYSTEM' } },
+      { type: 'SYSTEM', stepId: 'calc', loop: 2, actorId: null, data: { kind: 'FORMULA_ERROR', fieldCode: 'DOUBLE', reason: 'DIVISION_BY_ZERO' } },
+    ]);
+  });
+
+  it('records nothing when no CALCULATOR block ran', () => expect(computedEvents(NO_COMPUTED, 1)).toEqual([]));
 });
 
 describe('diversionEdge', () => {

@@ -3,20 +3,24 @@ import {
   AmountLimitExceededError,
   type AmountEvaluation,
   captureFieldsFor,
+  computeFieldValues,
   evaluateAmountRules,
   isDataReference,
   type FieldDocument,
   FieldValuesInvalidError,
+  type FormulaFailure,
   type FieldValueIssue,
   type StepDocument,
   validateCapturedValues,
   type WorkflowVersionDocument,
 } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { TicketContextRepository } from '../data/ticket-context.repository.js';
+import { ComputeEnvironment } from './compute-environment.js';
 import { FieldReferenceRepository } from '../data/field-reference.repository.js';
 import type { CompanyRow } from '../data/ticket-context.repository.js';
 import { localDateIn } from '../domain/local-date.js';
-import type { FieldWrite } from '../domain/plan.js';
+import type { EventPlan, FieldWrite } from '../domain/plan.js';
 import { type SubmissionFiles, SubmissionFilesChecker } from './submission-files.js';
 
 export interface SubmissionRequest {
@@ -46,6 +50,8 @@ export interface Submission {
   readonly changes: ReadonlyArray<{ readonly code: string; readonly before: unknown; readonly after: unknown }>;
   readonly amounts: AmountEvaluation;
   readonly files: SubmissionFiles;
+  /** Formulas that failed for reasons the person cannot fix by this submission: stored blank and recorded in the history. */
+  readonly formulaFailures: readonly FormulaFailure[];
 }
 
 const sameValue = (left: unknown, right: unknown): boolean => JSON.stringify(left) === JSON.stringify(right);
@@ -60,7 +66,17 @@ export class SubmissionValidator {
   constructor(
     @Inject(FieldReferenceRepository) private readonly references: FieldReferenceRepository,
     @Inject(SubmissionFilesChecker) private readonly fileChecker: SubmissionFilesChecker,
+    @Inject(TicketContextRepository) private readonly people: TicketContextRepository,
+    @Inject(ComputeEnvironment) private readonly environments: ComputeEnvironment,
   ) {}
+
+  private async recompute(tx: TenantTransaction, request: SubmissionRequest, capturedValues: Readonly<Record<string, unknown>>) {
+    const { document, company } = request;
+    if (!document.fields.some((field) => field.type === 'FORMULA' || field.type === 'CALCULATOR')) return { values: {}, failures: [] };
+    const calendar = await this.people.findBusinessCalendar(tx, request.tenantId, company.timeZone, company.calendarId, request.at);
+    const environment = await this.environments.build(tx, request.tenantId, document, { timeZone: company.timeZone, calendar, at: request.at });
+    return computeFieldValues(document.fields, { ...request.existing, ...capturedValues }, { ...environment, captured: new Set(Object.keys(capturedValues)) });
+  }
 
   async validate(tx: TenantTransaction, request: SubmissionRequest): Promise<Submission> {
     const { document, step } = request;
@@ -83,7 +99,11 @@ export class SubmissionValidator {
     });
     if (fileIssues.length > 0) throw new FieldValuesInvalidError(fileIssues);
 
-    const merged = { ...request.existing, ...captured.values };
+    const computed = await this.recompute(tx, request, captured.values);
+    const strictFailures = computed.failures.filter((failure) => failure.strict);
+    if (strictFailures.length > 0) throw new FieldValuesInvalidError(strictFailures.map((failure) => ({ code: 'FORMULA_ERROR', fieldCode: failure.fieldCode, reason: failure.reason })));
+    const written = { ...captured.values, ...computed.values };
+    const merged = { ...request.existing, ...written };
     const fieldByCode = new Map<string, FieldDocument>(document.fields.map((field) => [field.code, field]));
     const amounts = evaluateAmountRules(document.amountRules, fieldByCode, merged, {
       stepId: step.id,
@@ -93,12 +113,24 @@ export class SubmissionValidator {
     });
     if (amounts.blocks.length > 0) throw new AmountLimitExceededError(amounts.blocks);
 
-    const changes = Object.entries(captured.values)
-      .filter(([code, value]) => !sameValue(request.existing[code], value))
+    const changes = Object.entries(written)
+      .filter(([code, value]) => !sameValue(request.existing[code] ?? null, value ?? null))
       .map(([code, value]) => ({ code, before: request.existing[code] ?? null, after: value }));
     const fieldWrites = changes.map((change) => ({ fieldId: fieldByCode.get(change.code)!.id, value: change.after }));
-    return { merged, fieldWrites, changes, amounts, files };
+    return { merged, fieldWrites, changes, amounts, files, formulaFailures: computed.failures };
   }
+}
+
+/** What a submission leaves in the ticket's history: the values it changed and the formulas that could not be computed. */
+export function submissionEvents(submission: Submission, stepId: string, loop: number, actorId: string): EventPlan[] {
+  return [
+    ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId, loop, actorId, data: { changes: submission.changes } } satisfies EventPlan]),
+    ...formulaFailureEvents(submission, stepId, loop),
+  ];
+}
+
+export function formulaFailureEvents(submission: Submission, stepId: string, loop: number): EventPlan[] {
+  return submission.formulaFailures.map((failure): EventPlan => ({ type: 'SYSTEM', stepId, loop, actorId: null, data: { kind: 'FORMULA_ERROR', fieldCode: failure.fieldCode, reason: failure.reason } }));
 }
 
 /** The edge an EXTRA_APPROVAL rule sends the ticket through, from the block that was submitted. */

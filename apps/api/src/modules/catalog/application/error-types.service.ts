@@ -5,6 +5,7 @@ import {
   type ErrorSubtypeResponse,
   type ErrorTypeResponse,
   InvalidStateError,
+  LastReopeningTypeError,
   NotFoundError,
   type Page,
   type PageQuery,
@@ -90,9 +91,16 @@ export class ErrorTypesService {
       const current = await this.requireType(tx, id);
       const merged = { ...current, ...data };
       if (merged.isReopening && merged.forcesClose) throw new InvalidStateError('A reopening error type cannot also force the ticket to close');
+      if (current.isActive && current.isReopening && !(merged.isActive && merged.isReopening)) await this.assertAnotherReopeningType(tx, id);
       await this.repository.update(tx, this.tenantId, id, data);
       return this.requireType(tx, id);
     });
+  }
+
+  /** A ticket can only be reopened under a reopening type: the last active one stays. */
+  private async assertAnotherReopeningType(tx: TenantTransaction, leavingId: string): Promise<void> {
+    const active = await this.repository.lockActiveReopening(tx, this.tenantId);
+    if (!active.some((candidate) => candidate !== leavingId)) throw new LastReopeningTypeError();
   }
 
   private changeSubtype(errorTypeId: string, id: string, data: ErrorSubtypeWrite): Promise<ErrorSubtypeResponse> {

@@ -111,13 +111,13 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
 
     it('summary: counts, on-time percentages and resolution time', async () => {
       const summary = await get(reader, 'summary', A());
-      expect(summary).toMatchObject({ created: 6, closed: 5, open: 1, stepOnTimePct: 66.7, responsibleOnTimePct: 85.7, avgResolutionMin: 186, medianResolutionMin: 120, unmeasuredTickets: 0, timeZones: ['America/Bogota'] });
+      expect(summary).toMatchObject({ created: 6, closed: 5, open: 1, stepOnTimePct: 66.7, responsibleOnTimePct: 83.3, avgResolutionMin: 186, medianResolutionMin: 120, unmeasuredTickets: 0, timeZones: ['America/Bogota'] });
     });
 
     it('SLA per responsible: each person is measured from their own clock, net of pauses', async () => {
       const { items } = await get(reader, 'sla/responsibles', A());
       const byUser = Object.fromEntries(items.map((row: { userId: string }) => [row.userId, row]));
-      expect(byUser[u1.userId]).toMatchObject({ clocks: 6, onTime: 5, late: 1, noSla: 0, compliancePct: 83.3, avgMin: 135, medianMin: 120, avgPausedMin: 30 });
+      expect(byUser[u1.userId]).toMatchObject({ clocks: 6, onTime: 4, late: 1, handedOff: 1, noSla: 0, compliancePct: 80, avgMin: 135, medianMin: 120, avgPausedMin: 30 });
       expect(byUser[u2.userId]).toMatchObject({ clocks: 1, onTime: 1, late: 0, compliancePct: 100, avgMin: 120 });
     });
 
@@ -128,10 +128,10 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
 
     it('ranking: compliance × quality, quality from the reopening errors', async () => {
       const { ranked, unranked } = await get(reader, 'ranking', `${A()}&minVolume=1`);
-      expect(ranked.map((row: { userId: string; rank: number; score: number }) => [row.userId, row.rank, row.score])).toEqual([[u2.userId, 1, 100], [u1.userId, 2, 66.7]]);
-      expect(ranked[1]).toMatchObject({ delivered: 5, onTime: 5, late: 1, errors: 1, compliance: expect.closeTo(0.8333, 3), quality: 0.8 });
+      expect(ranked.map((row: { userId: string; rank: number; score: number }) => [row.userId, row.rank, row.score])).toEqual([[u2.userId, 1, 100], [u1.userId, 2, 60]]);
+      expect(ranked[1]).toMatchObject({ delivered: 4, onTime: 4, late: 1, errors: 1, compliance: 0.8, quality: 0.75 });
       expect(unranked).toEqual([]);
-      const strict = await get(reader, 'ranking', `${A()}&minVolume=5`);
+      const strict = await get(reader, 'ranking', `${A()}&minVolume=4`);
       expect(strict.ranked.map((row: { userId: string }) => row.userId)).toEqual([u1.userId]);
       expect(strict.unranked.map((row: { userId: string }) => row.userId)).toEqual([u2.userId]);
     });
@@ -165,7 +165,7 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
 
     it('user detail: their summary and their clocks, newest first', async () => {
       const detail = await get(reader, `users/${u1.userId}`, A());
-      expect(detail.summary).toMatchObject({ userId: u1.userId, delivered: 5, errors: 1, score: 66.7 });
+      expect(detail.summary).toMatchObject({ userId: u1.userId, delivered: 4, errors: 1, score: 60 });
       expect(detail.clocks.total).toBe(7);
       expect(detail.clocks.items.filter((row: { result: string | null }) => row.result === 'LATE')).toHaveLength(1);
       expect(detail.clocks.items.some((row: { completedAt: string | null }) => row.completedAt === null)).toBe(true);
@@ -260,7 +260,7 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
       const book = await sheets(response.body as Buffer);
       expect(book.map((entry) => entry.sheet)).toEqual(['Resumen', 'Filtros']);
       const summary = Object.fromEntries(book[0]!.data.slice(1).map((row) => [row[0], row[1]]));
-      expect(summary).toMatchObject({ Creados: 6, Cerrados: 5, Abiertos: 1, '% a tiempo (paso total)': 66.7, '% a tiempo (responsable)': 85.7, 'Tiempo medio de resolución (min hábiles)': 186 });
+      expect(summary).toMatchObject({ Creados: 6, Cerrados: 5, Abiertos: 1, '% a tiempo (paso total)': 66.7, '% a tiempo (responsable)': 83.3, 'Tiempo medio de resolución (min hábiles)': 186 });
       expect(book[1]!.data.find((row) => row[0] === 'Empresa')![1]).toBe(world.tenant.companyId);
     });
 

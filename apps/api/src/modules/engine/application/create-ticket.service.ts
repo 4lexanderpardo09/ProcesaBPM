@@ -23,7 +23,7 @@ import { isAllowedInitiator } from '../domain/initiator-match.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { type Arrival, ArrivalPlanner, arrivalEvents } from './arrival-planner.js';
 import { attachmentsPlanOf } from './submission-files.js';
-import { diversionEdge, SubmissionValidator } from './submission-validator.js';
+import { diversionEdge, formulaFailureEvents, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 
 export interface TicketCreator {
@@ -104,6 +104,7 @@ export class CreateTicketService {
         siteId: requester.siteId,
         creatorId: requester.userId,
         calendar,
+        timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
       });
@@ -139,6 +140,7 @@ export class CreateTicketService {
           attachments: attachmentsPlanOf(submission.files, start.id, 'ATTACHMENT'),
           outbox: [{ type: 'ticket.created', payload: { number: number.toString(), versionId: published.versionId, companyId: company.id, creatorId: requester.userId, registeredById } }],
         },
+        ...formulaFailureEvents(submission, start.id, 1),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: start.id, loop: 1, actorId: actor.userId, data: { ...warning } })),
         ...(diversion === undefined
           ? []
@@ -146,7 +148,7 @@ export class CreateTicketService {
         ...arrivalEvents(arrival, actor.userId, loop),
         ...(arrival.kind === 'END' ? [{ type: 'CLOSED', stepId: arrival.endStepId, loop: 1, actorId: actor.userId, data: { reason: 'WORKFLOW_ENDED' }, outbox: [{ type: 'ticket.closed', payload: { closedById: actor.userId } }] } satisfies EventPlan] : []),
       ];
-      const openVisitId = await this.applier.apply(tx, tenantId, { id: ticketId, workflowVersionId: published.versionId, companyId: company.id }, this.mutation(at, actor.userId, submission.fieldWrites, arrival, events));
+      const openVisitId = await this.applier.apply(tx, tenantId, { id: ticketId, workflowVersionId: published.versionId, companyId: company.id }, this.mutation(at, actor.userId, [...submission.fieldWrites, ...arrival.computed.fieldWrites], arrival, events));
       return { id: ticketId, number: number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId, openVisitId };
     });
   }

@@ -118,7 +118,11 @@ export interface TicketDetailResponse extends TicketSummaryResponse {
   /** The signatures of the current parallel step (empty on any other step). */
   readonly parallelTasks: ReadonlyArray<{ readonly id: string; readonly userId: string; readonly status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'CANCELLED'; readonly completedAt: string | null }>;
   readonly openIncident: { readonly id: string; readonly assignedToId: string; readonly createdById: string; readonly openedAt: string; readonly descriptionHtml: string } | null;
+  /** When the ticket wakes up, while it is parked on a WAIT block (nobody can act on it until then). */
+  readonly waitingUntil: string | null;
   readonly values: Readonly<Record<string, unknown>>;
+  /** Totals of the TABLE columns that show one, by field code and column code (decimal text). */
+  readonly totals: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 export interface TicketEventResponse {

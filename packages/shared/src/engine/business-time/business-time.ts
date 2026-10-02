@@ -1,8 +1,8 @@
 import { InvalidDurationError } from '../../errors/domain-error.js';
 import { CompiledCalendar, type Interval } from './compiled-calendar.js';
 import { normalizePauses, subtractPauses } from './intervals.js';
-import { addDaysToLocalDate } from './time-zone.js';
-import type { BusinessMinutesInput, DueDateInput } from './types.js';
+import { addDaysToLocalDate, zonedTimeToInstant } from './time-zone.js';
+import type { BusinessCalendar, BusinessMinutesInput, DueDateInput } from './types.js';
 
 const MS_PER_MINUTE = 60_000;
 /** Upper bound of local days to scan; a calendar with working time always resolves far sooner. */
@@ -109,4 +109,30 @@ export function businessMinutesBetween(input: BusinessMinutesInput): number {
   if (endMs - startMs > MAX_RANGE_MS) throw new InvalidDurationError('The range exceeds the scan horizon of the calendar');
   const calendar = CompiledCalendar.from(input.calendar);
   return Math.floor(sumBusinessMs(calendar, startMs, endMs, normalizePauses(input.pauses)) / MS_PER_MINUTE);
+}
+
+/** Whether a local `YYYY-MM-DD` date has working time in the calendar (not a holiday or a day off). Compile once, ask many times. */
+export function businessDayChecker(calendar: BusinessCalendar): (date: string) => boolean {
+  const compiled = CompiledCalendar.from(calendar);
+  return (date) => compiled.hasWorkingTime(date);
+}
+
+/** The local date that is `count` working days after (or, negative, before) `date`; a day with no working time is not counted. */
+export function addBusinessDays(calendar: BusinessCalendar, date: string, count: number): string {
+  const compiled = CompiledCalendar.from(calendar);
+  const step = count < 0 ? -1 : 1;
+  let remaining = Math.abs(count);
+  let current = date;
+  for (let scanned = 0; remaining > 0; scanned += 1) {
+    if (scanned >= MAX_SCAN_DAYS) throw new InvalidDurationError('The offset does not fit in the scan horizon of the calendar');
+    current = addDaysToLocalDate(current, step);
+    if (compiled.hasWorkingTime(current)) remaining -= 1;
+  }
+  return current;
+}
+
+/** The first instant with working time on or after the start of a local date. */
+export function firstWorkingInstantOnOrAfter(calendar: BusinessCalendar, date: string): Date {
+  const compiled = CompiledCalendar.from(calendar);
+  return new Date(firstWorkingInstant(compiled, zonedTimeToInstant(date, 0, compiled.timeZone)).instant);
 }

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidStateError, NotFoundError, PermissionDeniedError, StaleTicketError, TicketNotOpenError, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { InvalidStateError, NotFoundError, PermissionDeniedError, StaleTicketError, TicketNotOpenError, TicketWaitingError, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type LockedTicket, type OpenClockRow, type OpenVisitRow, TicketWriteRepository } from '../data/ticket-write.repository.js';
 
@@ -58,6 +58,7 @@ export class LockedTicketLoader {
     const visit = await this.writes.findOpenVisit(tx, tenantId, ticket.id);
     if (visit === null) throw new InvalidStateError('The ticket has no open step');
     if (visit.id !== visitId) throw new StaleTicketError();
+    if (visit.resumeAt !== null) throw new TicketWaitingError(visit.resumeAt);
     // "Holds the step" means PRIMARY or POOL: signers and incident assignees have their own paths.
     const holds = ownType === 'PRIMARY' || ownType === 'POOL';
     return {

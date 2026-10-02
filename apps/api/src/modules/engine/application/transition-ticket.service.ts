@@ -12,7 +12,7 @@ import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { assertMayLeaveByDecision } from '../domain/close-policy.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { attachmentsPlanOf } from './submission-files.js';
-import { diversionEdge, SubmissionValidator } from './submission-validator.js';
+import { diversionEdge, submissionEvents, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 import { TicketSlaService } from './ticket-sla.service.js';
 
@@ -85,6 +85,7 @@ export class TransitionTicketService {
         siteId: ticket.siteId,
         creatorId: ticket.creatorId,
         calendar,
+        timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
       });
@@ -92,9 +93,9 @@ export class TransitionTicketService {
 
       // A supervisor moving a parallel step on: the signatures still pending are cancelled with it.
       const cancelled = step.assignmentMode === 'PARALLEL' ? await this.cancelPendingSignatures(tx, tenantId, ticket.id, step.id, visit.loop, at) : [];
-      const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId);
+      const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId, 'STEP_EXITED', new Set(cancelled.map((task) => task.userId)));
       const events: EventPlan[] = [
-        ...(submission.changes.length === 0 ? [] : [{ type: 'FIELDS_UPDATED', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { changes: submission.changes } } satisfies EventPlan]),
+        ...submissionEvents(submission, step.id, visit.loop, actor.userId),
         ...cancelled.map((task): EventPlan => ({ type: 'PARALLEL_TASK_COMPLETED', stepId: step.id, loop: visit.loop, actorId: actor.userId, assigneeId: task.userId, data: { taskId: task.id, status: 'CANCELLED' } })),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { ...warning } })),
         {
@@ -113,8 +114,8 @@ export class TransitionTicketService {
       ];
       const mutation: TicketMutation =
         arrival.kind === 'END'
-          ? { at, actorId: actor.userId, fieldWrites: submission.fieldWrites, closing: closed, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
-          : { at, actorId: actor.userId, fieldWrites: submission.fieldWrites, closing: closed, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
+          ? { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
+          : { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, mutation);
       return { id: ticket.id, number: ticket.number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId: arrival.kind === 'END' ? arrival.endStepId : arrival.step.id, openVisitId };
     });

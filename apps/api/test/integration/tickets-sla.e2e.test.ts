@@ -154,7 +154,8 @@ describe('SLA: due dates, clocks and results', () => {
       await as(worker.userId, () => app.get(ReassignTicketService).reassign(actor(worker.userId, true), ticket.id, { toUserId: other.userId, visitId: ticket.openVisitId! }));
 
       const [first, second] = await world.clocks(ticket.id);
-      expect([first!.responsible_id, first!.result, first!.business_minutes]).toEqual([worker.userId, 'ON_TIME', 120]);
+      expect([first!.responsible_id, first!.result, first!.business_minutes, first!.completion_reason]).toEqual([worker.userId, 'ON_TIME', 120, 'REASSIGNED']);
+      expect(second!.completion_reason).toBeNull();
       expect(second).toMatchObject({ responsible_id: other.userId, completed_at: null, started_at: bogota('2026-09-07', '11:00') });
       expect(second!.due_at).toEqual(bogota('2026-09-07', '17:00'));
       const [visit] = await world.visits(ticket.id);

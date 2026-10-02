@@ -219,6 +219,7 @@ describe('catalog API', () => {
   describe('error types and subtypes', () => {
     it('creates, reads, updates, lists, deactivates and reactivates a type, with its subtypes', async () => {
       const name = unique('Wrong amount');
+      await admin.post('/error-types', { name: unique('Spare reopening'), isReopening: true }).expect(201);
       const created = (await admin.post('/error-types', { name, description: 'The amount does not match', isProcessError: true }).expect(201)).body;
       expect(created).toMatchObject({ name, isProcessError: true, forcesClose: false, isReopening: false, isActive: true });
       expect((await admin.get(`/error-types/${created.id}`).expect(200)).body.id).toBe(created.id);
@@ -254,6 +255,28 @@ describe('catalog API', () => {
       await admin.patch(`/error-types/${created.id}`, {}).expect(400);
       await admin.get('/error-types/0199a000-0000-7000-8000-0000000000aa').expect(404);
       await admin.post('/error-types/0199a000-0000-7000-8000-0000000000aa/subtypes', { name: 'x' }).expect(404);
+    });
+
+    it('keeps one active reopening type: the last one cannot be deactivated or turned into a plain type', async () => {
+      const { admin: lone } = await adminOf(db, app, await seedTenant(db.platform));
+      const only = (await lone.post('/error-types', { name: unique('Only'), isReopening: true }).expect(201)).body.id as string;
+      expect((await lone.post(`/error-types/${only}/deactivate`).expect(409)).body.error.code).toBe('LAST_REOPENING_TYPE');
+      expect((await lone.patch(`/error-types/${only}`, { isReopening: false }).expect(409)).body.error.code).toBe('LAST_REOPENING_TYPE');
+      expect((await lone.patch(`/error-types/${only}`, { name: unique('Renamed') }).expect(200)).body.isActive).toBe(true);
+
+      const second = (await lone.post('/error-types', { name: unique('Second'), isReopening: true }).expect(201)).body.id as string;
+      await lone.post(`/error-types/${only}/deactivate`).expect(200);
+      await lone.post(`/error-types/${second}/deactivate`).expect(409);
+      await lone.post(`/error-types/${only}/activate`).expect(200);
+      await lone.post(`/error-types/${second}/deactivate`).expect(200);
+    });
+
+    it('two deactivations at once leave one reopening type', async () => {
+      const { admin: pair } = await adminOf(db, app, await seedTenant(db.platform));
+      const first = (await pair.post('/error-types', { name: unique('First'), isReopening: true }).expect(201)).body.id as string;
+      const second = (await pair.post('/error-types', { name: unique('Other'), isReopening: true }).expect(201)).body.id as string;
+      const results = await Promise.all([pair.post(`/error-types/${first}/deactivate`), pair.post(`/error-types/${second}/deactivate`)]);
+      expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
     });
 
     it('needs the ErrorType permissions', async () => {

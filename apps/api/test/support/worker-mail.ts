@@ -5,6 +5,7 @@ import type { MailMessage } from '../../src/infrastructure/mail/mailer.js';
 import { Mailer } from '../../src/infrastructure/mail/mailer.js';
 import { OutboxDispatcher } from '../../src/infrastructure/outbox/outbox-dispatcher.js';
 import { WorkerModule } from '../../src/worker.module.js';
+import { connectTestDatabase } from './admin-api.js';
 
 export const tokenOf = (message: MailMessage): string => /#token=([A-Za-z0-9_-]+)/.exec(message.text)![1]!;
 
@@ -14,6 +15,7 @@ export class MailWorker {
     readonly module: TestingModule,
     readonly dispatcher: OutboxDispatcher,
     readonly mailer: InMemoryMailer,
+    private readonly db = connectTestDatabase(),
   ) {}
 
   static async start(): Promise<MailWorker> {
@@ -25,9 +27,24 @@ export class MailWorker {
     return new MailWorker(module, module.get(OutboxDispatcher), module.get(Mailer) as InMemoryMailer);
   }
 
-  /** Delivers everything that is due now, including the events that handlers queue while running (rounds repeat until one finds nothing). */
+  /**
+   * Delivers everything that is due now, including the events that handlers queue while running (rounds repeat until one
+   * finds nothing). Test files run side by side against one database and every worker claims the events of every tenant:
+   * an event this worker did not claim may be in the hands of another file's worker, so it also waits until nothing is
+   * being processed anywhere (the condition, not a fixed time), and drains again in case that work queued more.
+   */
   async deliver(): Promise<void> {
-    for (let round = 0; round < 500; round += 1) if ((await this.dispatcher.runOnce()).claimed === 0) return;
+    const deadline = Date.now() + 30_000;
+    do {
+      for (let round = 0; round < 500; round += 1) if ((await this.dispatcher.runOnce()).claimed === 0) break;
+      if ((await this.inFlight()) === 0) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    } while (Date.now() < deadline);
+  }
+
+  private async inFlight(): Promise<number> {
+    const { rows } = await this.db.platform.query<{ count: string }>(`SELECT count(*) FROM outbox_events WHERE status = 'PROCESSING'`);
+    return Number(rows[0]!.count);
   }
 
   /** The last message sent to an address. */
@@ -35,7 +52,8 @@ export class MailWorker {
     return this.mailer.to(address).at(-1);
   }
 
-  close(): Promise<void> {
-    return this.module.close();
+  async close(): Promise<void> {
+    await this.module.close();
+    await this.db.close();
   }
 }

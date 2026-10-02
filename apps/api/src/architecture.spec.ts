@@ -31,10 +31,10 @@ describe('architecture', () => {
     expect(importers.sort()).toEqual(['modules/platform/platform.module.ts']);
   });
 
-  it('the worker-only modules (outbox dispatcher, mail, account mail, notifications and documents fan-out) are only imported by the worker', () => {
+  it('the worker-only modules (outbox dispatcher, mail, account mail, notifications, documents fan-out and the wait wake-up) are only imported by the worker', () => {
     const workerOnly = /(outbox-dispatcher\.module|mail\.module|auth-mail\.module|notifications-worker\.module|documents-worker\.module)/;
     const importers = files.filter((file) => importsOf(file).some((source) => workerOnly.test(source))).map(posix);
-    expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/notifications/notifications-worker.module.ts', 'worker.module.ts']);
+    expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/engine/wait.module.ts', 'modules/notifications/notifications-worker.module.ts', 'worker.module.ts']);
   });
 
   it('no SQL is built from text: the unsafe raw-query helpers are never used', () => {

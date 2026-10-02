@@ -1,4 +1,5 @@
 import { PEOPLE_STEP_TYPES } from '../constants.js';
+import { effectiveFieldType } from '../transition-condition.js';
 import { type RuleContext } from './context.js';
 
 /** Amount caps point at fields and blocks of this version. */
@@ -12,7 +13,7 @@ export function checkAmountRules({ doc, stepById, fieldByCode, problems }: RuleC
       const columns = Array.isArray(field.config.columns) ? (field.config.columns as Array<{ code: string }>).map((column) => column.code) : [];
       if (rule.amountColumn === null || !columns.includes(rule.amountColumn)) problems.error('AMOUNT_RULE_TABLE_COLUMN_UNKNOWN', { ...at, params: { column: rule.amountColumn ?? '' } });
       if (rule.typeColumn !== null && !columns.includes(rule.typeColumn)) problems.error('AMOUNT_RULE_TABLE_COLUMN_UNKNOWN', { ...at, params: { column: rule.typeColumn } });
-    } else if (field.type !== 'NUMBER' && field.type !== 'CURRENCY') problems.error('AMOUNT_RULE_FIELD_NOT_NUMERIC', { ...at, params: { code: rule.fieldCode } });
+    } else if (!['NUMBER', 'CURRENCY'].includes(effectiveFieldType(field))) problems.error('AMOUNT_RULE_FIELD_NOT_NUMERIC', { ...at, params: { code: rule.fieldCode } });
 
     if (rule.stepId !== null && !stepById.has(rule.stepId)) problems.error('AMOUNT_RULE_STEP_NOT_IN_VERSION', at);
     if (rule.action === 'EXTRA_APPROVAL') {
