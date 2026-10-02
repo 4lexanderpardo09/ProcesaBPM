@@ -112,6 +112,34 @@ describe('OutboxDispatcher', () => {
     expect(calls).toEqual(['prepare:true', 'perform:false', 'complete']);
   });
 
+  it('records what the effect produced in the completion transaction, before completing', async () => {
+    const { dispatcher, registry, calls, inTransaction } = setup([event()]);
+    registry.registerExternal({
+      type: 'demo',
+      scope: 'tenant',
+      schema,
+      prepare: () => Promise.resolve({}),
+      perform: () => Promise.resolve('result'),
+      record: async (_tx, result) => void calls.push(`record:${result}:${inTransaction()}`),
+    });
+    await dispatcher.runOnce();
+    expect(calls).toEqual(['record:result:true', 'complete']);
+  });
+
+  it('a record that follows a lost claim is rolled back and is not recorded as a failure', async () => {
+    const { dispatcher, registry, fails } = setup([event()], { completes: false });
+    registry.registerExternal({ type: 'demo', scope: 'tenant', schema, prepare: () => Promise.resolve({}), perform: () => Promise.resolve(1), record: () => Promise.resolve() });
+    expect(await dispatcher.runOnce()).toMatchObject({ stale: 1, done: 0 });
+    expect(fails).toEqual([]);
+  });
+
+  it('does not record when prepare had nothing to do', async () => {
+    const { dispatcher, registry, calls } = setup([event()]);
+    registry.registerExternal({ type: 'demo', scope: 'tenant', schema, prepare: () => Promise.resolve(null), perform: () => Promise.resolve(1), record: async () => void calls.push('record') });
+    await dispatcher.runOnce();
+    expect(calls).toEqual(['complete']);
+  });
+
   it('does not even prepare an e-mail whose claim is no longer current, and records no failure', async () => {
     const { dispatcher, registry, calls, fails } = setup([event()], { current: false });
     registry.registerExternal({ type: 'demo', scope: 'tenant', schema, prepare: async () => (calls.push('prepare'), {}), perform: async () => void calls.push('perform') });

@@ -113,8 +113,11 @@ export class OutboxDispatcher {
       if (!(await this.claims.isCurrent(tx, source, event))) throw new StaleClaimError();
       return external.prepare(tx, parsed);
     }, timeoutMs);
-    if (message !== null) await external.perform(message as never, parsed);
-    await this.inScope(source, event, (tx) => this.completeOrThrow(tx, source, event), timeoutMs);
+    const result = message === null ? undefined : await external.perform(message as never, parsed);
+    await this.inScope(source, event, async (tx) => {
+      if (message !== null && external.record !== undefined) await external.record(tx, result as never, parsed);
+      await this.completeOrThrow(tx, source, event);
+    }, timeoutMs);
   }
 
   private async completeOrThrow(tx: WorkerTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<void> {

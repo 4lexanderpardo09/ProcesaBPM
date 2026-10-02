@@ -1,3 +1,9 @@
+export interface PutObjectInput {
+  readonly key: string;
+  readonly body: Uint8Array;
+  readonly contentType: string;
+}
+
 export interface PresignedUpload {
   readonly url: string;
   readonly method: 'PUT';
@@ -36,6 +42,8 @@ export abstract class ObjectStorage {
   /** The signature fixes the length and forbids overwriting (`If-None-Match: *`), so an object is written once. */
   abstract presignUpload(input: PresignUploadInput): Promise<PresignedUpload>;
   abstract presignDownload(input: PresignDownloadInput): Promise<PresignedDownload>;
+  /** Server-side write for what the system itself produces. Never overwrites: `'exists'` when the key is taken. */
+  abstract put(input: PutObjectInput): Promise<'created' | 'exists'>;
   /** `null` when the object does not exist. */
   abstract head(key: string): Promise<{ readonly sizeBytes: number } | null>;
   /** The whole object; throws when it is larger than `maxBytes`. */
