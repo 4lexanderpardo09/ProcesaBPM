@@ -47,7 +47,7 @@ ALTER TABLE pdf_template_fields ADD CONSTRAINT pdf_template_fields_geometry CHEC
   AND (font_size IS NULL OR font_size BETWEEN 4 AND 72) AND (max_width IS NULL OR max_width > 0)
   AND (align IS NULL OR align IN ('LEFT', 'CENTER', 'RIGHT')));
 ALTER TABLE pdf_template_signatures ADD CONSTRAINT pdf_template_signatures_box CHECK (
-  mode <> 'COORDINATES' OR (width > 0 AND height > 0 AND page >= 1));
+  mode <> 'COORDINATES' OR (width > 0 AND height > 0 AND page >= 1 AND x IS NOT NULL AND y IS NOT NULL));
 
 -- 3. Generated documents
 -- A generated file is the document of one version, never of two.

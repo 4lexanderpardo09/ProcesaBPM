@@ -8,7 +8,7 @@ import type { WorkerTransaction } from '../../../infrastructure/database/worker-
 import { type ClaimedEvent, type ExternalEffectHandler, PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { PdfRenderer } from '../../../infrastructure/pdf/pdf-renderer.js';
-import type { ImageBytes, RenderedPdf } from '../../../infrastructure/pdf/pdf-renderer.js';
+import type { RenderedPdf } from '../../../infrastructure/pdf/pdf-renderer.js';
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
 import { buildStorageKey } from '../../files/domain/storage-key.js';
 import { SystemFileService } from '../../files/application/system-file.service.js';
@@ -17,13 +17,11 @@ import { DocumentSourceRepository } from '../data/document-source.repository.js'
 import { deriveGeneratedFileId } from '../domain/derive-file-id.js';
 import { planRender, type RenderPlan } from '../domain/render-plan.js';
 import { type DocumentGeneratePayload, DOCUMENT_GENERATE_EVENT, documentGeneratePayloadSchema } from './document-generate.payload.js';
+import { ImageLoader } from './image-loader.js';
 import { RenderFactsLoader } from './render-facts.loader.js';
 
 const PDF_MIME_TYPE = 'application/pdf';
 const TEMPLATE_MAX_BYTES = 4 * 1024 * 1024 + 1;
-const PNG = [0x89, 0x50, 0x4e, 0x47];
-const JPEG = [0xff, 0xd8, 0xff];
-const hasPrefix = (bytes: Uint8Array, prefix: readonly number[]): boolean => prefix.every((byte, index) => bytes[index] === byte);
 
 /** What `prepare` decided to draw: plain data plus the storage keys to read, never bytes. */
 export interface PreparedDocument {
@@ -62,6 +60,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     @Inject(JsonLogger) private readonly logger: JsonLogger,
     @Inject(DocumentSourceRepository) private readonly sources: DocumentSourceRepository,
     @Inject(RenderFactsLoader) private readonly factsLoader: RenderFactsLoader,
+    @Inject(ImageLoader) private readonly imageLoader: ImageLoader,
     @Inject(TicketDocumentRepository) private readonly ticketDocuments: TicketDocumentRepository,
     @Inject(SystemFileService) private readonly systemFiles: SystemFileService,
   ) {}
@@ -121,7 +120,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
   }
 
   private async render(prepared: PreparedDocument, event: ClaimedEvent<DocumentGeneratePayload>): Promise<RenderedPdf> {
-    const images = await this.loadImages(prepared);
+    const images = await this.imageLoader.load(prepared.plan.imageKeys, prepared.imageStorageKeys);
     const deadlineAt = Date.now() + this.settings.PDF_RENDER_TIMEOUT_MS;
     const meta = { title: prepared.plan.fileName, createdAt: event.createdAt };
     const { plan } = prepared;
@@ -135,17 +134,6 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
       const cause = error instanceof Error ? error.name : 'Error';
       throw new PermanentEventError(`The document could not be drawn (${cause})`);
     }
-  }
-
-  private async loadImages(prepared: PreparedDocument): Promise<Map<string, ImageBytes>> {
-    const images = new Map<string, ImageBytes>();
-    for (const key of prepared.plan.imageKeys) {
-      const storageKey = prepared.imageStorageKeys.get(key);
-      if (storageKey === undefined || (await this.storage.head(storageKey)) === null) continue;
-      const bytes = await this.storage.read(storageKey, PDF_LIMITS.maxSignatureImageBytes);
-      if (hasPrefix(bytes, PNG) || hasPrefix(bytes, JPEG)) images.set(key, { bytes });
-    }
-    return images;
   }
 }
 

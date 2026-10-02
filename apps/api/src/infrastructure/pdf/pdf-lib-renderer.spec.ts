@@ -2,7 +2,7 @@ import { PDFArray, PDFDict, PDFDocument, PDFName, PDFString, StandardFonts, degr
 import { extractText, getDocumentProxy } from 'unpdf';
 import { describe, expect, it } from 'vitest';
 import { PdfTemplateInvalidError } from '@procesabpm/shared';
-import type { ResolvedBlock } from '../../modules/documents/domain/resolved-document.js';
+import type { ResolvedBlock } from './resolved-document.js';
 import { FileFontProvider } from './font-provider.js';
 import { PdfLibInspector } from './pdf-lib-inspector.js';
 import { PdfLibRenderer } from './pdf-lib-renderer.js';
@@ -190,5 +190,30 @@ describe('sanitizePdf', () => {
     const annotation = reloaded.getPages()[0]!.node.lookup(PDFName.of('Annots'), PDFArray).lookup(0, PDFDict);
     expect(annotation.has(PDFName.of('A'))).toBe(false);
     expect(annotation.has(PDFName.of('AA'))).toBe(false);
+  });
+
+  it('also removes the scripts of form fields at any depth, bookmarks, and annotations that carry files or media', async () => {
+    const document = await PDFDocument.create();
+    const page = document.addPage();
+    const { context } = document;
+    const script = context.obj({ S: 'JavaScript', JS: PDFString.of('app.alert(1)') });
+    const child = context.obj({ FT: 'Tx', T: PDFString.of('child'), AA: context.obj({ K: script, C: script }) });
+    const parent = context.obj({ T: PDFString.of('parent'), AA: context.obj({ F: script }), Kids: [child] });
+    document.catalog.set(PDFName.of('AcroForm'), context.obj({ Fields: [parent] }));
+    document.catalog.set(PDFName.of('Outlines'), context.obj({ Type: 'Outlines', First: context.obj({ A: script }) }));
+    const attachment = context.obj({ Type: 'Annot', Subtype: 'FileAttachment', Rect: [0, 0, 10, 10], FS: context.obj({}) });
+    const link = context.obj({ Type: 'Annot', Subtype: 'Link', Rect: [0, 0, 10, 10] });
+    page.node.set(PDFName.of('Annots'), context.obj([attachment, link]));
+
+    sanitizePdf(document);
+    const reloaded = await PDFDocument.load(await document.save());
+    const form = reloaded.catalog.lookup(PDFName.of('AcroForm'), PDFDict);
+    const [reParent] = [form.lookup(PDFName.of('Fields'), PDFArray).lookup(0, PDFDict)];
+    expect(reParent.has(PDFName.of('AA'))).toBe(false);
+    expect(reParent.lookup(PDFName.of('Kids'), PDFArray).lookup(0, PDFDict).has(PDFName.of('AA'))).toBe(false);
+    expect(reloaded.catalog.has(PDFName.of('Outlines'))).toBe(false);
+    const annotations = reloaded.getPages()[0]!.node.lookup(PDFName.of('Annots'), PDFArray);
+    expect(annotations.size()).toBe(1);
+    expect(annotations.lookup(0, PDFDict).get(PDFName.of('Subtype'))?.toString()).toBe('/Link');
   });
 });

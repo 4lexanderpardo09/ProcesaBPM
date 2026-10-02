@@ -1,5 +1,5 @@
 import type { AcroFieldInfo, PageBox } from '@procesabpm/shared';
-import type { Align, ResolvedBlock } from '../../modules/documents/domain/resolved-document.js';
+import type { Align, ResolvedBlock } from './resolved-document.js';
 
 export interface PdfMeta {
   readonly title: string;

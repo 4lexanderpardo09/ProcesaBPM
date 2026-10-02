@@ -3,6 +3,7 @@ import { PdfModule } from '../../infrastructure/pdf/pdf.module.js';
 import { FilesModule } from '../files/files.module.js';
 import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { DocumentSourcesPublicationCheck } from './application/document-sources.publication-check.js';
+import { ImageLoader } from './application/image-loader.js';
 import { DocumentSourceValidator } from './application/document-source.validator.js';
 import { PdfFormatsService } from './application/pdf-formats.service.js';
 import { PdfPreviewService } from './application/pdf-preview.service.js';
@@ -28,6 +29,7 @@ import { WorkflowDocumentsController } from './http/workflow-documents.controlle
     DocumentSourceRepository,
     RenderFactsRepository,
     DocumentSourceValidator,
+    ImageLoader,
     DocumentSourcesPublicationCheck,
     PdfFormatsService,
     PdfTemplatesService,

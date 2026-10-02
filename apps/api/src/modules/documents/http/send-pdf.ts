@@ -1,6 +1,6 @@
 import { StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
-import { contentDisposition } from '../../../infrastructure/storage/s3-object-storage.js';
+import { contentDisposition } from '../../../infrastructure/storage/content-disposition.js';
 import type { PreviewPdf } from '../application/pdf-preview.service.js';
 
 /** A generated PDF as the response body: shown in the browser, never cached, never sniffed as something else. */

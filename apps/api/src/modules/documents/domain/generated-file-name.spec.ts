@@ -7,7 +7,7 @@ describe('generatedFileName', () => {
   });
 
   it('replaces path separators and characters a file system refuses', () => {
-    expect(generatedFileName('a/b\\c:d*e?"<>|f', 'x')).toBe('a-b-c-d-e----f.pdf');
+    expect(generatedFileName('a/b\\c:d*e?"<>|f', 'x')).toBe('a-b-c-d-e-----f.pdf');
   });
 
   it('never starts with dots and falls back when nothing is left', () => {

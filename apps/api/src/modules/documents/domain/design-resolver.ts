@@ -16,7 +16,7 @@ import {
 import { documentsEs as es } from '../i18n/es.js';
 import { fieldText, fieldValue, sumColumn } from './field-display.js';
 import type { RenderFacts, SignerRecord } from './render-facts.js';
-import type { ResolvedBlock, ResolvedSignatureSlot } from './resolved-document.js';
+import type { ResolvedBlock, ResolvedSignatureSlot } from '../../../infrastructure/pdf/resolved-document.js';
 import { assignSigners, type SignatureSlot } from './signer-assignment.js';
 
 const LOGO_KEY = 'logo';

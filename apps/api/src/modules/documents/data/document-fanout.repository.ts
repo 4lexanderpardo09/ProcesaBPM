@@ -20,6 +20,11 @@ export class DocumentFanoutRepository {
     return tx.ticket.findFirst({ where: { tenantId, id: ticketId, deletedAt: null }, select: { workflowId: true, companyId: true, closedAt: true } });
   }
 
+  /** Whether the ticket was closed by the very movement that this event records (both events share the movement's time). */
+  async closedAt(tx: TenantTransaction, tenantId: string, ticketId: string, at: Date): Promise<boolean> {
+    return (await tx.ticketEvent.count({ where: { tenantId, ticketId, type: 'CLOSED', createdAt: at } })) > 0;
+  }
+
   async eventTime(tx: TenantTransaction, tenantId: string, ticketId: string, eventId: string): Promise<Date | null> {
     const event = await tx.ticketEvent.findFirst({ where: { tenantId, ticketId, id: eventId }, select: { createdAt: true } });
     return event?.createdAt ?? null;

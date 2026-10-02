@@ -11,12 +11,9 @@ export class InMemoryObjectStorage extends ObjectStorage {
     this.objects.set(key, content);
   }
 
-  readonly writes: string[] = [];
-
   async put(input: PutObjectInput): Promise<'created' | 'exists'> {
     if (this.objects.has(input.key)) return 'exists';
     this.objects.set(input.key, input.body);
-    this.writes.push(input.key);
     return 'created';
   }
 

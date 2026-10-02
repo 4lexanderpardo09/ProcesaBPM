@@ -34,7 +34,10 @@ export class DocumentSourcesPublicationCheck implements PublicationCheck, OnModu
       if (checked.has(workflowDocumentId)) return;
       checked.add(workflowDocumentId);
       const source = await this.sources.findWorkflowDocument(tx, tenantId, workflowDocumentId);
-      if (source === null || source.workflowId !== workflowId) return;
+      if (source === null || source.workflowId !== workflowId) {
+        if (stepId !== undefined) problems.push({ code: 'DOCUMENT_SOURCE_NOT_FOUND', severity: 'error', stepId, params: { workflowDocumentId } });
+        return;
+      }
       if (!source.isActive && stepId !== undefined) problems.push({ code: 'DOCUMENT_SOURCE_INACTIVE', severity: 'error', stepId, params: { workflowDocumentId } });
       if (!source.isActive) return;
       if (source.format !== null) problems.push(...validateDesign(source.format.design as PdfDesign, document).map((problem) => asProblem(problem, stepId)));

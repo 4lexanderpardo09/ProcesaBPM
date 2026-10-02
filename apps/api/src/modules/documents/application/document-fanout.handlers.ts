@@ -42,9 +42,9 @@ export class DocumentFanoutHandlers implements OnModuleInit {
   private async onTransitioned(tx: WorkerTransaction, event: ClaimedEvent<TicketEventPayload>): Promise<void> {
     const tenantId = event.tenantId!;
     const { ticketId, eventId } = event.payload;
-    const ticket = await this.tickets.ticket(tx, tenantId, ticketId);
     const at = eventId === undefined ? null : await this.tickets.eventTime(tx, tenantId, ticketId, eventId);
-    if (ticket?.closedAt != null && at?.getTime() === ticket.closedAt.getTime()) return;
+    // Looked up in the events themselves, not in the ticket's current state: a reopening in between must not bring the document back.
+    if (at !== null && (await this.tickets.closedAt(tx, tenantId, ticketId, at))) return;
     await this.atMoments(tx, event, ['EACH_STEP']);
   }
 

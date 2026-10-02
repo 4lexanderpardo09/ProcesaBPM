@@ -1,10 +1,11 @@
 import { PdfTemplateInvalidError, PDF_LIMITS } from '@procesabpm/shared';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFCheckBox, PDFDropdown, PDFFont, PDFPage, PDFRadioGroup, PDFTextField, degrees, rgb } from 'pdf-lib';
-import { layoutDocument, RenderLimitError } from '../../modules/documents/domain/layout/flow-layout.js';
-import { alignedX, clampLines, wrapText } from '../../modules/documents/domain/layout/text-wrap.js';
-import type { DrawCommand, TextMeasurer } from '../../modules/documents/domain/resolved-document.js';
+import { layoutDocument, RenderLimitError } from './layout/flow-layout.js';
+import { alignedX, clampLines, wrapText } from './layout/text-wrap.js';
+import type { DrawCommand, TextMeasurer } from './resolved-document.js';
 import { FontProvider } from './font-provider.js';
+import { isSafeImage, readImageInfo } from './image-size.js';
 import { toUserSpace } from './page-geometry.js';
 import { LOAD_OPTIONS } from './pdf-lib-inspector.js';
 import { sanitizePdf } from './pdf-sanitizer.js';
@@ -16,9 +17,6 @@ const hexColor = (hex: string) => {
   const value = Number.parseInt(hex.slice(1), 16);
   return rgb(((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255);
 };
-const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47];
-const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
-const startsWith = (bytes: Uint8Array, signature: readonly number[]) => signature.every((byte, index) => bytes[index] === byte);
 
 /** The fonts of one document and what they can draw: a character the font lacks becomes `?` instead of failing the whole PDF. */
 class Typography {
@@ -60,9 +58,10 @@ function setMetadata(document: PDFDocument, meta: PdfMeta): void {
 async function embedImages(document: PDFDocument, images: ReadonlyMap<string, ImageBytes>): Promise<Map<string, EmbeddedImage>> {
   const embedded = new Map<string, EmbeddedImage>();
   for (const [key, image] of images) {
-    if (image.bytes.length > PDF_LIMITS.maxSignatureImageBytes * 4) continue;
-    if (startsWith(image.bytes, PNG_SIGNATURE)) embedded.set(key, await document.embedPng(image.bytes));
-    else if (startsWith(image.bytes, JPEG_SIGNATURE)) embedded.set(key, await document.embedJpg(image.bytes));
+    // Decoding trusts the header: an image that declares a huge size is skipped, not decoded.
+    if (image.bytes.length > PDF_LIMITS.maxSignatureImageBytes || !isSafeImage(image.bytes)) continue;
+    const info = readImageInfo(image.bytes)!;
+    embedded.set(key, info.kind === 'png' ? await document.embedPng(image.bytes) : await document.embedJpg(image.bytes));
   }
   return embedded;
 }

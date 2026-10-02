@@ -79,6 +79,8 @@ describe('PDF documents: workflow documents, templates and generated files', () 
       const signature = (width: number) => db.platform.query(`INSERT INTO pdf_template_signatures (tenant_id, template_id, mode, step_name, signer_type, page, x, y, width, height) VALUES ($1, $2, 'COORDINATES', 'Review', 'CREATOR', 1, 10, 10, $3, 30)`, [tenant.tenantId, templateId, width]);
       await signature(100);
       expect(await sqlStateOf(() => signature(0))).toBe(SqlState.checkViolation);
+      const withoutPosition = () => db.platform.query(`INSERT INTO pdf_template_signatures (tenant_id, template_id, mode, step_name, signer_type, page, width, height) VALUES ($1, $2, 'COORDINATES', 'Review', 'CREATOR', 1, 100, 30)`, [tenant.tenantId, templateId]);
+      expect(await sqlStateOf(withoutPosition)).toBe(SqlState.checkViolation);
     });
 
     it('updated_at is maintained for templates', async () => {
