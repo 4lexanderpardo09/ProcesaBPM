@@ -328,12 +328,15 @@ describe('workflows API (builder backend)', () => {
       await putGraph(admin, version(c), withHook(ANY_ID)).expect(200);
       const refused = await publishFlow(c);
       expect(refused.status).toBe(422);
-      expect(refused.body.error.details.errors.map((p: { code: string; params: { kind: string } }) => `${p.code}:${p.params.kind}`)).toContain('BLOCK_REFERENCE_UNKNOWN:WEBHOOK');
+      expect(refused.body.error.details.errors.map((p: { code: string; params?: { kind: string } }) => `${p.code}:${p.params?.kind}`)).toContain('BLOCK_REFERENCE_UNKNOWN:WEBHOOK');
       expect((await admin.get(`${version(c)}/validation`).expect(200)).body.errors.map((p: { code: string }) => p.code)).toContain('BLOCK_REFERENCE_UNKNOWN');
       expect((await detail(c)).version.status).toBe('DRAFT');
 
       await putGraph(admin, version(c), withHook(webhook)).expect(200);
-      expect((await publishFlow(c)).status).toBe(200);
+      // The webhook exists now, but the block does nothing yet: the only reason left to refuse is that.
+      const stillRefused = await publishFlow(c);
+      expect(stillRefused.status).toBe(422);
+      expect(stillRefused.body.error.details.errors.map((p: { code: string }) => p.code)).toEqual(['NOT_IMPLEMENTED_WEBHOOK_BLOCK']);
     });
 
     it('two simultaneous replacements of a list leave exactly one of the lists, not both merged', async () => {

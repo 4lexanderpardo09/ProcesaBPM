@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { BacklogFilters, BacklogReport, CategoryRow, IncidentsReport, ReportFilters } from '@procesabpm/shared';
+import { type BacklogFilters, type BacklogReport, type CategoryRow, type IncidentsReport, type ReportFilters, ReportTooLargeError } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import { CatalogReportRepository, type CategoryStatsRow } from '../data/catalog-report.repository.js';
-import { IncidentRepository } from '../data/incident.repository.js';
+import { INCIDENT_ROW_CAP, IncidentRepository } from '../data/incident.repository.js';
 
 import { byAssignee, byOpener, byStep, groupIncidents } from '../domain/incident-groups.js';
 import { type ReportAccess, ReportRunner } from './report-runner.js';
@@ -46,6 +46,7 @@ export class BreakdownReportsService {
   incidentsReport(access: ReportAccess, filters: ReportFilters): Promise<IncidentsReport> {
     return this.runner.run(access, filters, async (tx, query) => {
       const rows = await this.incidents.rows(tx, query);
+      if (rows.length > INCIDENT_ROW_CAP) throw new ReportTooLargeError(INCIDENT_ROW_CAP);
       return { byStep: groupIncidents(rows, byStep), byOpener: groupIncidents(rows, byOpener), byAssignee: groupIncidents(rows, byAssignee) };
     });
   }

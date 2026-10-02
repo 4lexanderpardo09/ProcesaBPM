@@ -5,7 +5,7 @@ import { inCoarsePeriod, inPeriod, type ReportQuery, TICKET_JOIN, ticketPredicat
 
 const { sql } = Prisma;
 
-/** The most incidents a report reads: more than that is a filter too wide to be useful. */
+/** The most incidents a report groups: one more is read to know the filter was too wide (the counts would be wrong). */
 export const INCIDENT_ROW_CAP = 50_000;
 
 export interface IncidentRow {
@@ -38,6 +38,6 @@ export class IncidentRepository {
       LEFT JOIN ticket_events e ON e.tenant_id = i.tenant_id AND e.ticket_id = i.ticket_id AND e.type = 'INCIDENT_RESOLVED' AND e.data ->> 'incidentId' = i.id::text
       WHERE ${ticketPredicate(query)} AND i.tenant_id = ${query.tenantId}::uuid AND ${inCoarsePeriod(sql`i.opened_at`, query)} AND ${inPeriod(sql`i.opened_at`, query)}
       ORDER BY i.opened_at, i.id
-      LIMIT ${INCIDENT_ROW_CAP}`;
+      LIMIT ${INCIDENT_ROW_CAP + 1}`;
   }
 }

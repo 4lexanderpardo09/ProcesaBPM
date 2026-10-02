@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ReportFilters } from '@procesabpm/shared';
+import { ReportTimeoutError } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
@@ -11,6 +11,27 @@ import { compileReportScope, intersectScopes, type ScopeSpec } from '../domain/r
 export const REPORT_STATEMENT_TIMEOUT_MS = 8000;
 
 export type ReportAction = 'read' | 'export';
+
+/** 57014: the statement timeout; P2028: Prisma's own transaction timeout. */
+const TIMEOUT_CODES = new Set(['57014', 'P2028']);
+interface CodedError {
+  code?: unknown;
+  originalCode?: unknown;
+  meta?: { code?: unknown; driverAdapterError?: { cause?: CodedError } };
+  cause?: unknown;
+}
+
+/** Looks through the error and its causes for one of the timeout codes, wherever the driver or Prisma put it. */
+function isTimeout(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 6 && typeof current === 'object' && current !== null; depth += 1) {
+    const node = current as CodedError;
+    const codes = [node.code, node.originalCode, node.meta?.code, node.meta?.driverAdapterError?.cause?.originalCode, node.meta?.driverAdapterError?.cause?.code];
+    if (codes.some((code) => typeof code === 'string' && TIMEOUT_CODES.has(code))) return true;
+    current = node.cause;
+  }
+  return false;
+}
 
 /** The caller's ability (to read) or, for an export, the ability together with the actions that must all allow it. */
 export type ReportAccess = AppAbility | { readonly ability: AppAbility; readonly actions: readonly ReportAction[] };
@@ -51,9 +72,13 @@ export class ReportRunner {
       siteId: filters.siteId,
       scope: isAbility(access) ? scopeOf(access, ['read']) : scopeOf(access.ability, access.actions),
     };
-    return this.runner.withTenantTransaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('statement_timeout', ${String(REPORT_STATEMENT_TIMEOUT_MS)}, true)`;
-      return work(tx, query);
-    });
+    return this.runner
+      .withTenantTransaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('statement_timeout', ${String(REPORT_STATEMENT_TIMEOUT_MS)}, true)`;
+        return work(tx, query);
+      })
+      .catch((error: unknown) => {
+        throw isTimeout(error) ? new ReportTimeoutError({ cause: error }) : error;
+      });
   }
 }

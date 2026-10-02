@@ -4,6 +4,7 @@ import { insertReturningId } from '@procesabpm/db/testing/fixtures';
 import type { CreateTicketRequest, TicketMutationResponse } from '@procesabpm/shared';
 import readXlsxFile from 'read-excel-file/node';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { ReportRunner } from '../../src/modules/reports/application/report-runner.js';
 import { TenantContext } from '../../src/infrastructure/database/tenant-context.js';
 import { CreateTicketService } from '../../src/modules/engine/application/create-ticket.service.js';
 import type { TicketActor } from '../../src/modules/engine/application/locked-ticket.js';
@@ -193,6 +194,50 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
       for (const query of ['', 'from=2026-09-07', 'from=2026-09-09&to=2026-09-07', 'from=2025-01-01&to=2026-09-07', 'from=2026-13-01&to=2026-09-07', `${PERIOD}&companyId=nope`, `${PERIOD}&companyId=' OR 1=1 --`, `${PERIOD}&extra=1`]) {
         await reader.get(`/reports/summary?${query}`).expect(400);
       }
+    });
+  });
+
+  describe('scopes run in the database', () => {
+    const created = async (conditions: unknown, query = PERIOD) => (await get(await clientWith(db, app, world.tenant, [{ action: 'read', subject: 'Report', conditions }]), 'summary', query)).created as number;
+
+    it.each([
+      ['a company', { companyId: '$A' }, 6],
+      ['not a company', { companyId: { not: '$B' } }, 6],
+      ['one of several companies', { companyId: { in: ['$B', '0199a000-0000-7000-8000-0000000000aa'] } }, 1],
+      ['a workflow', { workflowId: '$W' }, 7],
+      ['another workflow', { workflowId: '0199a000-0000-7000-8000-0000000000aa' }, 0],
+      ['tickets without a site', { siteId: null }, 7],
+      ['tickets with a site', { siteId: { not: null } }, 0],
+      ['two conditions at once', { companyId: '$A', workflowId: '$W' }, 6],
+    ])('%s', async (_label, conditions, expected) => {
+      const resolved = JSON.parse(JSON.stringify(conditions).replace('$A', world.tenant.companyId).replace(/\$B/g, companyB).replace('$W', flow.workflowId));
+      expect(await created(resolved)).toBe(expected);
+    });
+
+    it('a rule the ability accepts but the compiler cannot read sees nothing (an empty report, not everything)', async () => {
+      expect(await created({ companyId: { equals: 'not-a-uuid' } })).toBe(0);
+    });
+
+    it('a time limit on the database is a typed error that asks to narrow the filters (422)', async () => {
+      const runner = app.get(ReportRunner);
+      const ability = { rulesFor: () => [{ conditions: undefined }], can: () => true } as never;
+      const slow = app.get(TenantContext).run({ tenantId: world.tenant.tenantId, userId: u1.userId }, () =>
+        runner.run(ability, { from: '2026-09-07', to: '2026-09-08' }, async (tx) => {
+          await tx.$executeRaw`SELECT set_config('statement_timeout', '30', true)`;
+          await tx.$queryRaw`SELECT pg_sleep(1)`;
+        }),
+      );
+      await expect(slow).rejects.toMatchObject({ code: 'REPORT_TIMEOUT' });
+    });
+
+    it('pages past the last page still say how many there are, and the name of someone outside the scope is not told', async () => {
+      const page = await get(reader, 'sla/responsibles', `${PERIOD}&pageSize=1&page=3`);
+      expect(page).toMatchObject({ items: [], page: 3, pageSize: 1, total: 2 });
+      const detail = await get(reader, `users/${u1.userId}`, `${PERIOD}&pageSize=1&page=9`);
+      expect(detail.clocks).toMatchObject({ items: [], total: 8 });
+      const scopedToB = await clientWith(db, app, world.tenant, [{ action: 'read', subject: 'Report', conditions: { companyId: companyB } }]);
+      expect((await get(scopedToB, `users/${u2.userId}`, PERIOD)).name).toBeNull();
+      expect((await get(scopedToB, `users/${u1.userId}`, PERIOD)).name).not.toBeNull();
     });
   });
 

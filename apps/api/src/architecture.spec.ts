@@ -38,7 +38,7 @@ describe('architecture', () => {
   });
 
   it('no SQL is built from text: the unsafe raw-query helpers are never used', () => {
-    const offenders = files.filter((file) => /\$(queryRaw|executeRaw)Unsafe|Prisma\.raw\(/.test(readFileSync(file, 'utf8'))).map(posix);
+    const offenders = files.filter((file) => /\$(queryRaw|executeRaw)Unsafe|\bPrisma\.raw\b|\{[^}]*\braw\b[^}]*\}\s*=\s*Prisma\b/.test(readFileSync(file, 'utf8'))).map(posix);
     expect(offenders).toEqual([]);
   });
 

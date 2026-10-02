@@ -139,14 +139,17 @@ export class PerformanceReportsService {
     return this.runner.run(access, filters, async (tx, query) => {
       const { ranked, unranked } = await this.rankingOf(tx, query, 1, userId);
       const clocks = await this.userDetail.clocks(tx, query, userId, filters.page, filters.pageSize);
+      const total = await this.userDetail.countClocks(tx, query, userId);
+      const summary = [...ranked, ...unranked][0] ?? null;
       return {
         userId,
-        name: await this.userDetail.name(tx, query.tenantId, userId),
-        summary: [...ranked, ...unranked][0] ?? null,
+        // Nothing of this person is in the caller's scope: not even their name is told.
+        name: summary === null && total === 0 ? null : await this.userDetail.name(tx, query.tenantId, userId),
+        summary,
         clocks: {
           page: filters.page,
           pageSize: filters.pageSize,
-          total: clocks[0]?.total ?? 0,
+          total,
           items: clocks.map((row) => ({
             ticketNumber: row.ticketNumber,
             workflowName: row.workflowName,

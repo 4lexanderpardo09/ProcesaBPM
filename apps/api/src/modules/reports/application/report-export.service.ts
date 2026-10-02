@@ -96,6 +96,7 @@ export class ReportExportService {
         [es.filters.workflow, text(query.workflowId)],
         [es.filters.department, text(query.departmentId)],
         [es.filters.site, text(query.siteId)],
+        ...(typeof query.userId === 'string' ? [[es.filters.user, query.userId] as [string, string]] : []),
         [es.filters.generatedAt, this.clock.now()],
       ],
     };
