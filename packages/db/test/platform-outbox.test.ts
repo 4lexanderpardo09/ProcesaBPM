@@ -4,7 +4,7 @@ import { seedTenant, type SeededTenant } from './support/fixtures.js';
 
 const PLATFORM_TABLES = ['platform_outbox_events', 'platform_event_types'];
 const WORKER_FUNCTIONS = [
-  'claim_outbox_events(10)',
+  'claim_outbox_events(10, NULL::text[])',
   'claim_platform_outbox_events(10)',
   `complete_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 1)`,
   `fail_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 1, 'x', NULL, 10)`,
@@ -81,7 +81,7 @@ describe('platform outbox and the worker role', () => {
     });
 
     it('cannot claim or read the tenant outbox either', async () => {
-      const call = () => withContext(db.runtime, { tenantId: tenantA.tenantId }, (client) => client.query('SELECT * FROM claim_outbox_events(10)'));
+      const call = () => withContext(db.runtime, { tenantId: tenantA.tenantId }, (client) => client.query('SELECT * FROM claim_outbox_events(10, NULL::text[])'));
       expect(await sqlStateOf(call)).toBe(SqlState.insufficientPrivilege);
     });
   });
@@ -110,7 +110,7 @@ describe('platform outbox and the worker role', () => {
         tenantA.tenantId,
         tenantB.tenantId,
       ]);
-      const claimed = await withoutContext(db.worker, async (client) => (await client.query<{ tenant_id: string; type: string; id: string; attempts: number }>('SELECT * FROM claim_outbox_events(100)')).rows);
+      const claimed = await withoutContext(db.worker, async (client) => (await client.query<{ tenant_id: string; type: string; id: string; attempts: number }>('SELECT * FROM claim_outbox_events(100, NULL::text[])')).rows);
       expect(claimed.filter((row) => row.type.startsWith('test.')).map((row) => row.tenant_id).sort()).toEqual([tenantA.tenantId, tenantB.tenantId].sort());
 
       const withoutTenant = await withoutContext(db.worker, (client) => client.query('SELECT 1 FROM outbox_events'));

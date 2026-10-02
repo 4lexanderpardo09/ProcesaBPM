@@ -80,7 +80,7 @@ describe('database functions', () => {
 
       const claimBatch = () =>
         withoutContext(db.worker, async (client) => {
-          const { rows } = await client.query<{ id: string; tenant_id: string }>('SELECT id, tenant_id FROM claim_outbox_events(4)');
+          const { rows } = await client.query<{ id: string; tenant_id: string }>('SELECT id, tenant_id FROM claim_outbox_events(4, NULL::text[])');
           return rows;
         });
       const batches = await Promise.all([claimBatch(), claimBatch(), claimBatch()]);
