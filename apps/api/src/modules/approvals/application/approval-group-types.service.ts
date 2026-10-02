@@ -10,6 +10,7 @@ import {
 import { toPage } from '../../../common/crud/pagination.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { ApprovalGroupTypeRepository, type ApprovalGroupTypeRow } from '../data/approval-group-type.repository.js';
 
 const toResponse = (row: ApprovalGroupTypeRow): ApprovalGroupTypeResponse => ({ ...row, createdAt: row.createdAt.toISOString() });
@@ -20,6 +21,7 @@ export class ApprovalGroupTypesService {
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(ApprovalGroupTypeRepository) private readonly repository: ApprovalGroupTypeRepository,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   list(query: PageQuery): Promise<Page<ApprovalGroupTypeResponse>> {
@@ -34,13 +36,18 @@ export class ApprovalGroupTypesService {
   }
 
   create(request: ApprovalGroupTypeRequest): Promise<ApprovalGroupTypeResponse> {
-    return this.runner.withTenantTransaction(async (tx) => toResponse(await this.repository.create(tx, this.tenantId, request.name)));
+    return this.runner.withTenantTransaction(async (tx) => {
+      const created = await this.repository.create(tx, this.tenantId, request.name);
+      await this.audit.record(tx, { action: 'approval_group_type.created', subjectType: 'ApprovalGroup', subjectId: created.id, after: { name: created.name } });
+      return toResponse(created);
+    });
   }
 
   rename(id: string, request: ApprovalGroupTypeRequest): Promise<ApprovalGroupTypeResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.require(tx, id);
+      const before = await this.require(tx, id);
       await this.repository.rename(tx, this.tenantId, id, request.name);
+      await this.audit.record(tx, { action: 'approval_group_type.updated', subjectType: 'ApprovalGroup', subjectId: id, before: { name: before.name }, after: { name: request.name } });
       return toResponse(await this.require(tx, id));
     });
   }
@@ -52,6 +59,7 @@ export class ApprovalGroupTypesService {
       if (type.isDefault) throw new InvalidStateError('The default type cannot be deleted');
       if ((await this.repository.countUsages(tx, this.tenantId, id)) > 0) throw new InvalidStateError('The type is still used by groups or workflow steps');
       await this.repository.remove(tx, this.tenantId, id);
+      await this.audit.record(tx, { action: 'approval_group_type.deleted', subjectType: 'ApprovalGroup', subjectId: id, before: { name: type.name } });
     });
   }
 

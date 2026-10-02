@@ -55,6 +55,9 @@ const PLATFORM_ROUTES = [
   'POST /platform/tenants/:id/reactivate',
 ];
 
+/** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */
+const AUDITED_SUBJECTS = new Set(['Membership', 'Role', 'Group', 'ApprovalGroup', 'Workflow', 'Setting']);
+
 /** Test routes that exist to prove the deny-by-default behaviour: they declare nothing on purpose. */
 const INTENTIONALLY_UNDECLARED = ['GET /test/undeclared'];
 
@@ -111,6 +114,14 @@ describe('route protection (deny by default)', () => {
       expect(route.requirement!.actions.length, label(route)).toBeGreaterThan(0);
       expect(route.requirement!.subject, label(route)).not.toBe('');
     }
+  });
+
+  it('every route that changes data of an audited subject says which audit events it writes, or why it writes none', () => {
+    const undecided = routes
+      .filter((route) => route.access === 'permission' && route.method !== 'GET' && AUDITED_SUBJECTS.has(route.requirement!.subject))
+      .filter((route) => route.audit === undefined)
+      .map(label);
+    expect(undecided).toEqual([]);
   });
 
   it('the real application (without the test routes) has no undeclared or conflicting route', () => {

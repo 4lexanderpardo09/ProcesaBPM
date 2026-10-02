@@ -13,8 +13,12 @@ describe('sanitizeAuditSummary', () => {
     });
   });
 
-  it.each(['password', 'newPassword', 'passwordHash', 'secret', 'mfaSecretEncrypted', 'accessToken', 'selectionToken', 'backupCodes', 'apiKey', 'otp'])('drops the key %s at any depth', (key) => {
+  it.each(['password', 'newPassword', 'passwordHash', 'secret', 'mfaSecretEncrypted', 'accessToken', 'selectionToken', 'backupCodes', 'apiKey', 'otp', 'privateKey', 'credentials'])('drops the key %s at any depth', (key) => {
     expect(sanitizeAuditSummary({ [key]: 'x', nested: { deeper: { [key]: 'x', ok: 1 } } })).toEqual({ nested: { deeper: { ok: 1 } } });
+  });
+
+  it('keeps ordinary codes and keys that are not secrets', () => {
+    expect(sanitizeAuditSummary({ code: 'LUNCH', keyboard: 'es', sortKey: 3 })).toEqual({ code: 'LUNCH', keyboard: 'es', sortKey: 3 });
   });
 
   it('cuts long strings', () => {

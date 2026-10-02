@@ -13,6 +13,8 @@ import {
   type WorkflowValidation,
 } from '@procesabpm/shared';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
+import { Audited } from '../../../common/audit/audited.decorator.js';
+import { NotAudited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { WorkflowGraphService } from '../application/workflow-graph.service.js';
@@ -30,6 +32,7 @@ export class WorkflowVersionsController {
   /** A new draft: empty, or a copy of `fromVersionId`. */
   @RequirePermission('update', 'Workflow')
   @Post()
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   create(@Param('workflowId', ParseUUIDPipe) workflowId: string, @Body(new ZodValidationPipe(createVersionRequestSchema)) body: CreateVersionRequest): Promise<VersionSummary> {
     return this.versions.create(workflowId, body);
   }
@@ -42,6 +45,7 @@ export class WorkflowVersionsController {
 
   @RequirePermission('update', 'Workflow')
   @Delete(':versionId')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteDraft(@Param('workflowId', ParseUUIDPipe) workflowId: string, @Param('versionId', ParseUUIDPipe) versionId: string): Promise<void> {
     return this.versions.deleteDraft(workflowId, versionId);
@@ -50,6 +54,7 @@ export class WorkflowVersionsController {
   /** The whole canvas (blocks, transitions, positions) replaces the draft's in one transaction. */
   @RequirePermission('update', 'Workflow')
   @Put(':versionId/graph')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   saveGraph(
     @Param('workflowId', ParseUUIDPipe) workflowId: string,
     @Param('versionId', ParseUUIDPipe) versionId: string,
@@ -66,6 +71,7 @@ export class WorkflowVersionsController {
   }
 
   @RequirePermission('publish', 'Workflow')
+  @Audited('workflow.version_published')
   @Post(':versionId/publish')
   @HttpCode(HttpStatus.OK)
   publish(

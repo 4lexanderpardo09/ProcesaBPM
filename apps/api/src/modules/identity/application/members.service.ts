@@ -11,9 +11,20 @@ import {
   PermissionDeniedError,
   type UpdateMemberRequest,
 } from '@procesabpm/shared';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { type MemberRow, MemberRepository } from '../data/member.repository.js';
 import { assertCanDeactivate, statusAfterActivation } from '../domain/member-policy.js';
+
+/** What the trail keeps of a membership: where the person sits, not who they are. */
+const summaryOf = (row: MemberRow) => ({
+  status: row.status,
+  roleId: row.roleId,
+  positionId: row.positionId,
+  departmentId: row.departmentId,
+  siteId: row.siteId,
+  companyIds: row.companies.map((company) => company.companyId),
+});
 
 export const toMemberResponse = (row: MemberRow): MemberResponse => ({
   userId: row.userId,
@@ -42,6 +53,7 @@ export class MembersService {
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(MemberRepository) private readonly repository: MemberRepository,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   list(query: MembersQuery): Promise<Page<MemberResponse>> {
@@ -62,7 +74,9 @@ export class MembersService {
       const { companyIds, ...fields } = compact(request);
       if (Object.keys(fields).length > 0) await this.repository.update(tx, this.tenantId, userId, fields);
       if (companyIds !== undefined) await this.repository.replaceCompanies(tx, this.tenantId, userId, companyIds);
-      return toMemberResponse(await this.require(tx, userId));
+      const updated = await this.require(tx, userId);
+      await this.audit.record(tx, { action: 'member.updated', subjectType: 'Membership', subjectId: userId, before: summaryOf(member), after: summaryOf(updated) });
+      return toMemberResponse(updated);
     });
   }
 
@@ -70,7 +84,9 @@ export class MembersService {
     return this.runner.withTenantTransaction(async (tx) => {
       const member = await this.require(tx, userId);
       await this.repository.update(tx, this.tenantId, userId, { status: statusAfterActivation(member) });
-      return toMemberResponse(await this.require(tx, userId));
+      const updated = await this.require(tx, userId);
+      await this.audit.record(tx, { action: 'member.reactivated', subjectType: 'Membership', subjectId: userId, before: { status: member.status }, after: { status: updated.status } });
+      return toMemberResponse(updated);
     });
   }
 
@@ -80,6 +96,7 @@ export class MembersService {
       assertCanDeactivate(member, actingUserId, userId);
       await this.assertMayLower(tx, ability, member);
       await this.repository.update(tx, this.tenantId, userId, { status: 'INACTIVE' });
+      await this.audit.record(tx, { action: 'member.deactivated', subjectType: 'Membership', subjectId: userId, before: { status: member.status }, after: { status: 'INACTIVE' } });
       return toMemberResponse(await this.require(tx, userId));
     });
   }

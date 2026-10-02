@@ -7,6 +7,7 @@ import {
   type PageQuery,
   pageQuerySchema,
 } from '@procesabpm/shared';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { ApprovalGroupTypesService } from '../application/approval-group-types.service.js';
@@ -29,18 +30,21 @@ export class ApprovalGroupTypesController {
 
   @RequirePermission('create', 'ApprovalGroup')
   @Post()
+  @Audited('approval_group_type.created')
   create(@Body(new ZodValidationPipe(approvalGroupTypeRequestSchema)) body: ApprovalGroupTypeRequest): Promise<ApprovalGroupTypeResponse> {
     return this.types.create(body);
   }
 
   @RequirePermission('update', 'ApprovalGroup')
   @Patch(':id')
+  @Audited('approval_group_type.updated')
   rename(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(approvalGroupTypeRequestSchema)) body: ApprovalGroupTypeRequest): Promise<ApprovalGroupTypeResponse> {
     return this.types.rename(id, body);
   }
 
   @RequirePermission('delete', 'ApprovalGroup')
   @Delete(':id')
+  @Audited('approval_group_type.deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.types.remove(id);

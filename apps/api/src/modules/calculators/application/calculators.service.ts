@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type CalculatorDefinition, type CalculatorResponse, findCalculator, listCalculators, NotFoundError, ValidationFailedError } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { CalculatorConfigRepository } from '../data/calculator-config.repository.js';
 
 const describe = (calculator: CalculatorDefinition, config: Record<string, unknown> | undefined): CalculatorResponse => ({
@@ -19,6 +20,7 @@ export class CalculatorsService {
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(CalculatorConfigRepository) private readonly configs: CalculatorConfigRepository,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   list(): Promise<CalculatorResponse[]> {
@@ -33,7 +35,10 @@ export class CalculatorsService {
     const parsed = calculator.configSchema.safeParse(config);
     if (!parsed.success) throw new ValidationFailedError(parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })));
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.configs.save(tx, this.context.require().tenantId, code, parsed.data);
+      const tenantId = this.context.require().tenantId;
+      const before = (await this.configs.all(tx, tenantId)).get(code);
+      await this.configs.save(tx, tenantId, code, parsed.data);
+      await this.audit.record(tx, { action: 'calculator.config_updated', subjectType: 'Setting', subjectId: null, before: { calculator: code, config: before ?? null }, after: { calculator: code, config: parsed.data } });
       return describe(calculator, parsed.data);
     });
   }
@@ -41,7 +46,10 @@ export class CalculatorsService {
   disable(code: string): Promise<CalculatorResponse> {
     const calculator = this.require(code);
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.configs.remove(tx, this.context.require().tenantId, code);
+      const tenantId = this.context.require().tenantId;
+      const before = (await this.configs.all(tx, tenantId)).get(code);
+      await this.configs.remove(tx, tenantId, code);
+      await this.audit.record(tx, { action: 'calculator.config_removed', subjectType: 'Setting', subjectId: null, before: { calculator: code, config: before ?? null } });
       return describe(calculator, undefined);
     });
   }

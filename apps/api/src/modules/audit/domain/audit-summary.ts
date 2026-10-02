@@ -1,4 +1,4 @@
-const SECRET_KEY = /pass|secret|token|hash|code|key|otp/i;
+const SECRET_KEY = /pass|secret|token|hash|otp|credential|api[-_]?key|private[-_]?key|backup/i;
 const MAX_STRING = 200;
 const MAX_DEPTH = 4;
 const MAX_BYTES = 8192;
