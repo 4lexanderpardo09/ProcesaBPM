@@ -40,3 +40,57 @@ jobs:
       # Integration tests start PostgreSQL 18 with Testcontainers (Docker is available on GitHub runners).
       - name: Tests
         run: pnpm test
+
+  # Builds the three production images (never publishes them) and starts them against a real PostgreSQL: the migrations
+  # apply, the API answers /health and /ready, and the worker stops cleanly on SIGTERM (scripts/smoke-images.sh).
+  images:
+    name: Docker images
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          load: true
+          push: false
+          tags: procesabpm-api:ci
+          cache-from: type=gha,scope=images
+          cache-to: type=gha,scope=images,mode=max
+
+      - name: Build worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          load: true
+          push: false
+          tags: procesabpm-worker:ci
+          cache-from: type=gha,scope=images
+          cache-to: type=gha,scope=images,mode=max
+
+      - name: Build migrate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrate
+          load: true
+          push: false
+          tags: procesabpm-migrate:ci
+          cache-from: type=gha,scope=images
+          cache-to: type=gha,scope=images,mode=max
+
+      - name: Smoke test
+        run: scripts/smoke-images.sh
+        env:
+          API_IMAGE: procesabpm-api:ci
+          WORKER_IMAGE: procesabpm-worker:ci
+          MIGRATE_IMAGE: procesabpm-migrate:ci
+
+      - name: Validate the example compose file
+        run: docker compose --env-file deploy/example.env -f docker-compose.prod.example.yml config --quiet
