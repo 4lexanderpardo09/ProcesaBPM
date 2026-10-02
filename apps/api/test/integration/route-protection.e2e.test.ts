@@ -26,8 +26,8 @@ const PUBLIC_ROUTES = [
 
 /** Routes that need a signed-in user but no permission of the catalog. */
 const AUTHENTICATED_ONLY_ROUTES = [
-  'GET /auth/me',
   'POST /auth/password',
+  'GET /auth/me',
   'GET /delegations',
   'POST /delegations',
   'POST /delegations/:id/cancel',
