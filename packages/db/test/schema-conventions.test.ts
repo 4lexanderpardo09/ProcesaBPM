@@ -110,6 +110,22 @@ describe('schema conventions', () => {
     ]);
   });
 
+  it('gives no application login the right to rewrite or empty a history table', async () => {
+    const { rows } = await db.owner.query<{ grant: string }>(`
+      SELECT r.rolname || ' ' || p.privilege || ' on ' || c.relname AS grant
+      FROM pg_class c
+      CROSS JOIN (VALUES ('app_runtime'), ('app_worker'), ('app_platform')) AS r(rolname)
+      CROSS JOIN (VALUES ('UPDATE'), ('DELETE'), ('TRUNCATE')) AS p(privilege)
+      WHERE c.relnamespace = 'public'::regnamespace
+        AND c.relname IN ('audit_logs', 'ticket_events', 'ticket_errors', 'ticket_signatures', 'platform_audit_logs')
+        AND has_table_privilege(r.rolname, c.oid, p.privilege)
+        -- app_platform keeps its rights on the ticket history: tenant purges and sign-up run as that login.
+        AND NOT (r.rolname = 'app_platform' AND c.relname IN ('ticket_events', 'ticket_errors', 'ticket_signatures') AND p.privilege <> 'TRUNCATE')
+      ORDER BY 1`);
+
+    expect(rows.map((row) => row.grant)).toEqual([]);
+  });
+
   it('does not let the application roles create temporary tables', async () => {
     for (const pool of [db.runtime, db.platform, db.worker]) {
       expect(await sqlStateOf(() => pool.query('CREATE TEMP TABLE shadow (id int)'))).toBe(SqlState.insufficientPrivilege);

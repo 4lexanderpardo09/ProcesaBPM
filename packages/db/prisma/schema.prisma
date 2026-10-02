@@ -2632,6 +2632,8 @@ model AuditLog {
   before     Json?
   after      Json?
   ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  requestId  String?  @map("request_id")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2639,6 +2641,7 @@ model AuditLog {
 
   @@id([tenantId, id])
   @@index([tenantId, entityType, entityId])
+  @@index([tenantId, action, createdAt(sort: Desc)])
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, actorId])
   @@map("audit_logs")
