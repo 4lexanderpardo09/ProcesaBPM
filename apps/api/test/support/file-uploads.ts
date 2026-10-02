@@ -26,7 +26,7 @@ export const declare = (file: FileToUpload) => ({ name: file.name, sizeBytes: fi
 /** What the browser does with a slot: PUT the bytes with the signed headers (the length comes from the body). */
 export async function putToStorage(slot: UploadSlot, content: Buffer): Promise<Response> {
   const { 'content-length': _fromBody, ...headers } = slot.headers;
-  return fetch(slot.url, { method: slot.method, headers, body: content });
+  return fetch(slot.url, { method: slot.method, headers, body: new Uint8Array(content) });
 }
 
 export async function reserve(member: Member, files: readonly FileToUpload[]): Promise<UploadSlot[]> {
