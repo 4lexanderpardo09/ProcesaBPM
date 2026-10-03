@@ -434,6 +434,10 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 - Columnas: `actor_id`, `action` (`<sujeto>.<verbo>`, CHECK de formato), `entity_type`/`entity_id`, `before`/`after` (resumen, máx. 8 KiB por CHECK), `ip_address`, `user_agent`, `request_id`, `created_at` (reloj de la BD).
 - El API la escribe con `AuditTrail.record(tx, …)` **dentro de la transacción de la acción** (se confirma o se revierte con ella); `GET /audit-logs` la consulta (permiso `read AuditLog`, solo el administrador). Detalle en `arquitectura.md` §17.
 
+### 8.22 Operaciones de plataforma (migración `20261016000000`)
+- `list_failed_platform_outbox_events(limite, desplazamiento)` y `retry_failed_platform_outbox_event(id)`: `SECURITY DEFINER` de `app_outbox_owner`, ejecutables **solo por `app_platform`**. La primera devuelve los eventos `FAILED` (tipo, intentos, error recortado a 500 caracteres, fecha y total) **sin el payload**; la segunda devuelve a `PENDING` con los intentos en cero solo un evento `FAILED`. El outbox de tenants (`outbox_events`) lo lee y reintenta `app_platform` directamente (ya tiene el privilegio).
+- Las ediciones de planes desde la consola persisten porque la semilla solo inserta planes (`ON CONFLICT DO NOTHING`).
+
 ## 9. Catálogo global y semillas
 `src/seed/run.ts` carga, de forma **idempotente** (upsert por llave natural), en cada despliegue:
 
@@ -463,7 +467,9 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 | `integrity.test.ts` | FK compuestas; unicidades; CHECKs; purga de tenant. |
 | `database-functions.test.ts` | Numeración concurrente; funciones de login; outbox concurrente; retención. |
 | `schema-conventions.test.ts` | **Guardas para migraciones futuras:** toda FK con índice y con `tenant_id`, PK con `tenant_id` primero, trigger de `updated_at`, funciones `SECURITY DEFINER` bien configuradas. |
-| `seed.test.ts` | Semilla idempotente, planes, permisos y plantillas de roles. |
+| `seed.test.ts` | Semilla idempotente, planes (sin deshacer ediciones de la consola), permisos y plantillas de roles. |
+| `create-platform-admin.test.ts` | Comando del primer administrador: enlace de 24 h con solo su hash, idempotencia, `--force-additional`, rechazo de superusuario y de logins ajenos a `app_platform`, auditoría. |
+| `platform-console-operations.test.ts` | Listado y reintento de eventos `FAILED` del outbox de plataforma, sin payload y cerrados al API y al worker. |
 | `unit/colombia-holidays.test.ts` | Festivos contra las listas del sistema viejo y la fecha de Pascua. |
 
 Convención: `sqlStateOf(() => operación)` recibe una **función**, para que la consulta no empiece antes de esperarla.
