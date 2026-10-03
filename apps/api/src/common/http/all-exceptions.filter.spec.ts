@@ -45,12 +45,25 @@ describe('AllExceptionsFilter', () => {
     ['foreign key violation (23503)', prismaError('P2010', '23503'), 422, 'INVALID_REFERENCE'],
     ['overlap (23P01)', prismaError('P2010', '23P01'), 409, 'OVERLAP'],
     ['missing privilege (42501)', prismaError('P2010', '42501'), 403, 'PERMISSION_DENIED'],
-    ['domain error', new InvalidStateError('ticket is closed'), 422, 'INVALID_STATE'],
-  ])('answers a %s', (_label, exception, status, code) => {
+  ])('answers a %s and logs the real reason as a warning', (_label, exception, status, code) => {
     const response = respond(exception);
     expect(response.status).toBe(status);
     expect(response.body).toEqual({ error: { code, message: expect.any(String), requestId: 'req-9' } });
+    expect(response.logged).toHaveLength(1);
+    expect(JSON.parse(response.logged[0]!)).toMatchObject({ level: 'warn', event: 'http.database_error', code, cause: expect.stringContaining('secret_table') });
+  });
+
+  it('answers a domain error without logging anything', () => {
+    const response = respond(new InvalidStateError('ticket is closed'));
+    expect([response.status, response.body.error.code]).toEqual([422, 'INVALID_STATE']);
     expect(response.logged).toHaveLength(0);
+  });
+
+  it('never turns a Prisma error it does not know into a 4xx: unknown is a 500', () => {
+    for (const code of ['P2025', 'P2003', 'P2016', 'P1001', 'P2024', 'P2028']) {
+      const error = Object.assign(new Error('Some Prisma failure'), { name: 'PrismaClientKnownRequestError', code, meta: {} });
+      expect(respond(error).status, code).toBe(500);
+    }
   });
 
   it.each([
@@ -83,6 +96,7 @@ describe('AllExceptionsFilter', () => {
     expect(response.body.error.code).toBe('TEMPORARILY_UNAVAILABLE');
     expect(response.headers['Retry-After']).toBe('1');
     expect(JSON.stringify(response.body)).not.toContain('secret_table');
+    expect(response.logged).toHaveLength(1);
   });
 
   it('tells a rate-limited client when to retry', () => {

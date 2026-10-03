@@ -193,7 +193,7 @@ describe('incidents (novedades): pause, hand over, resolve', () => {
         const ticket = (await create(single)).body;
         const [opened, moved] = await Promise.all([open(worker, ticket), worker.client.post(`/tickets/${ticket.id}/transition`, { transitionId: single.transition.Done, visitId: ticket.openVisitId })]);
         // Whoever goes second finds the ticket paused or closed: 422 either way.
-        expect([opened.status, moved.status].sort(), `round ${round}`).toEqual(opened.status === 201 ? [201, 422] : [200, 422]);
+        expect([opened.status, moved.status].sort(), `round ${round}: ${JSON.stringify([opened, moved].map((result) => [result.status, result.body?.error?.code]))}`).toEqual(opened.status === 201 ? [201, 422] : [200, 422]);
         const status = (await world.ticketRow(ticket.id)).status;
         expect(status).toBe(opened.status === 201 ? 'PAUSED' : 'CLOSED');
       }

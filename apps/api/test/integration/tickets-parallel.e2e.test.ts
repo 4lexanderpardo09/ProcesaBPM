@@ -150,7 +150,7 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       for (let round = 0; round < 10; round += 1) {
         const ticket = (await create(flow)).body;
         const results = await Promise.all([sign(a, ticket), sign(b, ticket)]);
-        expect(results.map((result) => result.status), `round ${round}`).toEqual([200, 200]);
+        expect(results.map((result) => result.status), `round ${round}: ${JSON.stringify(results.map((result) => [result.status, result.body?.error?.code]))}`).toEqual([200, 200]);
         expect((await tasks(ticket.id)).map((task) => task.status)).toEqual(['SIGNED', 'SIGNED']);
         expect((await world.visits(ticket.id)).map((visit) => visit.step_id)).toEqual([flow.step.sign, flow.step.next]);
         expect((await world.events(ticket.id)).filter((event) => event.type === 'TRANSITIONED' && event.actor_id !== null)).toHaveLength(1);
@@ -197,7 +197,7 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
         const ticket = (await create(flow)).body;
         const results = await Promise.all([sign(a, ticket), reject(b, ticket, { comment: 'No' })]);
         const statuses = results.map((result) => result.status).sort();
-        expect(statuses, `round ${round}`).toEqual(expect.arrayContaining([200]));
+        expect(statuses, `round ${round}: ${JSON.stringify(results.map((result) => [result.status, result.body?.error?.code]))}`).toEqual(expect.arrayContaining([200]));
         expect((await world.ticketRow(ticket.id)).current_step_id).toBe(flow.step.rejected);
         expect((await tasks(ticket.id)).every((task) => task.status !== 'PENDING')).toBe(true);
         expect((await world.visits(ticket.id)).filter((visit) => visit.exited_at === null)).toHaveLength(1);
