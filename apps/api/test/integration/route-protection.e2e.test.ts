@@ -73,6 +73,7 @@ const PLATFORM_ROUTES = [
   'POST /platform/operations/outbox-events/platform/:id/retry',
   'POST /platform/operations/outbox-events/tenants/:tenantId/:id/retry',
   'GET /platform/operations/metrics',
+  'GET /platform/audit-logs',
   'GET /platform/plans',
   'PUT /platform/plans/:code',
   'GET /platform/admins',

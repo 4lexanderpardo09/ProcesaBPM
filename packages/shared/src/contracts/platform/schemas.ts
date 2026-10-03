@@ -214,3 +214,26 @@ export interface PlatformMetrics {
   readonly storageUsedBytes: string;
   readonly ticketsPerDay: ReadonlyArray<{ readonly date: string; readonly count: number }>;
 }
+
+export const listPlatformAuditQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    actorUserId: uuidSchema.optional(),
+    tenantId: uuidSchema.optional(),
+    action: z.string().trim().min(1).max(64).optional(),
+    from: z.iso.datetime({ offset: true }).optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+  })
+  .refine((value) => value.from === undefined || value.to === undefined || new Date(value.to) > new Date(value.from), { path: ['to'], message: 'The end must be after the start' });
+export type ListPlatformAuditQuery = z.infer<typeof listPlatformAuditQuerySchema>;
+
+export interface PlatformAuditEntryResponse {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly action: string;
+  readonly targetTenantId: string | null;
+  readonly data: unknown;
+  readonly ipAddress: string | null;
+  readonly createdAt: string;
+}

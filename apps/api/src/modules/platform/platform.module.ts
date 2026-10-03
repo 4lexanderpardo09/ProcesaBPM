@@ -8,6 +8,8 @@ import { BASE_ROLE_TEMPLATES, TenantRoleProvisioner } from './application/tenant
 import { AnnouncementAdminService } from './application/announcement-admin.service.js';
 import { CountryCatalogService } from './application/country-catalog.service.js';
 import { OperationsService } from './application/operations.service.js';
+import { PlatformAuditQueryRepository } from './data/platform-audit-query.repository.js';
+import { PlatformAuditQueryService } from './application/platform-audit-query.service.js';
 import { PlanAdminService } from './application/plan-admin.service.js';
 import { TenantAdminService } from './application/tenant-admin.service.js';
 import { PlatformAdminsService } from './application/platform-admins.service.js';
@@ -28,13 +30,14 @@ import { PlatformAdminsController } from './http/platform-admins.controller.js';
 import { PlatformAnnouncementsController } from './http/platform-announcements.controller.js';
 import { PlatformCatalogController } from './http/platform-catalog.controller.js';
 import { PlatformOperationsController } from './http/platform-operations.controller.js';
+import { PlatformAuditController } from './http/platform-audit.controller.js';
 import { PlatformPlansController } from './http/platform-plans.controller.js';
 import { PlatformTenantsController } from './http/platform-tenants.controller.js';
 
 /** Platform administration: it acts on tenants with the login that bypasses row-level security. */
 @Module({
   imports: [PlatformDatabaseModule],
-  controllers: [PlatformTenantsController, PlatformAdminsController, PlatformPlansController, PlatformAnnouncementsController, PlatformCatalogController, PlatformOperationsController],
+  controllers: [PlatformTenantsController, PlatformAdminsController, PlatformPlansController, PlatformAnnouncementsController, PlatformCatalogController, PlatformOperationsController, PlatformAuditController],
   providers: [
     PlatformOutboxRepository,
     PlatformAuditRepository,
@@ -60,6 +63,8 @@ import { PlatformTenantsController } from './http/platform-tenants.controller.js
     CountryCatalogService,
     OperationsRepository,
     OperationsService,
+    PlatformAuditQueryRepository,
+    PlatformAuditQueryService,
   ],
 })
 export class PlatformModule {}
