@@ -29,6 +29,8 @@ const settingsSchema = z.object({
   SMTP_SECURE: boolean(false),
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASSWORD: z.string().min(1).optional(),
+  /** Tell the API instances (through `NOTIFY`) that something changed, so they can update open screens. */
+  REALTIME_SIGNALS_ENABLED: boolean(true),
   OUTBOX_POLLING_ENABLED: boolean(true),
   OUTBOX_POLL_INTERVAL_MS: positiveInteger(2_000, 600_000),
   OUTBOX_BATCH_SIZE: positiveInteger(10, 500),

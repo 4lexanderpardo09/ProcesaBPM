@@ -3,6 +3,8 @@ import { type NotificationTypeValue, uuidSchema } from '@procesabpm/shared';
 import { z } from 'zod';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { ClaimedEvent } from '../../../infrastructure/outbox/outbox-handler.js';
+import type { PostCommitEffects } from '../../../infrastructure/outbox/post-commit-effects.js';
+import { RealtimeSignalPublisher } from '../../../infrastructure/realtime/realtime-signal-publisher.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { EmailOutboxRepository } from '../data/email-outbox.repository.js';
 import { NotificationRepository, type NewNotification } from '../data/notification.repository.js';
@@ -50,16 +52,17 @@ export class TicketNotificationHandlers implements OnModuleInit {
     @Inject(NotificationRepository) private readonly notifications: NotificationRepository,
     @Inject(EmailOutboxRepository) private readonly emails: EmailOutboxRepository,
     @Inject(TicketReaderFilter) private readonly readers: TicketReaderFilter,
+    @Inject(RealtimeSignalPublisher) private readonly realtime: RealtimeSignalPublisher,
   ) {}
 
   onModuleInit(): void {
     for (const kind of TICKET_EVENT_KINDS) {
-      this.registry.registerTransactional({ type: kind, schema: SCHEMAS[kind] as z.ZodType<Payload>, handle: (tx, event) => this.handle(tx, kind, event) });
+      this.registry.registerTransactional({ type: kind, schema: SCHEMAS[kind] as z.ZodType<Payload>, handle: (tx, event, effects) => this.handle(tx, kind, event, effects) });
     }
     for (const type of COVERED_ELSEWHERE) this.registry.registerTransactional({ type, schema: z.object({}).passthrough(), handle: () => Promise.resolve() });
   }
 
-  private async handle(tx: TenantTransaction, kind: TicketEventKind, event: ClaimedEvent<Payload>): Promise<void> {
+  private async handle(tx: TenantTransaction, kind: TicketEventKind, event: ClaimedEvent<Payload>, effects: PostCommitEffects): Promise<void> {
     const tenantId = event.tenantId!;
     const { payload } = event;
     const tenant = await this.facts.tenant(tx, tenantId);
@@ -87,6 +90,11 @@ export class TicketNotificationHandlers implements OnModuleInit {
     }
     await this.notifications.createMany(tx, tenantId, inApp);
     await this.emails.enqueue(tx, tenantId, mails);
+    // After the commit, tell the open screens of these people (ids only; they read their own counter).
+    if (inApp.length > 0) {
+      const userIds = [...new Set(inApp.map((notification) => notification.userId))];
+      effects.afterCommit(() => this.realtime.publish([{ v: 1, k: 'notifications', t: tenantId, u: userIds }]));
+    }
   }
 
   /** `undefined` when the event no longer matters (an SLA clock that finished or a ticket that closed since). */

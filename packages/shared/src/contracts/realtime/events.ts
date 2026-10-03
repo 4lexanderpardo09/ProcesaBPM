@@ -86,7 +86,7 @@ export interface TicketChangedPayload {
 }
 export interface TicketDocumentGeneratedPayload {
   readonly ticketId: string;
-  readonly ticketDocumentId: string;
+  readonly fileId: string;
 }
 export interface TicketAccessLostPayload {
   readonly ticketId: string;
