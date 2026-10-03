@@ -8,6 +8,12 @@
 #   docker compose -f docker-compose.prod.example.yml up -d
 #
 # Order of startup, enforced with depends_on:  postgres -> migrate -> roles -> seed -> api, worker.
+#
+# Upgrading a running deployment: `up -d` alone runs migrate while the OLD worker is still working. Stop it first
+# (docs/despliegue.md §5; required for migration 20261017000000, which changes the outbox claim protocol):
+#   docker compose -f docker-compose.prod.example.yml stop worker
+#   docker compose -f docker-compose.prod.example.yml run --rm migrate
+#   docker compose -f docker-compose.prod.example.yml up -d
 name: procesabpm
 
 x-hardening: &hardening

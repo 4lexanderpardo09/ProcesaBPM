@@ -152,6 +152,20 @@ El comando **se niega** a correr con el dueño del esquema, con un superusuario 
 - Una migración fallida deja la BD en estado «fallida» (Prisma `P3009`): hay que resolverla a mano (`prisma migrate resolve`) antes de reintentar. No reintentes a ciegas.
 - `docker run --rm -e DATABASE_URL=… procesabpm-migrate` aplica; `… node seed/seed.js` carga el catálogo.
 
+### Actualizar un entorno en marcha (worker detenido durante la migración)
+
+Con otro orquestador o varios hosts, el paso 2 es «escala el worker a 0 réplicas **en todos los hosts**» antes de correr el trabajo de migración: una sola réplica vieja viva basta para el envío doble de correos de tenant que se describe abajo. Al revés, un worker nuevo contra una BD sin migrar falla cerrado (la consulta de reclamo no encuentra la columna `claim_token`), sin perder nada. El **API no necesita detenerse**: un API viejo solo inserta eventos y reintenta los `FAILED`, y eso es compatible.
+
+Con Compose, `up -d` con imágenes nuevas corre `migrate` **antes** de recrear el worker, así que el worker viejo sigue trabajando mientras se migra. Cuando una migración cambia el protocolo del outbox, eso no sirve. El procedimiento seguro, que vale para cualquier versión:
+
+1. Respaldo de la BD.
+2. `docker compose -f docker-compose.prod.example.yml stop worker`: el worker termina su lote en curso (`stop_grace_period`) y deja de reclamar.
+3. `docker compose -f docker-compose.prod.example.yml run --rm migrate`: aplica las migraciones.
+4. `docker compose -f docker-compose.prod.example.yml up -d`: arranca el API y el worker con las imágenes nuevas.
+5. `deploy/verify.sh` (§9).
+
+**Obligatorio para la migración `20261017000000` (ficha de reclamo del outbox, base-de-datos.md §8.26).** Cambia la firma de `complete_*`, `fail_*` y `platform_outbox_claim_is_current` (la ficha de exclusión deja de ser el número de intento). Un worker de la versión anterior que siga vivo seguiría reclamando eventos (esa firma no cambió) y luego llamaría a funciones que ya no existen: falla cerrado (su transacción se revierte, el arriendo vence y el worker nuevo reclama el evento), pero gasta intentos, llena el registro de errores y, en los correos de tenant, su comprobación de «reclamo vigente» era una consulta directa que sigue funcionando: puede **enviar un correo que después no puede completar**, y el worker nuevo lo enviaría otra vez. Con el worker detenido no pasa nada de eso; si quedó algún evento `PROCESSING`, la migración le asigna una ficha que nadie tiene y se vuelve a reclamar al vencer su arriendo (5 min).
+
 ## 6. Salud y apagado ordenado
 
 - **API:** `GET /health` (vivo; no toca la BD) y `GET /ready` (listo; comprueba la BD). El `HEALTHCHECK` de la imagen usa `/health`, para que una caída de la BD no reinicie el API en bucle; usa **`/ready` como sondeo de disponibilidad** del balanceador u orquestador.

@@ -7,8 +7,10 @@ export interface ClaimedEvent<P> {
   /** `null` for platform events. */
   readonly tenantId: string | null;
   readonly type: string;
-  /** Claims so far, this one included: it fences the result of a worker whose lease already ended. */
+  /** Claims so far, this one included: drives the backoff and the last-attempt rule (a console retry resets it). */
   readonly attempt: number;
+  /** New at every claim: fences the result of a worker whose lease already ended (docs/base-de-datos.md §6.4). */
+  readonly claimToken: string;
   readonly createdAt: Date;
   readonly payload: P;
 }

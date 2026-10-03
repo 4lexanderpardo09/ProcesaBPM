@@ -7,6 +7,7 @@ interface Claimed {
   tenant_id: string;
   attempts: number;
   status: string;
+  claim_token: string;
 }
 
 describe('tenant outbox: lease, fencing and complete/fail', () => {
@@ -27,11 +28,11 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
     (await db.owner.query<{ status: string; attempts: number; processed_at: Date | null; last_error: string | null; available_at: Date }>(
       'SELECT status, attempts, processed_at, last_error, available_at FROM outbox_events WHERE id = $1', [id])).rows[0]!;
   const asWorker = <T>(tenant: SeededTenant, work: Parameters<typeof withContext<T>>[2]) => withContext(db.worker, { tenantId: tenant.tenantId }, work);
-  const complete = (tenant: SeededTenant, id: string, attempt: number) =>
-    asWorker(tenant, async (client) => (await client.query<{ ok: boolean }>('SELECT complete_outbox_event($1, $2) AS ok', [id, attempt])).rows[0]!.ok);
-  const fail = (tenant: SeededTenant, id: string, attempt: number, retryAt: Date | null, maxAttempts = 10) =>
+  const complete = (tenant: SeededTenant, id: string, claimToken: string) =>
+    asWorker(tenant, async (client) => (await client.query<{ ok: boolean }>('SELECT complete_outbox_event($1, $2) AS ok', [id, claimToken])).rows[0]!.ok);
+  const fail = (tenant: SeededTenant, id: string, claimToken: string, retryAt: Date | null, maxAttempts = 10) =>
     asWorker(tenant, async (client) =>
-      (await client.query<{ ok: boolean }>('SELECT fail_outbox_event($1, $2, $3, $4, $5) AS ok', [id, attempt, 'boom', retryAt?.toISOString() ?? null, maxAttempts])).rows[0]!.ok);
+      (await client.query<{ ok: boolean }>('SELECT fail_outbox_event($1, $2, $3, $4, $5) AS ok', [id, claimToken, 'boom', retryAt?.toISOString() ?? null, maxAttempts])).rows[0]!.ok);
   const expire = (id: string) => db.owner.query(`UPDATE outbox_events SET available_at = now() - interval '1 second' WHERE id = $1`, [id]);
 
   beforeAll(async () => {
@@ -79,16 +80,16 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
   describe('complete and fail', () => {
     it('complete closes the event inside the handler\'s tenant transaction', async () => {
       const id = await insertEvent(tenantA);
-      const { attempts } = (await claim()).find((event) => event.id === id)!;
-      expect(await complete(tenantA, id, attempts)).toBe(true);
+      const { claim_token } = (await claim()).find((event) => event.id === id)!;
+      expect(await complete(tenantA, id, claim_token)).toBe(true);
       expect(await row(id)).toMatchObject({ status: 'DONE', processed_at: expect.any(Date) });
     });
 
     it('the effect and the completion commit together: a rollback leaves the event claimed, not done', async () => {
       const id = await insertEvent(tenantA);
-      const { attempts } = (await claim()).find((event) => event.id === id)!;
+      const { claim_token } = (await claim()).find((event) => event.id === id)!;
       const failing = asWorker(tenantA, async (client) => {
-        await client.query('SELECT complete_outbox_event($1, $2)', [id, attempts]);
+        await client.query('SELECT complete_outbox_event($1, $2)', [id, claim_token]);
         throw new Error('the handler failed after completing');
       });
       await expect(failing).rejects.toThrow('the handler failed');
@@ -97,22 +98,22 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
 
     it('another tenant\'s context cannot close or fail the event', async () => {
       const id = await insertEvent(tenantA);
-      const { attempts } = (await claim()).find((event) => event.id === id)!;
-      expect(await complete(tenantB, id, attempts)).toBe(false);
-      expect(await fail(tenantB, id, attempts, null)).toBe(false);
+      const { claim_token } = (await claim()).find((event) => event.id === id)!;
+      expect(await complete(tenantB, id, claim_token)).toBe(false);
+      expect(await fail(tenantB, id, claim_token, null)).toBe(false);
       expect(await row(id)).toMatchObject({ status: 'PROCESSING' });
     });
 
     it('without a tenant context they change nothing', async () => {
       const id = await insertEvent(tenantA);
-      const { attempts } = (await claim()).find((event) => event.id === id)!;
-      const { rows } = await withoutContext(db.worker, (client) => client.query<{ ok: boolean }>('SELECT complete_outbox_event($1, $2) AS ok', [id, attempts]));
+      const { claim_token } = (await claim()).find((event) => event.id === id)!;
+      const { rows } = await withoutContext(db.worker, (client) => client.query<{ ok: boolean }>('SELECT complete_outbox_event($1, $2) AS ok', [id, claim_token]));
       expect(rows[0]!.ok).toBe(false);
     });
 
-    it('a worker whose lease expired cannot overwrite the result of the new owner (stale attempt)', async () => {
+    it('a worker whose lease expired cannot overwrite the result of the new owner (stale claim)', async () => {
       const id = await insertEvent(tenantA);
-      const stale = (await claim()).find((event) => event.id === id)!.attempts;
+      const stale = (await claim()).find((event) => event.id === id)!.claim_token;
       await expire(id);
       await claim();
       expect(await complete(tenantA, id, stale)).toBe(false);
@@ -123,12 +124,12 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
     it('fail with a retry goes back to PENDING at that time, and to FAILED on the last allowed attempt', async () => {
       const [retried, last] = [await insertEvent(tenantA), await insertEvent(tenantA)];
       const claimed = await claim(1000, '5 minutes', 1);
-      const attemptOf = (id: string) => claimed.find((event) => event.id === id)!.attempts;
+      const tokenOf = (id: string) => claimed.find((event) => event.id === id)!.claim_token;
       const retryAt = new Date(Date.now() + 60_000);
-      expect(await fail(tenantA, retried, attemptOf(retried), retryAt, 10)).toBe(true);
+      expect(await fail(tenantA, retried, tokenOf(retried), retryAt, 10)).toBe(true);
       expect(await row(retried)).toMatchObject({ status: 'PENDING', last_error: 'boom' });
       expect((await row(retried)).available_at.getTime()).toBeGreaterThan(Date.now());
-      expect(await fail(tenantA, last, attemptOf(last), retryAt, 1)).toBe(true);
+      expect(await fail(tenantA, last, tokenOf(last), retryAt, 1)).toBe(true);
       expect((await row(last)).status).toBe('FAILED');
     });
   });
@@ -136,8 +137,9 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
   describe('privileges', () => {
     it.each([
       ['claim_outbox_events(10, NULL::text[])'],
-      [`complete_outbox_event('00000000-0000-4000-8000-000000000000', 1)`],
-      [`fail_outbox_event('00000000-0000-4000-8000-000000000000', 1, 'x', NULL, 10)`],
+      [`complete_outbox_event('00000000-0000-4000-8000-000000000000', '00000000-0000-4000-8000-000000000000')`],
+      [`fail_outbox_event('00000000-0000-4000-8000-000000000000', '00000000-0000-4000-8000-000000000000', 'x', NULL, 10)`],
+      [`outbox_claim_is_current('00000000-0000-4000-8000-000000000000', '00000000-0000-4000-8000-000000000000')`],
     ])('the API role cannot call %s', async (call) => {
       expect(await sqlStateOf(() => withContext(db.runtime, { tenantId: tenantA.tenantId }, (client) => client.query(`SELECT * FROM ${call}`)))).toBe(SqlState.insufficientPrivilege);
     });

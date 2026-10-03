@@ -11,28 +11,37 @@ interface ClaimRow {
   type: string;
   payload: unknown;
   attempts: number;
+  claim_token: string;
   created_at: Date;
 }
 
-const toEvent = (row: ClaimRow): ClaimedEvent<unknown> => ({ id: row.id, tenantId: row.tenant_id ?? null, type: row.type, attempt: row.attempts, createdAt: row.created_at, payload: row.payload });
+const toEvent = (row: ClaimRow): ClaimedEvent<unknown> => ({
+  id: row.id,
+  tenantId: row.tenant_id ?? null,
+  type: row.type,
+  attempt: row.attempts,
+  claimToken: row.claim_token,
+  createdAt: row.created_at,
+  payload: row.payload,
+});
 
 /**
  * The worker's side of both outboxes (docs/base-de-datos.md §6.3): claim with a lease, then complete or fail with the
- * attempt number as a fence. Tenant events complete and fail inside their own tenant's transaction; platform events
- * belong to no tenant.
+ * claim's token as a fence (attempt numbers repeat after a console retry, tokens never do). Tenant events complete
+ * and fail inside their own tenant's transaction; platform events belong to no tenant.
  */
 @Injectable()
 export class OutboxClaimsRepository {
   async claimTenant(tx: CrossTenantTransaction, limit: number, types: readonly string[]): Promise<ClaimedEvent<unknown>[]> {
     const rows = await tx.$queryRaw<ClaimRow[]>`
-      SELECT id::text AS id, tenant_id::text AS tenant_id, type, payload, attempts, created_at
+      SELECT id::text AS id, tenant_id::text AS tenant_id, type, payload, attempts, claim_token::text AS claim_token, created_at
       FROM claim_outbox_events(${limit}::int, ${[...types]}::text[], ${LEASE}::interval, ${MAX_ATTEMPTS}::int)`;
     return rows.map(toEvent);
   }
 
   async claimPlatform(tx: CrossTenantTransaction, limit: number): Promise<ClaimedEvent<unknown>[]> {
     const rows = await tx.$queryRaw<ClaimRow[]>`
-      SELECT id::text AS id, type, payload, attempts, created_at
+      SELECT id::text AS id, type, payload, attempts, claim_token::text AS claim_token, created_at
       FROM claim_platform_outbox_events(${limit}::int, ${LEASE}::interval, ${MAX_ATTEMPTS}::int)`;
     return rows.map(toEvent);
   }
@@ -41,10 +50,8 @@ export class OutboxClaimsRepository {
   async isCurrent(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
     const [row] =
       source === 'tenant'
-        ? await tx.$queryRaw<Array<{ ok: boolean }>>`
-            SELECT EXISTS (SELECT 1 FROM outbox_events WHERE tenant_id = app_current_tenant() AND id = ${event.id}::uuid
-                           AND status = 'PROCESSING' AND attempts = ${event.attempt}::int AND available_at > now()) AS ok`
-        : await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT platform_outbox_claim_is_current(${event.id}::uuid, ${event.attempt}::int) AS ok`;
+        ? await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT outbox_claim_is_current(${event.id}::uuid, ${event.claimToken}::uuid) AS ok`
+        : await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT platform_outbox_claim_is_current(${event.id}::uuid, ${event.claimToken}::uuid) AS ok`;
     return row?.ok === true;
   }
 
@@ -52,8 +59,8 @@ export class OutboxClaimsRepository {
   async complete(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
     const [row] =
       source === 'tenant'
-        ? await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT complete_outbox_event(${event.id}::uuid, ${event.attempt}::int) AS ok`
-        : await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT complete_platform_outbox_event(${event.id}::uuid, ${event.attempt}::int) AS ok`;
+        ? await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT complete_outbox_event(${event.id}::uuid, ${event.claimToken}::uuid) AS ok`
+        : await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT complete_platform_outbox_event(${event.id}::uuid, ${event.claimToken}::uuid) AS ok`;
     return row?.ok === true;
   }
 
@@ -61,8 +68,8 @@ export class OutboxClaimsRepository {
   async fail(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>, error: string, retryAt: Date | null): Promise<boolean> {
     const [row] =
       source === 'tenant'
-        ? await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT fail_outbox_event(${event.id}::uuid, ${event.attempt}::int, ${error}, ${retryAt}::timestamptz, ${MAX_ATTEMPTS}::int) AS ok`
-        : await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT fail_platform_outbox_event(${event.id}::uuid, ${event.attempt}::int, ${error}, ${retryAt}::timestamptz, ${MAX_ATTEMPTS}::int) AS ok`;
+        ? await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT fail_outbox_event(${event.id}::uuid, ${event.claimToken}::uuid, ${error}, ${retryAt}::timestamptz, ${MAX_ATTEMPTS}::int) AS ok`
+        : await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT fail_platform_outbox_event(${event.id}::uuid, ${event.claimToken}::uuid, ${error}, ${retryAt}::timestamptz, ${MAX_ATTEMPTS}::int) AS ok`;
     return row?.ok === true;
   }
 }

@@ -6,8 +6,9 @@ const PLATFORM_TABLES = ['platform_outbox_events', 'platform_event_types'];
 const WORKER_FUNCTIONS = [
   'claim_outbox_events(10, NULL::text[])',
   'claim_platform_outbox_events(10)',
-  `complete_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 1)`,
-  `fail_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 1, 'x', NULL, 10)`,
+  `complete_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', '${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}')`,
+  `fail_platform_outbox_event('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', '${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', 'x', NULL, 10)`,
+  `platform_outbox_claim_is_current('${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}', '${'0'.repeat(8)}-0000-4000-8000-${'0'.repeat(12)}')`,
 ];
 
 describe('platform outbox and the worker role', () => {
@@ -25,7 +26,7 @@ describe('platform outbox and the worker role', () => {
     });
   const claim = (limit = 100, lease = '5 minutes', maxAttempts = 10) =>
     withoutContext(db.worker, async (client) => {
-      const { rows } = await client.query<{ id: string; attempts: number; status: string; payload: Record<string, unknown> }>(
+      const { rows } = await client.query<{ id: string; attempts: number; status: string; payload: Record<string, unknown>; claim_token: string }>(
         'SELECT * FROM claim_platform_outbox_events($1, $2::interval, $3)',
         [limit, lease, maxAttempts],
       );
@@ -110,20 +111,20 @@ describe('platform outbox and the worker role', () => {
         tenantA.tenantId,
         tenantB.tenantId,
       ]);
-      const claimed = await withoutContext(db.worker, async (client) => (await client.query<{ tenant_id: string; type: string; id: string; attempts: number }>('SELECT * FROM claim_outbox_events(100, NULL::text[])')).rows);
+      const claimed = await withoutContext(db.worker, async (client) => (await client.query<{ tenant_id: string; type: string; id: string; claim_token: string }>('SELECT * FROM claim_outbox_events(100, NULL::text[])')).rows);
       expect(claimed.filter((row) => row.type.startsWith('test.')).map((row) => row.tenant_id).sort()).toEqual([tenantA.tenantId, tenantB.tenantId].sort());
 
       const withoutTenant = await withoutContext(db.worker, (client) => client.query('SELECT 1 FROM outbox_events'));
       expect(withoutTenant.rowCount).toBe(0);
       const claimedA = claimed.find((row) => row.type === 'test.a')!;
       const claimedB = claimed.find((row) => row.type === 'test.b')!;
-      const complete = (tenantId: string, row: { id: string; attempts?: number }) =>
+      const complete = (tenantId: string, row: { id: string; claim_token: string }) =>
         withContext(db.worker, { tenantId }, async (client) =>
-          (await client.query<{ ok: boolean }>('SELECT complete_outbox_event($1, $2) AS ok', [row.id, row.attempts])).rows[0]!.ok,
+          (await client.query<{ ok: boolean }>('SELECT complete_outbox_event($1, $2) AS ok', [row.id, row.claim_token])).rows[0]!.ok,
         );
-      expect(await complete(tenantA.tenantId, claimedA as never)).toBe(true);
-      // Another tenant's context cannot close it, and neither can a stale attempt.
-      expect(await complete(tenantA.tenantId, claimedB as never)).toBe(false);
+      expect(await complete(tenantA.tenantId, claimedA)).toBe(true);
+      // Another tenant's context cannot close it.
+      expect(await complete(tenantA.tenantId, claimedB)).toBe(false);
     });
 
     it('two workers claiming at the same time get disjoint events', async () => {
@@ -157,9 +158,9 @@ describe('platform outbox and the worker role', () => {
 
     it('a retry requested on the last allowed attempt ends the event in FAILED (it could never be claimed again), without the token', async () => {
       const id = await enqueue({ userId: 'u', token: 'last-attempt-secret' });
-      const { attempts } = (await claim(1000, '5 minutes', 1)).find((row) => row.id === id)!;
+      const { claim_token } = (await claim(1000, '5 minutes', 1)).find((row) => row.id === id)!;
       const retryAt = new Date(Date.now() + 60_000).toISOString();
-      const { rows } = await db.worker.query<{ ok: boolean }>('SELECT fail_platform_outbox_event($1, $2, $3, $4, $5) AS ok', [id, attempts, 'smtp down', retryAt, 1]);
+      const { rows } = await db.worker.query<{ ok: boolean }>('SELECT fail_platform_outbox_event($1, $2, $3, $4, $5) AS ok', [id, claim_token, 'smtp down', retryAt, 1]);
       expect(rows[0]!.ok).toBe(true);
       const failed = await eventRow(id);
       expect(failed.status).toBe('FAILED');
@@ -168,15 +169,15 @@ describe('platform outbox and the worker role', () => {
 
     it('a retry before the last attempt keeps the token for the next try', async () => {
       const id = await enqueue({ userId: 'u', token: 'keep-me' });
-      const { attempts } = (await claim(1000)).find((row) => row.id === id)!;
-      await db.worker.query('SELECT fail_platform_outbox_event($1, $2, $3, $4, $5)', [id, attempts, 'smtp down', new Date(Date.now() + 60_000).toISOString(), 10]);
+      const { claim_token } = (await claim(1000)).find((row) => row.id === id)!;
+      await db.worker.query('SELECT fail_platform_outbox_event($1, $2, $3, $4, $5)', [id, claim_token, 'smtp down', new Date(Date.now() + 60_000).toISOString(), 10]);
       expect(await eventRow(id)).toMatchObject({ status: 'PENDING', payload: { token: 'keep-me' } });
     });
 
     it('complete marks the event DONE and removes the token from the payload', async () => {
       const id = await enqueue({ userId: 'u', token: 'secret' });
-      const { attempts } = (await claim(1000)).find((row) => row.id === id)!;
-      const { rows } = await db.worker.query<{ ok: boolean }>('SELECT complete_platform_outbox_event($1, $2) AS ok', [id, attempts]);
+      const { claim_token } = (await claim(1000)).find((row) => row.id === id)!;
+      const { rows } = await db.worker.query<{ ok: boolean }>('SELECT complete_platform_outbox_event($1, $2) AS ok', [id, claim_token]);
       expect(rows[0]!.ok).toBe(true);
       expect(await eventRow(id)).toMatchObject({ status: 'DONE', payload: { userId: 'u' }, processed_at: expect.any(Date) });
       expect((await eventRow(id)).payload).not.toHaveProperty('token');
@@ -186,10 +187,10 @@ describe('platform outbox and the worker role', () => {
       const retried = await enqueue();
       const finished = await enqueue({ userId: 'u', token: 'secret' });
       const claimed = await claim(1000);
-      const attemptOf = (id: string) => claimed.find((row) => row.id === id)!.attempts;
+      const tokenOf = (id: string) => claimed.find((row) => row.id === id)!.claim_token;
       const retryAt = new Date(Date.now() + 60_000).toISOString();
-      await db.worker.query('SELECT fail_platform_outbox_event($1, $2, $3, $4)', [retried, attemptOf(retried), 'smtp down', retryAt]);
-      await db.worker.query('SELECT fail_platform_outbox_event($1, $2, $3, NULL)', [finished, attemptOf(finished), 'x'.repeat(5000)]);
+      await db.worker.query('SELECT fail_platform_outbox_event($1, $2, $3, $4)', [retried, tokenOf(retried), 'smtp down', retryAt]);
+      await db.worker.query('SELECT fail_platform_outbox_event($1, $2, $3, NULL)', [finished, tokenOf(finished), 'x'.repeat(5000)]);
 
       expect(await eventRow(retried)).toMatchObject({ status: 'PENDING', last_error: 'smtp down' });
       expect((await eventRow(retried)).available_at.getTime()).toBeGreaterThan(Date.now());
@@ -199,9 +200,9 @@ describe('platform outbox and the worker role', () => {
       expect(failed.payload).not.toHaveProperty('token');
     });
 
-    it('a worker whose lease expired cannot overwrite the result of the new owner (stale attempt)', async () => {
+    it('a worker whose lease expired cannot overwrite the result of the new owner (stale claim)', async () => {
       const id = await enqueue();
-      const stale = (await claim(1000)).find((row) => row.id === id)!.attempts;
+      const stale = (await claim(1000)).find((row) => row.id === id)!.claim_token;
       await db.owner.query(`UPDATE platform_outbox_events SET available_at = now() - interval '1 second' WHERE id = $1`, [id]);
       await claim(1000);
       const complete = await db.worker.query<{ ok: boolean }>('SELECT complete_platform_outbox_event($1, $2) AS ok', [id, stale]);
@@ -242,7 +243,7 @@ describe('platform outbox and the worker role', () => {
         expect(await sqlStateOf(() => db.platform.query(`SELECT * FROM ${table}`))).toBe(SqlState.insufficientPrivilege);
       }
       // It owns (and can read) the tenant outbox, so only the platform outbox functions are closed to it.
-      for (const call of [`claim_platform_outbox_events(10)`, `complete_platform_outbox_event('00000000-0000-4000-8000-000000000000', 1)`]) {
+      for (const call of [`claim_platform_outbox_events(10)`, `complete_platform_outbox_event('00000000-0000-4000-8000-000000000000', '00000000-0000-4000-8000-000000000000')`]) {
         expect(await sqlStateOf(() => db.platform.query(`SELECT * FROM ${call}`))).toBe(SqlState.insufficientPrivilege);
       }
     });
