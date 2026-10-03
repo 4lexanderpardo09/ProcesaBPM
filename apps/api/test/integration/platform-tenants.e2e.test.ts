@@ -310,7 +310,8 @@ describe('platform tenant sign-up', () => {
   });
 
   describe('suspend and reactivate', () => {
-    const post = (path: string, token = adminToken) => http().post(path).set(bearer(token));
+    const REASON = { reason: 'Unpaid invoice' };
+    const post = (path: string, token = adminToken) => http().post(path).set(bearer(token)).send(REASON);
 
     it('suspends: members get TENANT_SUSPENDED; reactivating restores access', async () => {
       const tenant = await seedTenant(db.platform);
@@ -343,6 +344,14 @@ describe('platform tenant sign-up', () => {
       await db.platform.query(`UPDATE tenants SET status = 'CANCELLED' WHERE id = $1`, [tenant.tenantId]);
       const response = await post(`/platform/tenants/${tenant.tenantId}/reactivate`).expect(422);
       expect(response.body.error.code).toBe('INVALID_STATE');
+    });
+
+    it('suspending needs a reason, which is kept in the audit trail', async () => {
+      const tenant = await seedTenant(db.platform);
+      await http().post(`/platform/tenants/${tenant.tenantId}/suspend`).set(bearer(adminToken)).send({}).expect(400);
+      await post(`/platform/tenants/${tenant.tenantId}/suspend`).expect(200);
+      const { rows } = await db.owner.query(`SELECT data FROM platform_audit_logs WHERE target_tenant_id = $1`, [tenant.tenantId]);
+      expect(rows).toEqual([{ data: REASON }]);
     });
 
     it('a tenant user cannot suspend a tenant', async () => {

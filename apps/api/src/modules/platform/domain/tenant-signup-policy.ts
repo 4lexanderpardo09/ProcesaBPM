@@ -2,6 +2,9 @@ export const PLATFORM_AUDIT_ACTIONS = {
   tenantCreated: 'tenant.created',
   tenantSuspended: 'tenant.suspended',
   tenantReactivated: 'tenant.reactivated',
+  tenantPlanChanged: 'tenant.plan_changed',
+  tenantExtraStorageChanged: 'tenant.extra_storage_changed',
+  tenantOwnerInvitationResent: 'tenant.owner_invitation_resent',
   adminInvited: 'platform_admin.invited',
   adminRevoked: 'platform_admin.revoked',
 } as const;

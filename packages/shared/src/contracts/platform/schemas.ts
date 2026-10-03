@@ -51,3 +51,58 @@ export const platformAdminSummarySchema = z.object({
   createdAt: z.string(),
 });
 export type PlatformAdminSummary = z.infer<typeof platformAdminSummarySchema>;
+
+const tenantStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'CANCELLED', 'DELETED']);
+const reasonSchema = z.string().trim().min(3).max(500);
+/** Byte counts travel as decimal strings: they can exceed what a JSON number holds exactly. */
+const bytesSchema = z.string().regex(/^\d{1,18}$/, 'Use a whole number of bytes');
+
+export const listTenantsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  search: z.string().trim().min(1).max(100).optional(),
+  status: tenantStatusSchema.optional(),
+  planCode: z.string().trim().min(1).max(64).optional(),
+});
+export type ListTenantsQuery = z.infer<typeof listTenantsQuerySchema>;
+
+export interface TenantListItem {
+  readonly tenantId: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly status: z.infer<typeof tenantStatusSchema>;
+  readonly planCode: string;
+  readonly countryCode: string;
+  readonly createdAt: string;
+}
+
+/** Aggregates only: the platform console never shows what a tenant's users wrote. */
+export interface TenantDetail extends TenantListItem {
+  readonly plan: { readonly code: string; readonly name: string };
+  readonly owner: { readonly email: string; readonly firstName: string; readonly lastName: string; readonly membershipStatus: string } | null;
+  readonly companies: number;
+  readonly activeUsers: number;
+  readonly storage: {
+    readonly usedBytes: string;
+    readonly reservedBytes: string;
+    readonly extraBytes: string;
+    readonly limitBytes: string;
+    readonly hardLimitBytes: string;
+    readonly state: 'OK' | 'OVER_LIMIT' | 'BLOCKED';
+  };
+  readonly ticketsLast30Days: number;
+  readonly lastActivityAt: string | null;
+  readonly suspension: { readonly reason: string; readonly at: string } | null;
+}
+
+export const changeTenantPlanRequestSchema = z.object({ planCode: z.string().trim().min(1).max(64) });
+export type ChangeTenantPlanRequest = z.infer<typeof changeTenantPlanRequestSchema>;
+
+export const setExtraStorageRequestSchema = z.object({ extraStorageBytes: bytesSchema });
+export type SetExtraStorageRequest = z.infer<typeof setExtraStorageRequestSchema>;
+
+export const suspendTenantRequestSchema = z.object({ reason: reasonSchema });
+export type SuspendTenantRequest = z.infer<typeof suspendTenantRequestSchema>;
+
+export const reactivateTenantRequestSchema = z.object({ reason: reasonSchema.optional() });
+export type ReactivateTenantRequest = z.infer<typeof reactivateTenantRequestSchema>;

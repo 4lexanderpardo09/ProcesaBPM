@@ -5,9 +5,11 @@ import { PlatformOutboxRepository } from '../../infrastructure/outbox/platform-o
 import { TenantDefaultsProvisioner } from './application/tenant-defaults-provisioner.js';
 import { TenantOwnerInviter } from './application/tenant-owner-inviter.js';
 import { BASE_ROLE_TEMPLATES, TenantRoleProvisioner } from './application/tenant-role-provisioner.js';
+import { TenantAdminService } from './application/tenant-admin.service.js';
 import { PlatformAdminsService } from './application/platform-admins.service.js';
 import { TenantSignupService } from './application/tenant-signup.service.js';
 import { TenantStatusService } from './application/tenant-status.service.js';
+import { TenantAdminRepository } from './data/tenant-admin.repository.js';
 import { PlatformAdminRepository } from './data/platform-admin.repository.js';
 import { PlatformAuditRepository } from './data/platform-audit.repository.js';
 import { TenantDefaultsRepository } from './data/tenant-defaults.repository.js';
@@ -36,6 +38,8 @@ import { PlatformTenantsController } from './http/platform-tenants.controller.js
     TenantOwnerInviter,
     TenantSignupService,
     TenantStatusService,
+    TenantAdminRepository,
+    TenantAdminService,
   ],
 })
 export class PlatformModule {}
