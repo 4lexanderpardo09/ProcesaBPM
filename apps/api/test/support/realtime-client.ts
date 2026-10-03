@@ -47,6 +47,23 @@ export function nextEvent<T>(socket: Socket, event: string, timeoutMs = 10_000):
   });
 }
 
+/** The next occurrence of an event whose payload satisfies the predicate (earlier ones are skipped). */
+export function nextEventWhere<T>(socket: Socket, event: string, predicate: (payload: T) => boolean, timeoutMs = 10_000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off(event, listener);
+      reject(new Error(`No matching "${event}" within ${timeoutMs} ms`));
+    }, timeoutMs);
+    const listener = (payload: T) => {
+      if (!predicate(payload)) return;
+      clearTimeout(timer);
+      socket.off(event, listener);
+      resolve(payload);
+    };
+    socket.on(event, listener);
+  });
+}
+
 export const connected = (socket: Socket): Promise<void> => (socket.connected ? Promise.resolve() : nextEvent<void>(socket, 'connect'));
 
 /** The `connect_error` of a refused handshake: its code, or the transport's message when it never got that far. */

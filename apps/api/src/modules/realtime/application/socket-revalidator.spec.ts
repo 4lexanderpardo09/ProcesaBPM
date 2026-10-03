@@ -4,6 +4,7 @@ import { RoomNames } from '../domain/room-names.js';
 import type { ConnectionRegistry } from './connection-registry.js';
 import type { SessionExpiry } from './session-expiry.js';
 import type { SessionGate } from './session-gate.js';
+import type { TicketSubscriptionsService } from './ticket-subscriptions.service.js';
 import { SocketRevalidator, socketsTargetedBy } from './socket-revalidator.js';
 import { type RealtimeSocket, SocketSession } from './socket-session.js';
 
@@ -21,8 +22,10 @@ function setUp(sockets: RealtimeSocket[], rooms: Record<string, RealtimeSocket[]
   const registry = { all: () => sockets, socketsIn: (room: string) => rooms[room] ?? [] } as unknown as ConnectionRegistry;
   const gate = { verify: vi.fn((target: RealtimeSocket, since: number) => (verified.push([target, since]), Promise.resolve(principal))) } as unknown as SessionGate;
   const expiry = { isExpired: () => expired, requireReauth: (target: RealtimeSocket) => reauth.push(target) } as unknown as SessionExpiry;
-  const revalidator = new SocketRevalidator({ REALTIME_REVALIDATE_INTERVAL_MS: 60_000 }, registry, gate, expiry);
-  return { revalidator, verified, reauth };
+  const rechecked: RealtimeSocket[] = [];
+  const subscriptions = { recheck: (target: RealtimeSocket) => (rechecked.push(target), Promise.resolve()) } as unknown as TicketSubscriptionsService;
+  const revalidator = new SocketRevalidator({ REALTIME_REVALIDATE_INTERVAL_MS: 60_000 }, registry, gate, expiry, subscriptions);
+  return { revalidator, verified, reauth, rechecked };
 }
 
 describe('socketsTargetedBy', () => {
@@ -65,11 +68,19 @@ describe('SocketRevalidator', () => {
     expect(verified[0]![1]).toBeGreaterThanOrEqual(before);
   });
 
-  it('sweepNow re-verifies every socket', async () => {
+  it('ignores an access signal that names no local socket', async () => {
+    const { revalidator, verified } = setUp([socket(0)]);
+    revalidator.handleAccess({ v: 1, k: 'access', s: 'nobody' });
+    await revalidator.whenIdle();
+    expect(verified).toEqual([]);
+  });
+
+  it('sweepNow re-verifies every socket and rechecks the subscriptions of the accepted ones', async () => {
     const sockets = [socket(0), socket(0)];
-    const { revalidator, verified } = setUp(sockets);
+    const { revalidator, verified, rechecked } = setUp(sockets);
     await revalidator.sweepNow();
     expect(verified.map(([target]) => target)).toEqual(sockets);
+    expect(rechecked).toEqual(sockets);
   });
 
   it('the periodic sweep re-verifies only the sockets due, spread over the interval, and asks expired tokens for a new one', async () => {

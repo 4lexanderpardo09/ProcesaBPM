@@ -3,10 +3,10 @@ import { type OnGatewayConnection, type OnGatewayDisconnect, type OnGatewayInit,
 import { REALTIME_PATH } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { stopAdmitting } from '../../../infrastructure/realtime/realtime-io-adapter.js';
-import { RealtimeSignalSource } from '../../../infrastructure/realtime/realtime-signal-source.js';
 import { ConnectionRegistry } from '../application/connection-registry.js';
 import { RealtimeEmitter } from '../application/realtime-emitter.js';
 import { SessionExpiry } from '../application/session-expiry.js';
+import { SignalRouter } from '../application/signal-router.js';
 import { SocketRevalidator } from '../application/socket-revalidator.js';
 import { type RealtimeServer, type RealtimeSocket, sessionOf } from '../application/socket-session.js';
 import { ClientMessageRouter } from './client-message-router.js';
@@ -24,7 +24,7 @@ function assertHardened(server: RealtimeServer): void {
 }
 
 /**
- * Lifecycle only: install the handshake, admit a connection (rooms, per-person cap, message router, expiry timer),
+ * Lifecycle only: install the handshake and the signal router, admit a connection (rooms, per-person cap, message router, expiry timer),
  * forget a disconnected one, and close everything on shutdown. No `@SubscribeMessage` handlers (see ClientMessageRouter).
  */
 @WebSocketGateway()
@@ -38,7 +38,7 @@ export class RealtimeGateway implements OnGatewayInit<RealtimeServer>, OnGateway
     @Inject(SessionExpiry) private readonly expiry: SessionExpiry,
     @Inject(SocketRevalidator) private readonly revalidator: SocketRevalidator,
     @Inject(RealtimeEmitter) private readonly emitter: RealtimeEmitter,
-    @Inject(RealtimeSignalSource) private readonly signals: RealtimeSignalSource,
+    @Inject(SignalRouter) private readonly signals: SignalRouter,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
 
@@ -47,9 +47,7 @@ export class RealtimeGateway implements OnGatewayInit<RealtimeServer>, OnGateway
     this.server = server;
     this.registry.attach(server);
     server.use(this.handshake.middleware);
-    this.signals.onSignal((signal) => {
-      if (signal.k === 'access') this.revalidator.handleAccess(signal);
-    });
+    this.signals.start();
     this.revalidator.start();
   }
 
@@ -68,6 +66,7 @@ export class RealtimeGateway implements OnGatewayInit<RealtimeServer>, OnGateway
   /** Before the database goes away: refuse new sockets, then end the open ones in small batches (clients reconnect elsewhere). */
   async beforeApplicationShutdown(): Promise<void> {
     this.revalidator.stop();
+    await this.signals.stop();
     if (this.server === undefined) return;
     stopAdmitting(this.server);
     const sockets = this.registry.all();

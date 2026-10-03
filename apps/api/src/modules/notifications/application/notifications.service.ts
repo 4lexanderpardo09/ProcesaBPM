@@ -14,6 +14,7 @@ import {
 import { pageWindow } from '../../../common/crud/pagination.js';
 import type { Principal } from '../../../common/auth/principal.js';
 import { Clock } from '../../../infrastructure/clock.js';
+import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { NotificationRepository } from '../data/notification.repository.js';
 import { DEFAULT_CHANNELS } from '../domain/channels.js';
@@ -25,6 +26,7 @@ export class NotificationsService {
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(NotificationRepository) private readonly notifications: NotificationRepository,
     @Inject(Clock) private readonly clock: Clock,
+    @Inject(TenantContext) private readonly context: TenantContext,
   ) {}
 
   list(who: Principal, query: ListNotificationsQuery): Promise<Page<NotificationResponse>> {
@@ -36,6 +38,11 @@ export class NotificationsService {
 
   async unreadCount(who: Principal): Promise<UnreadCountResponse> {
     return { count: await this.runner.withTenantTransaction((tx) => this.notifications.unreadCount(tx, who.tenantId, who.userId)) };
+  }
+
+  /** The same counter for a person outside a request (real time): read as that person, so only their own rows count. */
+  unreadCountOf(tenantId: string, userId: string): Promise<number> {
+    return this.context.run({ tenantId, userId }, () => this.runner.withTenantTransaction((tx) => this.notifications.unreadCount(tx, tenantId, userId)));
   }
 
   /** Idempotent: reading it again keeps the first reading time. Someone else's notification is a missing one. */

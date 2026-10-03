@@ -8,6 +8,7 @@ import { ConnectionRegistry } from './connection-registry.js';
 import { SessionExpiry } from './session-expiry.js';
 import { SessionGate } from './session-gate.js';
 import { monotonicNow, type RealtimeSocket, sessionOf } from './socket-session.js';
+import { TicketSubscriptionsService } from './ticket-subscriptions.service.js';
 
 export type AccessSignal = Extract<RealtimeSignal, { k: 'access' }>;
 
@@ -30,7 +31,8 @@ const accessKey = (signal: AccessSignal) => [signal.s, signal.t, signal.u, signa
 
 /**
  * Keeps every socket's authorization current: a sweep re-verifies each socket at least every
- * `REALTIME_REVALIDATE_INTERVAL_MS` (and notices expired tokens), and an access signal (a session revoked, a member,
+ * `REALTIME_REVALIDATE_INTERVAL_MS` (and notices expired tokens, and drops ticket subscriptions that became
+ * unreadable), and an access signal (a session revoked, a member,
  * role or tenant changed) re-verifies the sockets it names at once. A signal is never trusted: it only causes a check.
  */
 @Injectable()
@@ -45,6 +47,7 @@ export class SocketRevalidator {
     @Inject(ConnectionRegistry) private readonly registry: ConnectionRegistry,
     @Inject(SessionGate) private readonly gate: SessionGate,
     @Inject(SessionExpiry) private readonly expiry: SessionExpiry,
+    @Inject(TicketSubscriptionsService) private readonly subscriptions: TicketSubscriptionsService,
   ) {}
 
   start(): void {
@@ -61,6 +64,8 @@ export class SocketRevalidator {
   }
 
   handleAccess(signal: AccessSignal): void {
+    // No local socket: nothing to check, and a flood of forged signals cannot grow the pending set.
+    if (socketsTargetedBy(signal, this.registry).length === 0) return;
     this.pendingAccess.add(accessKey(signal), signal);
     this.flushTimer ??= setTimeout(() => {
       this.flushTimer = undefined;
@@ -101,7 +106,14 @@ export class SocketRevalidator {
   }
 
   private async reverify(sockets: readonly RealtimeSocket[], freshSince: number): Promise<void> {
-    await Promise.all(sockets.map((socket) => this.gate.verify(socket, freshSince)));
+    await Promise.all(sockets.map((socket) => this.reverifyOne(socket, freshSince)));
+  }
+
+  /** A socket still accepted also loses the tickets it can no longer read. */
+  private async reverifyOne(socket: RealtimeSocket, freshSince: number): Promise<void> {
+    const principal = await this.gate.verify(socket, freshSince);
+    // Best effort: nothing is ever emitted without a fresh per-record check, and the next sweep tries again.
+    if (principal !== undefined) await this.subscriptions.recheck(socket, principal).catch(() => undefined);
   }
 
   private track<T>(work: Promise<T>): Promise<T> {

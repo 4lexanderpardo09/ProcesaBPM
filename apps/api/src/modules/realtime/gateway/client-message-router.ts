@@ -1,10 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AckErrorCode, authRefreshSchema, RealtimeClientEvent } from '@procesabpm/shared';
+import { type AckErrorCode, authRefreshSchema, RealtimeClientEvent, ticketSubscribeSchema } from '@procesabpm/shared';
 import type { z } from 'zod';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import type { MessageOutcome } from '../application/message-outcome.js';
 import { RealtimeEmitter } from '../application/realtime-emitter.js';
 import { SessionRefresher } from '../application/session-refresher.js';
+import { TicketSubscriptionsService } from '../application/ticket-subscriptions.service.js';
 import { monotonicNow, type RealtimeSocket, type SocketSession, sessionOf } from '../application/socket-session.js';
 
 /** Refused messages in a row, or unknown events, after which the socket is ended as `RATE_LIMITED`. */
@@ -36,10 +37,13 @@ export class ClientMessageRouter {
 
   constructor(
     @Inject(SessionRefresher) refresher: SessionRefresher,
+    @Inject(TicketSubscriptionsService) subscriptions: TicketSubscriptionsService,
     @Inject(RealtimeEmitter) private readonly emitter: RealtimeEmitter,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {
     const entries: Array<[string, ClientMessage<never>]> = [
+      [RealtimeClientEvent.TicketSubscribe, message({ schema: ticketSubscribeSchema, duringReauth: false, handle: (socket, body) => subscriptions.subscribe(socket, body.ticketId) })],
+      [RealtimeClientEvent.TicketUnsubscribe, message({ schema: ticketSubscribeSchema, duringReauth: false, handle: (socket, body) => subscriptions.unsubscribe(socket, body.ticketId) })],
       [
         RealtimeClientEvent.AuthRefresh,
         message({ schema: authRefreshSchema, duringReauth: true, budget: (session) => session.refreshes.take(monotonicNow()), handle: (socket, body) => refresher.refresh(socket, body.token) }),
