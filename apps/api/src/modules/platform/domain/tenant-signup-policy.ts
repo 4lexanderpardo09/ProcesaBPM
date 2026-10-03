@@ -13,6 +13,7 @@ export const PLATFORM_AUDIT_ACTIONS = {
   holidayAdded: 'holiday.added',
   holidayDeleted: 'holiday.deleted',
   holidaysRegenerated: 'holidays.regenerated',
+  outboxEventRetried: 'outbox_event.retried',
   adminInvited: 'platform_admin.invited',
   adminRevoked: 'platform_admin.revoked',
 } as const;

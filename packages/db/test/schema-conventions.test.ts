@@ -105,8 +105,10 @@ describe('schema conventions', () => {
       'complete_platform_outbox_event',
       'enqueue_platform_event',
       'fail_platform_outbox_event',
+      'list_failed_platform_outbox_events',
       'platform_outbox_claim_is_current',
       'purge_processed_platform_outbox_events',
+      'retry_failed_platform_outbox_event',
     ]);
   });
 

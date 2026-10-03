@@ -189,3 +189,28 @@ export interface RegeneratedHolidays {
   readonly year: number;
   readonly holidays: readonly CountryHolidayResponse[];
 }
+
+export const listFailedEventsQuerySchema = z.object({
+  scope: z.enum(['PLATFORM', 'TENANT']),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ListFailedEventsQuery = z.infer<typeof listFailedEventsQuerySchema>;
+
+/** Never carries the payload: it can hold ids and personal data. */
+export interface FailedOutboxEvent {
+  readonly scope: 'PLATFORM' | 'TENANT';
+  readonly tenantId: string | null;
+  readonly id: string;
+  readonly type: string;
+  readonly attempts: number;
+  readonly lastError: string | null;
+  readonly createdAt: string;
+}
+
+export interface PlatformMetrics {
+  readonly tenantsByStatus: Readonly<Record<string, number>>;
+  readonly users: { readonly total: number; readonly withActiveMembership: number };
+  readonly storageUsedBytes: string;
+  readonly ticketsPerDay: ReadonlyArray<{ readonly date: string; readonly count: number }>;
+}
