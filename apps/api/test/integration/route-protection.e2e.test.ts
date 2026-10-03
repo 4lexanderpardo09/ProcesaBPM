@@ -75,6 +75,8 @@ const PLATFORM_ROUTES = [
   'GET /platform/operations/metrics',
   'POST /platform/tenants/:id/support-sessions',
   'DELETE /platform/tenants/:id/support-sessions/:sessionId',
+  'POST /platform/tenants/:id/deletion',
+  'DELETE /platform/tenants/:id/deletion',
   'GET /platform/audit-logs',
   'GET /platform/plans',
   'PUT /platform/plans/:code',

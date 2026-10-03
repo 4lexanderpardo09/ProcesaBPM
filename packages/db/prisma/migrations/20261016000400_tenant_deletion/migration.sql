@@ -42,6 +42,36 @@ CREATE OR REPLACE FUNCTION auth_list_memberships(p_user_id uuid)
       AND m.status <> 'INACTIVE'
   $$;
 
+-- The deferred "a tenant keeps its owner" check runs at COMMIT, when the tombstone is back in place: a purged tenant has no
+-- members to protect (same function as before, with that one exception).
+CREATE OR REPLACE FUNCTION assert_tenant_keeps_admin(p_tenant_id uuid, p_require_owner boolean) RETURNS void
+  LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+  AS $$
+  DECLARE
+    v_owner record;
+  BEGIN
+    -- The tenant is gone (purge_tenant cascades) or only its tombstone is left: nothing to protect.
+    IF NOT EXISTS (SELECT 1 FROM tenants WHERE id = p_tenant_id AND status <> 'PURGED') THEN
+      RETURN;
+    END IF;
+    SELECT m.status, m.joined_at, r.is_admin, r.is_active INTO v_owner
+    FROM memberships m JOIN roles r ON r.tenant_id = m.tenant_id AND r.id = m.role_id
+    WHERE m.tenant_id = p_tenant_id AND m.is_owner;
+    IF NOT FOUND THEN
+      IF p_require_owner THEN
+        RAISE EXCEPTION 'tenant % has no owner', p_tenant_id USING ERRCODE = '23514';
+      END IF;
+      RETURN;
+    END IF;
+    IF NOT (v_owner.is_admin AND v_owner.is_active) THEN
+      RAISE EXCEPTION 'the owner of tenant % must keep an active admin role', p_tenant_id USING ERRCODE = '23514';
+    END IF;
+    IF NOT (v_owner.status = 'ACTIVE' OR (v_owner.status = 'INVITED' AND v_owner.joined_at IS NULL)) THEN
+      RAISE EXCEPTION 'the owner membership of tenant % cannot be deactivated', p_tenant_id USING ERRCODE = '23514';
+    END IF;
+  END
+  $$;
+
 -- ===========================================================================
 -- The purge, one claim at a time (same protocol as the outbox: lease + attempt token + SKIP LOCKED)
 -- ===========================================================================

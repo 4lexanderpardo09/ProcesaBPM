@@ -51,6 +51,10 @@ export class InMemoryObjectStorage extends ObjectStorage {
     this.objects.delete(key);
   }
 
+  async listKeys(prefix: string, limit: number): Promise<string[]> {
+    return this.keys.filter((key) => key.startsWith(prefix)).sort().slice(0, limit);
+  }
+
   async deleteMany(keys: readonly string[]): Promise<{ failed: readonly string[] }> {
     for (const key of keys) this.objects.delete(key);
     return { failed: [] };

@@ -438,6 +438,17 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 - `list_failed_platform_outbox_events(limite, desplazamiento)` y `retry_failed_platform_outbox_event(id)`: `SECURITY DEFINER` de `app_outbox_owner`, ejecutables **solo por `app_platform`**. La primera devuelve los eventos `FAILED` (tipo, intentos, error recortado a 500 caracteres, fecha y total) **sin el payload**; la segunda devuelve a `PENDING` con los intentos en cero solo un evento `FAILED`. El outbox de tenants (`outbox_events`) lo lee y reintenta `app_platform` directamente (ya tiene el privilegio).
 - Las ediciones de planes desde la consola persisten porque la semilla solo inserta planes (`ON CONFLICT DO NOTHING`).
 
+### 8.23 Acceso de soporte (migración `20261016000100`)
+- `support_access_grants` (grant del tenant: quién, motivo, ventana de **máximo 72 h** por CHECK, revocación) y `support_sessions` (visita de un administrador, con `platform_user_label` = nombre y apellido al abrir, sin correo). Ambas con RLS de tenant. **Un solo grant en vigor por tenant** (índice único parcial `WHERE revoked_at IS NULL`; un grant vencido sin revocar cuenta hasta que se revoca, y otorgar uno nuevo lo revoca).
+- Privilegios: `app_runtime`/`app_worker` crean y leen grants y solo pueden escribir `revoked_at`/`revoked_by_id`; leen visitas y solo pueden escribir `closed_at`; nunca abren una visita. `app_platform` tampoco reescribe: solo revoca grants y cierra visitas (la columna con `UPDATE` también le permite el bloqueo `FOR SHARE`). Un trigger (`support_history_is_final`) impide deshacer una revocación, reabrir una visita o cambiar sus datos.
+- `platform_open_support_session(tenant, admin)` (solo `app_platform`): comprueba que sea un administrador activo, bloquea el grant en vigor del tenant (`ACTIVE` o `SUSPENDED`) y crea la visita; sin grant no devuelve filas. `auth_verify_support_session(tenant, visita, grant, admin)` (la ejecuta el API en cada petición): ¿visita abierta, grant vigente, administrador vigente, tenant existente? Si no, cierra la visita.
+- `audit_logs` gana `support_actor_id` y `support_grant_id` (CHECK: van juntos y, con ellos, `actor_id` queda vacío; FK compuesta al grant del mismo tenant).
+
+### 8.24 Eliminación y purga de tenants (migraciones `20261016000300` y `20261016000400`)
+- `tenant_status` gana `PENDING_DELETION` y `PURGED` (en una migración aparte: un valor nuevo no se puede usar en la transacción que lo crea). `tenants` gana `deletion_requested_at/_by_id`, `purged_at` y el estado de la purga (`purge_lease_until`, `purge_attempts`, `purge_retry_at`, `purge_last_error`); `purge_after` (ya existía) es la fecha. CHECK `tenants_deletion_is_coherent`: `PENDING_DELETION` ⇔ `purge_after`, `PURGED` ⇔ `purged_at`, ambos ⇒ quién y cuándo lo pidió.
+- Funciones de `app_platform` ejecutables solo por `app_worker`: `claim_due_tenant_purges(límite, arriendo)`, `fail_tenant_purge(tenant, intento, error, reintento)`, `finish_tenant_purge(tenant, intento)` (`purge_tenant` + lápida + `platform_audit_logs`, en una transacción, con `statement_timeout` de 30 min) y `worker_tenant_deletion_notice(tenant, usuario)` (dirección y nombre para el correo del dueño, solo si el tenant está pendiente y el usuario es su dueño activo).
+- `assert_tenant_keeps_admin` ignora los tenants `PURGED` (si no, su propia purga fallaría al confirmar: la lápida vuelve a existir y no tiene dueño). `auth_list_memberships` lista también `PENDING_DELETION`, nunca `PURGED`.
+
 ## 9. Catálogo global y semillas
 `src/seed/run.ts` carga, de forma **idempotente** (upsert por llave natural), en cada despliegue:
 
@@ -469,6 +480,8 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 | `schema-conventions.test.ts` | **Guardas para migraciones futuras:** toda FK con índice y con `tenant_id`, PK con `tenant_id` primero, trigger de `updated_at`, funciones `SECURITY DEFINER` bien configuradas. |
 | `seed.test.ts` | Semilla idempotente, planes (sin deshacer ediciones de la consola), permisos y plantillas de roles. |
 | `create-platform-admin.test.ts` | Comando del primer administrador: enlace de 24 h con solo su hash, idempotencia, `--force-additional`, rechazo de superusuario y de logins ajenos a `app_platform`, auditoría. |
+| `support-access.test.ts` | Grants (72 h, uno en vigor, RLS, solo revocar), apertura de visitas (sin grant, otro tenant, vencido, revocado, tenant eliminado, no administrador), verificación por petición, historia inmutable y auditoría de soporte. |
+| `tenant-deletion.test.ts` | Estados y CHECK de la eliminación, reclamo de purgas (plazo, arriendo, dos workers a la vez, reintento), fallo, lápida (datos de otros tenants intactos, nunca se reprocesa) y aviso al dueño. |
 | `platform-console-operations.test.ts` | Listado y reintento de eventos `FAILED` del outbox de plataforma, sin payload y cerrados al API y al worker. |
 | `unit/colombia-holidays.test.ts` | Festivos contra las listas del sistema viejo y la fecha de Pascua. |
 

@@ -26,6 +26,7 @@ export const ERROR_CODES = {
   rateLimited: 'RATE_LIMITED',
   validationFailed: 'VALIDATION_FAILED',
   tenantSuspended: 'TENANT_SUSPENDED',
+  tenantPendingDeletion: 'TENANT_PENDING_DELETION',
   missingCatalogPermission: 'MISSING_CATALOG_PERMISSION',
   platformAccessDenied: 'PLATFORM_ACCESS_DENIED',
   tenantSlugTaken: 'TENANT_SLUG_TAKEN',
@@ -261,6 +262,12 @@ export class TemporarilyUnavailableError extends DomainError {
 export class ValidationFailedError extends DomainError {
   constructor(issues: readonly ValidationIssue[]) {
     super(ERROR_CODES.validationFailed, 'The request is not valid', { details: { issues } });
+  }
+}
+
+export class TenantPendingDeletionError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.tenantPendingDeletion, 'The organization is pending deletion');
   }
 }
 

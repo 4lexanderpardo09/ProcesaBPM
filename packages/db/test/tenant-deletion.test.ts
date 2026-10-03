@@ -117,6 +117,8 @@ describe('tenant deletion and purge', () => {
   describe('finishing: data gone, tombstone left', () => {
     it('removes the data of the tenant, keeps a PURGED row with its identity and audits it', async () => {
       const tenant = await pending();
+      // With an owner, as every real tenant has: the "keeps its owner" check at commit must not stop its own purge.
+      await db.owner.query(`UPDATE memberships SET is_owner = true WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, tenant.userId]);
       const member = await seedMember(db.platform, tenant);
       const other = await seedTenant(db.platform);
       expect(await count('companies', tenant.tenantId)).toBeGreaterThan(0);

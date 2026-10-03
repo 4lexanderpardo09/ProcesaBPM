@@ -25,4 +25,11 @@ export class WorkerTokenRepository {
       FROM worker_issue_invitation_token(${input.eventId}::uuid, ${input.tenantId}::uuid, ${input.userId}::uuid, ${input.tokenHash}, make_interval(days => ${input.ttlDays}::int))`;
     return row === undefined ? undefined : { email: row.out_email, firstName: row.out_first_name, organization: row.out_tenant_name, expiresAt: row.out_expires_at };
   }
+
+  /** `undefined` unless the tenant is pending deletion and the user is its active owner. No token: the notice has no link. */
+  async tenantDeletionNotice(tx: CrossTenantTransaction, tenantId: string, userId: string): Promise<{ email: string; firstName: string; organization: string; purgeAfter: Date } | undefined> {
+    const [row] = await tx.$queryRaw<Array<{ out_email: string; out_first_name: string; out_tenant_name: string; out_purge_after: Date }>>`
+      SELECT out_email, out_first_name, out_tenant_name, out_purge_after FROM worker_tenant_deletion_notice(${tenantId}::uuid, ${userId}::uuid)`;
+    return row === undefined ? undefined : { email: row.out_email, firstName: row.out_first_name, organization: row.out_tenant_name, purgeAfter: row.out_purge_after };
+  }
 }

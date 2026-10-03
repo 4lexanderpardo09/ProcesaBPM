@@ -200,7 +200,7 @@ Para las pruebas se usa una cuenta gratuita de AWS. **Ninguna credencial va en e
     ```
   - S3 soporta `If-None-Match: *` en `PUT` (escrituras condicionales): si el objeto ya existe, la subida falla con 412 y no lo reemplaza.
   - Variables: `STORAGE_ENDPOINT=https://s3.<región>.amazonaws.com`, `STORAGE_REGION=<región>`, `STORAGE_BUCKET`, `STORAGE_FORCE_PATH_STYLE=false`, y las claves del usuario IAM.
-- **Usuario IAM** exclusivo de la aplicación, con una política mínima limitada al bucket (`s3:ListBucket` solo si el `HEAD`/listado lo necesita):
+- **Usuario IAM** exclusivo de la aplicación, con una política mínima limitada al bucket (`s3:ListBucket` es **obligatorio**: la purga de un tenant eliminado lista y borra todo `tenants/<id>/`; sin él la purga falla y se reintenta, y el `HEAD` de un objeto inexistente responde 403 en vez de 404):
   ```json
   { "Version": "2012-10-17", "Statement": [
     { "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"], "Resource": "arn:aws:s3:::BUCKET/*" },

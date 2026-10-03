@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { MfaRequiredError, TenantSuspendedError, UnauthenticatedError } from '@procesabpm/shared';
+import { MfaRequiredError, TenantPendingDeletionError, TenantSuspendedError, UnauthenticatedError } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -46,6 +46,7 @@ export class TenantAccessService {
           if (!this.isLive(session, request.tenantId)) throw new UnauthenticatedError();
           mfaVerified = session!.mfaVerified;
         }
+        if (access.tenantStatus === 'PENDING_DELETION') throw new TenantPendingDeletionError();
         if (access.tenantStatus !== 'ACTIVE') throw new TenantSuspendedError();
         // Turning the policy on takes effect at the next request of every member who has not passed the second factor.
         if (access.tenantMfaRequired && !mfaVerified) throw new MfaRequiredError();

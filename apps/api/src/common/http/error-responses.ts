@@ -85,5 +85,6 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.ticketWaiting]: { status: 422, message: 'The ticket is waiting and cannot be acted on until it resumes' },
   [ERROR_CODES.lastReopeningType]: { status: 409, message: 'The last active reopening error type cannot be deactivated or changed' },
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },
+  [ERROR_CODES.tenantPendingDeletion]: { status: 403, message: 'The organization is pending deletion' },
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },
 };

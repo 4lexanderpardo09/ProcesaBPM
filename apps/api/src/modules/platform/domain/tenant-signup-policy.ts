@@ -16,6 +16,8 @@ export const PLATFORM_AUDIT_ACTIONS = {
   outboxEventRetried: 'outbox_event.retried',
   supportSessionOpened: 'support_session.opened',
   supportSessionClosed: 'support_session.closed',
+  tenantDeletionRequested: 'tenant.deletion_requested',
+  tenantDeletionCancelled: 'tenant.deletion_cancelled',
   adminInvited: 'platform_admin.invited',
   adminRevoked: 'platform_admin.revoked',
 } as const;

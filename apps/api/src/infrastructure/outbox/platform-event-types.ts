@@ -4,6 +4,7 @@ import { uuidSchema } from '@procesabpm/shared';
 export const PASSWORD_RESET_EVENT = 'email.password_reset';
 export const INVITATION_EVENT = 'email.invitation';
 export const PLATFORM_ADMIN_INVITATION_EVENT = 'email.platform_admin_invitation';
+export const TENANT_DELETION_REQUESTED_EVENT = 'email.tenant_deletion_requested';
 
 /**
  * Platform events carry only ids: the worker reads the address from `users` and issues the one-time token itself,
@@ -12,10 +13,12 @@ export const PLATFORM_ADMIN_INVITATION_EVENT = 'email.platform_admin_invitation'
  */
 export const passwordResetPayloadSchema = z.object({ userId: uuidSchema }).strict();
 export const platformAdminInvitationPayloadSchema = z.object({ userId: uuidSchema }).strict();
+export const tenantDeletionRequestedPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
 export const invitationPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
 
 export interface PlatformEventPayloads {
   readonly [PASSWORD_RESET_EVENT]: z.infer<typeof passwordResetPayloadSchema>;
   readonly [INVITATION_EVENT]: z.infer<typeof invitationPayloadSchema>;
   readonly [PLATFORM_ADMIN_INVITATION_EVENT]: z.infer<typeof platformAdminInvitationPayloadSchema>;
+  readonly [TENANT_DELETION_REQUESTED_EVENT]: z.infer<typeof tenantDeletionRequestedPayloadSchema>;
 }

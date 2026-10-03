@@ -50,6 +50,8 @@ export abstract class ObjectStorage {
   abstract read(key: string, maxBytes: number): Promise<Uint8Array>;
   /** Idempotent: deleting a missing object is not an error. */
   abstract delete(key: string): Promise<void>;
+  /** Up to `limit` keys that start with `prefix` (S3 lists in key order). Used to empty a tenant's area when it is purged. */
+  abstract listKeys(prefix: string, limit: number): Promise<string[]>;
   /** Returns the keys it could not delete. */
   abstract deleteMany(keys: readonly string[]): Promise<{ readonly failed: readonly string[] }>;
 }

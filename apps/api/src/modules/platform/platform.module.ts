@@ -12,6 +12,7 @@ import { OperationsService } from './application/operations.service.js';
 import { PlatformAuditQueryRepository } from './data/platform-audit-query.repository.js';
 import { PlatformAuditQueryService } from './application/platform-audit-query.service.js';
 import { SupportSessionService } from './application/support-session.service.js';
+import { TenantDeletionService } from './application/tenant-deletion.service.js';
 import { PlanAdminService } from './application/plan-admin.service.js';
 import { TenantAdminService } from './application/tenant-admin.service.js';
 import { PlatformAdminsService } from './application/platform-admins.service.js';
@@ -21,6 +22,7 @@ import { AnnouncementAdminRepository } from './data/announcement-admin.repositor
 import { CountryCatalogRepository } from './data/country-catalog.repository.js';
 import { OperationsRepository } from './data/operations.repository.js';
 import { SupportSessionRepository } from './data/support-session.repository.js';
+import { TenantDeletionRepository } from './data/tenant-deletion.repository.js';
 import { PlanAdminRepository } from './data/plan-admin.repository.js';
 import { TenantAdminRepository } from './data/tenant-admin.repository.js';
 import { PlatformAdminRepository } from './data/platform-admin.repository.js';
@@ -35,13 +37,14 @@ import { PlatformCatalogController } from './http/platform-catalog.controller.js
 import { PlatformOperationsController } from './http/platform-operations.controller.js';
 import { PlatformAuditController } from './http/platform-audit.controller.js';
 import { PlatformSupportController } from './http/platform-support.controller.js';
+import { PlatformDeletionController } from './http/platform-deletion.controller.js';
 import { PlatformPlansController } from './http/platform-plans.controller.js';
 import { PlatformTenantsController } from './http/platform-tenants.controller.js';
 
 /** Platform administration: it acts on tenants with the login that bypasses row-level security. */
 @Module({
   imports: [PlatformDatabaseModule],
-  controllers: [PlatformTenantsController, PlatformAdminsController, PlatformPlansController, PlatformAnnouncementsController, PlatformCatalogController, PlatformOperationsController, PlatformAuditController, PlatformSupportController],
+  controllers: [PlatformTenantsController, PlatformAdminsController, PlatformPlansController, PlatformAnnouncementsController, PlatformCatalogController, PlatformOperationsController, PlatformAuditController, PlatformSupportController, PlatformDeletionController],
   providers: [
     PlatformOutboxRepository,
     PlatformAuditRepository,
@@ -71,6 +74,8 @@ import { PlatformTenantsController } from './http/platform-tenants.controller.js
     PlatformAuditQueryService,
     SupportSessionRepository,
     SupportSessionService,
+    TenantDeletionRepository,
+    TenantDeletionService,
     JwtTokenService,
   ],
 })
