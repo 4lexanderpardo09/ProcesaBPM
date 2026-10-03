@@ -37,6 +37,8 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.platformAccessDenied]: { status: 403, message: 'Platform access is not allowed' },
   [ERROR_CODES.tenantSlugTaken]: { status: 409, message: 'The slug is already taken' },
   [ERROR_CODES.lastPlatformAdmin]: { status: 409, message: 'The last platform admin cannot be revoked' },
+  [ERROR_CODES.supportAccessNotGranted]: { status: 403, message: 'The tenant has not granted support access' },
+  [ERROR_CODES.supportAccessReadOnly]: { status: 403, message: 'Support access is read-only' },
   [ERROR_CODES.tenantNotFound]: { status: 404, message: 'The tenant does not exist' },
   [ERROR_CODES.approverNotFound]: { status: 422, message: 'No approver could be resolved' },
   [ERROR_CODES.workflowNotPublishable]: { status: 422, message: 'The workflow has errors and cannot be published' },

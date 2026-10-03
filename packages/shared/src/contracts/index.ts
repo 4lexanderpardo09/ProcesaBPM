@@ -12,5 +12,6 @@ export * from './notifications/index.js';
 export * from './organization/index.js';
 export * from './platform/index.js';
 export * from './reports/index.js';
+export * from './support/index.js';
 export * from './tickets/index.js';
 export * from './workflows/index.js';

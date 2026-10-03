@@ -31,6 +31,8 @@ export const ERROR_CODES = {
   tenantSlugTaken: 'TENANT_SLUG_TAKEN',
   tenantNotFound: 'TENANT_NOT_FOUND',
   lastPlatformAdmin: 'LAST_PLATFORM_ADMIN',
+  supportAccessNotGranted: 'SUPPORT_ACCESS_NOT_GRANTED',
+  supportAccessReadOnly: 'SUPPORT_ACCESS_READ_ONLY',
   notFound: 'NOT_FOUND',
   approverNotFound: 'APPROVER_NOT_FOUND',
   workflowNotPublishable: 'WORKFLOW_NOT_PUBLISHABLE',
@@ -297,6 +299,19 @@ export class TenantNotFoundError extends DomainError {
 export class LastPlatformAdminError extends DomainError {
   constructor() {
     super(ERROR_CODES.lastPlatformAdmin, 'The last platform admin cannot be revoked');
+  }
+}
+
+export class SupportAccessNotGrantedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.supportAccessNotGranted, 'The tenant has not granted support access');
+  }
+}
+
+/** A support session only reads: any other method is refused. */
+export class SupportAccessReadOnlyError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.supportAccessReadOnly, 'Support access is read-only');
   }
 }
 

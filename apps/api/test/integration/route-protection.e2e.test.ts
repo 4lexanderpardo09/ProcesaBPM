@@ -82,7 +82,7 @@ const PLATFORM_ROUTES = [
 ];
 
 /** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */
-const AUDITED_SUBJECTS = new Set(['Membership', 'Role', 'Group', 'ApprovalGroup', 'Workflow', 'Setting']);
+const AUDITED_SUBJECTS = new Set(['Membership', 'Role', 'Group', 'ApprovalGroup', 'Workflow', 'Setting', 'SupportAccess']);
 
 /** Test routes that exist to prove the deny-by-default behaviour: they declare nothing on purpose. */
 const INTENTIONALLY_UNDECLARED = ['GET /test/undeclared'];

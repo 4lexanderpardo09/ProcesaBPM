@@ -107,6 +107,7 @@ export const PERMISSIONS: readonly PermissionSeed[] = [
   { action: 'read', subject: 'Storage', description: 'See storage usage' },
   { action: 'update', subject: 'Setting', description: 'Change tenant settings and branding' },
   { action: 'manage', subject: 'Delegation', description: 'Manage delegations of any member' },
+  { action: 'manage', subject: 'SupportAccess', description: 'Let platform support read the tenant for a limited time' },
 ];
 
 function capitalize(value: string): string {
