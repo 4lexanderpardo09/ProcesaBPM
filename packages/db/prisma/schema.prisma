@@ -27,6 +27,10 @@ enum TenantStatus {
   SUSPENDED
   CANCELLED
   DELETED
+  /// Deletion requested: locked out, kept for 30 days (`purge_after`), then purged by the worker.
+  PENDING_DELETION
+  /// Everything of the tenant is gone; the row stays as a tombstone (id, slug, name, dates).
+  PURGED
 
   @@map("tenant_status")
 }
@@ -625,6 +629,15 @@ model Tenant {
   logoFileId        String?      @map("logo_file_id") @db.Uuid
   cancelledAt       DateTime?    @map("cancelled_at") @db.Timestamptz(3)
   purgeAfter        DateTime?    @map("purge_after") @db.Timestamptz(3)
+  deletionRequestedAt   DateTime? @map("deletion_requested_at") @db.Timestamptz(3)
+  /// The platform administrator (a user id; no foreign key, so the tombstone outlives them).
+  deletionRequestedById String?   @map("deletion_requested_by_id") @db.Uuid
+  purgedAt              DateTime? @map("purged_at") @db.Timestamptz(3)
+  /// The worker that claimed the purge holds it until then (a dead worker's claim expires).
+  purgeLeaseUntil       DateTime? @map("purge_lease_until") @db.Timestamptz(3)
+  purgeAttempts         Int       @default(0) @map("purge_attempts")
+  purgeRetryAt          DateTime? @map("purge_retry_at") @db.Timestamptz(3)
+  purgeLastError        String?   @map("purge_last_error")
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
