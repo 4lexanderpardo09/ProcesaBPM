@@ -90,6 +90,29 @@ describe('support access', () => {
     });
   });
 
+  describe('history is final', () => {
+    it('a visit is closed once, and nothing else about it changes', async () => {
+      const tenant = await freshTenant();
+      await grant(tenant);
+      const [row] = await open(tenant.tenantId);
+      const update = (sql: string) => db.owner.query(`UPDATE support_sessions SET ${sql} WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, row!.out_session_id]);
+      expect(await sqlStateOf(() => update(`platform_user_label = 'Someone Else'`))).toBe(SqlState.checkViolation);
+      expect(await sqlStateOf(() => update(`opened_at = now() - interval '1 day'`))).toBe(SqlState.checkViolation);
+      await update('closed_at = now()');
+      expect(await sqlStateOf(() => update(`closed_at = NULL`))).toBe(SqlState.checkViolation);
+      expect(await sqlStateOf(() => update(`closed_at = now() + interval '1 day'`))).toBe(SqlState.checkViolation);
+    });
+
+    it('a revoked grant cannot be un-revoked or re-attributed', async () => {
+      const tenant = await freshTenant();
+      const id = await grant(tenant);
+      await revoke(tenant, id);
+      const update = (sql: string) => db.owner.query(`UPDATE support_access_grants SET ${sql} WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, id]);
+      expect(await sqlStateOf(() => update('revoked_at = NULL, revoked_by_id = NULL'))).toBe(SqlState.checkViolation);
+      expect(await sqlStateOf(() => update(`revoked_at = now() + interval '1 day'`))).toBe(SqlState.checkViolation);
+    });
+  });
+
   describe('opening a visit', () => {
     it('returns nothing without a grant, and a visit under a grant in force', async () => {
       const tenant = await freshTenant();

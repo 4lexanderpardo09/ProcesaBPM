@@ -98,6 +98,27 @@ ALTER TABLE audit_logs
 SELECT app_enable_tenant_rls('support_access_grants');
 SELECT app_enable_tenant_rls('support_sessions');
 
+-- History does not change: a visit only gets closed once, and a revoked grant stays as it was revoked (the privileges
+-- already limit which columns can be written; this keeps those columns from being rewritten).
+CREATE FUNCTION support_history_is_final() RETURNS trigger
+  LANGUAGE plpgsql
+  AS $$
+  BEGIN
+    IF TG_TABLE_NAME = 'support_sessions' THEN
+      IF NEW.platform_user_label IS DISTINCT FROM OLD.platform_user_label OR NEW.platform_user_id IS DISTINCT FROM OLD.platform_user_id
+         OR NEW.grant_id IS DISTINCT FROM OLD.grant_id OR NEW.opened_at IS DISTINCT FROM OLD.opened_at
+         OR (OLD.closed_at IS NOT NULL AND NEW.closed_at IS DISTINCT FROM OLD.closed_at) THEN
+        RAISE EXCEPTION 'a support session can only be closed, once' USING ERRCODE = '23514';
+      END IF;
+    ELSIF OLD.revoked_at IS NOT NULL AND (NEW.revoked_at IS DISTINCT FROM OLD.revoked_at OR NEW.revoked_by_id IS DISTINCT FROM OLD.revoked_by_id) THEN
+      RAISE EXCEPTION 'a revoked support grant cannot change' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+  END
+  $$;
+CREATE TRIGGER support_sessions_final BEFORE UPDATE ON support_sessions FOR EACH ROW EXECUTE FUNCTION support_history_is_final();
+CREATE TRIGGER support_access_grants_final BEFORE UPDATE ON support_access_grants FOR EACH ROW EXECUTE FUNCTION support_history_is_final();
+
 -- ===========================================================================
 -- Privileges: the tenant can create and revoke grants and see its visits; it can close a visit but never open one
 -- (app_worker mirrors app_runtime on tables, by convention).

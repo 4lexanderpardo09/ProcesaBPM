@@ -2,6 +2,7 @@ import { type CallHandler, type ExecutionContext, HttpException, Inject, Injecta
 import { DomainError } from '@procesabpm/shared';
 import type { Request, Response } from 'express';
 import { catchError, from, mergeMap, type Observable, throwError } from 'rxjs';
+import { ERROR_RESPONSES } from '../../../common/http/error-responses.js';
 import type { AuthenticatedRequest } from '../../../common/auth/principal.js';
 import { TenantContext, type TenantScope } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -50,6 +51,9 @@ export class SupportRequestAuditInterceptor implements NestInterceptor {
   }
 }
 
+/** The status the client will see: the same table the error filter uses for domain errors. */
 function statusOf(error: unknown): number {
-  return error instanceof HttpException ? error.getStatus() : 500;
+  if (error instanceof HttpException) return error.getStatus();
+  if (error instanceof DomainError) return ERROR_RESPONSES[error.code].status;
+  return 500;
 }
