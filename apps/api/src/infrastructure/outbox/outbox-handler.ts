@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { CrossTenantTransaction, TenantTransaction } from '../database/transaction-scope.js';
+import type { PostCommitEffects } from './post-commit-effects.js';
 
 export interface ClaimedEvent<P> {
   readonly id: string;
@@ -19,7 +20,8 @@ export interface ClaimedEvent<P> {
 export interface TransactionalHandler<P> {
   readonly type: string;
   readonly schema: z.ZodType<P>;
-  handle(tx: TenantTransaction, event: ClaimedEvent<P>): Promise<void>;
+  /** `effects`: work to run only after this transaction commits (real-time signals); discarded if it does not. */
+  handle(tx: TenantTransaction, event: ClaimedEvent<P>, effects: PostCommitEffects): Promise<void>;
 }
 
 /**
@@ -39,7 +41,7 @@ export interface ExternalEffectHandler<P, M, R = void, Tx extends TenantTransact
    * Optional: stores what `perform` produced, in the same transaction that completes the event. A claim that lost
    * its lease rolls it back, so whoever owns the event next records it exactly once.
    */
-  record?(tx: Tx, result: R, event: ClaimedEvent<P>): Promise<void>;
+  record?(tx: Tx, result: R, event: ClaimedEvent<P>, effects: PostCommitEffects): Promise<void>;
 }
 
 /**
@@ -52,7 +54,7 @@ export interface RegisteredExternalHandler {
   readonly schema: z.ZodType<never>;
   prepare(tx: never, event: ClaimedEvent<never>): Promise<unknown>;
   perform(message: never, event: ClaimedEvent<never>): Promise<unknown>;
-  record?(tx: never, result: never, event: ClaimedEvent<never>): Promise<void>;
+  record?(tx: never, result: never, event: ClaimedEvent<never>, effects: PostCommitEffects): Promise<void>;
 }
 
 /** Retrying cannot help (an invalid payload, a permanent delivery error): the event goes straight to FAILED. */

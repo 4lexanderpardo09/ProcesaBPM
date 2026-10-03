@@ -102,10 +102,16 @@ export class JwtTokenService {
   }
 
   async verifyAccessToken(token: string): Promise<AccessTokenClaims> {
+    return (await this.inspectAccessToken(token)).claims;
+  }
+
+  /** The verified claims and the instant the token stops being valid (a socket re-authenticates before it). */
+  async inspectAccessToken(token: string): Promise<{ readonly claims: AccessTokenClaims; readonly expiresAt: Date }> {
     const payload = await this.verify(token, ACCESS_AUDIENCE);
     const claims = accessTokenClaimsSchema.safeParse(payload);
-    if (!claims.success) throw new UnauthenticatedError();
-    return claims.data;
+    const expiry = z.object({ exp: z.number().int() }).safeParse(payload);
+    if (!claims.success || !expiry.success) throw new UnauthenticatedError();
+    return { claims: claims.data, expiresAt: new Date(expiry.data.exp * 1000) };
   }
 
   /** Its own audience: a support token is never accepted as an access or platform token, nor the other way round. */

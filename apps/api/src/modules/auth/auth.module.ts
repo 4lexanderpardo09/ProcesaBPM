@@ -11,6 +11,7 @@ import { CurrentPasswordVerifier } from './application/current-password-verifier
 import { MfaAccountService } from './application/mfa-account.service.js';
 import { TenantSecurityService } from './application/tenant-security.service.js';
 import { TenantSecurityRepository } from './data/tenant-security.repository.js';
+import { AccessTokenAuthenticator } from './application/access-token-authenticator.js';
 import { AccountAudit } from './application/account-audit.js';
 import { MfaEnrollmentService } from './application/mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './application/mfa-factor-verifier.js';
@@ -81,9 +82,10 @@ import { AuthController } from './http/auth.controller.js';
     MfaRepository,
     SupportSessionRepository,
     SupportSessionVerifier,
+    AccessTokenAuthenticator,
     AccessTokenGuard,
     { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],
-  exports: [AccessTokenGuard],
+  exports: [AccessTokenGuard, AccessTokenAuthenticator, RATE_LIMITER],
 })
 export class AuthModule {}

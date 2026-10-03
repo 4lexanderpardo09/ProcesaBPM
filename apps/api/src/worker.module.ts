@@ -6,6 +6,7 @@ import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { OutboxDispatcherModule } from './infrastructure/outbox/outbox-dispatcher.module.js';
 import { StorageModule } from './infrastructure/storage/storage.module.js';
 import { AuditTrailModule } from './modules/audit/audit-trail.module.js';
+import { RealtimeWorkerModule } from './modules/realtime/realtime-worker.module.js';
 import { AuthMaintenanceModule } from './modules/auth/auth-maintenance.module.js';
 import { AuthMailModule } from './modules/auth/auth-mail.module.js';
 import { DocumentsWorkerModule } from './modules/documents/documents-worker.module.js';
@@ -18,7 +19,7 @@ import { SlaModule } from './modules/sla/sla.module.js';
 import { WorkerLifecycle } from './worker-lifecycle.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('worker'), LoggingModule, ClockModule, DatabaseModule.forEntry('worker'), AuditTrailModule, StorageModule, SlaModule, DispatchModule, WaitModule, FilePurgeModule, TenantPurgeModule, OutboxDispatcherModule, AuthMailModule, AuthMaintenanceModule, NotificationsWorkerModule, DocumentsWorkerModule],
+  imports: [ConfigModule.forEntry('worker'), LoggingModule, ClockModule, DatabaseModule.forEntry('worker'), AuditTrailModule, StorageModule, SlaModule, DispatchModule, WaitModule, FilePurgeModule, TenantPurgeModule, OutboxDispatcherModule, AuthMailModule, AuthMaintenanceModule, NotificationsWorkerModule, DocumentsWorkerModule, RealtimeWorkerModule],
   providers: [WorkerLifecycle],
 })
 export class WorkerModule {}

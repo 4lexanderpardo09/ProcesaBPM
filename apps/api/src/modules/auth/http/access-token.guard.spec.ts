@@ -7,6 +7,7 @@ import { PlatformAdminOnly, RequirePermission } from '../../../common/auth/route
 import type { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import type { PlatformSessionService } from '../application/platform-session.service.js';
 import type { SupportRequestRecorder } from '../../audit/application/support-request-recorder.js';
+import { AccessTokenAuthenticator } from '../application/access-token-authenticator.js';
 import type { SupportSessionVerifier } from '../application/support-session-verifier.js';
 import type { TenantAccessService } from '../application/tenant-access.service.js';
 import { AccessTokenGuard } from './access-token.guard.js';
@@ -41,13 +42,15 @@ function setup(authorization?: string, options: { support?: boolean; method?: st
   const verifySupport = vi.fn().mockResolvedValue(undefined);
   const recordSupport = vi.fn().mockResolvedValue(undefined);
   const verifyAccessToken = vi.fn().mockResolvedValue(claims);
+  const inspectAccessToken = vi.fn(async (token: string) => ({ claims: (await verifyAccessToken(token)) as typeof claims, expiresAt: new Date(Date.now() + 900_000) }));
   const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null, positionId: null };
   const verify = vi.fn().mockResolvedValue(access);
   const verifyPlatformToken = vi.fn().mockResolvedValue({ sub: claims.sub, sid: claims.sid });
   const verifyPlatformSession = vi.fn().mockResolvedValue(undefined);
+  const tokens = { verifyAccessToken, inspectAccessToken, verifyPlatformToken, verifySupportToken } as unknown as JwtTokenService;
   const guard = new AccessTokenGuard(
-    { verifyAccessToken, verifyPlatformToken, verifySupportToken } as unknown as JwtTokenService,
-    { verify } as unknown as TenantAccessService,
+    tokens,
+    new AccessTokenAuthenticator(tokens, { verify } as unknown as TenantAccessService),
     { verify: verifyPlatformSession } as unknown as PlatformSessionService,
     { verify: verifySupport } as unknown as SupportSessionVerifier,
     { record: recordSupport } as unknown as SupportRequestRecorder,

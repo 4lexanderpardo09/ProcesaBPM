@@ -451,6 +451,12 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 - Migración `20261016000500`: `claim_outbox_events`, `claim_overdue_sla_clocks`, `claim_due_waits` y `claim_random_dispatch_steps` saltan los tenants `PENDING_DELETION` (lo ya encolado espera y se va con la purga, o sigue si se cancela). `purge_tenant` no borra a un usuario al que aún apunta historial de soporte de otros tenants (si no, la purga fallaría para siempre).
 - `assert_tenant_keeps_admin` ignora los tenants `PURGED` (si no, su propia purga fallaría al confirmar: la lápida vuelve a existir y no tiene dueño). `auth_list_memberships` lista también `PENDING_DELETION`, nunca `PURGED`.
 
+### 8.25 Señales de tiempo real (migración `20261016000600`)
+- La función `trg_realtime_access_signal()` (`SECURITY INVOKER`, `search_path` fijo, sin permisos para los roles de la aplicación) emite `pg_notify('procesabpm_realtime', {"v":1,"k":"access", …})` con **solo ids** (`s` sesión, `t` tenant, `u` usuario, `r` rol). Sin tablas ni columnas nuevas.
+- Disparadores `AFTER UPDATE`: `realtime_session_revoked` (`refresh_sessions.revoked_at` pasa de nulo a valor **sin** `replaced_by`: una rotación no se avisa), `realtime_membership_changed` (estado, rol, dueño, departamento, sede, cargo), `realtime_role_changed` (`permissions_version`, `is_active`, `is_admin`: un aviso por cambio de `role_permissions`), `realtime_tenant_changed` (estado, `mfa_required`) y `realtime_user_changed` (estado, `password_changed_at`). No hay aviso al borrar membresías: solo `purge_tenant` las borra y el tenant ya salió de `ACTIVE`.
+- El `NOTIFY` corre **dentro** de la transacción que cambia el dato y toma el bloqueo de la cola al confirmar; son cambios poco frecuentes. Vigila `SELECT pg_notification_queue_usage()` (alerta > 0.1).
+- La conexión que hace `LISTEN` debe ser directa o de un pool en **modo sesión** (`REALTIME_DATABASE_URL`); `NOTIFY` funciona con cualquier modo.
+
 ## 9. Catálogo global y semillas
 `src/seed/run.ts` carga, de forma **idempotente** (upsert por llave natural), en cada despliegue:
 

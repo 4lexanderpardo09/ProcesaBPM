@@ -62,6 +62,57 @@ describe('OutboxDispatcher', () => {
     expect(calls).toEqual(['handle', 'complete']);
   });
 
+  describe('post-commit effects', () => {
+    it('run after the transaction committed, never inside it', async () => {
+      const { dispatcher, registry, calls, inTransaction } = setup([event()]);
+      registry.registerTransactional({ type: 'demo', schema, handle: async (_tx, _event, effects) => void effects.afterCommit(async () => void calls.push(`effect:${inTransaction()}`)) });
+      expect(await dispatcher.runOnce()).toMatchObject({ done: 1 });
+      expect(calls).toEqual(['complete', 'effect:false']);
+    });
+
+    it('are discarded when the claim was lost or the handler failed', async () => {
+      const lost = setup([event()], { completes: false });
+      lost.registry.registerTransactional({ type: 'demo', schema, handle: async (_tx, _event, effects) => void effects.afterCommit(async () => void lost.calls.push('effect')) });
+      await lost.dispatcher.runOnce();
+      expect(lost.calls).not.toContain('effect');
+
+      const failing = setup([event()]);
+      failing.registry.registerTransactional({
+        type: 'demo',
+        schema,
+        handle: async (_tx, _event, effects) => {
+          effects.afterCommit(async () => void failing.calls.push('effect'));
+          throw new Error('boom');
+        },
+      });
+      await failing.dispatcher.runOnce();
+      expect(failing.calls).not.toContain('effect');
+    });
+
+    it('a failing effect does not change the outcome and is logged without the payload', async () => {
+      const { dispatcher, registry, warnings, fails } = setup([event({ payload: { value: 1, secret: 'x' } })]);
+      registry.registerTransactional({ type: 'demo', schema: schema.passthrough(), handle: async (_tx, _event, effects) => void effects.afterCommit(() => Promise.reject(new Error('queue full'))) });
+      expect(await dispatcher.runOnce()).toMatchObject({ done: 1, retried: 0, failed: 0 });
+      expect(fails).toEqual([]);
+      expect(JSON.stringify(warnings)).toContain('realtime.signal_failed');
+      expect(JSON.stringify(warnings)).not.toContain('secret');
+    });
+
+    it('also run after record, when the external effect completes', async () => {
+      const { dispatcher, registry, calls } = setup([event()]);
+      registry.registerExternal({
+        type: 'demo',
+        scope: 'tenant',
+        schema,
+        prepare: () => Promise.resolve({}),
+        perform: () => Promise.resolve('sent'),
+        record: async (_tx, _result, _event, effects) => void effects.afterCommit(async () => void calls.push('effect')),
+      });
+      await dispatcher.runOnce();
+      expect(calls).toEqual(['complete', 'effect']);
+    });
+  });
+
   it('a lost claim rolls the work back and is not recorded as a failure', async () => {
     const { dispatcher, registry, fails } = setup([event()], { completes: false });
     registry.registerTransactional({ type: 'demo', schema, handle: () => Promise.resolve() });

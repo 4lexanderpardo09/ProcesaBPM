@@ -14,6 +14,12 @@ const positiveInteger = (defaultValue: number, max: number) => z.coerce.number()
 const MAX_BATCH_PROCESSING_MS = 150_000;
 /** With rendering included: the lease is 5 minutes and the last wave still has to record its result. */
 const MAX_BATCH_WITH_RENDERING_MS = 270_000;
+/** How long publishing one realtime signal (a post-commit effect) may take. */
+export const SIGNAL_PUBLISH_TIMEOUT_MS = 5_000;
+/** Post-commit effects of one event at most: a ticket event signals its notifications and the ticket itself. */
+export const MAX_POST_COMMIT_EFFECTS_PER_EVENT = 2;
+/** The effects run in the event's lane, after its commit: their time counts against the lease too. */
+const POST_COMMIT_BUDGET_MS = MAX_POST_COMMIT_EFFECTS_PER_EVENT * SIGNAL_PUBLISH_TIMEOUT_MS;
 
 const settingsSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
@@ -29,6 +35,8 @@ const settingsSchema = z.object({
   SMTP_SECURE: boolean(false),
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASSWORD: z.string().min(1).optional(),
+  /** Tell the API instances (through `NOTIFY`) that something changed, so they can update open screens. */
+  REALTIME_SIGNALS_ENABLED: boolean(true),
   OUTBOX_POLLING_ENABLED: boolean(true),
   OUTBOX_POLL_INTERVAL_MS: positiveInteger(2_000, 600_000),
   OUTBOX_BATCH_SIZE: positiveInteger(10, 500),
@@ -60,8 +68,9 @@ export function loadWorkerSettings(env: Readonly<Record<string, string | undefin
     if (data.NODE_ENV === 'production' && !data.WEB_BASE_URL.startsWith('https://')) problems.push('WEB_BASE_URL must be https in production');
     // Events are claimed for 5 minutes and processed in waves: the slowest wave must end well inside the lease.
     const waves = Math.ceil(data.OUTBOX_BATCH_SIZE / data.OUTBOX_CONCURRENCY);
-    if (waves * data.OUTBOX_TX_TIMEOUT_MS > MAX_BATCH_PROCESSING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS would outlive the claim lease');
-    else if (waves * (data.OUTBOX_TX_TIMEOUT_MS + data.PDF_RENDER_TIMEOUT_MS) > MAX_BATCH_WITH_RENDERING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS plus PDF_RENDER_TIMEOUT_MS would outlive the claim lease');
+    const effects = data.REALTIME_SIGNALS_ENABLED ? POST_COMMIT_BUDGET_MS : 0;
+    if (waves * (data.OUTBOX_TX_TIMEOUT_MS + effects) > MAX_BATCH_PROCESSING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS (plus the realtime signals after commit) would outlive the claim lease');
+    else if (waves * (data.OUTBOX_TX_TIMEOUT_MS + data.PDF_RENDER_TIMEOUT_MS + effects) > MAX_BATCH_WITH_RENDERING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS plus PDF_RENDER_TIMEOUT_MS (plus the realtime signals after commit) would outlive the claim lease');
     if ((data.SMTP_USER === undefined) !== (data.SMTP_PASSWORD === undefined)) problems.push('SMTP_USER and SMTP_PASSWORD go together');
   }
   if (problems.length > 0 || !result.success) throw new ConfigError(problems);

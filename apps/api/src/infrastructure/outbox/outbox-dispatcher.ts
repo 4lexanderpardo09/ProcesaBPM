@@ -3,6 +3,7 @@ import { JsonLogger } from '../../common/logging/json-logger.js';
 import { WORKER_SETTINGS, type WorkerSettings } from '../../config/worker-settings.js';
 import { Clock } from '../clock.js';
 import type { CrossTenantTransaction, TenantTransaction } from '../database/transaction-scope.js';
+import { PostCommitEffects } from './post-commit-effects.js';
 import { WorkerTransactionRunner } from '../database/worker-transaction-runner.js';
 import { type OutboxSource, OutboxClaimsRepository } from './outbox-claims.repository.js';
 import { type ClaimedEvent, PermanentEventError, StaleClaimError } from './outbox-handler.js';
@@ -99,11 +100,13 @@ export class OutboxDispatcher {
     const transactional = source === 'tenant' ? this.registry.transactionalFor(event.type) : [];
     if (transactional.length > 0) {
       const handlers = transactional.map((handler) => ({ handler, event: { ...event, payload: parsePayload(handler.schema, event.payload) } }));
+      const effects = new PostCommitEffects();
       await this.inScope(source, event, async (tx) => {
         // Transactional handlers exist for tenant events only, so this scope is always a tenant one.
-        for (const { handler, event: parsed } of handlers) await handler.handle(tx as TenantTransaction, parsed as ClaimedEvent<never>);
+        for (const { handler, event: parsed } of handlers) await handler.handle(tx as TenantTransaction, parsed as ClaimedEvent<never>, effects);
         await this.completeOrThrow(tx, source, event);
       }, timeoutMs);
+      await this.runEffects(effects, event);
       return;
     }
 
@@ -116,10 +119,19 @@ export class OutboxDispatcher {
       return external.prepare(tx as never, parsed);
     }, timeoutMs);
     const result = message === null ? undefined : await external.perform(message as never, parsed);
+    const effects = new PostCommitEffects();
     await this.inScope(source, event, async (tx) => {
-      if (message !== null && external.record !== undefined) await external.record(tx as never, result as never, parsed);
+      if (message !== null && external.record !== undefined) await external.record(tx as never, result as never, parsed, effects);
       await this.completeOrThrow(tx, source, event);
     }, timeoutMs);
+    await this.runEffects(effects, event);
+  }
+
+  /** After the commit: a failure only loses a hint (it is logged without the payload) and never changes the event's outcome. */
+  private runEffects(effects: PostCommitEffects, event: ClaimedEvent<unknown>): Promise<void> {
+    return effects.run((error) =>
+      this.logger.warn({ message: 'A post-commit effect failed', event: 'realtime.signal_failed', eventId: event.id, type: event.type, error: describeError(error) }, 'OutboxDispatcher'),
+    );
   }
 
   private async completeOrThrow(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<void> {

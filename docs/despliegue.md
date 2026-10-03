@@ -76,6 +76,11 @@ Las obligatorias son las que no tienen valor por defecto. Un valor inválido o f
 | `DB_TX_TIMEOUT_MS` | no | `10000` (máx. 120000) | Duración máxima de una transacción; también `statement_timeout` de la BD |
 | `DB_TX_MAX_WAIT_MS` | no | `5000` (máx. 60000) | Espera máxima de una conexión libre del pool |
 | `DB_LOCK_TIMEOUT_MS` | no | `5000` (máx. 60000) | Espera máxima de un bloqueo de fila: pasada, la BD cancela y el API responde **503** `TEMPORARILY_UNAVAILABLE` con `Retry-After: 1` |
+| `REALTIME_ENABLED` | no | `true` | Activa el WebSocket de tiempo real (`/realtime`) |
+| `REALTIME_ALLOWED_ORIGINS` | sí si `REALTIME_ENABLED` | | Orígenes (esquema, host y puerto, sin ruta) que pueden abrir el socket, separados por comas; `https://` en producción. El compose de ejemplo usa `WEB_BASE_URL` |
+| `REALTIME_DATABASE_URL` | no | `DATABASE_URL` | Conexión directa (no a través de un pooler en modo transacción) para `LISTEN`; el API revisa su salud con un ping propio cada 30 s |
+| `REALTIME_MAX_CONNECTIONS` / `_PER_USER` / `_MAX_TICKET_SUBSCRIPTIONS` | no | `5000` / `10` / `20` | Límites de sockets por instancia, por usuario y de tickets suscritos por socket |
+| `REALTIME_REVALIDATE_INTERVAL_MS` / `_AUTH_GRACE_MS` / `_DB_CONCURRENCY` / `_SIGNAL_QUEUE_MAX` | no | `60000` / `10000` / `4` / `10000` | Revalidación periódica de la sesión, plazo para autenticar tras conectar, trabajos concurrentes a la BD (debe ser menor que `DB_POOL_MAX`) y cola de señales |
 | `STORAGE_ENDPOINT` | sí | | URL S3 compatible (R2, S3, SeaweedFS…) |
 | `STORAGE_BUCKET` | sí | | ≥ 3 caracteres; el bucket debe existir |
 | `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` | sí | | |
@@ -92,6 +97,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 | `WORKER_DATABASE_URL` | sí | | Login de `app_worker` |
 | `WEB_BASE_URL` | sí | | Dirección de la aplicación web; los enlaces de los correos se construyen con ella. En producción debe ser `https://` |
 | `OUTBOX_TOKEN_KEY` | sí | | ≥ 32 bytes |
+| `REALTIME_SIGNALS_ENABLED` | no | `true` | Publica las señales de tiempo real (`pg_notify`) tras cada evento de ticket, notificación o documento |
 | `MAIL_TRANSPORT` | no | `smtp` | `smtp` o `memory` (esta última se rechaza en producción) |
 | `SMTP_HOST` | sí con `smtp` | | |
 | `SMTP_PORT` | no | `1025` | |
@@ -103,7 +109,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 | `OUTBOX_POLL_INTERVAL_MS` | no | `2000` | |
 | `OUTBOX_BATCH_SIZE` | no | `10` (máx. 500) | Eventos reclamados por ronda |
 | `OUTBOX_CONCURRENCY` | no | `4` (máx. 64) | Eventos en paralelo |
-| `OUTBOX_TX_TIMEOUT_MS` | no | `30000` | Tope de la transacción de un evento; el arranque rechaza combinaciones que sobrepasen el arrendamiento de 5 min |
+| `OUTBOX_TX_TIMEOUT_MS` | no | `30000` | Tope de la transacción de un evento; el arranque rechaza combinaciones que sobrepasen el arrendamiento de 5 min (cuenta también hasta 2 señales de tiempo real de 5 s por evento, después del commit) |
 | `PDF_RENDER_TIMEOUT_MS` | no | `30000` (máx. 120000) | |
 | `PDF_MAX_OUTPUT_BYTES` | no | 20 MB (máx. 50 MB) | |
 
@@ -157,6 +163,7 @@ El comando **se niega** a correr con el dueño del esquema, con un superusuario 
 
 - **API:** sin estado; se escala en réplicas detrás de un balanceador. Las sesiones viven en la BD.
 - **Worker:** se escala añadiendo réplicas. Son seguras en paralelo: los eventos se reclaman con `SKIP LOCKED` y arrendamiento, y los trabajos programados (alertas de SLA, despertar de `WAIT`, despacho aleatorio, purga) se reparten en la BD de forma que cada elemento se procesa una sola vez. Más réplicas o más `OUTBOX_CONCURRENCY` suben el rendimiento de correos y PDF; el dibujo del PDF corre dentro del proceso del worker (CPU y memoria).
+- **Tiempo real:** sin sesiones pegajosas (solo WebSocket; cualquier réplica sirve). Cada réplica del API abre **una conexión más** para `LISTEN` (`REALTIME_DATABASE_URL`, directa o pool en modo sesión; un pooler en modo transacción no sirve y se nota en el registro `realtime.listener_unhealthy`). Cuenta `réplicas × (DB_POOL_MAX + pool de plataforma + 1)` contra `max_connections`. Detrás de un proxy: permite `Upgrade`/`Connection` en `/realtime` (Caddy y Traefik lo hacen solos; nginx: `proxy_http_version 1.1`, `proxy_set_header Upgrade $http_upgrade`, `Connection "upgrade"`, `proxy_read_timeout 75s`), tiempo de inactividad del proxy o balanceador **≥ 60 s** (el ping es de 25 s más 20 s de espera), Caddy `stream_close_delay 5m` para que recargar la configuración no corte todos los sockets a la vez, no registres cuerpos ni la consulta de `/realtime`, y no actives `DEBUG=socket.io*`. **`TRUST_PROXY` debe estar bien configurado:** el límite de conexiones del WebSocket es por dirección de cliente (50 sin autenticar, 1000 abiertas, 600 nuevas por minuto); si el API ve solo la dirección del proxy, esos límites se aplican a todos los clientes juntos. Monitoreo: `SELECT pg_notification_queue_usage()` (alerta > 0.1) y los eventos `realtime.listener_unhealthy`.
 - **Conexiones:** cada proceso abre un pool de `DB_POOL_MAX` (10) conexiones, y el API además un pequeño pool de plataforma. El total (réplicas × pool) debe quedar por debajo de `max_connections` de Postgres. Con muchas réplicas conviene PgBouncer (§10).
 
 ## 8. Endurecimiento recomendado

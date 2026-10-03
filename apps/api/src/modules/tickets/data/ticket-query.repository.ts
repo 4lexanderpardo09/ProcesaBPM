@@ -34,6 +34,16 @@ const DETAIL = {
   fieldValues: { select: { value: true, field: { select: { code: true, type: true, config: true } } } },
 } as const;
 
+/** What a real-time subscriber may see of a ticket: its state and the ids of its assignees, never its content. */
+const REALTIME_SUMMARY = {
+  id: true,
+  status: true,
+  currentStepId: true,
+  currentLoop: true,
+  assignees: { select: { userId: true, type: true }, orderBy: { userId: 'asc' } },
+  events: { select: { seq: true }, orderBy: { seq: 'desc' }, take: 1 },
+} as const;
+
 /** Reads of tickets. The caller passes the access filter (per-record authorization): it is part of every query. */
 @Injectable()
 export class TicketQueryRepository {
@@ -46,6 +56,16 @@ export class TicketQueryRepository {
     // One query after another: an interactive transaction has a single connection.
     const rows = await tx.ticket.findMany({ where, select: SUMMARY, orderBy: { number: 'desc' }, ...window });
     return { rows, total: await tx.ticket.count({ where }) };
+  }
+
+  findRealtimeSummary(tx: TenantTransaction, tenantId: string, ticketId: string, access: Where) {
+    return tx.ticket.findFirst({ where: { AND: [{ tenantId, id: ticketId, deletedAt: null }, access] } as never, select: REALTIME_SUMMARY });
+  }
+
+  /** The ids, among the given ones, that the access filter lets the caller see. */
+  async readableIds(tx: TenantTransaction, tenantId: string, ticketIds: readonly string[], access: Where): Promise<string[]> {
+    const rows = await tx.ticket.findMany({ where: { AND: [{ tenantId, id: { in: [...ticketIds] }, deletedAt: null }, access] } as never, select: { id: true } });
+    return rows.map((row) => row.id);
   }
 
   /** Whether the access filter lets the caller see the ticket. */

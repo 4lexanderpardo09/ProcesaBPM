@@ -34,7 +34,7 @@ describe('architecture', () => {
   it('the worker-only modules (outbox dispatcher, mail, account mail, notifications, documents fan-out and the wait wake-up) are only imported by the worker', () => {
     const workerOnly = /(outbox-dispatcher\.module|mail\.module|auth-mail\.module|auth-maintenance\.module|notifications-worker\.module|documents-worker\.module|tenant-purge\.module)/;
     const importers = files.filter((file) => importsOf(file).some((source) => workerOnly.test(source))).map(posix);
-    expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/engine/wait.module.ts', 'modules/notifications/notifications-worker.module.ts', 'worker.module.ts']);
+    expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/engine/wait.module.ts', 'modules/notifications/notifications-worker.module.ts', 'modules/realtime/realtime-worker.module.ts', 'worker.module.ts']);
   });
 
   it('no SQL is built from text: the unsafe raw-query helpers are never used', () => {
@@ -44,6 +44,27 @@ describe('architecture', () => {
 
   it('the worker never imports the controllers or the guards of the API', () => {
     const offenders = files.filter((file) => posix(file).startsWith('modules/') && /notifications-worker|documents-worker|auth-mail|auth-maintenance|file-purge/.test(posix(file))).filter((file) => importsOf(file).some((source) => /\.controller\.js$|authorization\.module\.js$|\.guard\.js$/.test(source))).map(posix);
+    expect(offenders).toEqual([]);
+  });
+
+  it('real time: the API and the worker each import only their own side', () => {
+    const importersOf = (pattern: RegExp) => files.filter((file) => importsOf(file).some((source) => pattern.test(source))).map(posix).sort();
+    expect(importersOf(/realtime-worker\.module/)).toEqual(['worker.module.ts']);
+    expect(importersOf(/realtime-signal-publisher\.module/)).toEqual(['modules/documents/documents-worker.module.ts', 'modules/notifications/notifications-worker.module.ts', 'modules/realtime/realtime-worker.module.ts']);
+    expect(importersOf(/\/realtime\.module/)).toEqual(['app.module.ts']);
+    expect(importersOf(/realtime-listener\.module/)).toEqual(['modules/realtime/realtime.module.ts']);
+  });
+
+  it('no WebSocket message handler is declared with @SubscribeMessage (the global HTTP guard would refuse it): ClientMessageRouter wires them', () => {
+    const offenders = files.filter((file) => /^\s*@SubscribeMessage\b|import\s*\{[^}]*\bSubscribeMessage\b[^}]*\}\s*from\s*'@nestjs\/websockets'/m.test(readFileSync(file, 'utf8'))).map(posix);
+    expect(offenders).toEqual([]);
+  });
+
+  it('in the realtime module only RealtimeEmitter sends to or closes a socket, and nothing broadcasts to a room', () => {
+    const offenders = files
+      .filter((file) => posix(file).startsWith('modules/realtime/') && posix(file) !== 'modules/realtime/application/realtime-emitter.ts')
+      .filter((file) => /\.to\(|\.in\(|\.broadcast\b|\bserver\.emit\(|(?<!emitter)\.emit\(|\.disconnect\(|\.disconnectSockets\(/.test(readFileSync(file, 'utf8')))
+      .map(posix);
     expect(offenders).toEqual([]);
   });
 

@@ -10,8 +10,11 @@ import { useTestEnvironment } from '../support/test-environment.js';
 import { seedTenant } from '@procesabpm/db/testing/fixtures';
 import { connectTestDatabase } from '@procesabpm/db/testing/database';
 
-/** A pool of one connection and a short transaction budget: the two ways Prisma's own transaction timeout shows up under load. */
-useTestEnvironment({ DB_POOL_MAX: '1', DB_TX_MAX_WAIT_MS: '300', DB_TX_TIMEOUT_MS: '1500' } as never);
+/**
+ * A pool of one connection and a short transaction budget: the two ways Prisma's own transaction timeout shows up under
+ * load. Real time is off: its database work must keep a connection of the pool free, which one connection cannot.
+ */
+useTestEnvironment({ DB_POOL_MAX: '1', DB_TX_MAX_WAIT_MS: '300', DB_TX_TIMEOUT_MS: '1500', REALTIME_ENABLED: 'false' } as never);
 
 async function failureOf(work: () => Promise<unknown>): Promise<unknown> {
   try {

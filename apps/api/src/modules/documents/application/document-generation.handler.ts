@@ -7,6 +7,8 @@ import { Clock } from '../../../infrastructure/clock.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type ClaimedEvent, type ExternalEffectHandler, PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
+import type { PostCommitEffects } from '../../../infrastructure/outbox/post-commit-effects.js';
+import { RealtimeSignalPublisher } from '../../../infrastructure/realtime/realtime-signal-publisher.js';
 import { PdfRenderer } from '../../../infrastructure/pdf/pdf-renderer.js';
 import type { RenderedPdf } from '../../../infrastructure/pdf/pdf-renderer.js';
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
@@ -63,6 +65,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     @Inject(ImageLoader) private readonly imageLoader: ImageLoader,
     @Inject(TicketDocumentRepository) private readonly ticketDocuments: TicketDocumentRepository,
     @Inject(SystemFileService) private readonly systemFiles: SystemFileService,
+    @Inject(RealtimeSignalPublisher) private readonly realtime: RealtimeSignalPublisher,
   ) {}
 
   onModuleInit(): void {
@@ -88,9 +91,9 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     return { fileId: prepared.fileId, storageKey: prepared.storageKey, fileName: prepared.plan.fileName, sizeBytes: stored.length, sha256: sha256Of(stored) };
   }
 
-  async record(tx: TenantTransaction, result: GeneratedPdf, event: ClaimedEvent<DocumentGeneratePayload>): Promise<void> {
+  async record(tx: TenantTransaction, result: GeneratedPdf, event: ClaimedEvent<DocumentGeneratePayload>, effects: PostCommitEffects): Promise<void> {
     const { payload } = event;
-    await this.systemFiles.recordGeneratedDocument(tx, event.tenantId!, {
+    const recorded = await this.systemFiles.recordGeneratedDocument(tx, event.tenantId!, {
       ...result,
       mimeType: PDF_MIME_TYPE,
       ticketId: payload.ticketId,
@@ -99,6 +102,10 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
       eventId: payload.ticketEventId,
       at: event.createdAt,
     });
+    // A retry that finds the document already recorded has nothing new to announce.
+    if (recorded === 'recorded') {
+      effects.afterCommit(() => this.realtime.publish([{ v: 1, k: 'document', t: event.tenantId!, id: payload.ticketId, d: result.fileId }]));
+    }
   }
 
   private skip(event: ClaimedEvent<DocumentGeneratePayload>, reason: string): null {

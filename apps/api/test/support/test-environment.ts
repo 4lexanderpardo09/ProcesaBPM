@@ -5,6 +5,7 @@ export const TEST_WEB_BASE_URL = 'http://web.test';
 export const TEST_OUTBOX_TOKEN_KEY = 'outbox-test-key-with-more-than-32-bytes!!';
 export const TEST_MFA_KEY = { id: 'test', key: Buffer.alloc(32, 7) };
 export const TEST_MFA_ENCRYPTION_KEYS = `${TEST_MFA_KEY.id}:${TEST_MFA_KEY.key.toString('base64')}`;
+export const TEST_REALTIME_ORIGIN = 'http://app.test';
 export const TEST_JWT_SECRET = 'integration-test-secret-with-more-than-32-bytes';
 const VARIABLES = [
   'NODE_ENV',
@@ -28,6 +29,11 @@ const VARIABLES = [
   'OUTBOX_POLLING_ENABLED',
   'OUTBOX_BATCH_SIZE',
   'OUTBOX_CONCURRENCY',
+  'REALTIME_ALLOWED_ORIGINS',
+  'REALTIME_AUTH_GRACE_MS',
+  'REALTIME_REVALIDATE_INTERVAL_MS',
+  'REALTIME_MAX_CONNECTIONS_PER_USER',
+  'REALTIME_MAX_TICKET_SUBSCRIPTIONS',
 ] as const;
 
 /** Points the application configuration at the test database for the duration of a test file. */
@@ -54,8 +60,12 @@ export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[
       OUTBOX_TOKEN_KEY: TEST_OUTBOX_TOKEN_KEY,
       MAIL_TRANSPORT: 'memory',
       OUTBOX_POLLING_ENABLED: 'false',
-      OUTBOX_BATCH_SIZE: '50',
+      // Two waves of 16: the lease budget also counts the realtime signals published after each commit.
+      OUTBOX_BATCH_SIZE: '32',
       OUTBOX_CONCURRENCY: '16',
+      REALTIME_ALLOWED_ORIGINS: TEST_REALTIME_ORIGIN,
+      REALTIME_AUTH_GRACE_MS: '1000',
+      REALTIME_REVALIDATE_INTERVAL_MS: '10000',
       ...overrides,
     });
   });
