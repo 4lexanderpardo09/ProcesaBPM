@@ -19,11 +19,19 @@ export interface CreatePlatformAdminInput {
   webBaseUrl: string;
 }
 
+export class PlatformLoginRequiredError extends Error {
+  constructor() {
+    super('Connect with the app_platform login (not the schema owner or a superuser): DATABASE_URL must belong to a member of app_platform');
+    this.name = 'PlatformLoginRequiredError';
+  }
+}
+
 export interface CreatedPlatformAdmin {
   userId: string;
   email: string;
-  setPasswordLink: string;
-  expiresAt: Date;
+  /** `null` when the user already had a password: nothing is issued and their pending tokens are left alone. */
+  setPasswordLink: string | null;
+  expiresAt: Date | null;
 }
 
 /**
@@ -45,11 +53,30 @@ export async function createPlatformAdmin(client: ClientBase, input: CreatePlatf
 }
 
 async function provision(client: ClientBase, input: CreatePlatformAdminInput): Promise<CreatedPlatformAdmin> {
+  await assertPlatformLogin(client);
   await client.query('LOCK TABLE platform_admins IN SHARE ROW EXCLUSIVE MODE');
   const userId = await upsertUser(client, input);
   await assertAllowed(client, userId, input.forceAdditional);
   await client.query('INSERT INTO platform_admins (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [userId]);
+  const hasPassword = (await client.query('SELECT 1 FROM users WHERE id = $1 AND password_hash IS NOT NULL', [userId])).rowCount === 1;
+  const link = hasPassword ? null : await issueSetPasswordLink(client, userId, input.webBaseUrl);
+  await client.query(
+    `INSERT INTO platform_audit_logs (actor_user_id, action, data) VALUES ($1, $2, $3::jsonb)`,
+    [userId, PLATFORM_ADMIN_BOOTSTRAP_ACTION, JSON.stringify({ email: input.email, forceAdditional: input.forceAdditional, via: 'cli', linkIssued: link !== null })],
+  );
+  return { userId, email: input.email, setPasswordLink: link?.url ?? null, expiresAt: link?.expiresAt ?? null };
+}
 
+/** Least privilege: the command must not run with the schema owner or any superuser. */
+async function assertPlatformLogin(client: ClientBase): Promise<void> {
+  const { rows } = await client.query<{ ok: boolean }>(
+    `SELECT pg_has_role(session_user, 'app_platform', 'MEMBER')
+            AND NOT (SELECT rolsuper FROM pg_roles WHERE rolname = session_user) AS ok`,
+  );
+  if (!rows[0]!.ok) throw new PlatformLoginRequiredError();
+}
+
+async function issueSetPasswordLink(client: ClientBase, userId: string, webBaseUrl: string): Promise<{ url: string; expiresAt: Date }> {
   const token = randomBytes(32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const issued = await client.query<{ id: string }>(
@@ -57,12 +84,7 @@ async function provision(client: ClientBase, input: CreatePlatformAdminInput): P
     [userId, tokenHash, PLATFORM_ADMIN_LINK_VALIDITY_HOURS],
   );
   const { rows } = await client.query<{ expires_at: Date }>('SELECT expires_at FROM user_tokens WHERE id = $1', [issued.rows[0]!.id]);
-  await client.query(
-    `INSERT INTO platform_audit_logs (actor_user_id, action, data) VALUES ($1, $2, $3::jsonb)`,
-    [userId, PLATFORM_ADMIN_BOOTSTRAP_ACTION, JSON.stringify({ email: input.email, forceAdditional: input.forceAdditional, via: 'cli' })],
-  );
-
-  return { userId, email: input.email, setPasswordLink: buildLink(input.webBaseUrl, token), expiresAt: rows[0]!.expires_at };
+  return { url: buildLink(webBaseUrl, token), expiresAt: rows[0]!.expires_at };
 }
 
 async function upsertUser(client: ClientBase, input: CreatePlatformAdminInput): Promise<string> {

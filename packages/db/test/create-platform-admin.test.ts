@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createPlatformAdmin, PLATFORM_ADMIN_BOOTSTRAP_ACTION, PlatformAdminAlreadyExistsError } from '../src/seed/platform-admin.js';
+import { createPlatformAdmin, PLATFORM_ADMIN_BOOTSTRAP_ACTION, PlatformAdminAlreadyExistsError, PlatformLoginRequiredError } from '../src/seed/platform-admin.js';
 import { connectTestDatabase, type TestDatabase } from './support/database.js';
 
 const WEB = 'https://app.example.com';
@@ -32,7 +32,7 @@ describe('create-platform-admin command', () => {
     const admin = await run(email.toUpperCase());
 
     expect(admin.email).toBe(email);
-    const url = new URL(admin.setPasswordLink);
+    const url = new URL(admin.setPasswordLink!);
     expect(`${url.origin}${url.pathname}`).toBe(`${WEB}/reset-password`);
     const token = decodeURIComponent(url.hash.replace('#token=', ''));
     const hash = createHash('sha256').update(token).digest('hex');
@@ -86,14 +86,40 @@ describe('create-platform-admin command', () => {
     await expect(run(email)).rejects.toBeInstanceOf(PlatformAdminAlreadyExistsError);
   });
 
-  it('promotes an existing global user without touching their password', async () => {
+  it('promotes an existing user with a password without a link and without consuming their pending tokens', async () => {
     const email = `member-${Date.now()}@example.com`;
-    await db.owner.query(`INSERT INTO users (email, first_name, last_name, password_hash) VALUES ($1, 'Mem', 'Ber', 'existing-hash')`, [email]);
+    const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO users (email, first_name, last_name, password_hash) VALUES ($1, 'Mem', 'Ber', 'existing-hash') RETURNING id`, [email]);
+    await db.owner.query(`INSERT INTO user_tokens (user_id, type, token_hash, expires_at) VALUES ($1, 'PASSWORD_RESET', 'pending-hash', now() + interval '1 hour')`, [rows[0]!.id]);
 
     const admin = await run(email, true);
+
+    expect(admin.setPasswordLink).toBeNull();
+    expect(admin.expiresAt).toBeNull();
+    const tokens = await db.owner.query<{ consumed_at: Date | null }>('SELECT consumed_at FROM user_tokens WHERE user_id = $1', [admin.userId]);
+    expect(tokens.rows).toEqual([{ consumed_at: null }]);
 
     const user = await db.owner.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [admin.userId]);
     expect(user.rows[0]!.password_hash).toBe('existing-hash');
     expect(await adminCount()).toBe(1);
+  });
+
+  it('refuses to run with the schema owner or any superuser, and creates nothing', async () => {
+    const email = `owner-run-${Date.now()}@example.com`;
+    const client = await db.owner.connect();
+    try {
+      await expect(createPlatformAdmin(client, input(email))).rejects.toBeInstanceOf(PlatformLoginRequiredError);
+    } finally {
+      client.release();
+    }
+    expect(await db.owner.query('SELECT 1 FROM users WHERE email = $1', [email])).toHaveProperty('rowCount', 0);
+  });
+
+  it('refuses a login that is not a member of app_platform', async () => {
+    const client = await db.runtime.connect();
+    try {
+      await expect(createPlatformAdmin(client, input(`runtime-run-${Date.now()}@example.com`))).rejects.toBeInstanceOf(PlatformLoginRequiredError);
+    } finally {
+      client.release();
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import pg from 'pg';
-import { createPlatformAdmin, PLATFORM_ADMIN_LINK_VALIDITY_HOURS, PlatformAdminAlreadyExistsError } from './platform-admin.js';
+import { createPlatformAdmin, PLATFORM_ADMIN_LINK_VALIDITY_HOURS, PlatformAdminAlreadyExistsError, PlatformLoginRequiredError } from './platform-admin.js';
 
 const USAGE = `Usage: DATABASE_URL=<platform login> WEB_BASE_URL=<https://app.example.com> create-platform-admin.js --email <address>
          [--first-name <name>] [--last-name <name>] [--force-additional]`;
@@ -34,7 +34,11 @@ async function main(): Promise<void> {
       webBaseUrl,
     });
     console.log(`Platform admin ready: ${admin.email}`);
-    console.log(`Set the password within ${PLATFORM_ADMIN_LINK_VALIDITY_HOURS} h (expires ${admin.expiresAt.toISOString()}); MFA enrollment is required at the first login:`);
+    if (admin.setPasswordLink === null) {
+      console.log('The user already has a password; MFA will be required at their next login.');
+      return;
+    }
+    console.log(`Set the password within ${PLATFORM_ADMIN_LINK_VALIDITY_HOURS} h (expires ${admin.expiresAt!.toISOString()}); MFA enrollment is required at the first login:`);
     console.log(admin.setPasswordLink);
   } finally {
     await client.end();
@@ -42,7 +46,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  if (error instanceof PlatformAdminAlreadyExistsError) console.error(error.message);
+  if (error instanceof PlatformAdminAlreadyExistsError || error instanceof PlatformLoginRequiredError) console.error(error.message);
   else console.error(error);
   process.exitCode = 1;
 });
