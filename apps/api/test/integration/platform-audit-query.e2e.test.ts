@@ -58,10 +58,14 @@ describe('platform console: audit log', () => {
     await db.owner.query(`INSERT INTO platform_audit_logs (actor_user_id, action, data) VALUES (NULL, 'retention.run_finished', $1)`, [
       JSON.stringify({ runId, deleted: { audit_logs: 2 }, failed: [], durationMs: 5 }),
     ]);
-    const runs = await query('?action=retention.run_finished').expect(200);
-    expect(runs.body.items).toContainEqual(
-      expect.objectContaining({ actorUserId: null, action: 'retention.run_finished', targetTenantId: null, data: { runId, deleted: { audit_logs: 2 }, failed: [], durationMs: 5 } }),
-    );
+    try {
+      const runs = await query('?action=retention.run_finished').expect(200);
+      expect(runs.body.items).toContainEqual(
+        expect.objectContaining({ actorUserId: null, action: 'retention.run_finished', targetTenantId: null, data: { runId, deleted: { audit_logs: 2 }, failed: [], durationMs: 5 } }),
+      );
+    } finally {
+      await db.owner.query(`DELETE FROM platform_audit_logs WHERE action = 'retention.run_finished' AND data ->> 'runId' = $1`, [runId]);
+    }
   });
 
   it('paginates', async () => {

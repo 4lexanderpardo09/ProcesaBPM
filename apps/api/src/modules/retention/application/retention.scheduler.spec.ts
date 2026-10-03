@@ -8,7 +8,7 @@ describe('RetentionScheduler', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  const setup = (runOnce: () => Promise<unknown>, now = new Date('2026-10-03T07:30:00Z')) => {
+  const setup = (runOnce: (signal?: unknown) => Promise<unknown>, now = new Date('2026-10-03T07:30:00Z')) => {
     const logger = { error: vi.fn() };
     const job = { runOnce: vi.fn(runOnce) };
     const clock = { now: () => now };
@@ -42,6 +42,25 @@ describe('RetentionScheduler', () => {
     expect(job.runOnce).toHaveBeenCalledTimes(1);
     finish();
     await scheduler.beforeApplicationShutdown();
+  });
+
+  it('at shutdown tells the run in progress to stop and waits only for it to wrap up', async () => {
+    let received: AbortSignal | undefined;
+    const { scheduler, job } = setup(
+      (signal?: unknown) =>
+        new Promise<void>((resolve) => {
+          received = signal as AbortSignal;
+          // A run that ends as soon as it is told to stop (the job checks between batches).
+          received.addEventListener('abort', () => resolve());
+        }),
+    );
+    scheduler.onApplicationBootstrap();
+    await vi.advanceTimersByTimeAsync(RETENTION_FIRST_CHECK_DELAY_MS);
+    expect(received?.aborted).toBe(false);
+    await scheduler.beforeApplicationShutdown();
+    expect(received?.aborted).toBe(true);
+    await scheduler.tick();
+    expect(job.runOnce).toHaveBeenCalledTimes(1);
   });
 
   it('survives a failing run', async () => {

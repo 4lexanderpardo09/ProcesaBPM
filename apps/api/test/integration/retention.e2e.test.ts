@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { connectTestDatabase, type TestDatabase } from '@procesabpm/db/testing/database';
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { RetentionJob } from '../../src/modules/retention/application/retention.job.js';
 import { RETENTION_STEPS } from '../../src/modules/retention/domain/retention-step.js';
@@ -10,6 +10,11 @@ import { WorkerModule } from '../../src/worker.module.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 
 useTestEnvironment({ LOG_LEVEL: 'info' });
+
+/**
+ * The job is cross-tenant by design: a run deletes every row of the shared test database that is past its window, not only
+ * the ones this file creates. Other suites do not create rows that old, and this file only removes its own run rows.
+ */
 
 /** Text that only exists inside the rows: the log must never carry it. */
 const SECRET_MARKER = `retention-secret-${randomUUID()}`;
@@ -33,10 +38,19 @@ describe('retention job (worker, real database)', () => {
     await moduleRef.close();
     await db.close();
   });
-  beforeEach(async () => {
-    // One run per 20 hours: every test starts with no run recorded.
-    await db.owner.query(`DELETE FROM platform_audit_logs WHERE action LIKE 'retention.%'`);
+  /** Runs this file started: removed after each test (one run per 20 hours), and nothing else of the trail is touched. */
+  const ownRuns: string[] = [];
+  const runOnce = async (signal?: AbortSignal) => {
+    const summary = await job.runOnce(signal);
+    if (summary) ownRuns.push(summary.runId);
+    return summary;
+  };
+  beforeEach(() => {
     lines.length = 0;
+  });
+  afterEach(async () => {
+    await db.owner.query(`DELETE FROM platform_audit_logs WHERE id = ANY($1::uuid[]) OR (action = 'retention.run_finished' AND data ->> 'runId' = ANY($2::text[]))`, [ownRuns, ownRuns]);
+    ownRuns.length = 0;
   });
 
   const ids = (sql: string, params: unknown[] = []) => db.owner.query<{ id: string }>(sql, params).then((result) => result.rows.map((row) => row.id));
@@ -99,12 +113,15 @@ describe('retention job (worker, real database)', () => {
   it('deletes what is past each window for every tenant, keeps the rest, and records the run in the platform trail', async () => {
     const [tenantA, tenantB] = [await seedTenant(db.platform), await seedTenant(db.platform)];
     const [rowsA, rowsB] = [await seedAges(tenantA), await seedAges(tenantB)];
-    const platformAudit = {
-      old: await one(`INSERT INTO platform_audit_logs (actor_user_id, action, created_at) VALUES ($1, 'tenant.suspended', now() - interval '5 years 1 day') RETURNING id`, [tenantA.userId]),
-      young: await one(`INSERT INTO platform_audit_logs (actor_user_id, action, created_at) VALUES ($1, 'tenant.suspended', now() - interval '4 years') RETURNING id`, [tenantA.userId]),
+    // The trail dates new rows itself (trigger): backdate them as the owner.
+    const platformAuditAged = async (age: string) => {
+      const id = await one(`INSERT INTO platform_audit_logs (actor_user_id, action) VALUES ($1, 'tenant.suspended') RETURNING id`, [tenantA.userId]);
+      await db.owner.query(`UPDATE platform_audit_logs SET created_at = now() - $2::interval WHERE id = $1`, [id, age]);
+      return id;
     };
+    const platformAudit = { old: await platformAuditAged('5 years 1 day'), young: await platformAuditAged('4 years') };
 
-    const summary = await job.runOnce();
+    const summary = await runOnce();
 
     expect(summary).toMatchObject({ failed: [] });
     for (const table of Object.keys(rowsA.old) as Array<keyof typeof rowsA.old>) {
@@ -116,32 +133,48 @@ describe('retention job (worker, real database)', () => {
     expect(await remaining('platform_audit_logs', [platformAudit.old, platformAudit.young])).toEqual([platformAudit.young]);
 
     const runs = await db.owner.query<{ action: string; actor_user_id: string | null; data: Record<string, unknown> }>(
-      `SELECT action, actor_user_id, data FROM platform_audit_logs WHERE action LIKE 'retention.%' ORDER BY created_at, action DESC`,
+      `SELECT action, actor_user_id, data FROM platform_audit_logs
+       WHERE id = $1 OR (action = 'retention.run_finished' AND data ->> 'runId' = $1::text) ORDER BY created_at, action DESC`,
+      [summary!.runId],
     );
     expect(runs.rows.map((row) => [row.action, row.actor_user_id])).toEqual([
       ['retention.run_started', null],
       ['retention.run_finished', null],
     ]);
-    expect(runs.rows[1]!.data).toEqual({ runId: summary!.runId, deleted: summary!.deleted, failed: [], durationMs: summary!.durationMs });
+    expect(runs.rows[1]!.data).toEqual({ runId: summary!.runId, deleted: summary!.deleted, failed: [], durationMs: summary!.durationMs, interrupted: false });
     expect(Object.keys(summary!.deleted).sort()).toEqual([...RETENTION_STEPS].sort());
   });
 
   it('logs counts per step and never the content of a row', async () => {
     const tenant = await seedTenant(db.platform);
     await seedAges(tenant);
-    await job.runOnce();
+    await runOnce();
     const events = lines.map((line) => JSON.parse(line) as { event?: string; step?: string; rows?: number });
     expect(events.filter((entry) => entry.event === 'retention.step_done').map((entry) => entry.step)).toEqual([...RETENTION_STEPS]);
     expect(events.find((entry) => entry.event === 'retention.step_done' && entry.step === 'audit_logs')?.rows).toBeGreaterThanOrEqual(1);
     expect(lines.join('\n')).not.toContain(SECRET_MARKER);
   });
 
-  it('one run per night: a second call, from this replica or another, does nothing', async () => {
-    expect(await job.runOnce()).toBeDefined();
+  it('one run per night: a second call, from this replica or another, does nothing and logs the run that blocks it', async () => {
+    expect(await runOnce()).toBeDefined();
     const tenant = await seedTenant(db.platform);
     const rows = await seedAges(tenant);
-    expect(await job.runOnce()).toBeUndefined();
+    expect(await runOnce()).toBeUndefined();
     expect(await remaining('audit_logs', [rows.old.audit_logs])).toEqual([rows.old.audit_logs]);
+    const skipped = lines.map((line) => JSON.parse(line) as { event?: string; blockingRunStartedAt?: string }).find((entry) => entry.event === 'retention.run_skipped');
+    expect(skipped?.blockingRunStartedAt).toEqual(expect.any(String));
+  });
+
+  it('a shutdown before the next step ends the run at once and records it as interrupted', async () => {
+    const tenant = await seedTenant(db.platform);
+    const rows = await seedAges(tenant);
+    const stop = new AbortController();
+    stop.abort();
+    const summary = await runOnce(stop.signal);
+    expect(summary).toMatchObject({ interrupted: true, deleted: {}, failed: [] });
+    expect(await remaining('audit_logs', [rows.old.audit_logs])).toEqual([rows.old.audit_logs]);
+    const finished = await db.owner.query<{ data: { interrupted: boolean } }>(`SELECT data FROM platform_audit_logs WHERE action = 'retention.run_finished' AND data ->> 'runId' = $1`, [summary!.runId]);
+    expect(finished.rows[0]?.data.interrupted).toBe(true);
   });
 
   it('one tenant’s cleanup never touches another tenant’s young rows, even when only one tenant has old data', async () => {
@@ -149,7 +182,7 @@ describe('retention job (worker, real database)', () => {
     const oldRows = await seedAges(withOld);
     const youngRows = (await seedAges(withYoungOnly)).young;
     const youngOfOther = Object.entries(youngRows);
-    await job.runOnce();
+    await runOnce();
     for (const [table, id] of youngOfOther) expect(await remaining(table, [id]), table).toEqual([id]);
     expect(await remaining('audit_logs', [oldRows.old.audit_logs])).toEqual([]);
     const counts = await db.owner.query<{ n: number }>(`SELECT count(*)::int AS n FROM audit_logs WHERE tenant_id = $1`, [withYoungOnly.tenantId]);

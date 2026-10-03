@@ -18,11 +18,14 @@ interface StepResult {
   readonly failed: boolean;
 }
 
+const NOT_STOPPED: AbortSignal = new AbortController().signal;
+
 /**
  * Deletes what is past its retention window, step by step (`RETENTION_STEPS`), in batches until a batch comes back short
  * or the step's budget runs out. One run per night across every replica: `retention_start_run` hands the run to one of
  * them. A failing step is logged and the run goes on with the next one. The counts end in the platform trail
- * (`retention.run_finished`); the log carries counts and error codes only, never a row.
+ * (`retention.run_finished`); the log carries counts and error codes only, never a row. A stop signal (worker shutdown)
+ * is honoured between batches: the batch in flight finishes, the run is recorded as interrupted and the job returns.
  */
 @Injectable()
 export class RetentionJob {
@@ -34,31 +37,35 @@ export class RetentionJob {
   ) {}
 
   /** `undefined`: another replica already ran tonight. */
-  async runOnce(): Promise<RetentionRunSummary | undefined> {
-    const runId = await this.runner.withoutTenant((tx) => this.retention.startRun(tx));
-    if (runId === null) return undefined;
+  async runOnce(signal: AbortSignal = NOT_STOPPED): Promise<RetentionRunSummary | undefined> {
+    const claim = await this.runner.withoutTenant((tx) => this.retention.startRun(tx));
+    if (claim.kind === 'skipped') {
+      this.logger.info('retention.run_skipped', { event: 'retention.run_skipped', blockingRunStartedAt: claim.blockingStartedAt.toISOString() });
+      return undefined;
+    }
     const startedAt = this.clock.now().getTime();
     const deleted: Partial<Record<RetentionStep, number>> = {};
     const failed: RetentionStep[] = [];
     for (const step of RETENTION_STEPS) {
-      const result = await this.runStep(step);
+      if (signal.aborted) break;
+      const result = await this.runStep(step, signal);
       deleted[step] = result.deleted;
       if (result.failed) failed.push(step);
     }
-    const summary: RetentionRunSummary = { runId, deleted, failed, durationMs: this.clock.now().getTime() - startedAt };
+    const summary: RetentionRunSummary = { runId: claim.runId, deleted, failed, durationMs: this.clock.now().getTime() - startedAt, interrupted: signal.aborted };
     await this.runner.withoutTenant((tx) => this.retention.finishRun(tx, summary));
-    this.logger.info('retention.run_done', { event: 'retention.run_done', deleted, failed, durationMs: summary.durationMs });
+    this.logger.info('retention.run_done', { event: 'retention.run_done', deleted, failed, durationMs: summary.durationMs, interrupted: summary.interrupted });
     return summary;
   }
 
-  private async runStep(step: RetentionStep): Promise<StepResult> {
+  private async runStep(step: RetentionStep, signal: AbortSignal): Promise<StepResult> {
     const startedAt = this.clock.now().getTime();
     let deleted = 0;
     try {
       for (let batch = 0; batch < RETENTION_MAX_BATCHES_PER_STEP; batch += 1) {
         const rows = await this.runner.withoutTenant((tx) => this.retention.purgeBatch(tx, step, RETENTION_BATCH_SIZE), { timeoutMs: RETENTION_BATCH_TIMEOUT_MS });
         deleted += rows;
-        if (rows < RETENTION_BATCH_SIZE || this.clock.now().getTime() - startedAt >= RETENTION_STEP_BUDGET_MS) break;
+        if (rows < RETENTION_BATCH_SIZE || signal.aborted || this.clock.now().getTime() - startedAt >= RETENTION_STEP_BUDGET_MS) break;
       }
       this.logger.info('retention.step_done', { event: 'retention.step_done', step, rows: deleted, ms: this.clock.now().getTime() - startedAt });
       return { deleted, failed: false };

@@ -92,8 +92,12 @@ describe('retention', () => {
            VALUES ($1, 'support.request', 'Ticket', $3, $2, ${createdAt}) RETURNING id`,
       grantId === undefined ? [tenant.tenantId, tenant.userId] : [tenant.tenantId, grantId, adminId],
     );
-  const insertPlatformAudit = (client: pg.PoolClient, createdAt: At) =>
-    insertReturningId(client, `INSERT INTO platform_audit_logs (actor_user_id, action, created_at) VALUES ($1, 'tenant.suspended', ${createdAt}) RETURNING id`, [adminId]);
+  /** The trigger dates every new row with now(): the owner backdates it afterwards, inside the test's transaction. */
+  const insertPlatformAudit = async (client: pg.PoolClient, createdAt: At) => {
+    const id = await insertReturningId(client, `INSERT INTO platform_audit_logs (actor_user_id, action) VALUES ($1, 'tenant.suspended') RETURNING id`, [adminId]);
+    await client.query(`UPDATE platform_audit_logs SET created_at = ${createdAt} WHERE id = $1`, [id]);
+    return id;
+  };
   const insertNotification = (client: pg.PoolClient, tenant: SeededTenant, createdAt: At, readAt: At | null) =>
     insertReturningId(
       client,
@@ -114,7 +118,7 @@ describe('retention', () => {
       table: 'outbox_events',
       window: '30 days',
       insert: (client, at) =>
-        insertReturningId(client, `INSERT INTO outbox_events (tenant_id, type, payload, status, created_at) VALUES ($1, 'ticket.created', '{}', 'FAILED', ${at}) RETURNING id`, [tenantA.tenantId]),
+        insertReturningId(client, `INSERT INTO outbox_events (tenant_id, type, payload, status, created_at, available_at) VALUES ($1, 'ticket.created', '{}', 'FAILED', ${at}, ${at}) RETURNING id`, [tenantA.tenantId]),
     },
     {
       fn: 'retention_purge_platform_outbox_events',
@@ -128,7 +132,7 @@ describe('retention', () => {
       table: 'platform_outbox_events',
       window: '30 days',
       insert: (client, at) =>
-        insertReturningId(client, `INSERT INTO platform_outbox_events (type, payload, status, created_at) VALUES ('email.password_reset', '{}', 'FAILED', ${at}) RETURNING id`),
+        insertReturningId(client, `INSERT INTO platform_outbox_events (type, payload, status, created_at, available_at) VALUES ('email.password_reset', '{}', 'FAILED', ${at}, ${at}) RETURNING id`),
     },
     { fn: 'retention_purge_notifications', table: 'notifications', window: '365 days', insert: (client, at) => insertNotification(client, tenantA, at, null) },
     { fn: 'retention_purge_notifications', table: 'notifications', window: '180 days', insert: (client, at) => insertNotification(client, tenantA, `${at} - interval '1 day'`, at) },
@@ -188,6 +192,39 @@ describe('retention', () => {
         await purge(client, fn);
         await asRole('owner');
         expect(await existing(client, table, [id])).toEqual([id]);
+      });
+    });
+
+    it.each([
+      ['outbox_events', 'retention_purge_outbox_events', `INSERT INTO outbox_events (tenant_id, type, payload, status, created_at, available_at) VALUES ($1, 'ticket.created', '{}', 'FAILED', now() - interval '35 days', now() - interval '1 day') RETURNING id`],
+      ['platform_outbox_events', 'retention_purge_platform_outbox_events', `INSERT INTO platform_outbox_events (type, payload, status, created_at, available_at) VALUES ('email.password_reset', '{}', 'FAILED', now() - interval '35 days', now() - interval '1 day') RETURNING id`],
+    ])('%s: a FAILED event retried from the console and failed again is kept 30 days from its last attempt', async (table, fn, sql) => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const id = await insertReturningId(client, sql, table === 'outbox_events' ? [tenantA.tenantId] : []);
+        await asRole('app_worker');
+        await purge(client, fn);
+        await asRole('owner');
+        expect(await existing(client, table, [id])).toEqual([id]);
+      });
+    });
+
+    it('platform outbox: the real retry, claim and final failure of a 35-day-old event keep it', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const id = await insertReturningId(
+          client,
+          `INSERT INTO platform_outbox_events (type, payload, status, created_at, available_at) VALUES ('email.password_reset', '{}', 'FAILED', now() - interval '35 days', now() - interval '35 days') RETURNING id`,
+        );
+        await asRole('app_platform');
+        expect((await client.query<{ ok: boolean }>('SELECT retry_failed_platform_outbox_event($1) AS ok', [id])).rows[0]!.ok).toBe(true);
+        // A moment later (available_at is now() rounded to milliseconds, which can be just ahead of now() in this transaction).
+        await asRole('owner');
+        await client.query(`UPDATE platform_outbox_events SET available_at = now() - interval '1 second' WHERE id = $1`, [id]);
+        await asRole('app_worker');
+        const claimed = (await client.query<{ id: string; claim_token: string }>('SELECT id, claim_token FROM claim_platform_outbox_events(1000)')).rows.find((row) => row.id === id)!;
+        await client.query(`SELECT fail_platform_outbox_event($1, $2, 'smtp down', NULL, 10)`, [id, claimed.claim_token]);
+        await purge(client, 'retention_purge_platform_outbox_events');
+        await asRole('owner');
+        expect(await existing(client, 'platform_outbox_events', [id])).toEqual([id]);
       });
     });
 
@@ -348,6 +385,35 @@ describe('retention', () => {
     });
   });
 
+  describe('support grants referenced by rows the purge cannot see', () => {
+    it('keeps an old grant that a young audit row still references, without failing, and deletes the other old grants', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const old = `now() - interval '3 years'`;
+        const referenced = await insertGrant(client, tenantA, old);
+        await insertAudit(client, tenantA, `now() - interval '1 year'`, referenced);
+        const free = [await insertGrant(client, tenantA, old), await insertGrant(client, tenantA, `${old} + interval '1 day'`)];
+        await asRole('app_worker');
+        expect(await purge(client, 'retention_purge_support_access_grants')).toBeGreaterThanOrEqual(2);
+        expect(await purge(client, 'retention_purge_support_access_grants')).toBe(0);
+        await asRole('owner');
+        expect(await existing(client, 'support_access_grants', [referenced, ...free])).toEqual([referenced]);
+      });
+    });
+
+    it('a batch limit counts deleted grants, not skipped ones', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const old = `now() - interval '3 years'`;
+        const referenced = await insertGrant(client, tenantA, `${old} - interval '1 day'`);
+        await insertAudit(client, tenantA, `now() - interval '1 year'`, referenced);
+        const free = await insertGrant(client, tenantA, old);
+        await asRole('app_worker');
+        expect(await purge(client, 'retention_purge_support_access_grants', 1)).toBe(1);
+        await asRole('owner');
+        expect(await existing(client, 'support_access_grants', [referenced, free])).toEqual([referenced]);
+      });
+    });
+  });
+
   describe('privileges', () => {
     it.each(PURGE_FUNCTIONS)('%s runs only for app_worker', async (fn) => {
       for (const pool of [db.runtime, db.platform]) {
@@ -362,7 +428,7 @@ describe('retention', () => {
     it('the run functions run only for app_worker', async () => {
       for (const pool of [db.runtime, db.platform]) {
         expect(await sqlStateOf(() => withoutContext(pool, (client) => client.query('SELECT retention_start_run()')))).toBe(SqlState.insufficientPrivilege);
-        expect(await sqlStateOf(() => withoutContext(pool, (client) => client.query(`SELECT retention_finish_run($1, '{}', '{}', 0)`, [randomUUID()])))).toBe(
+        expect(await sqlStateOf(() => withoutContext(pool, (client) => client.query(`SELECT retention_finish_run($1, '{}', '{}', 0, false)`, [randomUUID()])))).toBe(
           SqlState.insufficientPrivilege,
         );
       }
@@ -378,48 +444,82 @@ describe('retention', () => {
 
   describe('runs', () => {
     const INVALID_PARAMETER = '22023';
-    const startRun = (client: pg.PoolClient) => client.query<{ id: string | null }>('SELECT retention_start_run() AS id').then((result) => result.rows[0]!.id);
-    const finishRun = (client: pg.PoolClient, runId: string, deleted: unknown, failed: string[] = [], durationMs = 10) =>
-      client.query('SELECT retention_finish_run($1, $2::jsonb, $3::text[], $4)', [runId, JSON.stringify(deleted), failed, durationMs]);
+    const startRun = (client: pg.PoolClient) =>
+      client
+        .query<{ out_run_id: string | null; out_blocking_started_at: Date | null }>('SELECT * FROM retention_start_run()')
+        .then((result) => result.rows[0]!);
+    const finishRun = (client: pg.PoolClient, runId: string, deleted: unknown, failed: string[] = [], durationMs = 10, interrupted: boolean | null = false) =>
+      client.query('SELECT retention_finish_run($1, $2::jsonb, $3::text[], $4, $5)', [runId, JSON.stringify(deleted), failed, durationMs, interrupted]);
+    const runRows = (client: pg.PoolClient, runId: string) =>
+      client
+        .query(`SELECT actor_user_id, action, data FROM platform_audit_logs WHERE id = $1 OR (action = 'retention.run_finished' AND data ->> 'runId' = $1::text) ORDER BY action`, [runId])
+        .then((result) => result.rows);
 
-    it('starts one run per 20 hours and records its counts without a human actor', async () => {
+    it('starts one run per 20 hours, says which run blocks the next one, and records the counts without a human actor', async () => {
       await inRolledBackTransaction(async (client, asRole) => {
-        await client.query(`DELETE FROM platform_audit_logs WHERE action LIKE 'retention.%'`);
         await asRole('app_worker');
-        const runId = (await startRun(client))!;
+        const runId = (await startRun(client)).out_run_id!;
         expect(runId).toEqual(expect.any(String));
-        expect(await startRun(client)).toBeNull();
-        await finishRun(client, runId, { audit_logs: 3, notifications: 0 }, ['user_tokens'], 1234);
+        const blocked = await startRun(client);
+        expect(blocked).toEqual({ out_run_id: null, out_blocking_started_at: expect.any(Date) });
+        await finishRun(client, runId, { audit_logs: 3, notifications: 0 }, ['user_tokens'], 1234, true);
         await asRole('owner');
-        const { rows } = await client.query(`SELECT actor_user_id, action, data FROM platform_audit_logs WHERE action LIKE 'retention.%' ORDER BY action`);
-        expect(rows).toEqual([
-          { actor_user_id: null, action: 'retention.run_finished', data: { runId, deleted: { audit_logs: 3, notifications: 0 }, failed: ['user_tokens'], durationMs: 1234 } },
+        expect(await runRows(client, runId)).toEqual([
+          { actor_user_id: null, action: 'retention.run_finished', data: { runId, deleted: { audit_logs: 3, notifications: 0 }, failed: ['user_tokens'], durationMs: 1234, interrupted: true } },
           { actor_user_id: null, action: 'retention.run_started', data: {} },
         ]);
+        const { rows } = await client.query<{ created_at: Date }>('SELECT created_at FROM platform_audit_logs WHERE id = $1', [runId]);
+        expect(blocked.out_blocking_started_at).toEqual(rows[0]!.created_at);
         await client.query(`UPDATE platform_audit_logs SET created_at = now() - interval '20 hours 1 minute' WHERE id = $1`, [runId]);
         await asRole('app_worker');
-        expect(await startRun(client)).toEqual(expect.any(String));
+        expect((await startRun(client)).out_run_id).toEqual(expect.any(String));
+      });
+    });
+
+    it('a run_started row dated in the future does not switch retention off', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        await asRole('app_worker');
+        const runId = (await startRun(client)).out_run_id!;
+        await asRole('owner');
+        await client.query(`UPDATE platform_audit_logs SET created_at = now() + interval '10 years' WHERE id = $1`, [runId]);
+        await asRole('app_worker');
+        expect((await startRun(client)).out_run_id).toEqual(expect.any(String));
+      });
+    });
+
+    it('every platform trail row is dated by the database clock, whatever the writer sends', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        await asRole('app_platform');
+        const { rows } = await client.query<{ dated_now: boolean; inserted: number }>(
+          `WITH inserted AS (
+             INSERT INTO platform_audit_logs (actor_user_id, action, created_at)
+             VALUES ($1, 'tenant.suspended', now() - interval '6 years'), ($1, 'tenant.suspended', now() + interval '1 year')
+             RETURNING created_at)
+           SELECT bool_and(abs(extract(epoch FROM created_at - now())) < 0.001) AS dated_now, count(*)::int AS inserted FROM inserted`,
+          [adminId],
+        );
+        expect(rows[0]).toEqual({ dated_now: true, inserted: 2 });
       });
     });
 
     it('rejects a summary with anything but counts of known steps, an unknown run or a second finish', async () => {
       await inRolledBackTransaction(async (client, asRole) => {
-        await client.query(`DELETE FROM platform_audit_logs WHERE action LIKE 'retention.%'`);
         await asRole('app_worker');
-        const runId = (await startRun(client))!;
-        const attempts: Array<[string, unknown, string[], number]> = [
-          [randomUUID(), {}, [], 0],
-          [runId, { audit_logs: -1 }, [], 0],
-          [runId, { audit_logs: 1.5 }, [], 0],
-          [runId, { audit_logs: '3' }, [], 0],
-          [runId, { tickets: 3 }, [], 0],
-          [runId, [1], [], 0],
-          [runId, {}, ['tickets'], 0],
-          [runId, {}, [], -1],
+        const runId = (await startRun(client)).out_run_id!;
+        const attempts: Array<[string, unknown, string[], number, boolean | null]> = [
+          [randomUUID(), {}, [], 0, false],
+          [runId, { audit_logs: -1 }, [], 0, false],
+          [runId, { audit_logs: 1.5 }, [], 0, false],
+          [runId, { audit_logs: '3' }, [], 0, false],
+          [runId, { tickets: 3 }, [], 0, false],
+          [runId, [1], [], 0, false],
+          [runId, {}, ['tickets'], 0, false],
+          [runId, {}, [], -1, false],
+          [runId, {}, [], 0, null],
         ];
-        for (const [id, deleted, failed, ms] of attempts) {
+        for (const [id, deleted, failed, ms, interrupted] of attempts) {
           await client.query('SAVEPOINT attempt');
-          expect(await sqlStateOf(() => finishRun(client, id, deleted, failed, ms)), JSON.stringify(deleted)).toBe(INVALID_PARAMETER);
+          expect(await sqlStateOf(() => finishRun(client, id, deleted, failed, ms, interrupted)), JSON.stringify(deleted)).toBe(INVALID_PARAMETER);
           await client.query('ROLLBACK TO SAVEPOINT attempt');
         }
         await finishRun(client, runId, {});
@@ -428,12 +528,14 @@ describe('retention', () => {
     });
 
     it('two workers starting at the same moment get one run between them', async () => {
-      await db.owner.query(`DELETE FROM platform_audit_logs WHERE action LIKE 'retention.%'`);
+      // Committed rows (the only ones in this file): removed by id afterwards, nothing else is touched.
+      const claims = await Promise.all([1, 2].map(() => withoutContext(db.worker, (client) => startRun(client))));
+      const started = claims.map((claim) => claim.out_run_id).filter((id): id is string => id !== null);
       try {
-        const ids = await Promise.all([1, 2].map(() => withoutContext(db.worker, (client) => startRun(client))));
-        expect(ids.filter((id) => id !== null)).toHaveLength(1);
+        expect(started).toHaveLength(1);
+        expect(claims.filter((claim) => claim.out_run_id === null)[0]?.out_blocking_started_at).toEqual(expect.any(Date));
       } finally {
-        await db.owner.query(`DELETE FROM platform_audit_logs WHERE action LIKE 'retention.%'`);
+        await db.owner.query('DELETE FROM platform_audit_logs WHERE id = ANY($1::uuid[])', [started]);
       }
     });
 

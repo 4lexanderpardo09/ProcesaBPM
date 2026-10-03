@@ -22,4 +22,9 @@ export interface RetentionRunSummary {
   readonly deleted: Readonly<Partial<Record<RetentionStep, number>>>;
   readonly failed: readonly RetentionStep[];
   readonly durationMs: number;
+  /** A shutdown stopped the run before it went through every step; the rest waits for the next night. */
+  readonly interrupted: boolean;
 }
+
+/** What `retention_start_run` answered: this replica got tonight's run, or another one started it at `startedAt`. */
+export type RetentionRunClaim = { readonly kind: 'started'; readonly runId: string } | { readonly kind: 'skipped'; readonly blockingStartedAt: Date };

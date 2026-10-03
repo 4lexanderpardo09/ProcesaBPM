@@ -15,13 +15,17 @@ export function isWithinRetentionWindow(instant: Date): boolean {
   return hour >= RETENTION_WINDOW_START_HOUR_UTC && hour < RETENTION_WINDOW_END_HOUR_UTC;
 }
 
-/** Checks every hour whether tonight's retention run is due; a failing run is logged and the next check tries again. */
+/**
+ * Checks every hour whether tonight's retention run is due; a failing run is logged and the next check tries again.
+ * At shutdown the run in progress is told to stop after its current batch, so the worker leaves well within its grace period.
+ */
 @Injectable()
 export class RetentionScheduler implements OnApplicationBootstrap, BeforeApplicationShutdown {
   private firstCheck: NodeJS.Timeout | undefined;
   private timer: NodeJS.Timeout | undefined;
   private running: Promise<void> = Promise.resolve();
   private busy = false;
+  private readonly stopping = new AbortController();
 
   constructor(
     @Inject(RetentionJob) private readonly job: RetentionJob,
@@ -35,6 +39,7 @@ export class RetentionScheduler implements OnApplicationBootstrap, BeforeApplica
   }
 
   async beforeApplicationShutdown(): Promise<void> {
+    this.stopping.abort();
     clearTimeout(this.firstCheck);
     clearInterval(this.timer);
     this.firstCheck = undefined;
@@ -43,10 +48,10 @@ export class RetentionScheduler implements OnApplicationBootstrap, BeforeApplica
   }
 
   async tick(): Promise<void> {
-    if (!isWithinRetentionWindow(this.clock.now())) return;
+    if (this.stopping.signal.aborted || !isWithinRetentionWindow(this.clock.now())) return;
     this.busy = true;
     try {
-      await this.job.runOnce();
+      await this.job.runOnce(this.stopping.signal);
     } catch (error) {
       this.logger.error(error, 'RetentionScheduler');
     } finally {

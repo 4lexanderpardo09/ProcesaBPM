@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
-import type { RetentionRunSummary, RetentionStep } from '../domain/retention-step.js';
+import type { RetentionRunClaim, RetentionRunSummary, RetentionStep } from '../domain/retention-step.js';
 
 type DeletedRows = Array<{ deleted: number }>;
 
@@ -19,10 +19,13 @@ const PURGE_BATCH: Readonly<Record<RetentionStep, (tx: CrossTenantTransaction, l
 
 @Injectable()
 export class RetentionRepository {
-  /** Claims tonight's run for this replica; `null` when another one already started a run in the last 20 hours. */
-  async startRun(tx: CrossTenantTransaction): Promise<string | null> {
-    const [row] = await tx.$queryRaw<Array<{ run_id: string | null }>>`SELECT retention_start_run()::text AS run_id`;
-    return row?.run_id ?? null;
+  /** Claims tonight's run for this replica, unless another one already started a run in the last 20 hours. */
+  async startRun(tx: CrossTenantTransaction): Promise<RetentionRunClaim> {
+    const [row] = await tx.$queryRaw<Array<{ run_id: string | null; blocking_started_at: Date | null }>>`
+      SELECT out_run_id::text AS run_id, out_blocking_started_at AS blocking_started_at FROM retention_start_run()`;
+    if (row?.run_id) return { kind: 'started', runId: row.run_id };
+    if (row?.blocking_started_at) return { kind: 'skipped', blockingStartedAt: row.blocking_started_at };
+    throw new Error('retention_start_run returned neither a run nor the run that blocks it');
   }
 
   /** Deletes at most `limit` rows of the step's table that are past its window; returns how many it deleted. */
@@ -33,6 +36,6 @@ export class RetentionRepository {
 
   /** Writes the run's counts to the platform trail (`retention.run_finished`). */
   async finishRun(tx: CrossTenantTransaction, summary: RetentionRunSummary): Promise<void> {
-    await tx.$executeRaw`SELECT retention_finish_run(${summary.runId}::uuid, ${JSON.stringify(summary.deleted)}::jsonb, ${[...summary.failed]}::text[], ${summary.durationMs}::int)`;
+    await tx.$executeRaw`SELECT retention_finish_run(${summary.runId}::uuid, ${JSON.stringify(summary.deleted)}::jsonb, ${[...summary.failed]}::text[], ${summary.durationMs}::int, ${summary.interrupted}::boolean)`;
   }
 }

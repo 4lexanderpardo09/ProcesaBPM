@@ -3,10 +3,11 @@ import type { JsonLogger } from '../../../common/logging/json-logger.js';
 import type { Clock } from '../../../infrastructure/clock.js';
 import type { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import type { RetentionRepository } from '../data/retention.repository.js';
-import { RETENTION_STEPS, type RetentionRunSummary, type RetentionStep } from '../domain/retention-step.js';
+import { RETENTION_STEPS, type RetentionRunClaim, type RetentionRunSummary, type RetentionStep } from '../domain/retention-step.js';
 import { RETENTION_BATCH_SIZE, RETENTION_MAX_BATCHES_PER_STEP, RETENTION_STEP_BUDGET_MS, RetentionJob } from './retention.job.js';
 
 const RUN_ID = '0199a8f0-0000-7000-8000-000000000001';
+const BLOCKING_RUN_START = new Date('2026-10-03T06:05:00Z');
 
 /** A repository that hands out the given batch sizes per step (then 0), and can fail a step. */
 class FakeRetentionRepository {
@@ -20,8 +21,8 @@ class FakeRetentionRepository {
     private readonly onBatch: () => void = () => undefined,
   ) {}
 
-  startRun(): Promise<string | null> {
-    return Promise.resolve(this.runId);
+  startRun(): Promise<RetentionRunClaim> {
+    return Promise.resolve(this.runId === null ? { kind: 'skipped', blockingStartedAt: BLOCKING_RUN_START } : { kind: 'started', runId: this.runId });
   }
 
   purgeBatch(_tx: unknown, step: RetentionStep, limit: number): Promise<number> {
@@ -53,12 +54,38 @@ function setup(repository: FakeRetentionRepository, clock: { now: () => Date } =
 const stepsCalled = (repository: FakeRetentionRepository) => repository.calls.map((call) => call.step);
 
 describe('RetentionJob', () => {
-  it('does nothing when another replica already started tonight’s run', async () => {
+  it('does nothing when another replica already started tonight’s run, and says which run blocks it', async () => {
     const repository = new FakeRetentionRepository({}, {}, null);
-    const { job } = setup(repository);
+    const { job, logger } = setup(repository);
     expect(await job.runOnce()).toBeUndefined();
     expect(repository.calls).toEqual([]);
     expect(repository.finished).toBeUndefined();
+    expect(logger.info).toHaveBeenCalledWith('retention.run_skipped', { event: 'retention.run_skipped', blockingRunStartedAt: BLOCKING_RUN_START.toISOString() });
+  });
+
+  it('stops between batches when asked to (shutdown), records the run as interrupted and skips the remaining steps', async () => {
+    const stop = new AbortController();
+    const full = Array.from({ length: 10 }, () => RETENTION_BATCH_SIZE);
+    const repository = new FakeRetentionRepository({ notifications: full }, {}, RUN_ID, () => {
+      if (repository.calls.filter((call) => call.step === 'notifications').length === 2) stop.abort();
+    });
+    const { job } = setup(repository);
+
+    const summary = await job.runOnce(stop.signal);
+
+    expect(stepsCalled(repository)).toEqual(['outbox_events', 'platform_outbox_events', 'notifications', 'notifications']);
+    expect(summary).toMatchObject({ interrupted: true, deleted: { outbox_events: 0, platform_outbox_events: 0, notifications: 2 * RETENTION_BATCH_SIZE } });
+    expect(Object.keys(summary!.deleted)).toEqual(['outbox_events', 'platform_outbox_events', 'notifications']);
+    expect(repository.finished).toEqual(summary);
+  });
+
+  it('does not start a step once stopped, but still records the run', async () => {
+    const stop = new AbortController();
+    stop.abort();
+    const repository = new FakeRetentionRepository();
+    const { job } = setup(repository);
+    expect(await job.runOnce(stop.signal)).toMatchObject({ interrupted: true, deleted: {}, failed: [] });
+    expect(repository.calls).toEqual([]);
   });
 
   it('runs every step once, in order, when nothing is due, and records the run', async () => {
@@ -68,7 +95,7 @@ describe('RetentionJob', () => {
     expect(stepsCalled(repository)).toEqual([...RETENTION_STEPS]);
     expect(repository.calls.every((call) => call.limit === RETENTION_BATCH_SIZE)).toBe(true);
     expect(summary).toEqual(repository.finished);
-    expect(summary).toMatchObject({ runId: RUN_ID, failed: [], deleted: Object.fromEntries(RETENTION_STEPS.map((step) => [step, 0])) });
+    expect(summary).toMatchObject({ runId: RUN_ID, failed: [], interrupted: false, deleted: Object.fromEntries(RETENTION_STEPS.map((step) => [step, 0])) });
   });
 
   it('calls a step again while its batches come back full and stops at the first short one', async () => {
