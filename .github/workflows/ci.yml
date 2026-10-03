@@ -87,6 +87,21 @@ jobs:
           cache-from: type=gha,scope=images-migrate
           cache-to: type=gha,scope=images-migrate,mode=max
 
+      # The image deploy/verify.sh runs on the server: the unit tests of shared and the API inside a 2 GB container.
+      - name: Build the unit test image and check it holds the tests
+        run: |
+          docker build -f Dockerfile.test-unit -t procesabpm-test-unit:ci .
+          for package in apps/api packages/shared; do
+            docker run --rm --entrypoint sh procesabpm-test-unit:ci -c "test -f $package/vitest.config.ts && find $package/src -name '*.spec.ts' | grep -q ." \
+              || { echo "::error::the unit test image has no vitest config or no spec files in $package (is .dockerignore applied to it?)"; exit 1; }
+          done
+
+      - name: Run the unit tests in the image
+        run: docker run --rm --memory 2g --memory-swap 2g procesabpm-test-unit:ci
+
+      - name: Check the verification script
+        run: bash -n deploy/verify.sh
+
       - name: Smoke test
         run: scripts/smoke-images.sh
         env:

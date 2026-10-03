@@ -1,0 +1,15 @@
+# The unit test image needs the tests and the vitest configs, so it does not use .dockerignore (which excludes them).
+.git
+.github
+.claude
+**/node_modules
+**/dist
+**/coverage
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+docs
+docker-compose*.yml
+# The Prisma client is generated inside the build.
+packages/db/src/generated

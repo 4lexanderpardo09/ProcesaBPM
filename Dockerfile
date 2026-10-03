@@ -4,6 +4,7 @@
 #   docker build --target api     -t procesabpm-api .      the HTTP API
 #   docker build --target worker  -t procesabpm-worker .   the outbox worker and the schedulers
 #   docker build --target migrate -t procesabpm-migrate .  applies the migrations (and loads the global catalog)
+#   docker build -f Dockerfile.test-unit -t procesabpm-test-unit .  the unit tests (Dockerfile.test-unit, deploy/verify.sh); never deployed
 #
 # The Node image is pinned by version and digest: a tag can move, a digest cannot. Update both together.
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
