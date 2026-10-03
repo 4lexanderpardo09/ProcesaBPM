@@ -3,13 +3,13 @@ import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-set
 import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 import { type MailMessage, Mailer } from '../../../infrastructure/mail/mailer.js';
 import { WebLinks } from '../../../infrastructure/mail/links.js';
-import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema, PLATFORM_ADMIN_INVITATION_EVENT, platformAdminInvitationPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
+import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema, PLATFORM_ADMIN_INVITATION_EVENT, platformAdminInvitationPayloadSchema, TENANT_DELETION_REQUESTED_EVENT, tenantDeletionRequestedPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
 import { type ClaimedEvent, type ExternalEffectHandler, PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { WorkerTokenRepository } from '../data/worker-token.repository.js';
-import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS, renderInvitationEmail, renderPasswordResetEmail, renderPlatformAdminInvitationEmail, type RenderedMail } from '../domain/auth-email-templates.js';
+import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS, renderInvitationEmail, renderPasswordResetEmail, renderPlatformAdminInvitationEmail, renderTenantDeletionEmail, type RenderedMail } from '../domain/auth-email-templates.js';
 import { deriveEmailLinkToken } from '../domain/email-link-token.js';
 
 /** A reset request that waited longer than this in the queue is not mailed: the person asked again by now. */
@@ -122,5 +122,32 @@ export class PlatformAdminInvitationEmailHandler extends AccountEmailHandler<Res
     const recipient = await this.tokens.issuePasswordReset(tx, { eventId: event.id, userId: event.payload.userId, tokenHash: sha256Hex(token), ttlMinutes });
     if (recipient === undefined) return null;
     return this.message(event, recipient.email, renderPlatformAdminInvitationEmail({ firstName: recipient.firstName, url: this.links.resetPassword(token) }));
+  }
+}
+
+/** Tells the owner that the deletion of the organization was requested and when it becomes final. */
+@Injectable()
+export class TenantDeletionEmailHandler extends AccountEmailHandler<InvitationPayload> implements ExternalEffectHandler<InvitationPayload, MailMessage, void, CrossTenantTransaction>, OnModuleInit {
+  readonly type = TENANT_DELETION_REQUESTED_EVENT;
+  readonly scope = 'platform' as const;
+  readonly schema = tenantDeletionRequestedPayloadSchema;
+
+  constructor(
+    @Inject(WORKER_SETTINGS) settings: WorkerSettings,
+    @Inject(Mailer) mailer: Mailer,
+    @Inject(WorkerTokenRepository) private readonly tokens: WorkerTokenRepository,
+    @Inject(OutboxHandlerRegistry) private readonly registry: OutboxHandlerRegistry,
+  ) {
+    super(settings, mailer);
+  }
+
+  onModuleInit(): void {
+    this.registry.registerExternal(this);
+  }
+
+  async prepare(tx: CrossTenantTransaction, event: ClaimedEvent<InvitationPayload>): Promise<MailMessage | null> {
+    const notice = await this.tokens.tenantDeletionNotice(tx, event.payload.tenantId, event.payload.userId);
+    if (notice === undefined) return null;
+    return this.message(event, notice.email, renderTenantDeletionEmail(notice));
   }
 }

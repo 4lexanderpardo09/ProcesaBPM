@@ -23,6 +23,8 @@ export const auditLogEntrySchema = z.object({
   id: uuidSchema,
   at: z.string(),
   actor: z.object({ id: uuidSchema, name: z.string() }).nullable(),
+  /** Set when a platform administrator did it under a support grant (then `actor` is empty). */
+  supportGrantId: uuidSchema.nullable(),
   action: z.string(),
   subjectType: z.string(),
   subjectId: uuidSchema.nullable(),

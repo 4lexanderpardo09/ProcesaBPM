@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Public } from '../../../common/auth/public.decorator.js';
 import type { Principal } from '../../../common/auth/principal.js';
 import { AuthenticatedOnly, PlatformAdminOnly, RequireAnyPermission, RequirePermission } from '../../../common/auth/route-access.js';
+import type { SupportRequestRecorder } from '../../audit/application/support-request-recorder.js';
 import type { AbilityService } from '../application/ability.service.js';
 import { buildAbility, type RawPermissionRule } from '../domain/build-ability.js';
 import { SubjectRegistry } from '../domain/subject-registry.js';
@@ -41,7 +42,8 @@ class Routes {
 function setup(rules: RawPermissionRule[], requestPrincipal: Principal | null = principal) {
   const ability = buildAbility(rules, { userId: 'u1', membership: {} }, new SubjectRegistry()).ability;
   const forPrincipal = vi.fn().mockResolvedValue(ability);
-  const guard = new PermissionGuard({ forPrincipal } as unknown as AbilityService);
+  const record = vi.fn().mockResolvedValue(undefined);
+  const guard = new PermissionGuard({ forPrincipal } as unknown as AbilityService, { record } as unknown as SupportRequestRecorder);
   const request: AbilityRequest = { principal: requestPrincipal ?? undefined } as AbilityRequest;
   const call = (handler: keyof Routes) =>
     guard.canActivate({
@@ -49,7 +51,7 @@ function setup(rules: RawPermissionRule[], requestPrincipal: Principal | null = 
       getHandler: () => Routes.prototype[handler],
       switchToHttp: () => ({ getRequest: () => request }),
     } as unknown as ExecutionContext);
-  return { call, request, forPrincipal };
+  return { call, request, forPrincipal, record };
 }
 
 const rule = (action: string, subject: string): RawPermissionRule => ({ action, subject, conditions: null });
@@ -122,6 +124,25 @@ describe('PermissionGuard', () => {
     it('are refused (401) without a platform principal, even with a tenant principal and manage all', async () => {
       const { call } = setup([rule('manage', 'all')]);
       await expect(call('platform')).rejects.toBeInstanceOf(UnauthenticatedError);
+    });
+  });
+
+  describe('a support visit that is refused', () => {
+    const support: Principal = { ...principal, support: { grantId: 'g1' } };
+
+    it('is recorded as DENIED before the 403 goes out', async () => {
+      const { call, record, request } = setup([rule('read', 'Company')], support);
+      await expect(call('readTickets')).rejects.toBeInstanceOf(PermissionDeniedError);
+      expect(record).toHaveBeenCalledWith(request, { tenantId: 't1', userId: 'u1', grantId: 'g1' }, { outcome: 'DENIED', status: 403, code: 'PERMISSION_DENIED' });
+    });
+
+    it('is not recorded when it is allowed, nor for an ordinary member', async () => {
+      const allowed = setup([rule('read', 'Company')], support);
+      await expect(allowed.call('readCompany')).resolves.toBe(true);
+      expect(allowed.record).not.toHaveBeenCalled();
+      const member = setup([rule('read', 'Company')]);
+      await expect(member.call('readTickets')).rejects.toBeInstanceOf(PermissionDeniedError);
+      expect(member.record).not.toHaveBeenCalled();
     });
   });
 });

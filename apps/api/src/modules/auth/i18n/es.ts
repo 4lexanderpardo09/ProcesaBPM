@@ -19,6 +19,14 @@ export const authMailEs = {
     action: 'Elegir mi contraseña',
     ignore: 'Si no esperabas esta invitación, ignora este mensaje.',
   },
+  tenantDeletionRequested: {
+    subject: 'La eliminación de tu organización fue solicitada',
+    title: 'Eliminación de la organización',
+    greeting: (firstName: string) => `Hola ${firstName},`,
+    requested: (organization: string) => `Se solicitó la eliminación de la organización «${organization}». Desde ahora nadie puede ingresar a ella.`,
+    deadline: (date: string) => `Si no se cancela, sus datos y archivos se borrarán de forma definitiva el ${date}.`,
+    contact: 'Si necesitas una copia de tus datos o crees que fue un error, responde a este correo o escribe a soporte antes de esa fecha.',
+  },
   invitation: {
     subject: 'Te invitaron a ProcesaBPM',
     title: 'Te invitaron a ProcesaBPM',

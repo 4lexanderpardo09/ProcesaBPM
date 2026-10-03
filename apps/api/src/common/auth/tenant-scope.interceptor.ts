@@ -15,7 +15,7 @@ export class TenantScopeInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const principal = context.switchToHttp().getRequest<AuthenticatedRequest>().principal;
     if (principal === undefined) return next.handle();
-    const scope = { tenantId: principal.tenantId, userId: principal.userId };
+    const scope = { tenantId: principal.tenantId, userId: principal.userId, ...(principal.support ? { supportGrantId: principal.support.grantId } : {}) };
     return new Observable((subscriber) =>
       this.tenantContext.run(scope, () => next.handle().subscribe(subscriber)),
     );

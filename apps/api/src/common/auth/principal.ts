@@ -18,6 +18,11 @@ export interface Principal {
   /** Bumped by the database on any change of the role's permissions; the cache is keyed by it. */
   readonly permissionsVersion: number;
   readonly membership: { readonly departmentId: string | null; readonly siteId: string | null; readonly positionId: string | null };
+  /**
+   * Set only for a platform administrator reading the tenant under a support grant. Then `userId` is the administrator
+   * (not a member), `sessionId` is the support session, and the ability is the fixed read-only template.
+   */
+  readonly support?: { readonly grantId: string };
 }
 
 /** A platform administrator acting on tenants: no tenant, no CASL ability. */

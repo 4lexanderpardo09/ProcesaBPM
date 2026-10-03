@@ -34,3 +34,13 @@ export function renderPlatformAdminInvitationEmail(input: { firstName: string; u
     ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.invited, t.validity(PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS), t.ignore], action: { label: t.action, url: input.url }, footer: es.footerAutomatic }),
   };
 }
+
+/** No link and no button: the owner is told, and acts through support. */
+export function renderTenantDeletionEmail(input: { firstName: string; organization: string; purgeAfter: Date }): RenderedMail {
+  const t = es.tenantDeletionRequested;
+  const date = input.purgeAfter.toLocaleDateString('es-CO', { dateStyle: 'long', timeZone: 'America/Bogota' });
+  return {
+    subject: t.subject,
+    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.requested(input.organization), t.deadline(date), t.contact], footer: es.footerAutomatic }),
+  };
+}

@@ -140,4 +140,47 @@ describe('JwtTokenService', () => {
   it.each(['', 'not-a-jwt', 'a.b.c'])('rejects %j', async (token) => {
     await expect(setup().service.verifyAccessToken(token)).rejects.toBeInstanceOf(UnauthenticatedError);
   });
+
+  describe('support tokens', () => {
+    const support = { ...claims, grant: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae' };
+
+    it('carry the grant, last as long as asked and are verified on their own audience', async () => {
+      const { service } = setup();
+      const { token, expiresIn } = await service.issueSupportToken(support, 120);
+      expect(expiresIn).toBe(120);
+      const payload = decodeJwt(token);
+      expect(payload.aud).toBe('procesabpm:support');
+      expect(payload.exp! - payload.iat!).toBe(120);
+      expect(await service.verifySupportToken(token)).toEqual(support);
+    });
+
+    it('are never accepted as access or platform tokens, nor are those accepted as support tokens', async () => {
+      const { service } = setup();
+      const { token: supportToken } = await service.issueSupportToken(support, 120);
+      const { token: accessToken } = await service.issueAccessToken(claims);
+      const { token: platformToken } = await service.issuePlatformToken({ sub: claims.sub, sid: claims.sid });
+      await expect(service.verifyAccessToken(supportToken)).rejects.toBeInstanceOf(UnauthenticatedError);
+      await expect(service.verifyPlatformToken(supportToken)).rejects.toBeInstanceOf(UnauthenticatedError);
+      await expect(service.verifySupportToken(accessToken)).rejects.toBeInstanceOf(UnauthenticatedError);
+      await expect(service.verifySupportToken(platformToken)).rejects.toBeInstanceOf(UnauthenticatedError);
+    });
+
+    it('expire and reject another signature or a missing grant', async () => {
+      const { service, advance } = setup();
+      const { token } = await service.issueSupportToken(support, 60);
+      advance(70);
+      await expect(service.verifySupportToken(token)).rejects.toBeInstanceOf(UnauthenticatedError);
+      const other = setup('another-secret-with-at-least-32-bytes!!').service;
+      await expect(service.verifySupportToken((await other.issueSupportToken(support, 60)).token)).rejects.toBeInstanceOf(UnauthenticatedError);
+      const noGrant = await new SignJWT({ tid: claims.tid, sid: claims.sid })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setSubject(claims.sub)
+        .setIssuer('procesabpm')
+        .setAudience('procesabpm:support')
+        .setIssuedAt(Math.floor(new Date('2026-10-01T12:00:00Z').getTime() / 1000))
+        .setExpirationTime(Math.floor(new Date('2026-10-01T13:00:00Z').getTime() / 1000))
+        .sign(new TextEncoder().encode(SECRET));
+      await expect(setup().service.verifySupportToken(noGrant)).rejects.toBeInstanceOf(UnauthenticatedError);
+    });
+  });
 });

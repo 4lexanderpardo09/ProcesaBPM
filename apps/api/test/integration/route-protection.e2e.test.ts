@@ -73,6 +73,10 @@ const PLATFORM_ROUTES = [
   'POST /platform/operations/outbox-events/platform/:id/retry',
   'POST /platform/operations/outbox-events/tenants/:tenantId/:id/retry',
   'GET /platform/operations/metrics',
+  'POST /platform/tenants/:id/support-sessions',
+  'DELETE /platform/tenants/:id/support-sessions/:sessionId',
+  'POST /platform/tenants/:id/deletion',
+  'DELETE /platform/tenants/:id/deletion',
   'GET /platform/audit-logs',
   'GET /platform/plans',
   'PUT /platform/plans/:code',
@@ -82,7 +86,7 @@ const PLATFORM_ROUTES = [
 ];
 
 /** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */
-const AUDITED_SUBJECTS = new Set(['Membership', 'Role', 'Group', 'ApprovalGroup', 'Workflow', 'Setting']);
+const AUDITED_SUBJECTS = new Set(['Membership', 'Role', 'Group', 'ApprovalGroup', 'Workflow', 'Setting', 'SupportAccess']);
 
 /** Test routes that exist to prove the deny-by-default behaviour: they declare nothing on purpose. */
 const INTENTIONALLY_UNDECLARED = ['GET /test/undeclared'];

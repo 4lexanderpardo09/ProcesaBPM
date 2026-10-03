@@ -26,11 +26,14 @@ export const ERROR_CODES = {
   rateLimited: 'RATE_LIMITED',
   validationFailed: 'VALIDATION_FAILED',
   tenantSuspended: 'TENANT_SUSPENDED',
+  tenantPendingDeletion: 'TENANT_PENDING_DELETION',
   missingCatalogPermission: 'MISSING_CATALOG_PERMISSION',
   platformAccessDenied: 'PLATFORM_ACCESS_DENIED',
   tenantSlugTaken: 'TENANT_SLUG_TAKEN',
   tenantNotFound: 'TENANT_NOT_FOUND',
   lastPlatformAdmin: 'LAST_PLATFORM_ADMIN',
+  supportAccessNotGranted: 'SUPPORT_ACCESS_NOT_GRANTED',
+  supportAccessReadOnly: 'SUPPORT_ACCESS_READ_ONLY',
   notFound: 'NOT_FOUND',
   approverNotFound: 'APPROVER_NOT_FOUND',
   workflowNotPublishable: 'WORKFLOW_NOT_PUBLISHABLE',
@@ -262,6 +265,12 @@ export class ValidationFailedError extends DomainError {
   }
 }
 
+export class TenantPendingDeletionError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.tenantPendingDeletion, 'The organization is pending deletion');
+  }
+}
+
 export class TenantSuspendedError extends DomainError {
   constructor() {
     super(ERROR_CODES.tenantSuspended, 'The organization is suspended');
@@ -297,6 +306,19 @@ export class TenantNotFoundError extends DomainError {
 export class LastPlatformAdminError extends DomainError {
   constructor() {
     super(ERROR_CODES.lastPlatformAdmin, 'The last platform admin cannot be revoked');
+  }
+}
+
+export class SupportAccessNotGrantedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.supportAccessNotGranted, 'The tenant has not granted support access');
+  }
+}
+
+/** A support session only reads: any other method is refused. */
+export class SupportAccessReadOnlyError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.supportAccessReadOnly, 'Support access is read-only');
   }
 }
 

@@ -52,7 +52,7 @@ export const platformAdminSummarySchema = z.object({
 });
 export type PlatformAdminSummary = z.infer<typeof platformAdminSummarySchema>;
 
-const tenantStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'CANCELLED', 'DELETED']);
+const tenantStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'CANCELLED', 'DELETED', 'PENDING_DELETION', 'PURGED']);
 const reasonSchema = z.string().trim().min(3).max(500);
 /** Byte counts travel as decimal strings: they can exceed what a JSON number holds exactly. */
 const bytesSchema = z.string().regex(/^\d{1,18}$/, 'Use a whole number of bytes');
@@ -93,6 +93,8 @@ export interface TenantDetail extends TenantListItem {
   readonly ticketsLast30Days: number;
   readonly lastActivityAt: string | null;
   readonly suspension: { readonly reason: string; readonly at: string } | null;
+  /** Set while the deletion is pending (and on the tombstone). */
+  readonly deletion: { readonly requestedAt: string; readonly purgeAfter: string | null; readonly purgedAt: string | null } | null;
 }
 
 export const changeTenantPlanRequestSchema = z.object({ planCode: z.string().trim().min(1).max(64) });
@@ -236,4 +238,18 @@ export interface PlatformAuditEntryResponse {
   readonly data: unknown;
   readonly ipAddress: string | null;
   readonly createdAt: string;
+}
+
+export const requestTenantDeletionSchema = z.object({
+  /** The name of the organization, typed again: deleting is not something to do by accident. */
+  confirmName: z.string().trim().min(1).max(200),
+  reason: reasonSchema,
+});
+export type RequestTenantDeletion = z.infer<typeof requestTenantDeletionSchema>;
+
+export interface TenantDeletionResponse {
+  readonly tenantId: string;
+  readonly status: 'PENDING_DELETION' | 'SUSPENDED';
+  /** When the purge becomes possible; empty after the deletion was cancelled. */
+  readonly purgeAfter: string | null;
 }

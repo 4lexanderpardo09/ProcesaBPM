@@ -12,6 +12,9 @@ export interface TenantProfile {
   readonly countryCode: string;
   readonly createdAt: Date;
   readonly extraStorageBytes: bigint;
+  readonly deletionRequestedAt: Date | null;
+  readonly purgeAfter: Date | null;
+  readonly purgedAt: Date | null;
   readonly plan: { readonly code: string; readonly name: string; readonly storageBaseBytes: bigint; readonly storagePerUserBytes: bigint; readonly storageGracePercent: number };
 }
 
@@ -30,6 +33,9 @@ const PROFILE_SELECT = {
   countryCode: true,
   createdAt: true,
   extraStorageBytes: true,
+  deletionRequestedAt: true,
+  purgeAfter: true,
+  purgedAt: true,
   plan: { select: { code: true, name: true, storageBaseBytes: true, storagePerUserBytes: true, storageGracePercent: true } },
 } as const;
 
@@ -128,12 +134,12 @@ export class TenantAdminRepository {
     return plan ?? undefined;
   }
 
-  async lockProfile(tx: PlatformTransaction, tenantId: string): Promise<{ planCode: string; extraStorageBytes: bigint } | undefined> {
-    const [row] = await tx.$queryRaw<Array<{ plan_code: string; extra_storage_bytes: bigint }>>`
-      SELECT p.code AS plan_code, t.extra_storage_bytes
+  async lockProfile(tx: PlatformTransaction, tenantId: string): Promise<{ planCode: string; extraStorageBytes: bigint; status: string } | undefined> {
+    const [row] = await tx.$queryRaw<Array<{ plan_code: string; extra_storage_bytes: bigint; status: string }>>`
+      SELECT p.code AS plan_code, t.extra_storage_bytes, t.status::text AS status
       FROM tenants t JOIN plans p ON p.id = t.plan_id
       WHERE t.id = ${tenantId}::uuid FOR UPDATE OF t`;
-    return row ? { planCode: row.plan_code, extraStorageBytes: row.extra_storage_bytes } : undefined;
+    return row ? { planCode: row.plan_code, extraStorageBytes: row.extra_storage_bytes, status: row.status } : undefined;
   }
 
   async updatePlan(tx: PlatformTransaction, tenantId: string, planId: string): Promise<void> {

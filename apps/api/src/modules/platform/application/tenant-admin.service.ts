@@ -46,6 +46,7 @@ export class TenantAdminService {
     return this.runner.run(async (tx) => {
       const current = await this.tenants.lockProfile(tx, tenantId);
       if (current === undefined) throw new TenantNotFoundError();
+      if (current.status === 'PURGED') throw new InvalidStateError('A purged tenant cannot change');
       const plan = await this.tenants.findActivePlan(tx, request.planCode);
       if (plan === undefined) throw new InvalidReferenceError(`Unknown or inactive plan ${request.planCode}`);
       if (plan.code !== current.planCode) {
@@ -62,6 +63,7 @@ export class TenantAdminService {
     return this.runner.run(async (tx) => {
       const current = await this.tenants.lockProfile(tx, tenantId);
       if (current === undefined) throw new TenantNotFoundError();
+      if (current.status === 'PURGED') throw new InvalidStateError('A purged tenant cannot change');
       const next = BigInt(request.extraStorageBytes);
       if (next !== current.extraStorageBytes) {
         await this.tenants.updateExtraStorage(tx, tenantId, next);
@@ -126,6 +128,7 @@ export class TenantAdminService {
       ticketsLast30Days: tickets,
       lastActivityAt: activity?.toISOString() ?? null,
       suspension: suspension ? { reason: suspension.reason, at: suspension.at.toISOString() } : null,
+      deletion: profile.deletionRequestedAt === null ? null : { requestedAt: profile.deletionRequestedAt.toISOString(), purgeAfter: profile.purgeAfter?.toISOString() ?? null, purgedAt: profile.purgedAt?.toISOString() ?? null },
     };
   }
 }

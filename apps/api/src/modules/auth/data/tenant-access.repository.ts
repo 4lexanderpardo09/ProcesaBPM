@@ -16,7 +16,7 @@ export interface TenantAccess {
     | undefined;
   readonly userStatus: 'ACTIVE' | 'LOCKED' | 'DISABLED' | undefined;
   readonly membershipStatus: 'INVITED' | 'ACTIVE' | 'INACTIVE' | undefined;
-  readonly tenantStatus: 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'DELETED' | undefined;
+  readonly tenantStatus: 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'DELETED' | 'PENDING_DELETION' | 'PURGED' | undefined;
   /** The organization requires two-step verification from its members. */
   readonly tenantMfaRequired: boolean;
 }

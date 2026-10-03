@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { StorageUnavailableError } from '@procesabpm/shared';
 import { contentDisposition } from './content-disposition.js';
@@ -96,6 +96,15 @@ export class S3ObjectStorage extends ObjectStorage {
   async delete(key: string): Promise<void> {
     try {
       await this.client.send(new DeleteObjectCommand({ Bucket: this.settings.bucket, Key: key }));
+    } catch (error) {
+      throw new StorageUnavailableError({ cause: error });
+    }
+  }
+
+  async listKeys(prefix: string, limit: number): Promise<string[]> {
+    try {
+      const result = await this.client.send(new ListObjectsV2Command({ Bucket: this.settings.bucket, Prefix: prefix, MaxKeys: Math.min(limit, DELETE_BATCH) }));
+      return (result.Contents ?? []).flatMap((entry) => (entry.Key === undefined ? [] : [entry.Key]));
     } catch (error) {
       throw new StorageUnavailableError({ cause: error });
     }

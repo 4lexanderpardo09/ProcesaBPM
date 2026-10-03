@@ -4,7 +4,10 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 
 export interface NewAuditRow {
   readonly tenantId: string;
-  readonly actorId: string;
+  /** Empty for a support visit: a platform administrator is not a member. */
+  readonly actorId: string | null;
+  readonly supportActorId?: string | null;
+  readonly supportGrantId?: string | null;
   readonly action: string;
   readonly entityType: string;
   readonly entityId: string | null;
@@ -32,6 +35,8 @@ export interface AuditLogRow {
   readonly id: string;
   readonly at: Date;
   readonly actor: { readonly id: string; readonly name: string } | null;
+  /** The grant under which a platform administrator did it, when it was support. */
+  readonly supportGrantId: string | null;
   readonly action: string;
   readonly subjectType: string;
   readonly subjectId: string | null;
@@ -52,6 +57,8 @@ export class AuditLogRepository {
       data: {
         tenantId: row.tenantId,
         actorId: row.actorId,
+        supportActorId: row.supportActorId ?? null,
+        supportGrantId: row.supportGrantId ?? null,
         action: row.action,
         entityType: row.entityType,
         entityId: row.entityId,
@@ -85,6 +92,7 @@ export class AuditLogRepository {
       id: row.id,
       at: row.createdAt,
       actor: row.actor === null ? null : { id: row.actor.user.id, name: `${row.actor.user.firstName} ${row.actor.user.lastName}` },
+      supportGrantId: row.supportGrantId,
       action: row.action,
       subjectType: row.entityType,
       subjectId: row.entityId,

@@ -5,6 +5,8 @@ import { InvalidTenantContextError, isUuid, MissingTenantContextError } from '@p
 export interface TenantScope {
   readonly tenantId: string;
   readonly userId: string;
+  /** Set when `userId` is a platform administrator acting under a support grant: the audit trail records it. */
+  readonly supportGrantId?: string;
 }
 
 /** Who is acting on which tenant, for the duration of one request or job. */
@@ -14,7 +16,7 @@ export class TenantContext {
 
   /** Throws `InvalidTenantContextError` unless both ids are UUIDs, so garbage never reaches the database. */
   run<T>(scope: TenantScope, work: () => T): T {
-    if (!isUuid(scope.tenantId) || !isUuid(scope.userId)) {
+    if (!isUuid(scope.tenantId) || !isUuid(scope.userId) || (scope.supportGrantId !== undefined && !isUuid(scope.supportGrantId))) {
       throw new InvalidTenantContextError();
     }
     return this.storage.run(scope, work);
