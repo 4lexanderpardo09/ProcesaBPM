@@ -2553,6 +2553,8 @@ model OutboxEvent {
   processedAt DateTime?    @map("processed_at") @db.Timestamptz(3)
   lastError   String?      @map("last_error")
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Fence of the current claim: issued by claim_outbox_events, present only while PROCESSING (CHECK).
+  claimToken  String?      @map("claim_token") @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -2582,6 +2584,8 @@ model PlatformOutboxEvent {
   processedAt DateTime?    @map("processed_at") @db.Timestamptz(3)
   lastError   String?      @map("last_error")
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Fence of the current claim: issued by claim_platform_outbox_events, present only while PROCESSING (CHECK).
+  claimToken  String?      @map("claim_token") @db.Uuid
 
   eventType PlatformEventType @relation(fields: [type], references: [type], onDelete: NoAction, onUpdate: NoAction)
 
