@@ -30,11 +30,14 @@ export class AuditTrail {
   ) {}
 
   async record(tx: TenantTransaction, entry: AuditEntry): Promise<void> {
-    const { tenantId, userId } = this.tenantContext.require();
+    const { tenantId, userId, supportGrantId } = this.tenantContext.require();
     const request = this.requestContext.current();
     await this.logs.insert(tx, {
       tenantId,
-      actorId: userId,
+      // Under a support grant the actor is the platform administrator, who is not a member: the row says so explicitly.
+      actorId: supportGrantId === undefined ? userId : null,
+      supportActorId: supportGrantId === undefined ? null : userId,
+      supportGrantId: supportGrantId ?? null,
       action: entry.action,
       entityType: entry.subjectType,
       entityId: entry.subjectId,

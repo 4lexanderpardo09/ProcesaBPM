@@ -6,6 +6,7 @@ import { TenantTransactionRunner } from '../../../infrastructure/database/tenant
 import { RolePermissionRepository } from '../data/role-permission.repository.js';
 import { type AppAbility, buildAbility, type RawPermissionRule } from '../domain/build-ability.js';
 import { fixedRules } from '../domain/full-access.js';
+import { SUPPORT_READ_ONLY_RULES } from '../domain/support-rules.js';
 import { SubjectRegistry } from '../domain/subject-registry.js';
 import { ABILITY_CACHE, type AbilityCache } from './ability-cache.js';
 
@@ -40,6 +41,8 @@ export class AbilityService {
   }
 
   private async rulesOf(principal: Principal): Promise<readonly RawPermissionRule[]> {
+    // Support is not a member: no role, no ownership, no stored rules. Only the fixed read-only template.
+    if (principal.support !== undefined) return SUPPORT_READ_ONLY_RULES;
     const fixed = fixedRules(principal);
     if (fixed !== undefined) return fixed;
 

@@ -1,11 +1,12 @@
 import type { ExecutionContext } from '@nestjs/common';
-import { PermissionDeniedError, UnauthenticatedError } from '@procesabpm/shared';
+import { PermissionDeniedError, SupportAccessReadOnlyError, UnauthenticatedError } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthenticatedRequest } from '../../../common/auth/principal.js';
 import { Public } from '../../../common/auth/public.decorator.js';
 import { PlatformAdminOnly, RequirePermission } from '../../../common/auth/route-access.js';
 import type { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import type { PlatformSessionService } from '../application/platform-session.service.js';
+import type { SupportSessionVerifier } from '../application/support-session-verifier.js';
 import type { TenantAccessService } from '../application/tenant-access.service.js';
 import { AccessTokenGuard } from './access-token.guard.js';
 
@@ -32,18 +33,23 @@ class PublicController {
   protectedByMethod(): void {}
 }
 
-function setup(authorization?: string) {
+const supportClaims = { sub: claims.sub, tid: claims.tid, sid: claims.sid, grant: '018f3c1e-7b2a-7c3d-9e4f-0123456789af' };
+
+function setup(authorization?: string, options: { support?: boolean; method?: string } = {}) {
+  const verifySupportToken = options.support ? vi.fn().mockResolvedValue(supportClaims) : vi.fn().mockRejectedValue(new UnauthenticatedError());
+  const verifySupport = vi.fn().mockResolvedValue(undefined);
   const verifyAccessToken = vi.fn().mockResolvedValue(claims);
   const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null, positionId: null };
   const verify = vi.fn().mockResolvedValue(access);
   const verifyPlatformToken = vi.fn().mockResolvedValue({ sub: claims.sub, sid: claims.sid });
   const verifyPlatformSession = vi.fn().mockResolvedValue(undefined);
   const guard = new AccessTokenGuard(
-    { verifyAccessToken, verifyPlatformToken } as unknown as JwtTokenService,
+    { verifyAccessToken, verifyPlatformToken, verifySupportToken } as unknown as JwtTokenService,
     { verify } as unknown as TenantAccessService,
     { verify: verifyPlatformSession } as unknown as PlatformSessionService,
+    { verify: verifySupport } as unknown as SupportSessionVerifier,
   );
-  const request = { header: (name: string) => (name === 'authorization' ? authorization : undefined) } as AuthenticatedRequest;
+  const request = { method: options.method ?? 'GET', header: (name: string) => (name === 'authorization' ? authorization : undefined) } as AuthenticatedRequest;
   const context = (handler: keyof Routes) =>
     ({
       getType: () => 'http',
@@ -58,7 +64,7 @@ function setup(authorization?: string) {
       getClass: () => PublicController,
       switchToHttp: () => ({ getRequest: () => request }),
     }) as unknown as ExecutionContext;
-  return { guard, request, context, conflictContext, verifyAccessToken, verify, verifyPlatformToken, verifyPlatformSession };
+  return { guard, request, context, conflictContext, verifyAccessToken, verify, verifyPlatformToken, verifyPlatformSession, verifySupport };
 }
 
 describe('AccessTokenGuard', () => {
@@ -157,6 +163,36 @@ describe('AccessTokenGuard', () => {
       const { guard, context, verifyAccessToken } = setup('Bearer p.q.r');
       verifyAccessToken.mockRejectedValue(new UnauthenticatedError());
       await expect(guard.canActivate(context('protectedRoute'))).rejects.toBeInstanceOf(UnauthenticatedError);
+    });
+  });
+
+  describe('support tokens', () => {
+    it('open a read-only principal that is not a member and carries the grant', async () => {
+      const { guard, context, request, verify, verifySupport, verifyAccessToken } = setup('Bearer support', { support: true });
+      await expect(guard.canActivate(context('protectedRoute'))).resolves.toBe(true);
+      expect(request.principal).toMatchObject({ userId: supportClaims.sub, tenantId: supportClaims.tid, sessionId: supportClaims.sid, isOwner: false, roleIsAdmin: false, support: { grantId: supportClaims.grant } });
+      expect(verifySupport).toHaveBeenCalledWith(supportClaims);
+      expect(verify).not.toHaveBeenCalled();
+      expect(verifyAccessToken).not.toHaveBeenCalled();
+    });
+
+    it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('refuse %s before looking at the database', async (method) => {
+      const { guard, context, verifySupport } = setup('Bearer support', { support: true, method });
+      await expect(guard.canActivate(context('protectedRoute'))).rejects.toBeInstanceOf(SupportAccessReadOnlyError);
+      expect(verifySupport).not.toHaveBeenCalled();
+    });
+
+    it('answer 401 when the visit is no longer valid', async () => {
+      const { guard, context, request, verifySupport } = setup('Bearer support', { support: true });
+      verifySupport.mockRejectedValue(new UnauthenticatedError());
+      await expect(guard.canActivate(context('protectedRoute'))).rejects.toBeInstanceOf(UnauthenticatedError);
+      expect(request.principal).toBeUndefined();
+    });
+
+    it('never open a platform route: they are a tenant-side identity (403)', async () => {
+      const { guard, context, verifyPlatformToken } = setup('Bearer support', { support: true });
+      verifyPlatformToken.mockRejectedValue(new UnauthenticatedError());
+      await expect(guard.canActivate(context('platformRoute'))).rejects.toBeInstanceOf(PermissionDeniedError);
     });
   });
 });

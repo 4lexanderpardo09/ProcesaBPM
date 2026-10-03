@@ -24,6 +24,8 @@ import { PasswordResetService } from './application/password-reset.service.js';
 import { PlatformSessionService } from './application/platform-session.service.js';
 import { ProfileService } from './application/profile.service.js';
 import { SessionService } from './application/session.service.js';
+import { SupportSessionVerifier } from './application/support-session-verifier.js';
+import { SupportSessionRepository } from './data/support-session.repository.js';
 import { TenantAccessService } from './application/tenant-access.service.js';
 import { TenantSelectionService } from './application/tenant-selection.service.js';
 import { CredentialsRepository } from './data/credentials.repository.js';
@@ -77,6 +79,8 @@ import { AuthController } from './http/auth.controller.js';
     TenantSecurityRepository,
     CurrentPasswordVerifier,
     MfaRepository,
+    SupportSessionRepository,
+    SupportSessionVerifier,
     AccessTokenGuard,
     { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],

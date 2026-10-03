@@ -5,6 +5,8 @@ import {
   accessTokenClaimsSchema,
   type PlatformTokenClaims,
   platformTokenClaimsSchema,
+  type SupportTokenClaims,
+  supportTokenClaimsSchema,
   UnauthenticatedError,
   uuidSchema,
 } from '@procesabpm/shared';
@@ -18,6 +20,8 @@ export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const SELECTION_TOKEN_TTL_SECONDS = 2 * 60;
 /** Time to type the code from the authenticator app (or to scan the QR code and confirm the first one). */
 export const MFA_CHALLENGE_TTL_SECONDS = 5 * 60;
+/** A support token lives at most this long, and never past the grant it was opened under. */
+export const SUPPORT_TOKEN_MAX_TTL_SECONDS = 15 * 60;
 /** A platform session is short and never renewed: after it, the administrator logs in again. */
 export const PLATFORM_TOKEN_TTL_SECONDS = 15 * 60;
 
@@ -25,6 +29,7 @@ const ISSUER = 'procesabpm';
 const ACCESS_AUDIENCE = 'procesabpm:api';
 const SELECTION_AUDIENCE = 'procesabpm:tenant-selection';
 const PLATFORM_AUDIENCE = 'procesabpm:platform';
+const SUPPORT_AUDIENCE = 'procesabpm:support';
 const MFA_CHALLENGE_AUDIENCE = 'procesabpm:mfa-challenge';
 const ALGORITHM = 'HS256';
 const CLOCK_TOLERANCE_SECONDS = 5;
@@ -81,6 +86,11 @@ export class JwtTokenService {
     return this.sign({ sid: claims.sid }, claims.sub, PLATFORM_AUDIENCE, PLATFORM_TOKEN_TTL_SECONDS);
   }
 
+  /** `ttlSeconds` is chosen by the caller (the earlier of the maximum and the grant's end). */
+  issueSupportToken(claims: SupportTokenClaims, ttlSeconds: number): Promise<IssuedToken> {
+    return this.sign({ tid: claims.tid, sid: claims.sid, grant: claims.grant }, claims.sub, SUPPORT_AUDIENCE, ttlSeconds);
+  }
+
   /** `mfa`: the user passed the second factor in this sign-in. A session opened with it is marked as verified. */
   issueSelectionToken(userId: string, options: { mfa: boolean }): Promise<IssuedToken> {
     return this.sign({ mfa: options.mfa }, userId, SELECTION_AUDIENCE, SELECTION_TOKEN_TTL_SECONDS, randomUUID());
@@ -94,6 +104,13 @@ export class JwtTokenService {
   async verifyAccessToken(token: string): Promise<AccessTokenClaims> {
     const payload = await this.verify(token, ACCESS_AUDIENCE);
     const claims = accessTokenClaimsSchema.safeParse(payload);
+    if (!claims.success) throw new UnauthenticatedError();
+    return claims.data;
+  }
+
+  /** Its own audience: a support token is never accepted as an access or platform token, nor the other way round. */
+  async verifySupportToken(token: string): Promise<SupportTokenClaims> {
+    const claims = supportTokenClaimsSchema.safeParse(await this.verify(token, SUPPORT_AUDIENCE));
     if (!claims.success) throw new UnauthenticatedError();
     return claims.data;
   }

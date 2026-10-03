@@ -1,9 +1,10 @@
 import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@nestjs/common';
-import { PermissionDeniedError, UnauthenticatedError } from '@procesabpm/shared';
+import { PermissionDeniedError, SupportAccessReadOnlyError, type SupportTokenClaims, UnauthenticatedError } from '@procesabpm/shared';
 import type { AuthenticatedRequest } from '../../../common/auth/principal.js';
 import { accessMetadataOf, classifyAccess } from '../../../common/auth/route-metadata.js';
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import { PlatformSessionService } from '../application/platform-session.service.js';
+import { SupportSessionVerifier } from '../application/support-session-verifier.js';
 import { TenantAccessService } from '../application/tenant-access.service.js';
 import { bearerToken } from '../../../common/auth/bearer-token.js';
 
@@ -19,6 +20,7 @@ export class AccessTokenGuard implements CanActivate {
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
     @Inject(TenantAccessService) private readonly tenantAccess: TenantAccessService,
     @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
+    @Inject(SupportSessionVerifier) private readonly supportSessions: SupportSessionVerifier,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -36,6 +38,12 @@ export class AccessTokenGuard implements CanActivate {
       return true;
     }
 
+    const support = await this.supportClaims(token);
+    if (support !== undefined) {
+      await this.authenticateSupport(request, support);
+      return true;
+    }
+
     const claims = await this.tokens.verifyAccessToken(token);
     const access = await this.tenantAccess.verify({ userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid });
     request.principal = {
@@ -50,6 +58,36 @@ export class AccessTokenGuard implements CanActivate {
       membership: { departmentId: access.departmentId, siteId: access.siteId, positionId: access.positionId },
     };
     return true;
+  }
+
+  /** `undefined` when the token is not a support token (it is then verified as an ordinary access token). */
+  private async supportClaims(token: string): Promise<SupportTokenClaims | undefined> {
+    try {
+      return await this.tokens.verifySupportToken(token);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * A platform administrator reading one tenant under a grant. Read-only: anything but GET and HEAD is refused before
+   * any other check. The principal is not a member: its ability is the fixed read-only template (see `AbilityService`).
+   */
+  private async authenticateSupport(request: AuthenticatedRequest, claims: SupportTokenClaims): Promise<void> {
+    if (request.method !== 'GET' && request.method !== 'HEAD') throw new SupportAccessReadOnlyError();
+    await this.supportSessions.verify(claims);
+    request.principal = {
+      userId: claims.sub,
+      tenantId: claims.tid,
+      sessionId: claims.sid,
+      roleId: '',
+      roleActive: true,
+      roleIsAdmin: false,
+      isOwner: false,
+      permissionsVersion: 0,
+      membership: { departmentId: null, siteId: null, positionId: null },
+      support: { grantId: claims.grant },
+    };
   }
 
   /**
@@ -72,12 +110,13 @@ export class AccessTokenGuard implements CanActivate {
     }
   }
 
+  /** A member's or a support token: valid identities, but not platform ones. */
   private async isTenantToken(token: string): Promise<boolean> {
     try {
       await this.tokens.verifyAccessToken(token);
       return true;
     } catch {
-      return false;
+      return (await this.supportClaims(token)) !== undefined;
     }
   }
 }
