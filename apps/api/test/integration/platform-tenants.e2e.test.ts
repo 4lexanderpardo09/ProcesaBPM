@@ -46,10 +46,11 @@ describe('platform tenant sign-up', () => {
     (await db.owner.query<{ n: number }>(`SELECT count(*)::int AS n FROM ${table} WHERE tenant_id = $1`, [tenantId])).rows[0]!.n;
 
   let mail: MailWorker;
-  /** Lets the worker deliver and returns the token of the newest link mailed to the address. */
+  /** Lets the worker deliver and returns the token of the newest message with a link mailed to the address. */
   const linkTokenFor = async (email: string): Promise<string> => {
     await mail.deliver({ retries: true });
-    return tokenOf(mail.lastTo(email)!);
+    const withLink = mail.mailer.to(email).filter((message) => /#token=/.test(message.text));
+    return tokenOf(withLink.at(-1)!);
   };
 
   const invitationEvent = async (tenantId: string) =>

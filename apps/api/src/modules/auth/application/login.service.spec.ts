@@ -1,11 +1,15 @@
 import { InvalidCredentialsError } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
+import { BackgroundTasks } from '../../../common/background/background-tasks.js';
+import type { JsonLogger } from '../../../common/logging/json-logger.js';
 import type { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import type { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import type { SelectionIssuer } from './selection-issuer.js';
 import type { PasswordHasher } from '../../../infrastructure/security/password-hasher.js';
 import type { CredentialsRepository } from '../data/credentials.repository.js';
+import type { AttemptClaim } from '../domain/attempt-claim.js';
 import type { LoginCandidate } from '../domain/login-candidate.js';
+import type { SecurityNotifier } from './security-notifier.js';
 import { LoginService } from './login.service.js';
 
 const active: LoginCandidate = {
@@ -16,7 +20,8 @@ const active: LoginCandidate = {
 };
 const SELECTION = { step: 'SELECT_ORGANIZATION', organizations: [], selectionToken: 'selection', expiresIn: 120, platformAdmin: false } as const;
 
-function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, claimed = true) {
+function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, claimed = true, locking = false) {
+  const claim: AttemptClaim = { claimed, locking: claimed && locking };
   const tx = {};
   const calls: string[] = [];
   const runner = {
@@ -27,7 +32,7 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
     findLoginCandidate: vi.fn().mockResolvedValue(candidate),
     claimLoginAttempt: vi.fn(() => {
       calls.push('claim');
-      return Promise.resolve(claimed);
+      return Promise.resolve(claim);
     }),
     recordPasswordSuccess: vi.fn().mockResolvedValue(undefined),
     isPlatformAdmin: vi.fn().mockResolvedValue(false),
@@ -41,14 +46,18 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
   };
   const tokens = { issueMfaChallenge: vi.fn().mockResolvedValue({ token: 'challenge', expiresIn: 300 }) };
   const selection = { issue: vi.fn().mockResolvedValue(SELECTION) };
+  const notifier = { notifyLockout: vi.fn().mockResolvedValue(undefined) };
+  const background = new BackgroundTasks({ error: vi.fn() } as unknown as JsonLogger);
   const service = new LoginService(
     runner,
     credentials as unknown as CredentialsRepository,
     hasher as unknown as PasswordHasher,
     tokens as unknown as JwtTokenService,
     selection as unknown as SelectionIssuer,
+    notifier as unknown as SecurityNotifier,
+    background,
   );
-  return { service, credentials, hasher, calls, tokens, selection };
+  return { service, background, credentials, hasher, calls, tokens, selection, notifier };
 }
 
 const request = { email: 'jane@example.com', password: 'secret password' };
@@ -92,6 +101,32 @@ describe('LoginService', () => {
     const { service, credentials } = setup(undefined, false);
     await expect(service.login(request)).rejects.toBeInstanceOf(InvalidCredentialsError);
     expect(credentials.isPlatformAdmin).not.toHaveBeenCalled();
+  });
+
+  describe('the lockout notice', () => {
+    it('is queued once when the attempt that locks the account has a wrong password', async () => {
+      const { service, notifier, background } = setup(active, false, true, true);
+      await expect(service.login(request)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await background.whenIdle();
+      expect(notifier.notifyLockout).toHaveBeenCalledTimes(1);
+      expect(notifier.notifyLockout).toHaveBeenCalledWith(active.id, 'ACCOUNT_LOCKED');
+    });
+
+    it('is not queued when the locking attempt has the right password (the lock is given back)', async () => {
+      const { service, notifier } = setup(active, true, true, true);
+      await expect(service.login(request)).resolves.toEqual(SELECTION);
+      expect(notifier.notifyLockout).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a wrong password before the maximum', active, true, false],
+      ['an unknown e-mail', undefined, false, false],
+      ['an account already locked', active, false, false],
+    ])('is not queued for %s', async (_label, candidate, claimed, locking) => {
+      const { service, notifier } = setup(candidate, false, claimed, locking);
+      await expect(service.login(request)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      expect(notifier.notifyLockout).not.toHaveBeenCalled();
+    });
   });
 
   describe('after the right password', () => {

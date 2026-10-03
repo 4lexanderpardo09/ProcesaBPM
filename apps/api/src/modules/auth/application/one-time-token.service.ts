@@ -4,6 +4,7 @@ import { Clock } from '../../../infrastructure/clock.js';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { PasswordHasher } from '../../../infrastructure/security/password-hasher.js';
 import { sha256Hex } from '../../../infrastructure/security/token-utils.js';
+import type { AuthTransaction } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { type ConsumedUserToken, CredentialsRepository, type UserTokenType } from '../data/credentials.repository.js';
 
 /** Consumes the e-mailed one-time tokens (password reset, invitation) through `auth_consume_user_token`. */
@@ -16,8 +17,16 @@ export class OneTimeTokenService {
     @Inject(Clock) private readonly clock: Clock,
   ) {}
 
-  /** The token works once, before it expires, and only for its own purpose. */
-  async consume(type: UserTokenType, token: string, newPassword: string | undefined): Promise<ConsumedUserToken> {
+  /**
+   * The token works once, before it expires, and only for its own purpose. `alsoInSameTransaction` commits together with
+   * the consumption.
+   */
+  async consume(
+    type: UserTokenType,
+    token: string,
+    newPassword: string | undefined,
+    alsoInSameTransaction?: (tx: AuthTransaction, consumed: ConsumedUserToken) => Promise<void>,
+  ): Promise<ConsumedUserToken> {
     const tokenHash = sha256Hex(token);
     const stored = await this.runner.withAnonymousTransaction((tx) =>
       this.credentials.findUsableToken(tx, tokenHash, this.clock.now()),
@@ -26,7 +35,11 @@ export class OneTimeTokenService {
 
     const passwordHash = newPassword === undefined ? null : await this.hasher.hash(newPassword);
     try {
-      return await this.runner.withAnonymousTransaction((tx) => this.credentials.consumeToken(tx, tokenHash, passwordHash));
+      return await this.runner.withAnonymousTransaction(async (tx) => {
+        const consumed = await this.credentials.consumeToken(tx, tokenHash, passwordHash);
+        await alsoInSameTransaction?.(tx, consumed);
+        return consumed;
+      });
     } catch (error) {
       // Lost a race with another request that consumed it, or it expired meanwhile.
       if (mapDatabaseError(error) instanceof PermissionDeniedError) throw new InvalidTokenError({ cause: error });

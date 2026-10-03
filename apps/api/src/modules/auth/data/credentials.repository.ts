@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InvalidTokenError, type Organization } from '@procesabpm/shared';
 import type { AuthTransaction } from '../../../infrastructure/database/auth-transaction-runner.js';
+import { type AttemptClaim, toAttemptClaim } from '../domain/attempt-claim.js';
 import { LOGIN_LOCKOUT } from '../domain/auth-policy.js';
 import type { LoginCandidate } from '../domain/login-candidate.js';
 
@@ -44,13 +45,13 @@ export class CredentialsRepository {
   }
 
   /**
-   * Counts one login attempt, atomically, before the password is checked. `false`: the account is locked, not active or
-   * unknown, and the password must not be tested against its real hash.
+   * Counts one login attempt, atomically, before the password is checked. Not `claimed`: the account is locked, not active
+   * or unknown, and the password must not be tested against its real hash. `locking`: this attempt locked the account.
    */
-  async claimLoginAttempt(tx: AuthTransaction, userId: string): Promise<boolean> {
-    const [row] = await tx.$queryRaw<{ claimed: boolean }[]>`
-      SELECT auth_claim_login_attempt(${userId}::uuid, ${LOGIN_LOCKOUT.maxFailedAttempts}::int, ${LOGIN_LOCKOUT.lockMinutes}::int) AS claimed`;
-    return row?.claimed === true;
+  async claimLoginAttempt(tx: AuthTransaction, userId: string): Promise<AttemptClaim> {
+    const [row] = await tx.$queryRaw<{ claim: number | null }[]>`
+      SELECT auth_claim_login_attempt_counted(${userId}::uuid, ${LOGIN_LOCKOUT.maxFailedAttempts}::int, ${LOGIN_LOCKOUT.lockMinutes}::int) AS claim`;
+    return toAttemptClaim(row?.claim, LOGIN_LOCKOUT.maxFailedAttempts);
   }
 
   /** The password was right: gives the claimed attempt back; `signedIn` stamps the last login. */
