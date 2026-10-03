@@ -45,6 +45,7 @@ const AUTHENTICATED_ONLY_ROUTES = [
   'PUT /notifications/preferences/:type',
   'POST /notifications/read-all',
   'POST /notifications/:id/read',
+  'GET /announcements',
 ];
 
 /** Routes of the platform administrators: they need a platform token, never a tenant one. */
@@ -58,6 +59,10 @@ const PLATFORM_ROUTES = [
   'PUT /platform/tenants/:id/plan',
   'PUT /platform/tenants/:id/extra-storage',
   'POST /platform/tenants/:id/owner-invitation',
+  'GET /platform/announcements',
+  'POST /platform/announcements',
+  'PUT /platform/announcements/:id',
+  'DELETE /platform/announcements/:id',
   'GET /platform/plans',
   'PUT /platform/plans/:code',
   'GET /platform/admins',

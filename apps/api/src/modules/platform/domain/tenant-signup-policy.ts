@@ -6,6 +6,9 @@ export const PLATFORM_AUDIT_ACTIONS = {
   tenantExtraStorageChanged: 'tenant.extra_storage_changed',
   tenantOwnerInvitationResent: 'tenant.owner_invitation_resent',
   planUpdated: 'plan.updated',
+  announcementCreated: 'announcement.created',
+  announcementUpdated: 'announcement.updated',
+  announcementDeleted: 'announcement.deleted',
   adminInvited: 'platform_admin.invited',
   adminRevoked: 'platform_admin.revoked',
 } as const;

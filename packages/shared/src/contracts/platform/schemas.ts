@@ -130,3 +130,25 @@ export const updatePlanRequestSchema = z
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Send at least one field');
 export type UpdatePlanRequest = z.infer<typeof updatePlanRequestSchema>;
+
+export const announcementRequestSchema = z
+  .object({
+    type: z.enum(['MAINTENANCE', 'RELEASE_NOTES', 'INFO']),
+    title: z.string().trim().min(1).max(200),
+    body: z.string().trim().min(1).max(5000),
+    startsAt: z.iso.datetime({ offset: true }),
+    endsAt: z.iso.datetime({ offset: true }).nullable().default(null),
+    blocksLogin: z.boolean().default(false),
+  })
+  .refine((value) => value.endsAt === null || new Date(value.endsAt) > new Date(value.startsAt), { path: ['endsAt'], message: 'The end must be after the start' });
+export type AnnouncementRequest = z.infer<typeof announcementRequestSchema>;
+
+export interface AnnouncementResponse {
+  readonly id: string;
+  readonly type: 'MAINTENANCE' | 'RELEASE_NOTES' | 'INFO';
+  readonly title: string;
+  readonly body: string;
+  readonly startsAt: string;
+  readonly endsAt: string | null;
+  readonly blocksLogin: boolean;
+}
