@@ -34,7 +34,7 @@ RUN --mount=type=secret,id=extra-ca,required=false pnpm --filter @procesabpm/db 
 # Built on `build`, which has the development dependencies and the sources. It never runs as a service. Only the `unit`
 # projects run: they need no database, no storage and no Docker. The heap is capped so that it fits in 2 GB of memory.
 FROM build AS test-unit
-ENV NODE_OPTIONS=--max-old-space-size=1536 CI=true
+ENV NODE_OPTIONS=--max-old-space-size=1536 CI=true NODE_EXTRA_CA_CERTS=
 CMD ["sh", "-c", "pnpm --filter @procesabpm/shared exec vitest run --maxWorkers=2 && pnpm --filter @procesabpm/api exec vitest run --project unit --maxWorkers=2"]
 
 # Production dependencies only, installed from the lockfile (workspace packages are bundled, so their copies are dropped).
