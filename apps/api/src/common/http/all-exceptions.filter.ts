@@ -1,5 +1,5 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Inject } from '@nestjs/common';
-import { DomainError, mapDatabaseError, RateLimitedError, TemporarilyUnavailableError } from '@procesabpm/shared';
+import { DomainError, extractSqlState, isTransactionTimeout, mapDatabaseError, RateLimitedError, TemporarilyUnavailableError } from '@procesabpm/shared';
 import type { Response } from 'express';
 import { JsonLogger } from '../logging/json-logger.js';
 import { RequestContext } from '../logging/request-context.js';
@@ -39,6 +39,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const resolved = this.resolve(exception);
     if (resolved.status >= 500 && resolved.status !== HttpStatus.NOT_IMPLEMENTED) {
       this.logger.error(exception, 'AllExceptionsFilter');
+    } else if (!(exception instanceof DomainError) && !(exception instanceof HttpException) && resolved.status !== HttpStatus.INTERNAL_SERVER_ERROR) {
+      // A database rule or timeout became a 4xx/503: the response is generic by design, so the log is where the real reason is.
+      this.logger.warn('Database error answered as a typed error', {
+        event: 'http.database_error',
+        status: resolved.status,
+        code: resolved.code,
+        sqlState: extractSqlState(exception) ?? (isTransactionTimeout(exception) ? 'P2028' : undefined),
+        cause: exception instanceof Error ? exception.message.slice(0, 500) : String(exception).slice(0, 500),
+      });
     }
     const body: ErrorBody = {
       error: {
