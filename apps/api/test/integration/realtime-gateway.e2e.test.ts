@@ -148,14 +148,13 @@ describe('realtime gateway: handshake, session revalidation and limits', () => {
   });
 
   describe('revocation', () => {
-    it('a logout followed by its access signal ends the socket (SESSION_ENDED after the grace)', async () => {
+    it('a logout ends the socket at once: the database trigger signals it (SESSION_ENDED after the grace)', async () => {
       const signedIn = await member();
       const socket = open(signedIn.accessToken);
       await connected(socket);
       const required = nextEvent<{ reason: string; graceMs: number }>(socket, 'auth.required');
       const ended = nextEvent<{ reason: string }>(socket, 'session.ended');
       await http().post('/auth/logout').set('cookie', signedIn.refreshCookie).expect(204);
-      await notifySignal(inject('runtimeUrl'), { v: 1, k: 'access', s: sessionIdOf(signedIn.accessToken) });
       expect(await required).toEqual({ reason: 'SESSION_CHANGED', graceMs: 1000 });
       expect(await ended).toEqual({ reason: 'SESSION_ENDED' });
     });
@@ -188,14 +187,13 @@ describe('realtime gateway: handshake, session revalidation and limits', () => {
       expect(socket.connected).toBe(true);
     });
 
-    it('a changed role ends the socket with PERMISSIONS_CHANGED', async () => {
+    it('a changed role ends the socket with PERMISSIONS_CHANGED, signalled by the trigger', async () => {
       const signedIn = await member();
       const socket = open(signedIn.accessToken);
       await connected(socket);
       const ended = nextEvent<{ reason: string }>(socket, 'session.ended');
       const roleId = await seedRole(db, tenant.tenantId, `Other ${Math.random()}`);
       await db.platform.query('UPDATE memberships SET role_id = $1 WHERE tenant_id = $2 AND user_id = $3', [roleId, tenant.tenantId, signedIn.userId]);
-      await notifySignal(inject('runtimeUrl'), { v: 1, k: 'access', t: tenant.tenantId, u: signedIn.userId });
       expect(await ended).toEqual({ reason: 'PERMISSIONS_CHANGED' });
     });
   });
