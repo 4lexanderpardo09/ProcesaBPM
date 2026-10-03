@@ -1,3 +1,4 @@
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
@@ -23,6 +24,13 @@ const MAX_PER_USER = 3;
 useTestEnvironment({ REALTIME_MAX_CONNECTIONS_PER_USER: String(MAX_PER_USER), LOG_LEVEL: 'debug' });
 
 const sessionIdOf = (accessToken: string): string => (JSON.parse(Buffer.from(accessToken.split('.')[1]!, 'base64url').toString('utf8')) as { sid: string }).sid;
+
+/** A well-formed HS256 token signed with a key nobody knows: the signature check must refuse it. */
+function tokenSignedWithRandomKey(): string {
+  const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const unsigned = `${part({ alg: 'HS256', typ: 'JWT' })}.${part({ sub: randomUUID(), aud: 'procesabpm:api' })}`;
+  return `${unsigned}.${createHmac('sha256', randomBytes(32)).update(unsigned).digest('base64url')}`;
+}
 
 describe('realtime gateway: handshake, session revalidation and limits', () => {
   let db: TestDatabase;
@@ -73,7 +81,7 @@ describe('realtime gateway: handshake, session revalidation and limits', () => {
     it.each([
       ['no token', undefined],
       ['garbage', 'not-a-token'],
-      ['a token signed with another key', 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl'],
+      ['a token signed with another key', tokenSignedWithRandomKey()],
     ])('refuses %s with UNAUTHENTICATED', async (_name, token) => {
       expect(await connectError(open(token))).toMatchObject({ code: 'UNAUTHENTICATED' });
     });
