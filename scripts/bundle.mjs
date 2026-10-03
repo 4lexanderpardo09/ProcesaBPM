@@ -15,7 +15,7 @@ const readJson = (path) => JSON.parse(readFileSync(join(root, path), 'utf8'));
 const thirdParty = (manifest) => Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }).filter((name) => !name.startsWith('@procesabpm/'));
 
 const targets = [
-  { name: 'api', manifest: 'apps/api/package.json', entries: { main: 'apps/api/src/main.ts', worker: 'apps/api/src/worker.ts' }, outdir: 'dist/api' },
+  { name: 'api', manifest: 'apps/api/package.json', entries: { main: 'apps/api/src/main.ts', worker: 'apps/api/src/worker.ts', smoke: 'apps/api/src/smoke/smoke.ts' }, outdir: 'dist/api' },
   { name: 'seed', manifest: 'packages/migrate/package.json', entries: { seed: 'packages/db/src/seed/run.ts', 'create-platform-admin': 'packages/db/src/seed/create-platform-admin.ts' }, outdir: 'dist/seed' },
 ];
 

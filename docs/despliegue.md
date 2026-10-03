@@ -173,6 +173,26 @@ El trabajo `Docker images` de `.github/workflows/ci.yml` (en cada PR, sin public
 
 Localmente: `docker build` de los tres destinos y `scripts/smoke-images.sh` (usa `API_IMAGE`, `WORKER_IMAGE`, `MIGRATE_IMAGE` si los nombres cambian).
 
+### Verificación después de cada despliegue (`deploy/verify.sh`)
+
+En el servidor, desde la carpeta del compose y con el `.env` de la instalación:
+
+```bash
+deploy/verify.sh                 # pruebas unitarias y prueba de humo
+deploy/verify.sh --skip-unit     # solo la prueba de humo
+deploy/verify.sh --skip-smoke    # solo las pruebas unitarias
+```
+
+1. **Pruebas unitarias** de `shared` y del API en un contenedor desechable (destino `test-unit` del `Dockerfile`, basado en `build`; nunca se despliega), con 2 GB de memoria y el heap limitado. No necesitan base de datos, almacenamiento ni Docker.
+2. **Prueba de humo** (`smoke.js`, dentro de la imagen del worker, con `docker compose run --rm --no-deps worker node smoke.js`): recorre el API real como lo haría un cliente y escribe `OK` o `FAIL` por paso, con el motivo:
+   - `/health` y `/ready`;
+   - administrador de plataforma de prueba (el mismo camino del comando del primer administrador: enlace, inscripción obligatoria de MFA con el TOTP generado por el script y sesión de plataforma);
+   - alta de una organización de prueba, invitación al dueño (el correo llega a Mailpit, `MAILPIT_URL`) y aceptación;
+   - un flujo publicado, un archivo subido a S3 con URL prefirmada y confirmado, un ticket creado con ese archivo, avanzado y cerrado, el archivo descargado y comparado byte a byte, y un reporte;
+   - **limpieza**: borra la organización de prueba (`purge_tenant`), sus archivos del bucket (prefijo `tenants/<id>/`) y al administrador y al dueño de prueba. Solo toca lo que parece de humo: slug `smoke-xxxxxxxx` **y** nombre «Smoke test (delete me)», así que una organización real nunca coincide; los restos de una corrida anterior que murió a medias (más de una hora) también se borran. La limpieza se intenta aunque un paso falle; si falla, el script dice qué borrar a mano.
+
+Variables (todas opcionales): `COMPOSE_FILE`, `ENV_FILE` (de ahí se lee `PLATFORM_DB_PASSWORD`; entra al contenedor por nombre, nunca en la línea de comandos), `BASE_URL` (por defecto `http://api:3000` dentro de la red del compose; con la dirección pública `https://…` se prueba también el proxy), `MAILPIT_URL` (por defecto `http://mailpit:8025`), `SMOKE_PLAN_CODE`, `TEST_IMAGE`. El código de salida es 1 si algo falló. El trabajo `Docker images` del CI construye y ejecuta el destino `test-unit` y valida la sintaxis del script; `apps/api/test/integration/smoke-run.e2e.test.ts` corre todos los pasos contra un API en proceso.
+
 ## 10. Pendientes
 - **PgBouncer** (o el pooler del proveedor): modo transacción es compatible con la forma de trabajar (`set_config(..., true)` dentro de la transacción); falta probarlo y fijar el tamaño de los pools.
 - **Almacenamiento (AWS S3, decidido):** el código usa el SDK de S3 con endpoint configurable y está probado con SeaweedFS; falta probarlo contra S3 real (URL prefirmadas, CORS del bucket; ver «AWS (pruebas)»).

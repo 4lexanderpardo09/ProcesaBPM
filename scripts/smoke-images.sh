@@ -50,6 +50,7 @@ for image in "$API_IMAGE" "$WORKER_IMAGE" "$MIGRATE_IMAGE"; do
 done
 docker run --rm --entrypoint test "$API_IMAGE" -f /app/assets/fonts/NotoSans-Regular.ttf || fail "the PDF fonts are not in the API image"
 docker run --rm --entrypoint test "$WORKER_IMAGE" -f /app/assets/fonts/NotoSans-Bold.ttf || fail "the PDF fonts are not in the worker image"
+docker run --rm --entrypoint test "$WORKER_IMAGE" -f /app/smoke.js || fail "smoke.js (deploy/verify.sh) is not in the worker image"
 
 step "database"
 docker network create "$NETWORK" >/dev/null

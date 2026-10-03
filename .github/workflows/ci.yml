@@ -87,6 +87,15 @@ jobs:
           cache-from: type=gha,scope=images-migrate
           cache-to: type=gha,scope=images-migrate,mode=max
 
+      # The image deploy/verify.sh runs on the server: the unit tests of shared and the API inside a 2 GB container.
+      - name: Build and run the unit test image
+        run: |
+          docker build --target test-unit -t procesabpm-test-unit:ci .
+          docker run --rm --memory 2g --memory-swap 2g procesabpm-test-unit:ci
+
+      - name: Check the verification script
+        run: bash -n deploy/verify.sh
+
       - name: Smoke test
         run: scripts/smoke-images.sh
         env:
