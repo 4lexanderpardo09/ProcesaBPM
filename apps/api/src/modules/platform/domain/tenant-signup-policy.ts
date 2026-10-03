@@ -9,6 +9,10 @@ export const PLATFORM_AUDIT_ACTIONS = {
   announcementCreated: 'announcement.created',
   announcementUpdated: 'announcement.updated',
   announcementDeleted: 'announcement.deleted',
+  countryCreated: 'country.created',
+  holidayAdded: 'holiday.added',
+  holidayDeleted: 'holiday.deleted',
+  holidaysRegenerated: 'holidays.regenerated',
   adminInvited: 'platform_admin.invited',
   adminRevoked: 'platform_admin.revoked',
 } as const;

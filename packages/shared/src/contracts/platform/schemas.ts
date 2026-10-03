@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { emailSchema } from '../common.js';
+import { emailSchema, isoDateSchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 
 /** Same pattern as the CHECK constraint `tenants_slug_format` of the database. */
@@ -151,4 +151,41 @@ export interface AnnouncementResponse {
   readonly startsAt: string;
   readonly endsAt: string | null;
   readonly blocksLogin: boolean;
+}
+
+export const createCountryRequestSchema = z.object({
+  code: z.string().regex(/^[A-Z]{2}$/, 'Use the two-letter country code in capitals'),
+  name: z.string().trim().min(1).max(100),
+  currencyCode: z.string().regex(/^[A-Z]{3}$/, 'Use the three-letter currency code in capitals'),
+  timeZone: z.string().trim().min(1).max(64),
+});
+export type CreateCountryRequest = z.infer<typeof createCountryRequestSchema>;
+
+export interface CountrySummary {
+  readonly code: string;
+  readonly name: string;
+  readonly currencyCode: string;
+  readonly timeZone: string;
+  readonly tenants: number;
+  /** Whether the platform ships a rule-based holiday calendar for the country (so a year can be regenerated). */
+  readonly hasHolidayGenerator: boolean;
+}
+
+export const countryHolidaysQuerySchema = z.object({ year: z.coerce.number().int().min(2000).max(2100) });
+export type CountryHolidaysQuery = z.infer<typeof countryHolidaysQuerySchema>;
+
+export const addCountryHolidayRequestSchema = z.object({ date: isoDateSchema, name: z.string().trim().min(1).max(200) });
+export type AddCountryHolidayRequest = z.infer<typeof addCountryHolidayRequestSchema>;
+
+export const regenerateHolidaysRequestSchema = z.object({ year: z.number().int().min(2000).max(2100) });
+export type RegenerateHolidaysRequest = z.infer<typeof regenerateHolidaysRequestSchema>;
+
+export interface CountryHolidayResponse {
+  readonly date: string;
+  readonly name: string;
+}
+
+export interface RegeneratedHolidays {
+  readonly year: number;
+  readonly holidays: readonly CountryHolidayResponse[];
 }

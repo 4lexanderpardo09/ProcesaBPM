@@ -28,6 +28,17 @@ describe('global catalog seed', () => {
     expect({ permissions: await count('permissions'), holidays: await count('country_holidays') }).toEqual(before);
   });
 
+  it('does not undo plan limits edited from the platform console', async () => {
+    await db.owner.query(`UPDATE plans SET max_users = 77 WHERE code = 'basic'`);
+    try {
+      await withoutContext(db.platform, (client) => seedGlobalCatalog(client, { holidayYears: [2026] }));
+      const { rows } = await db.owner.query<{ max_users: number }>(`SELECT max_users FROM plans WHERE code = 'basic'`);
+      expect(rows[0]?.max_users).toBe(77);
+    } finally {
+      await db.owner.query(`UPDATE plans SET max_users = NULL WHERE code = 'basic'`);
+    }
+  });
+
   it('loads the approved plans and the whole permission catalog', async () => {
     expect(await count('plans')).toBe(PLANS.length);
     expect(await count('permissions')).toBe(PERMISSIONS.length);
