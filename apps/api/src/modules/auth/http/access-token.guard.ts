@@ -5,8 +5,8 @@ import { accessMetadataOf, classifyAccess } from '../../../common/auth/route-met
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import { SupportRequestRecorder } from '../../audit/application/support-request-recorder.js';
 import { PlatformSessionService } from '../application/platform-session.service.js';
+import { AccessTokenAuthenticator } from '../application/access-token-authenticator.js';
 import { SupportSessionVerifier } from '../application/support-session-verifier.js';
-import { TenantAccessService } from '../application/tenant-access.service.js';
 import { bearerToken } from '../../../common/auth/bearer-token.js';
 
 /**
@@ -19,7 +19,7 @@ import { bearerToken } from '../../../common/auth/bearer-token.js';
 export class AccessTokenGuard implements CanActivate {
   constructor(
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
-    @Inject(TenantAccessService) private readonly tenantAccess: TenantAccessService,
+    @Inject(AccessTokenAuthenticator) private readonly authenticator: AccessTokenAuthenticator,
     @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
     @Inject(SupportSessionVerifier) private readonly supportSessions: SupportSessionVerifier,
     @Inject(SupportRequestRecorder) private readonly supportAudit: SupportRequestRecorder,
@@ -46,19 +46,7 @@ export class AccessTokenGuard implements CanActivate {
       return true;
     }
 
-    const claims = await this.tokens.verifyAccessToken(token);
-    const access = await this.tenantAccess.verify({ userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid });
-    request.principal = {
-      userId: claims.sub,
-      tenantId: claims.tid,
-      sessionId: claims.sid,
-      roleId: access.roleId,
-      roleActive: access.roleActive,
-      roleIsAdmin: access.roleIsAdmin,
-      isOwner: access.isOwner,
-      permissionsVersion: access.permissionsVersion,
-      membership: { departmentId: access.departmentId, siteId: access.siteId, positionId: access.positionId },
-    };
+    request.principal = (await this.authenticator.authenticate(token)).principal;
     return true;
   }
 
