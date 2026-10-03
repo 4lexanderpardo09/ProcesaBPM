@@ -3,6 +3,8 @@ import { uuidSchema } from '@procesabpm/shared';
 import { z } from 'zod';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { ClaimedEvent } from '../../../infrastructure/outbox/outbox-handler.js';
+import type { PostCommitEffects } from '../../../infrastructure/outbox/post-commit-effects.js';
+import { RealtimeSignalPublisher } from '../../../infrastructure/realtime/realtime-signal-publisher.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { TicketTextRenderer } from '../../documents/application/ticket-text-renderer.js';
 import { EmailOutboxRepository } from '../data/email-outbox.repository.js';
@@ -37,13 +39,14 @@ export class BlockNotificationHandlers implements OnModuleInit {
     @Inject(EmailOutboxRepository) private readonly emails: EmailOutboxRepository,
     @Inject(TicketReaderFilter) private readonly readers: TicketReaderFilter,
     @Inject(TicketTextRenderer) private readonly texts: TicketTextRenderer,
+    @Inject(RealtimeSignalPublisher) private readonly realtime: RealtimeSignalPublisher,
   ) {}
 
   onModuleInit(): void {
-    this.registry.registerTransactional({ type: 'block.notification', schema: blockEvent, handle: (tx, event) => this.handle(tx, event as ClaimedEvent<BlockEventPayload>) });
+    this.registry.registerTransactional({ type: 'block.notification', schema: blockEvent, handle: (tx, event, effects) => this.handle(tx, event as ClaimedEvent<BlockEventPayload>, effects) });
   }
 
-  private async handle(tx: TenantTransaction, event: ClaimedEvent<BlockEventPayload>): Promise<void> {
+  private async handle(tx: TenantTransaction, event: ClaimedEvent<BlockEventPayload>, effects: PostCommitEffects): Promise<void> {
     const tenantId = event.tenantId!;
     const { ticketId, stepId } = event.payload;
     const block = await this.facts.notificationBlock(tx, tenantId, ticketId, stepId);
@@ -64,6 +67,8 @@ export class BlockNotificationHandlers implements OnModuleInit {
       if (rendered === null) return;
       const [title, body] = rendered as [string, string];
       await this.notifications.createMany(tx, tenantId, inApp.map((userId) => ({ userId, ticketId, type: BLOCK_NOTICE, title: title.slice(0, TITLE_MAX), body: body.slice(0, BODY_MAX), sourceEventId: event.id })));
+      // After the commit, tell the open screens of these people (ids only; they read their own counter).
+      effects.afterCommit(() => this.realtime.publish([{ v: 1, k: 'notifications', t: tenantId, u: inApp }]));
     }
     const mails = readerIds.filter((userId) => wantsEmail && channelsFor(stored, userId, BLOCK_NOTICE).email).map((userId): NotificationEmailPayload => ({ userId, notificationType: BLOCK_NOTICE, ticketId, sourceEventId: event.id, stepId }));
     await this.emails.enqueue(tx, tenantId, mails);

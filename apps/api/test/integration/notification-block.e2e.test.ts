@@ -3,6 +3,7 @@ import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
+import { connected, connectSocket, nextEvent, startListening } from '../support/realtime-client.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type Member, publishFlow, publishVersion, TicketWorld, unique, type FlowSpec } from '../support/ticket-world.js';
 import { MailWorker } from '../support/worker-mail.js';
@@ -165,6 +166,21 @@ describe('NOTIFICATION blocks: who is told, with which text, through which chann
     const stranger = await other.member([grant('read_all')]);
     await expect(flowWith({ ...base, recipients: [{ kind: 'USER', id: stranger.userId }] })).rejects.toThrow(/BLOCK_REFERENCE_UNKNOWN/);
     expect((await stranger.client.get('/notifications?pageSize=100').expect(200)).body.items.filter((item: NotificationBody) => item.type === 'SYSTEM')).toEqual([]);
+  });
+
+  it('an open screen is told to refresh its counter when a block notifies the person in the app', async () => {
+    const url = await startListening(app);
+    const socket = connectSocket(url, requester.client.accessToken);
+    try {
+      await connected(socket);
+      const flow = await flowWith({ ...base, channels: ['IN_APP'], recipients: [{ kind: 'CREATOR' }] });
+      const changed = nextEvent<{ unreadCount: number }>(socket, 'notifications.changed');
+      await create(flow);
+      await mail.deliver();
+      expect((await changed).unreadCount).toBeGreaterThan(0);
+    } finally {
+      socket.disconnect();
+    }
   });
 
   it('does not run again for a repeated event: one notice per person and block', async () => {
