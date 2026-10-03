@@ -63,7 +63,8 @@ export class BlockNotificationHandlers implements OnModuleInit {
 
     const inApp = readerIds.filter((userId) => wantsInApp && channelsFor(stored, userId, BLOCK_NOTICE).inApp);
     if (inApp.length > 0) {
-      const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, block.body]);
+      const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, block.body], { stepId });
+      // The ticket was deleted (tenant purge) after the event was queued: nothing to notify, by e-mail either.
       if (rendered === null) return;
       const [title, body] = rendered as [string, string];
       await this.notifications.createMany(tx, tenantId, inApp.map((userId) => ({ userId, ticketId, type: BLOCK_NOTICE, title: title.slice(0, TITLE_MAX), body: body.slice(0, BODY_MAX), sourceEventId: event.id })));
