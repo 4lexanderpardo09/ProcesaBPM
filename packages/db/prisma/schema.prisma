@@ -509,6 +509,8 @@ model User {
   consumedAuthTokens ConsumedAuthToken[]
   mfaBackupCodes     UserMfaBackupCode[]
   platformAdmin   PlatformAdmin?
+  supportSessions SupportSession[]
+  supportAuditLogs AuditLog[] @relation("SupportActor")
 
   @@map("users")
 }
@@ -698,6 +700,8 @@ model Tenant {
   workflowDocuments       WorkflowDocument[]
   exportDefinitions       ExportDefinition[]
   exportColumns           ExportColumn[]
+  supportAccessGrants     SupportAccessGrant[]
+  supportSessions         SupportSession[]
   exportCatalogEntries    ExportCatalogEntry[]
   exportCutoffs           ExportCutoff[]
   exportLines             ExportLine[]
@@ -798,6 +802,8 @@ model Membership {
   ticketEventsAssigned    TicketEvent[]            @relation("TicketEventAssignee")
   slaClocks               TicketSlaClock[]
   fieldValuesUpdated      TicketFieldValue[]
+  supportGrantsGiven      SupportAccessGrant[]     @relation("SupportGrantGranter")
+  supportGrantsRevoked    SupportAccessGrant[]     @relation("SupportGrantRevoker")
   parallelTasks           TicketParallelTask[]
   incidentsCreated        TicketIncident[]         @relation("IncidentCreator")
   incidentsAssigned       TicketIncident[]         @relation("IncidentAssignee")
@@ -2634,16 +2640,23 @@ model AuditLog {
   ipAddress  String?  @map("ip_address")
   userAgent  String?  @map("user_agent")
   requestId  String?  @map("request_id")
+  /// A platform administrator acting under a support grant (never a member): both columns are set together, `actor_id` stays empty.
+  supportActorId String? @map("support_actor_id") @db.Uuid
+  supportGrantId String? @map("support_grant_id") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  actor  Membership? @relation(fields: [tenantId, actorId], references: [tenantId, userId], onDelete: NoAction)
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor        Membership?         @relation(fields: [tenantId, actorId], references: [tenantId, userId], onDelete: NoAction)
+  supportActor User?               @relation("SupportActor", fields: [supportActorId], references: [id], onDelete: NoAction)
+  supportGrant SupportAccessGrant? @relation(fields: [tenantId, supportGrantId], references: [tenantId, id], onDelete: NoAction)
 
   @@id([tenantId, id])
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, action, createdAt(sort: Desc)])
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, actorId])
+  @@index([supportActorId])
+  @@index([tenantId, supportGrantId])
   @@map("audit_logs")
 }
 
@@ -2681,4 +2694,51 @@ model TextTemplateShare {
   @@id([tenantId, templateId, userId])
   @@index([tenantId, userId])
   @@map("text_template_shares")
+}
+
+/// The tenant lets platform support read its data for a limited time (at most 72 hours). One grant in force per tenant.
+model SupportAccessGrant {
+  tenantId    String    @map("tenant_id") @db.Uuid
+  id          String    @default(dbgenerated("uuidv7()")) @db.Uuid
+  grantedById String    @map("granted_by_id") @db.Uuid
+  reason      String
+  startsAt    DateTime  @default(now()) @map("starts_at") @db.Timestamptz(3)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(3)
+  /// Empty when the system revoked it (a new grant replaced it, or the tenant was suspended or deleted).
+  revokedById String?   @map("revoked_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grantedBy Membership   @relation("SupportGrantGranter", fields: [tenantId, grantedById], references: [tenantId, userId], onDelete: NoAction)
+  revokedBy Membership?  @relation("SupportGrantRevoker", fields: [tenantId, revokedById], references: [tenantId, userId], onDelete: NoAction)
+  sessions  SupportSession[]
+  auditLogs AuditLog[]
+
+  @@id([tenantId, id])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, grantedById])
+  @@index([tenantId, revokedById])
+  @@map("support_access_grants")
+}
+
+/// A platform administrator's visit under a grant. Opened only by `platform_open_support_session`.
+model SupportSession {
+  tenantId       String    @map("tenant_id") @db.Uuid
+  id             String    @default(dbgenerated("uuidv7()")) @db.Uuid
+  grantId        String    @map("grant_id") @db.Uuid
+  platformUserId String    @map("platform_user_id") @db.Uuid
+  /// First and last name of the administrator when the visit opened: members cannot read other people's users rows.
+  platformUserLabel String @map("platform_user_label")
+  openedAt       DateTime  @default(now()) @map("opened_at") @db.Timestamptz(3)
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(3)
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grant        SupportAccessGrant @relation(fields: [tenantId, grantId], references: [tenantId, id], onDelete: NoAction)
+  platformUser User               @relation(fields: [platformUserId], references: [id], onDelete: NoAction)
+
+  @@id([tenantId, id])
+  @@index([tenantId, grantId])
+  @@index([platformUserId])
+  @@map("support_sessions")
 }
