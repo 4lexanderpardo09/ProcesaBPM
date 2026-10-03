@@ -72,6 +72,28 @@ CREATE OR REPLACE FUNCTION assert_tenant_keeps_admin(p_tenant_id uuid, p_require
   END
   $$;
 
+-- purge_tenant removes the users who belonged only to the purged tenant. It now also spares a user that support history in
+-- other tenants still points at (a former platform administrator who was once a member): their rows cannot be deleted
+-- (NO ACTION foreign keys), and failing here would leave the purge failing for good.
+CREATE OR REPLACE FUNCTION purge_tenant(p_tenant_id uuid) RETURNS void
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
+  AS $$
+  DECLARE
+    v_user_ids uuid[];
+  BEGIN
+    SELECT array_agg(user_id) INTO v_user_ids FROM memberships WHERE tenant_id = p_tenant_id;
+    PERFORM set_config('app.purge_tenant', p_tenant_id::text, true);
+    DELETE FROM tenants WHERE id = p_tenant_id;
+    DELETE FROM users u
+    WHERE u.id = ANY (coalesce(v_user_ids, '{}'))
+      AND NOT EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id)
+      AND NOT EXISTS (SELECT 1 FROM platform_admins a WHERE a.user_id = u.id)
+      AND NOT EXISTS (SELECT 1 FROM support_sessions s WHERE s.platform_user_id = u.id)
+      AND NOT EXISTS (SELECT 1 FROM audit_logs l WHERE l.support_actor_id = u.id);
+    PERFORM set_config('app.purge_tenant', '', true);
+  END
+  $$;
+
 -- ===========================================================================
 -- The purge, one claim at a time (same protocol as the outbox: lease + attempt token + SKIP LOCKED)
 -- ===========================================================================

@@ -170,6 +170,45 @@ describe('tenant deletion and purge', () => {
     });
   });
 
+  describe('what the purge spares and what stops while pending', () => {
+    it('keeps a user that support history in another tenant still points at', async () => {
+      const doomed = await pending();
+      const former = await seedMember(db.platform, doomed);
+      const other = await seedTenant(db.platform);
+      const grantId = (await db.owner.query<{ id: string }>(
+        `INSERT INTO support_access_grants (tenant_id, granted_by_id, reason, expires_at) VALUES ($1, $2, 'history', now() + interval '1 hour') RETURNING id`,
+        [other.tenantId, other.userId],
+      )).rows[0]!.id;
+      await db.owner.query(
+        `INSERT INTO support_sessions (tenant_id, grant_id, platform_user_id, platform_user_label, platform_session_id) VALUES ($1, $2, $3, 'Former Admin', $4)`,
+        [other.tenantId, grantId, former, randomUUID()],
+      );
+
+      const { out_attempt: attempt } = mine(await claim(), doomed)!;
+      expect(await finish(doomed, attempt)).toBe(true);
+
+      expect((await db.owner.query('SELECT 1 FROM users WHERE id = $1', [former])).rowCount).toBe(1);
+      expect((await tenantRow(doomed.tenantId)).status).toBe('PURGED');
+    });
+
+    it('stops the outbox for a tenant pending deletion; it resumes if the deletion is cancelled', async () => {
+      const closed = await pending(1);
+      const open = await seedTenant(db.platform);
+      const event = (tenant: SeededTenant) =>
+        db.owner.query<{ id: string }>(`INSERT INTO outbox_events (tenant_id, type, payload, available_at) VALUES ($1, 'test.pending', '{}', now() - interval '1 minute') RETURNING id`, [tenant.tenantId]).then((r) => r.rows[0]!.id);
+      const [closedEvent, openEvent] = [await event(closed), await event(open)];
+      const claimEvents = () =>
+        withoutContext(db.worker, async (client) => (await client.query<{ id: string }>(`SELECT id FROM claim_outbox_events(1000, ARRAY['test.pending'], interval '5 minutes', 10)`)).rows.map((row) => row.id));
+
+      const claimedIds = await claimEvents();
+      expect(claimedIds).toContain(openEvent);
+      expect(claimedIds).not.toContain(closedEvent);
+
+      await db.owner.query(`UPDATE tenants SET status = 'SUSPENDED', purge_after = NULL, deletion_requested_at = NULL, deletion_requested_by_id = NULL WHERE id = $1`, [closed.tenantId]);
+      expect(await claimEvents()).toContain(closedEvent);
+    });
+  });
+
   describe('the login', () => {
     it('still lists an organization pending deletion (so choosing it can explain why), and never a purged one', async () => {
       const tenant = await pending(1);

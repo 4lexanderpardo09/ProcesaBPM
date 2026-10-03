@@ -3,6 +3,7 @@ import { PermissionDeniedError, SupportAccessReadOnlyError, type SupportTokenCla
 import type { AuthenticatedRequest } from '../../../common/auth/principal.js';
 import { accessMetadataOf, classifyAccess } from '../../../common/auth/route-metadata.js';
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
+import { SupportRequestRecorder } from '../../audit/application/support-request-recorder.js';
 import { PlatformSessionService } from '../application/platform-session.service.js';
 import { SupportSessionVerifier } from '../application/support-session-verifier.js';
 import { TenantAccessService } from '../application/tenant-access.service.js';
@@ -21,6 +22,7 @@ export class AccessTokenGuard implements CanActivate {
     @Inject(TenantAccessService) private readonly tenantAccess: TenantAccessService,
     @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
     @Inject(SupportSessionVerifier) private readonly supportSessions: SupportSessionVerifier,
+    @Inject(SupportRequestRecorder) private readonly supportAudit: SupportRequestRecorder,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -70,12 +72,16 @@ export class AccessTokenGuard implements CanActivate {
   }
 
   /**
-   * A platform administrator reading one tenant under a grant. Read-only: anything but GET and HEAD is refused before
-   * any other check. The principal is not a member: its ability is the fixed read-only template (see `AbilityService`).
+   * A platform administrator reading one tenant under a grant. Read-only: anything but GET and HEAD is refused. The visit
+   * is verified first, so the refusal is attributable (and audited: a write attempt is what the tenant most wants to see).
+   * The principal is not a member: its ability is the fixed read-only template (see `AbilityService`).
    */
   private async authenticateSupport(request: AuthenticatedRequest, claims: SupportTokenClaims): Promise<void> {
-    if (request.method !== 'GET' && request.method !== 'HEAD') throw new SupportAccessReadOnlyError();
     await this.supportSessions.verify(claims);
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      await this.supportAudit.record(request, { tenantId: claims.tid, userId: claims.sub, grantId: claims.grant }, { outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' });
+      throw new SupportAccessReadOnlyError();
+    }
     request.principal = {
       userId: claims.sub,
       tenantId: claims.tid,

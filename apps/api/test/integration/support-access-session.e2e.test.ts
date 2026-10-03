@@ -176,6 +176,16 @@ describe('a platform administrator reads a tenant that granted support access', 
       expect((await db.owner.query(`SELECT 1 FROM platform_audit_logs WHERE action = 'support_session.closed' AND data ->> 'sessionId' = $1`, [sessionId])).rowCount).toBe(1);
     });
 
+    it('ending the platform session ends the visit at once (a platform logout, within the 15 minutes of the token)', async () => {
+      const { tenant } = await grantedTenant();
+      const temporary = await seedPlatformAdmin(db);
+      const token = await signInPlatform(app, db, temporary);
+      const { accessToken } = (await openSupportSession(app, token, tenant.tenantId).expect(201)).body;
+      await http().get('/companies').set(bearer(accessToken)).expect(200);
+      await http().post('/auth/platform/logout').set(bearer(token)).expect(204);
+      await http().get('/companies').set(bearer(accessToken)).expect(401);
+    });
+
     it('removing the platform administrator ends the visit', async () => {
       const { tenant } = await grantedTenant();
       const temporary = await seedPlatformAdmin(db);
@@ -240,6 +250,31 @@ describe('a platform administrator reads a tenant that granted support access', 
   });
 
   describe('audit of what the visit does', () => {
+    it('records what the guards refuse too: write attempts and subjects support cannot read (DENIED)', async () => {
+      const { tenant, grant } = await grantedTenant();
+      const { accessToken } = await visit(tenant);
+      await http().post('/companies').set(bearer(accessToken)).send({ name: 'x', countryCode: 'CO' }).expect(403);
+      await http().delete('/settings/support-access').set(bearer(accessToken)).expect(403);
+      await http().get('/audit-logs').set(bearer(accessToken)).expect(403);
+
+      const { rows } = await db.owner.query(`SELECT support_grant_id, after FROM audit_logs WHERE tenant_id = $1 AND action = 'support.request' ORDER BY created_at`, [tenant.tenantId]);
+      expect(rows.map((row) => row.support_grant_id)).toEqual([grant.id, grant.id, grant.id]);
+      expect(rows.map((row) => row.after)).toEqual([
+        expect.objectContaining({ method: 'POST', route: '/companies', outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' }),
+        expect.objectContaining({ method: 'DELETE', route: '/settings/support-access', outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' }),
+        expect.objectContaining({ method: 'GET', route: '/audit-logs', outcome: 'DENIED', status: 403, code: 'PERMISSION_DENIED' }),
+      ]);
+    });
+
+    it('a write attempt with a dead visit is a plain 401 and leaves no row', async () => {
+      const { tenant, admin } = await grantedTenant();
+      const { accessToken } = await visit(tenant);
+      await revokeSupport(app, admin.accessToken).expect(204);
+      await http().post('/companies').set(bearer(accessToken)).send({ name: 'x', countryCode: 'CO' }).expect(401);
+      const { rowCount } = await db.owner.query(`SELECT 1 FROM audit_logs WHERE tenant_id = $1 AND action = 'support.request'`, [tenant.tenantId]);
+      expect(rowCount).toBe(0);
+    });
+
     it('records every request in the tenant audit log with the administrator and the grant, never the query string', async () => {
       const { tenant, admin, grant } = await grantedTenant();
       const { accessToken } = await visit(tenant);
@@ -254,8 +289,8 @@ describe('a platform administrator reads a tenant that granted support access', 
       expect(rows).toHaveLength(3);
       expect(rows.every((row) => row.actor_id === null && row.support_actor_id === platformUserId && row.support_grant_id === grant.id)).toBe(true);
       expect(rows.map((row) => row.after)).toEqual([
-        { method: 'GET', route: '/companies', outcome: 'OK', status: 200 },
-        { method: 'GET', route: '/companies/:id', outcome: 'OK', status: 200 },
+        { ids: [], method: 'GET', route: '/companies', outcome: 'OK', status: 200 },
+        { ids: [tenant.companyId], method: 'GET', route: '/companies/:id', outcome: 'OK', status: 200 },
         expect.objectContaining({ method: 'GET', route: '/companies/:id', outcome: 'ERROR', status: 404 }),
       ]);
       expect(rows[1].entity_id).toBe(tenant.companyId);

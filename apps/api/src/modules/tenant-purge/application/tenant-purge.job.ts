@@ -43,7 +43,10 @@ export class TenantPurgeJob {
     for (const claim of claims) {
       try {
         await this.emptyStorage(claim.tenantId);
-        if (await this.runner.withoutTenant((tx) => this.purges.finish(tx, claim), { timeoutMs: PURGE_DATABASE_TIMEOUT_MS })) purged += 1;
+        if (await this.runner.withoutTenant((tx) => this.purges.finish(tx, claim), { timeoutMs: PURGE_DATABASE_TIMEOUT_MS })) {
+          purged += 1;
+          await this.sweepLateObjects(claim.tenantId);
+        }
       } catch (error) {
         failed += 1;
         await this.release(claim, error);
@@ -61,6 +64,19 @@ export class TenantPurgeJob {
       const { failed } = await this.storage.deleteMany(keys);
       if (failed.length > 0) throw new Error(`Could not delete ${failed.length} objects of the tenant's storage area`);
       if (this.clock.now().getTime() > deadline) throw new StorageBudgetExceeded('The storage area is large: the purge continues in the next run');
+    }
+  }
+
+  /**
+   * After the tombstone exists, once more: an object written by work that was already in flight when the tenant was
+   * locked (a generated document) could have landed between step (a) and the end of step (b). Nothing writes for a
+   * pending tenant any more, so one sweep is enough. Best effort: the tenant is purged either way.
+   */
+  private async sweepLateObjects(tenantId: string): Promise<void> {
+    try {
+      await this.emptyStorage(tenantId);
+    } catch (error) {
+      this.logger.error(error, 'TenantPurgeJob');
     }
   }
 

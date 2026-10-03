@@ -6,6 +6,7 @@ import { Public } from '../../../common/auth/public.decorator.js';
 import { PlatformAdminOnly, RequirePermission } from '../../../common/auth/route-access.js';
 import type { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import type { PlatformSessionService } from '../application/platform-session.service.js';
+import type { SupportRequestRecorder } from '../../audit/application/support-request-recorder.js';
 import type { SupportSessionVerifier } from '../application/support-session-verifier.js';
 import type { TenantAccessService } from '../application/tenant-access.service.js';
 import { AccessTokenGuard } from './access-token.guard.js';
@@ -38,6 +39,7 @@ const supportClaims = { sub: claims.sub, tid: claims.tid, sid: claims.sid, grant
 function setup(authorization?: string, options: { support?: boolean; method?: string } = {}) {
   const verifySupportToken = options.support ? vi.fn().mockResolvedValue(supportClaims) : vi.fn().mockRejectedValue(new UnauthenticatedError());
   const verifySupport = vi.fn().mockResolvedValue(undefined);
+  const recordSupport = vi.fn().mockResolvedValue(undefined);
   const verifyAccessToken = vi.fn().mockResolvedValue(claims);
   const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null, positionId: null };
   const verify = vi.fn().mockResolvedValue(access);
@@ -48,6 +50,7 @@ function setup(authorization?: string, options: { support?: boolean; method?: st
     { verify } as unknown as TenantAccessService,
     { verify: verifyPlatformSession } as unknown as PlatformSessionService,
     { verify: verifySupport } as unknown as SupportSessionVerifier,
+    { record: recordSupport } as unknown as SupportRequestRecorder,
   );
   const request = { method: options.method ?? 'GET', header: (name: string) => (name === 'authorization' ? authorization : undefined) } as AuthenticatedRequest;
   const context = (handler: keyof Routes) =>
@@ -64,7 +67,7 @@ function setup(authorization?: string, options: { support?: boolean; method?: st
       getClass: () => PublicController,
       switchToHttp: () => ({ getRequest: () => request }),
     }) as unknown as ExecutionContext;
-  return { guard, request, context, conflictContext, verifyAccessToken, verify, verifyPlatformToken, verifyPlatformSession, verifySupport };
+  return { guard, request, context, conflictContext, verifyAccessToken, verify, verifyPlatformToken, verifyPlatformSession, verifySupport, recordSupport };
 }
 
 describe('AccessTokenGuard', () => {
@@ -176,10 +179,19 @@ describe('AccessTokenGuard', () => {
       expect(verifyAccessToken).not.toHaveBeenCalled();
     });
 
-    it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('refuse %s before looking at the database', async (method) => {
-      const { guard, context, verifySupport } = setup('Bearer support', { support: true, method });
+    it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('refuse %s after verifying the visit, and record the attempt as DENIED', async (method) => {
+      const { guard, context, request, verifySupport, recordSupport } = setup('Bearer support', { support: true, method });
       await expect(guard.canActivate(context('protectedRoute'))).rejects.toBeInstanceOf(SupportAccessReadOnlyError);
-      expect(verifySupport).not.toHaveBeenCalled();
+      expect(verifySupport).toHaveBeenCalledOnce();
+      expect(recordSupport).toHaveBeenCalledWith(request, { tenantId: supportClaims.tid, userId: supportClaims.sub, grantId: supportClaims.grant }, { outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' });
+      expect(request.principal).toBeUndefined();
+    });
+
+    it('a write attempt with an invalid visit is a plain 401 and leaves no row', async () => {
+      const { guard, context, verifySupport, recordSupport } = setup('Bearer support', { support: true, method: 'DELETE' });
+      verifySupport.mockRejectedValue(new UnauthenticatedError());
+      await expect(guard.canActivate(context('protectedRoute'))).rejects.toBeInstanceOf(UnauthenticatedError);
+      expect(recordSupport).not.toHaveBeenCalled();
     });
 
     it('answer 401 when the visit is no longer valid', async () => {

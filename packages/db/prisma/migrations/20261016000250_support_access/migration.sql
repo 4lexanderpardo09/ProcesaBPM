@@ -29,6 +29,7 @@ CREATE TABLE "support_sessions" (
     "grant_id" UUID NOT NULL,
     "platform_user_id" UUID NOT NULL,
     "platform_user_label" TEXT NOT NULL,
+    "platform_session_id" UUID NOT NULL,
     "opened_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "closed_at" TIMESTAMPTZ(3),
 
@@ -106,6 +107,7 @@ CREATE FUNCTION support_history_is_final() RETURNS trigger
   BEGIN
     IF TG_TABLE_NAME = 'support_sessions' THEN
       IF NEW.platform_user_label IS DISTINCT FROM OLD.platform_user_label OR NEW.platform_user_id IS DISTINCT FROM OLD.platform_user_id
+         OR NEW.platform_session_id IS DISTINCT FROM OLD.platform_session_id
          OR NEW.grant_id IS DISTINCT FROM OLD.grant_id OR NEW.opened_at IS DISTINCT FROM OLD.opened_at
          OR (OLD.closed_at IS NOT NULL AND NEW.closed_at IS DISTINCT FROM OLD.closed_at) THEN
         RAISE EXCEPTION 'a support session can only be closed, once' USING ERRCODE = '23514';
@@ -132,6 +134,9 @@ GRANT UPDATE (closed_at) ON support_sessions TO app_runtime, app_worker;
 -- suspended or deleted) and close a visit; row locks (FOR SHARE) also need an UPDATE privilege, and these columns give it.
 REVOKE DELETE, TRUNCATE ON support_access_grants, support_sessions FROM app_platform;
 REVOKE UPDATE ON support_access_grants, support_sessions FROM app_platform;
+-- Consent is the tenant's alone: the platform login cannot write a grant on a tenant's behalf. It does insert visits, but
+-- only through platform_open_support_session (owned by app_platform), which requires a grant in force.
+REVOKE INSERT ON support_access_grants FROM app_platform;
 GRANT UPDATE (revoked_at, revoked_by_id) ON support_access_grants TO app_platform;
 GRANT UPDATE (closed_at) ON support_sessions TO app_platform;
 
@@ -140,7 +145,7 @@ GRANT UPDATE (closed_at) ON support_sessions TO app_platform;
 -- ===========================================================================
 -- Returns no row when the tenant has no grant in force. FOR SHARE: a revocation in flight is waited for, so a visit is
 -- never opened under a grant that was just revoked.
-CREATE FUNCTION platform_open_support_session(p_tenant uuid, p_admin uuid)
+CREATE FUNCTION platform_open_support_session(p_tenant uuid, p_admin uuid, p_platform_session uuid)
   RETURNS TABLE (out_grant_id uuid, out_session_id uuid, out_expires_at timestamptz)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
@@ -150,6 +155,9 @@ CREATE FUNCTION platform_open_support_session(p_tenant uuid, p_admin uuid)
   BEGIN
     IF NOT EXISTS (SELECT 1 FROM platform_admins pa JOIN users u ON u.id = pa.user_id WHERE pa.user_id = p_admin AND u.status = 'ACTIVE') THEN
       RAISE EXCEPTION 'only an active platform admin opens a support session' USING ERRCODE = '42501';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM refresh_sessions rs WHERE rs.id = p_platform_session AND rs.user_id = p_admin AND rs.active_tenant_id IS NULL AND rs.revoked_at IS NULL AND rs.expires_at > now()) THEN
+      RAISE EXCEPTION 'the platform session is not open' USING ERRCODE = '42501';
     END IF;
 
     SELECT g.* INTO v_grant
@@ -161,8 +169,8 @@ CREATE FUNCTION platform_open_support_session(p_tenant uuid, p_admin uuid)
       RETURN;
     END IF;
 
-    INSERT INTO support_sessions (tenant_id, grant_id, platform_user_id, platform_user_label)
-    SELECT p_tenant, v_grant.id, u.id, left(u.first_name || ' ' || u.last_name, 200) FROM users u WHERE u.id = p_admin
+    INSERT INTO support_sessions (tenant_id, grant_id, platform_user_id, platform_user_label, platform_session_id)
+    SELECT p_tenant, v_grant.id, u.id, left(u.first_name || ' ' || u.last_name, 200), p_platform_session FROM users u WHERE u.id = p_admin
     RETURNING id INTO v_session;
     RETURN QUERY SELECT v_grant.id, v_session, v_grant.expires_at;
   END
@@ -183,6 +191,8 @@ CREATE FUNCTION auth_verify_support_session(p_tenant uuid, p_session uuid, p_gra
       JOIN platform_admins pa ON pa.user_id = s.platform_user_id
       JOIN users u ON u.id = s.platform_user_id AND u.status = 'ACTIVE'
       JOIN tenants t ON t.id = s.tenant_id
+      JOIN refresh_sessions rs ON rs.id = s.platform_session_id AND rs.user_id = s.platform_user_id AND rs.active_tenant_id IS NULL
+        AND rs.revoked_at IS NULL AND rs.expires_at > now()
       WHERE s.tenant_id = p_tenant AND s.id = p_session AND s.grant_id = p_grant AND s.platform_user_id = p_admin
         AND s.closed_at IS NULL AND g.revoked_at IS NULL AND g.starts_at <= now() AND g.expires_at > now()
         AND t.status IN ('ACTIVE', 'SUSPENDED')
@@ -194,8 +204,8 @@ CREATE FUNCTION auth_verify_support_session(p_tenant uuid, p_session uuid, p_gra
   END
   $$;
 
-ALTER FUNCTION platform_open_support_session(uuid, uuid) OWNER TO app_platform;
+ALTER FUNCTION platform_open_support_session(uuid, uuid, uuid) OWNER TO app_platform;
 ALTER FUNCTION auth_verify_support_session(uuid, uuid, uuid, uuid) OWNER TO app_platform;
-REVOKE ALL ON FUNCTION platform_open_support_session(uuid, uuid), auth_verify_support_session(uuid, uuid, uuid, uuid) FROM PUBLIC, app_runtime, app_worker;
-GRANT EXECUTE ON FUNCTION platform_open_support_session(uuid, uuid) TO app_platform;
+REVOKE ALL ON FUNCTION platform_open_support_session(uuid, uuid, uuid), auth_verify_support_session(uuid, uuid, uuid, uuid) FROM PUBLIC, app_runtime, app_worker;
+GRANT EXECUTE ON FUNCTION platform_open_support_session(uuid, uuid, uuid) TO app_platform;
 GRANT EXECUTE ON FUNCTION auth_verify_support_session(uuid, uuid, uuid, uuid) TO app_runtime;

@@ -2743,6 +2743,8 @@ model SupportSession {
   platformUserId String    @map("platform_user_id") @db.Uuid
   /// First and last name of the administrator when the visit opened: members cannot read other people's users rows.
   platformUserLabel String @map("platform_user_label")
+  /// The platform session (a `refresh_sessions` row) the visit was opened from: ending it ends the visit. No foreign key: history.
+  platformSessionId String @map("platform_session_id") @db.Uuid
   openedAt       DateTime  @default(now()) @map("opened_at") @db.Timestamptz(3)
   closedAt       DateTime? @map("closed_at") @db.Timestamptz(3)
 

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connectTestDatabase, SqlState, sqlStateOf, withContext, withoutContext, type TestDatabase } from './support/database.js';
 import { insertReturningId, seedMember, seedTenant, type SeededTenant } from './support/fixtures.js';
@@ -33,9 +33,23 @@ describe('support access', () => {
   const revoke = (tenant: SeededTenant, grantId: string) =>
     withContext(db.runtime, { tenantId: tenant.tenantId, userId: tenant.userId }, (client) =>
       client.query(`UPDATE support_access_grants SET revoked_at = now(), revoked_by_id = $3 WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, grantId, tenant.userId]));
-  const open = (tenantId: string, admin = adminId) =>
-    withoutContext(db.platform, async (client) =>
-      (await client.query<{ out_grant_id: string; out_session_id: string; out_expires_at: Date }>('SELECT * FROM platform_open_support_session($1, $2)', [tenantId, admin])).rows);
+  /** The platform session (a refresh_sessions row without tenant) an administrator is signed in with. */
+  const platformSessions = new Map<string, string>();
+  const platformSessionOf = async (admin: string) => {
+    const known = platformSessions.get(admin);
+    if (known !== undefined) return known;
+    const id = (await db.owner.query<{ id: string }>(
+      `INSERT INTO refresh_sessions (user_id, active_tenant_id, token_hash, expires_at, mfa_verified) VALUES ($1, NULL, $2, now() + interval '15 minutes', true) RETURNING id`,
+      [admin, createHash('sha256').update(randomUUID()).digest('hex')],
+    )).rows[0]!.id;
+    platformSessions.set(admin, id);
+    return id;
+  };
+  const open = async (tenantId: string, admin = adminId, platformSession?: string) => {
+    const session = platformSession ?? (await platformSessionOf(admin));
+    return withoutContext(db.platform, async (client) =>
+      (await client.query<{ out_grant_id: string; out_session_id: string; out_expires_at: Date }>('SELECT * FROM platform_open_support_session($1, $2, $3)', [tenantId, admin, session])).rows);
+  };
   const verify = (tenantId: string, sessionId: string, grantId: string, admin = adminId) =>
     withContext(db.runtime, { tenantId, userId: admin }, async (client) =>
       (await client.query<{ ok: boolean }>('SELECT auth_verify_support_session($1, $2, $3, $4) AS ok', [tenantId, sessionId, grantId, admin])).rows[0]!.ok);
@@ -164,7 +178,7 @@ describe('support access', () => {
       const tenant = await freshTenant();
       await grant(tenant);
       for (const pool of [db.runtime, db.worker]) {
-        expect(await sqlStateOf(() => withoutContext(pool, (c) => c.query('SELECT * FROM platform_open_support_session($1, $2)', [tenant.tenantId, adminId])))).toBe(SqlState.insufficientPrivilege);
+        expect(await sqlStateOf(() => withoutContext(pool, (c) => c.query('SELECT * FROM platform_open_support_session($1, $2, $3)', [tenant.tenantId, adminId, randomUUID()])))).toBe(SqlState.insufficientPrivilege);
       }
     });
 
@@ -172,7 +186,7 @@ describe('support access', () => {
       const tenant = await freshTenant();
       const id = await grant(tenant);
       expect(await sqlStateOf(() => withContext(db.runtime, { tenantId: tenant.tenantId, userId: tenant.userId }, (c) =>
-        c.query(`INSERT INTO support_sessions (tenant_id, grant_id, platform_user_id, platform_user_label) VALUES ($1, $2, $3, 'x')`, [tenant.tenantId, id, adminId])))).toBe(SqlState.insufficientPrivilege);
+        c.query(`INSERT INTO support_sessions (tenant_id, grant_id, platform_user_id, platform_user_label, platform_session_id) VALUES ($1, $2, $3, 'x', $4)`, [tenant.tenantId, id, adminId, randomUUID()])))).toBe(SqlState.insufficientPrivilege);
     });
 
     it('many simultaneous openings all get their own visit', async () => {
@@ -180,6 +194,50 @@ describe('support access', () => {
       await grant(tenant);
       const rows = await Promise.all(Array.from({ length: 5 }, () => open(tenant.tenantId)));
       expect(new Set(rows.map(([row]) => row!.out_session_id)).size).toBe(5);
+    });
+  });
+
+  describe('the platform session behind a visit', () => {
+    it('is needed to open one: an unknown, revoked, expired or tenant session is refused', async () => {
+      const tenant = await freshTenant();
+      await grant(tenant);
+      const session = async (options: { revoked?: boolean; expires?: string; tenantId?: string | null }) =>
+        (await db.owner.query<{ id: string }>(
+          `INSERT INTO refresh_sessions (user_id, active_tenant_id, token_hash, expires_at, revoked_at)
+           VALUES ($1, $2, $3, now() + $4::interval, ${options.revoked ? 'now()' : 'NULL'}) RETURNING id`,
+          [adminId, options.tenantId ?? null, createHash('sha256').update(randomUUID()).digest('hex'), options.expires ?? '1 hour'],
+        )).rows[0]!.id;
+      const refused = (platformSession: string) => sqlStateOf(() => open(tenant.tenantId, adminId, platformSession));
+      expect(await refused(await session({ revoked: true }))).toBe(SqlState.insufficientPrivilege);
+      expect(await refused(await session({ expires: '-1 minute' }))).toBe(SqlState.insufficientPrivilege);
+      expect(await refused(await session({ tenantId: tenant.tenantId }))).toBe(SqlState.insufficientPrivilege);
+      expect(await refused(randomUUID())).toBe(SqlState.insufficientPrivilege);
+      expect(await open(tenant.tenantId, adminId, await session({}))).toHaveLength(1);
+    });
+
+    it('ends the visit when it ends (a logout or a password reset revokes it)', async () => {
+      const tenant = await freshTenant();
+      const id = await grant(tenant);
+      const admin = await newPlatformAdmin();
+      const [row] = await open(tenant.tenantId, admin);
+      expect(await verify(tenant.tenantId, row!.out_session_id, id, admin)).toBe(true);
+      await db.owner.query('UPDATE refresh_sessions SET revoked_at = now() WHERE id = $1', [platformSessions.get(admin)]);
+      expect(await verify(tenant.tenantId, row!.out_session_id, id, admin)).toBe(false);
+      expect(await closedAt(tenant.tenantId, row!.out_session_id)).not.toBeNull();
+    });
+  });
+
+  describe('consent', () => {
+    it('cannot be written by the platform login: only the tenant creates a grant', async () => {
+      const tenant = await freshTenant();
+      expect(await sqlStateOf(() => withoutContext(db.platform, (c) =>
+        c.query(`INSERT INTO support_access_grants (tenant_id, granted_by_id, reason, expires_at) VALUES ($1, $2, 'forged consent', now() + interval '1 hour')`, [tenant.tenantId, tenant.userId])))).toBe(SqlState.insufficientPrivilege);
+    });
+
+    it('cannot get a visit without a grant by inserting one: the function is the only door', async () => {
+      const tenant = await freshTenant();
+      expect(await sqlStateOf(() => withoutContext(db.platform, (c) =>
+        c.query(`INSERT INTO support_sessions (tenant_id, grant_id, platform_user_id, platform_user_label, platform_session_id) VALUES ($1, $2, $3, 'x', $4)`, [tenant.tenantId, randomUUID(), adminId, randomUUID()])))).toBe(SqlState.foreignKeyViolation);
     });
   });
 

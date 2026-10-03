@@ -13,7 +13,7 @@ export class PlatformSupportController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   open(@CurrentPlatformPrincipal() admin: PlatformPrincipal, @Param('id', ParseUUIDPipe) tenantId: string): Promise<SupportSessionResponse> {
-    return this.support.open(admin.userId, tenantId);
+    return this.support.open(admin, tenantId);
   }
 
   @Delete(':sessionId')
