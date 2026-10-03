@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { connectTestDatabase, SqlState, sqlStateOf, withoutContext, type TestDatabase } from './support/database.js';
+import { connectTestDatabase, SqlState, sqlStateOf, withContext, withoutContext, type TestDatabase } from './support/database.js';
 import { insertReturningId, seedMember, seedTenant, type SeededTenant } from './support/fixtures.js';
 
 describe('tenant deletion and purge', () => {
@@ -165,6 +165,17 @@ describe('tenant deletion and purge', () => {
       const tenant = await pending();
       expect(await sqlStateOf(() => withoutContext(db.runtime, (c) => c.query('SELECT finish_tenant_purge($1, 1)', [tenant.tenantId])))).toBe(SqlState.insufficientPrivilege);
       expect(await sqlStateOf(() => withoutContext(db.runtime, (c) => c.query(`SELECT fail_tenant_purge($1, 1, 'x', NULL)`, [tenant.tenantId])))).toBe(SqlState.insufficientPrivilege);
+    });
+  });
+
+  describe('the login', () => {
+    it('still lists an organization pending deletion (so choosing it can explain why), and never a purged one', async () => {
+      const tenant = await pending(1);
+      const listed = async (userId: string) =>
+        (await withContext(db.runtime, { userId }, (c) => c.query<{ tenant_id: string }>('SELECT tenant_id FROM auth_list_memberships($1)', [userId]))).rows.map((row) => row.tenant_id);
+      expect(await listed(tenant.userId)).toContain(tenant.tenantId);
+      await db.owner.query(`UPDATE tenants SET status = 'PURGED', purged_at = now(), purge_after = NULL WHERE id = $1`, [tenant.tenantId]);
+      expect(await listed(tenant.userId)).not.toContain(tenant.tenantId);
     });
   });
 

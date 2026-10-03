@@ -28,6 +28,20 @@ CREATE INDEX tenants_purge_due ON tenants (purge_after) WHERE status = 'PENDING_
 INSERT INTO platform_event_types (type, description) VALUES
   ('email.tenant_deletion_requested', 'Tells the owner that the deletion of the organization was requested and when it becomes final; the payload carries only the tenant and user ids');
 
+-- The login still lists an organization that is pending deletion, so that choosing it answers 403 TENANT_PENDING_DELETION
+-- (the person learns why) instead of the organization silently disappearing.
+CREATE OR REPLACE FUNCTION auth_list_memberships(p_user_id uuid)
+  RETURNS TABLE (tenant_id uuid, tenant_slug text, tenant_name text, membership_status membership_status, tenant_mfa_required boolean)
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
+  AS $$
+    SELECT t.id, t.slug, t.name, m.status, t.mfa_required
+    FROM memberships m JOIN tenants t ON t.id = m.tenant_id
+    WHERE m.user_id = p_user_id
+      AND p_user_id = app_current_user()
+      AND t.status IN ('ACTIVE', 'SUSPENDED', 'PENDING_DELETION')
+      AND m.status <> 'INACTIVE'
+  $$;
+
 -- ===========================================================================
 -- The purge, one claim at a time (same protocol as the outbox: lease + attempt token + SKIP LOCKED)
 -- ===========================================================================
