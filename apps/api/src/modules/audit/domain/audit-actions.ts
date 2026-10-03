@@ -42,6 +42,8 @@ export const AUDIT_ACTIONS = [
   'account.mfa_enabled',
   'account.mfa_disabled',
   'account.mfa_backup_codes_regenerated',
+  /** Written by the database (`platform_reset_user_mfa`) in every organization where the user is an active member. */
+  'account.mfa_reset_by_support',
   'file.download_url_issued',
   'pdf_template.download_url_issued',
   'report.exported',

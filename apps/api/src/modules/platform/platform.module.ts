@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ROLE_TEMPLATES } from '@procesabpm/db';
 import { JwtTokenService } from '../../infrastructure/security/jwt-token-service.js';
 import { PlatformDatabaseModule } from '../../infrastructure/database/platform-database.module.js';
+import { AuthModule } from '../auth/auth.module.js';
 import { PlatformOutboxRepository } from '../../infrastructure/outbox/platform-outbox.repository.js';
 import { TenantDefaultsProvisioner } from './application/tenant-defaults-provisioner.js';
 import { TenantOwnerInviter } from './application/tenant-owner-inviter.js';
@@ -12,6 +13,7 @@ import { OperationsService } from './application/operations.service.js';
 import { PlatformAuditQueryRepository } from './data/platform-audit-query.repository.js';
 import { PlatformAuditQueryService } from './application/platform-audit-query.service.js';
 import { SupportSessionService } from './application/support-session.service.js';
+import { PlatformUserSupportService } from './application/platform-user-support.service.js';
 import { TenantDeletionService } from './application/tenant-deletion.service.js';
 import { PlanAdminService } from './application/plan-admin.service.js';
 import { TenantAdminService } from './application/tenant-admin.service.js';
@@ -22,6 +24,7 @@ import { AnnouncementAdminRepository } from './data/announcement-admin.repositor
 import { CountryCatalogRepository } from './data/country-catalog.repository.js';
 import { OperationsRepository } from './data/operations.repository.js';
 import { SupportSessionRepository } from './data/support-session.repository.js';
+import { PlatformUserRepository } from './data/platform-user.repository.js';
 import { TenantDeletionRepository } from './data/tenant-deletion.repository.js';
 import { PlanAdminRepository } from './data/plan-admin.repository.js';
 import { TenantAdminRepository } from './data/tenant-admin.repository.js';
@@ -40,11 +43,24 @@ import { PlatformSupportController } from './http/platform-support.controller.js
 import { PlatformDeletionController } from './http/platform-deletion.controller.js';
 import { PlatformPlansController } from './http/platform-plans.controller.js';
 import { PlatformTenantsController } from './http/platform-tenants.controller.js';
+import { PlatformUsersController } from './http/platform-users.controller.js';
 
 /** Platform administration: it acts on tenants with the login that bypasses row-level security. */
 @Module({
-  imports: [PlatformDatabaseModule],
-  controllers: [PlatformTenantsController, PlatformAdminsController, PlatformPlansController, PlatformAnnouncementsController, PlatformCatalogController, PlatformOperationsController, PlatformAuditController, PlatformSupportController, PlatformDeletionController],
+  // AuthModule only for the shared rate limiter (support's lookups and MFA resets are limited per administrator and user).
+  imports: [PlatformDatabaseModule, AuthModule],
+  controllers: [
+    PlatformTenantsController,
+    PlatformAdminsController,
+    PlatformPlansController,
+    PlatformAnnouncementsController,
+    PlatformCatalogController,
+    PlatformOperationsController,
+    PlatformAuditController,
+    PlatformSupportController,
+    PlatformDeletionController,
+    PlatformUsersController,
+  ],
   providers: [
     PlatformOutboxRepository,
     PlatformAuditRepository,
@@ -74,6 +90,8 @@ import { PlatformTenantsController } from './http/platform-tenants.controller.js
     PlatformAuditQueryService,
     SupportSessionRepository,
     SupportSessionService,
+    PlatformUserRepository,
+    PlatformUserSupportService,
     TenantDeletionRepository,
     TenantDeletionService,
     JwtTokenService,
