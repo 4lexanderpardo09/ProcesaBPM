@@ -10,6 +10,9 @@
 -- its tenant "is current" check is a plain query that still works, so it could send an e-mail it can no longer complete
 -- (docs/despliegue.md §5).
 
+-- Fail fast instead of queueing every writer of the outbox behind a lock we cannot get.
+SET LOCAL lock_timeout = '10s';
+
 ALTER TABLE outbox_events ADD COLUMN claim_token uuid;
 ALTER TABLE platform_outbox_events ADD COLUMN claim_token uuid;
 
@@ -18,8 +21,10 @@ ALTER TABLE platform_outbox_events ADD COLUMN claim_token uuid;
 UPDATE outbox_events SET claim_token = gen_random_uuid() WHERE status = 'PROCESSING';
 UPDATE platform_outbox_events SET claim_token = gen_random_uuid() WHERE status = 'PROCESSING';
 
-ALTER TABLE outbox_events ADD CONSTRAINT outbox_claim_token_iff_processing CHECK ((status = 'PROCESSING') = (claim_token IS NOT NULL));
-ALTER TABLE platform_outbox_events ADD CONSTRAINT platform_outbox_claim_token_iff_processing CHECK ((status = 'PROCESSING') = (claim_token IS NOT NULL));
+-- NOT VALID: it is enforced for every new and updated row at once, but the scan of the existing rows (which would hold the
+-- table's exclusive lock for as long as it takes) is left to the next migration, which validates it with a weaker lock.
+ALTER TABLE outbox_events ADD CONSTRAINT outbox_claim_token_iff_processing CHECK ((status = 'PROCESSING') = (claim_token IS NOT NULL)) NOT VALID;
+ALTER TABLE platform_outbox_events ADD CONSTRAINT platform_outbox_claim_token_iff_processing CHECK ((status = 'PROCESSING') = (claim_token IS NOT NULL)) NOT VALID;
 
 -- ===========================================================================
 -- 1. Tenant outbox

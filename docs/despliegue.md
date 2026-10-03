@@ -154,6 +154,8 @@ El comando **se niega** a correr con el dueño del esquema, con un superusuario 
 
 ### Actualizar un entorno en marcha (worker detenido durante la migración)
 
+Con otro orquestador o varios hosts, el paso 2 es «escala el worker a 0 réplicas **en todos los hosts**» antes de correr el trabajo de migración: una sola réplica vieja viva basta para el envío doble de correos de tenant que se describe abajo. Al revés, un worker nuevo contra una BD sin migrar falla cerrado (la consulta de reclamo no encuentra la columna `claim_token`), sin perder nada. El **API no necesita detenerse**: un API viejo solo inserta eventos y reintenta los `FAILED`, y eso es compatible.
+
 Con Compose, `up -d` con imágenes nuevas corre `migrate` **antes** de recrear el worker, así que el worker viejo sigue trabajando mientras se migra. Cuando una migración cambia el protocolo del outbox, eso no sirve. El procedimiento seguro, que vale para cualquier versión:
 
 1. Respaldo de la BD.
