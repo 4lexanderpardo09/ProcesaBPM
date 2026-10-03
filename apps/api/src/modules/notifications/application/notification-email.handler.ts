@@ -7,6 +7,7 @@ import { singleLine } from '../../../infrastructure/mail/html.js';
 import { renderEmail } from '../../../infrastructure/mail/layout.js';
 import { type ClaimedEvent, type ExternalEffectHandler } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
+import { TicketTextRenderer } from '../../documents/application/ticket-text-renderer.js';
 import { NOTIFICATION_EMAIL_EVENT } from '../data/email-outbox.repository.js';
 import { channelsFor } from '../domain/channels.js';
 import { RecipientRepository } from '../data/recipient.repository.js';
@@ -34,6 +35,7 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
     @Inject(TicketFactsRepository) private readonly facts: TicketFactsRepository,
     @Inject(RecipientRepository) private readonly recipients: RecipientRepository,
     @Inject(TicketReaderFilter) private readonly readers: TicketReaderFilter,
+    @Inject(TicketTextRenderer) private readonly texts: TicketTextRenderer,
   ) {}
 
   onModuleInit(): void {
@@ -42,7 +44,7 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
 
   async prepare(tx: TenantTransaction, event: ClaimedEvent<NotificationEmailPayload>): Promise<MailMessage | null> {
     const tenantId = event.tenantId!;
-    const { userId, ticketId, notificationType } = event.payload;
+    const { userId, ticketId, notificationType, stepId } = event.payload;
     const tenant = await this.facts.tenant(tx, tenantId);
     const ticket = await this.facts.ticket(tx, tenantId, ticketId);
     if (tenant === undefined || !tenant.active || ticket === undefined) return null;
@@ -53,18 +55,31 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
     const recipient = await this.recipients.mailRecipient(tx, userId);
     if (recipient === undefined) return null;
 
-    const subject = singleLine(es.titles[notificationType](ticket.number));
+    const written = stepId === undefined ? undefined : await this.writtenBy(tx, tenantId, ticketId, stepId);
+    if (stepId !== undefined && written === undefined) return null;
+    const subject = singleLine(written?.subject ?? es.titles[notificationType](ticket.number));
     const content = renderEmail({
       title: subject,
       greeting: es.email.greeting(recipient.firstName),
-      paragraphs: [es.email.ticketLine(ticket.title)],
+      paragraphs: written === undefined ? [es.email.ticketLine(ticket.title)] : paragraphsOf(written.body),
       action: { label: es.email.action, url: this.links.ticket(tenantId, ticketId) },
       footer: es.email.why(tenant.name),
     });
     return { to: recipient.email, subject, ...content, messageId: `<${event.id}@${this.settings.MAIL_MESSAGE_ID_DOMAIN}>` };
   }
 
+  /** The subject and body a NOTIFICATION block asks for, with the ticket's data filled in; `undefined` when the block or the ticket is gone. */
+  private async writtenBy(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<{ subject: string; body: string } | undefined> {
+    const block = await this.facts.notificationBlock(tx, tenantId, ticketId, stepId);
+    if (block === undefined) return undefined;
+    const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, block.body]);
+    return rendered === null ? undefined : { subject: rendered[0]!, body: rendered[1]! };
+  }
+
   async perform(message: MailMessage): Promise<void> {
     await this.mailer.send(message);
   }
 }
+
+/** Blank lines separate paragraphs; a single line break stays inside one. */
+const paragraphsOf = (body: string): string[] => body.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter((paragraph) => paragraph.length > 0);

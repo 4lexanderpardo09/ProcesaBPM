@@ -7,6 +7,7 @@ import { checkConditions } from './rules/conditions.js';
 import { buildContext } from './rules/context.js';
 import { checkFields } from './rules/fields.js';
 import { checkLoops } from './rules/loops.js';
+import { checkNotifications } from './rules/notifications.js';
 import { checkSteps } from './rules/steps.js';
 import { checkStructure } from './rules/structure.js';
 import { checkTransitions } from './rules/transitions.js';
@@ -28,6 +29,7 @@ export function validateWorkflowGraph(doc: WorkflowVersionDocument): WorkflowVal
   checkCalculators(context);
   checkConditions(context);
   checkAmountRules(context);
+  checkNotifications(context);
   checkAssignmentModes(context);
   return problems.result();
 }
