@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SECURITY_NOTICE_KINDS } from '../../../infrastructure/outbox/platform-event-types.js';
-import { renderInvitationEmail, renderPasswordResetEmail, renderSecurityNoticeEmail } from './auth-email-templates.js';
+import { renderInvitationEmail, renderMemberSecurityNoticeEmail, renderPasswordResetEmail, renderSecurityNoticeEmail } from './auth-email-templates.js';
 
 const ATTACK = `Ana "><script>alert(1)</script>`;
 
@@ -72,6 +72,40 @@ describe('account e-mails', () => {
       expect(renderSecurityNoticeEmail({ ...base, kind: 'MFA_ENABLED', timeZone: 'Europe/Madrid' }).text).toContain('(Europe/Madrid)');
       expect(renderSecurityNoticeEmail({ ...base, kind: 'MFA_ENABLED', timeZone: null }).text).toContain('10:04');
       expect(renderSecurityNoticeEmail({ ...base, kind: 'MFA_ENABLED', timeZone: 'Not/AZone' }).text).toContain('(America/Bogota)');
+    });
+
+    it('the reset by support says the identity was verified and every session was closed', () => {
+      const mail = renderSecurityNoticeEmail({ ...base, kind: 'MFA_RESET_BY_SUPPORT' });
+      expect(mail.text).toContain('verificar tu identidad');
+      expect(mail.text).toContain('sesiones se cerraron');
+    });
+  });
+
+  describe('notice to an owner about a member', () => {
+    const input = {
+      kind: 'MEMBER_MFA_RESET_BY_SUPPORT',
+      firstName: 'Olga',
+      organization: 'Acme <b>S.A.</b>',
+      memberName: ATTACK,
+      occurredAt: new Date('2026-10-03T15:04:00Z'),
+      timeZone: null,
+    } as const;
+
+    it('names the member and the organization in the body only, escaped, never in the subject', () => {
+      const mail = renderMemberSecurityNoticeEmail(input);
+      expect(mail.subject).toBe('Soporte restableció la verificación en dos pasos de un miembro de tu organización');
+      expect(mail.html).not.toContain('<script');
+      expect(mail.html).toContain('Acme &lt;b&gt;S.A.&lt;/b&gt;');
+      expect(mail.text).toContain('Acme <b>S.A.</b>');
+      expect(mail.text).toContain('Hola Olga,');
+      expect(mail.text).toContain('auditoría');
+      expect(mail.text).toContain('10:04');
+    });
+
+    it('carries no link, no button and nothing secret-looking', () => {
+      const mail = renderMemberSecurityNoticeEmail({ ...input, memberName: 'Ana Ruiz' });
+      expect(mail.html).not.toContain('href=');
+      expect(mail.text).not.toMatch(/https?:|token|[A-Za-z0-9_-]{32,}/);
     });
   });
 });

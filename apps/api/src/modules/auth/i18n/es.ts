@@ -55,7 +55,8 @@ export const authMailEs = {
       MFA_ENABLED: 'Se activó la verificación en dos pasos en tu cuenta. Guarda tus códigos de respaldo en un lugar seguro.',
       MFA_DISABLED: 'Se desactivó la verificación en dos pasos en tu cuenta. Las demás sesiones abiertas se cerraron.',
       MFA_BACKUP_CODES_REGENERATED: 'Se generaron nuevos códigos de respaldo para tu verificación en dos pasos. Los anteriores ya no sirven.',
-      MFA_RESET_BY_SUPPORT: 'El equipo de soporte de ProcesaBPM restableció tu verificación en dos pasos. La próxima vez que ingreses tendrás que activarla de nuevo.',
+      MFA_RESET_BY_SUPPORT:
+        'El equipo de soporte de ProcesaBPM restableció tu verificación en dos pasos después de verificar tu identidad. Todas tus sesiones se cerraron. Si tu organización la exige, tendrás que activarla de nuevo al ingresar.',
       ACCOUNT_LOCKED: (minutes: number) => `Tu cuenta se bloqueó durante ${minutes} minutos porque se escribió mal la contraseña varias veces seguidas.`,
       MFA_LOCKED: (minutes: number) => `La verificación en dos pasos de tu cuenta se bloqueó durante ${minutes} minutos porque se escribió mal el código varias veces seguidas.`,
       PLATFORM_ADMIN_SIGN_IN: 'Se abrió una sesión en la consola de administración de la plataforma con tu cuenta.',
@@ -65,5 +66,17 @@ export const authMailEs = {
     unknown: 'desconocido',
     notYou: 'Si no fuiste tú, restablece tu contraseña ya mismo y avisa a soporte o al administrador de tu organización.',
     action: 'Restablecer mi contraseña',
+  },
+  memberSecurityNotice: {
+    greeting: (firstName: string) => `Hola ${firstName},`,
+    subject: {
+      MEMBER_MFA_RESET_BY_SUPPORT: 'Soporte restableció la verificación en dos pasos de un miembro de tu organización',
+    },
+    happened: {
+      MEMBER_MFA_RESET_BY_SUPPORT: (member: string, organization: string) =>
+        `El equipo de soporte de ProcesaBPM restableció la verificación en dos pasos de ${member} en la organización «${organization}», después de verificar su identidad. Todas sus sesiones se cerraron.`,
+    },
+    audit: 'El cambio quedó registrado en la auditoría de la organización.',
+    unexpected: 'Si no esperabas este cambio, responde a este correo o escribe a soporte.',
   },
 } as const;
