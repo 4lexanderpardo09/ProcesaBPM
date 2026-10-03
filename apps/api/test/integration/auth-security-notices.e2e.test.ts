@@ -34,6 +34,7 @@ describe('security e-mails', () => {
 
   /** Every notice sent to the address so far, after the worker delivered what is due. */
   async function noticesTo(email: string): Promise<MailMessage[]> {
+    await app.get(BackgroundTasks).whenIdle();
     await mail.deliver({ retries: true });
     const subjects = new Set(Object.values(authMailEs.securityNotice.subject));
     return mail.mailer.to(email).filter((message) => subjects.has(message.subject as never));

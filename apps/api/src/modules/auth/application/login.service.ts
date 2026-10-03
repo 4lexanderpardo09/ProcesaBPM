@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { InvalidCredentialsError, type LoginRequest, type LoginResponse } from '@procesabpm/shared';
+import { BackgroundTasks } from '../../../common/background/background-tasks.js';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import { PasswordHasher } from '../../../infrastructure/security/password-hasher.js';
@@ -19,6 +20,7 @@ export class LoginService {
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
     @Inject(SelectionIssuer) private readonly selection: SelectionIssuer,
     @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
+    @Inject(BackgroundTasks) private readonly background: BackgroundTasks,
   ) {}
 
   /**
@@ -26,7 +28,7 @@ export class LoginService {
    * claim and one Argon2id verification), so neither the answer nor its timing tells them apart. The attempt is claimed
    * (and committed) BEFORE the password is checked: a burst of parallel requests cannot test more passwords than the
    * lockout allows, and a locked account is never tested against its real hash. When the attempt that locked the account
-   * was wrong, its owner is told (the database sends one such notice per day at most).
+   * was wrong, its owner is told in the background (the database sends one such notice per day at most).
    */
   async login(request: LoginRequest): Promise<LoginResponse> {
     const candidate = await this.runner.withAnonymousTransaction((tx) =>
@@ -39,7 +41,10 @@ export class LoginService {
     const usable = claim.claimed && candidate !== undefined;
     const passwordMatches = await this.hasher.verify(usable ? candidate.passwordHash : null, request.password);
     if (usable && passwordMatches) return this.nextStep(candidate);
-    if (usable && claim.locking) await this.notifier.notifyLockout(candidate.id, 'ACCOUNT_LOCKED');
+    if (usable && claim.locking) {
+      // In the background: the extra transaction must not make the locking attempt slower than the unknown-account path.
+      this.background.run('login.lockout-notice', () => this.notifier.notifyLockout(candidate.id, 'ACCOUNT_LOCKED'));
+    }
     throw new InvalidCredentialsError();
   }
 

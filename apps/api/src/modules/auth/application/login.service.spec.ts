@@ -1,5 +1,7 @@
 import { InvalidCredentialsError } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
+import { BackgroundTasks } from '../../../common/background/background-tasks.js';
+import type { JsonLogger } from '../../../common/logging/json-logger.js';
 import type { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import type { JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
 import type { SelectionIssuer } from './selection-issuer.js';
@@ -45,6 +47,7 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
   const tokens = { issueMfaChallenge: vi.fn().mockResolvedValue({ token: 'challenge', expiresIn: 300 }) };
   const selection = { issue: vi.fn().mockResolvedValue(SELECTION) };
   const notifier = { notifyLockout: vi.fn().mockResolvedValue(undefined) };
+  const background = new BackgroundTasks({ error: vi.fn() } as unknown as JsonLogger);
   const service = new LoginService(
     runner,
     credentials as unknown as CredentialsRepository,
@@ -52,8 +55,9 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
     tokens as unknown as JwtTokenService,
     selection as unknown as SelectionIssuer,
     notifier as unknown as SecurityNotifier,
+    background,
   );
-  return { service, credentials, hasher, calls, tokens, selection, notifier };
+  return { service, background, credentials, hasher, calls, tokens, selection, notifier };
 }
 
 const request = { email: 'jane@example.com', password: 'secret password' };
@@ -101,8 +105,9 @@ describe('LoginService', () => {
 
   describe('the lockout notice', () => {
     it('is queued once when the attempt that locks the account has a wrong password', async () => {
-      const { service, notifier } = setup(active, false, true, true);
+      const { service, notifier, background } = setup(active, false, true, true);
       await expect(service.login(request)).rejects.toBeInstanceOf(InvalidCredentialsError);
+      await background.whenIdle();
       expect(notifier.notifyLockout).toHaveBeenCalledTimes(1);
       expect(notifier.notifyLockout).toHaveBeenCalledWith(active.id, 'ACCOUNT_LOCKED');
     });
