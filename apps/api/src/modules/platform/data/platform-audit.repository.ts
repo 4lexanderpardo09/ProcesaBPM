@@ -6,7 +6,7 @@ import type { PlatformTransaction } from '../../../infrastructure/database/platf
 export interface PlatformAuditEntry {
   readonly actorUserId: string;
   readonly action: string;
-  readonly targetTenantId: string;
+  readonly targetTenantId?: string;
   readonly data?: Prisma.InputJsonObject;
 }
 
@@ -17,7 +17,7 @@ export class PlatformAuditRepository {
 
   async record(tx: PlatformTransaction, entry: PlatformAuditEntry): Promise<void> {
     await tx.platformAuditLog.create({
-      data: { actorUserId: entry.actorUserId, action: entry.action, targetTenantId: entry.targetTenantId, data: entry.data ?? {}, ipAddress: this.requestContext.current()?.ipAddress ?? null },
+      data: { actorUserId: entry.actorUserId, action: entry.action, targetTenantId: entry.targetTenantId ?? null, data: entry.data ?? {}, ipAddress: this.requestContext.current()?.ipAddress ?? null },
     });
   }
 }

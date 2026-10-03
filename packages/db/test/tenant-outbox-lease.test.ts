@@ -14,8 +14,13 @@ describe('tenant outbox: lease, fencing and complete/fail', () => {
   let tenantA: SeededTenant;
   let tenantB: SeededTenant;
 
+  // available_at has millisecond precision and now() is rounded up to it: an event claimed within the same millisecond
+  // would not be due yet. Inserting it a second in the past makes every test deterministic.
   const insertEvent = async (tenant: SeededTenant, type = 'test.lease') =>
-    (await db.platform.query<{ id: string }>(`INSERT INTO outbox_events (tenant_id, type, payload) VALUES ($1, $2, '{}') RETURNING id`, [tenant.tenantId, type])).rows[0]!.id;
+    (await db.platform.query<{ id: string }>(
+      `INSERT INTO outbox_events (tenant_id, type, payload, available_at) VALUES ($1, $2, '{}', now() - interval '1 second') RETURNING id`,
+      [tenant.tenantId, type],
+    )).rows[0]!.id;
   const claim = (limit = 1000, lease = '5 minutes', maxAttempts = 10) =>
     withoutContext(db.worker, async (client) => (await client.query<Claimed>('SELECT * FROM claim_outbox_events($1, NULL::text[], $2::interval, $3)', [limit, lease, maxAttempts])).rows);
   const row = async (id: string) =>

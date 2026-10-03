@@ -45,6 +45,7 @@ const AUTHENTICATED_ONLY_ROUTES = [
   'PUT /notifications/preferences/:type',
   'POST /notifications/read-all',
   'POST /notifications/:id/read',
+  'GET /announcements',
 ];
 
 /** Routes of the platform administrators: they need a platform token, never a tenant one. */
@@ -53,6 +54,31 @@ const PLATFORM_ROUTES = [
   'POST /platform/tenants',
   'POST /platform/tenants/:id/suspend',
   'POST /platform/tenants/:id/reactivate',
+  'GET /platform/tenants',
+  'GET /platform/tenants/:id',
+  'PUT /platform/tenants/:id/plan',
+  'PUT /platform/tenants/:id/extra-storage',
+  'POST /platform/tenants/:id/owner-invitation',
+  'GET /platform/announcements',
+  'POST /platform/announcements',
+  'PUT /platform/announcements/:id',
+  'DELETE /platform/announcements/:id',
+  'GET /platform/catalog/countries',
+  'POST /platform/catalog/countries',
+  'GET /platform/catalog/countries/:code/holidays',
+  'POST /platform/catalog/countries/:code/holidays',
+  'DELETE /platform/catalog/countries/:code/holidays/:date',
+  'POST /platform/catalog/countries/:code/holidays/regenerate',
+  'GET /platform/operations/outbox-events/failed',
+  'POST /platform/operations/outbox-events/platform/:id/retry',
+  'POST /platform/operations/outbox-events/tenants/:tenantId/:id/retry',
+  'GET /platform/operations/metrics',
+  'GET /platform/audit-logs',
+  'GET /platform/plans',
+  'PUT /platform/plans/:code',
+  'GET /platform/admins',
+  'POST /platform/admins',
+  'DELETE /platform/admins/:userId',
 ];
 
 /** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */

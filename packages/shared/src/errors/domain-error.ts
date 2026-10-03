@@ -30,6 +30,7 @@ export const ERROR_CODES = {
   platformAccessDenied: 'PLATFORM_ACCESS_DENIED',
   tenantSlugTaken: 'TENANT_SLUG_TAKEN',
   tenantNotFound: 'TENANT_NOT_FOUND',
+  lastPlatformAdmin: 'LAST_PLATFORM_ADMIN',
   notFound: 'NOT_FOUND',
   approverNotFound: 'APPROVER_NOT_FOUND',
   workflowNotPublishable: 'WORKFLOW_NOT_PUBLISHABLE',
@@ -290,6 +291,12 @@ export class TenantSlugTakenError extends DomainError {
 export class TenantNotFoundError extends DomainError {
   constructor() {
     super(ERROR_CODES.tenantNotFound, 'The tenant does not exist');
+  }
+}
+
+export class LastPlatformAdminError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.lastPlatformAdmin, 'The last platform admin cannot be revoked');
   }
 }
 

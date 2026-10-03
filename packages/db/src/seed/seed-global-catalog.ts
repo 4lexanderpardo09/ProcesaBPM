@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import { colombianHolidays } from '../holidays/colombia.js';
+import { holidayGeneratorFor } from '../holidays/generators.js';
 import { COUNTRIES, CURRENCIES, PERMISSIONS, PLANS } from './catalog.js';
 
 type Queryable = Pick<pg.ClientBase, 'query'>;
@@ -9,13 +9,9 @@ export interface SeedOptions {
   holidayYears: readonly number[];
 }
 
-const HOLIDAY_GENERATORS: Readonly<Record<string, (year: number) => { date: string; name: string }[]>> = {
-  CO: colombianHolidays,
-};
-
 /**
  * Loads the global catalog (currencies, countries, holidays, plans, permissions).
- * Idempotent: upserts by natural key, so it runs on every deploy. Requires the
+ * Idempotent: upserts by natural key, so it runs on every deploy (plans are only inserted: their limits belong to the console). Requires the
  * app_platform role (the API role cannot write global tables).
  */
 export async function seedGlobalCatalog(db: Queryable, options: SeedOptions): Promise<void> {
@@ -39,9 +35,9 @@ export async function seedGlobalCatalog(db: Queryable, options: SeedOptions): Pr
 
   for (const plan of PLANS) {
     await db.query(
+      // Insert only: the platform console edits the limits, and a deployment must not undo those edits.
       `INSERT INTO plans (code, name, storage_base_bytes, storage_per_user_bytes, max_users) VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, storage_base_bytes = EXCLUDED.storage_base_bytes,
-         storage_per_user_bytes = EXCLUDED.storage_per_user_bytes, max_users = EXCLUDED.max_users`,
+       ON CONFLICT (code) DO NOTHING`,
       [plan.code, plan.name, plan.storageBaseBytes.toString(), plan.storagePerUserBytes.toString(), plan.maxUsers],
     );
   }
@@ -56,7 +52,7 @@ export async function seedGlobalCatalog(db: Queryable, options: SeedOptions): Pr
 }
 
 async function seedCountryHolidays(db: Queryable, countryCode: string, years: readonly number[]): Promise<void> {
-  const generate = HOLIDAY_GENERATORS[countryCode];
+  const generate = holidayGeneratorFor(countryCode);
   if (!generate) return;
 
   for (const year of years) {

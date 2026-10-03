@@ -3,13 +3,13 @@ import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-set
 import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 import { type MailMessage, Mailer } from '../../../infrastructure/mail/mailer.js';
 import { WebLinks } from '../../../infrastructure/mail/links.js';
-import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
+import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema, PLATFORM_ADMIN_INVITATION_EVENT, platformAdminInvitationPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
 import { type ClaimedEvent, type ExternalEffectHandler, PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { WorkerTokenRepository } from '../data/worker-token.repository.js';
-import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, renderInvitationEmail, renderPasswordResetEmail, type RenderedMail } from '../domain/auth-email-templates.js';
+import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS, renderInvitationEmail, renderPasswordResetEmail, renderPlatformAdminInvitationEmail, type RenderedMail } from '../domain/auth-email-templates.js';
 import { deriveEmailLinkToken } from '../domain/email-link-token.js';
 
 /** A reset request that waited longer than this in the queue is not mailed: the person asked again by now. */
@@ -92,5 +92,35 @@ export class InvitationEmailHandler extends AccountEmailHandler<InvitationPayloa
     const recipient = await this.tokens.issueInvitation(tx, { eventId: event.id, tenantId: event.payload.tenantId, userId: event.payload.userId, tokenHash: sha256Hex(token), ttlDays: INVITATION_VALIDITY_DAYS });
     if (recipient === undefined) return null;
     return this.message(event, recipient.email, renderInvitationEmail({ firstName: recipient.firstName, organization: recipient.organization, url: this.links.acceptInvitation(token) }));
+  }
+}
+
+/** The e-mail of a new platform administrator: a password link that lasts days, never dropped for waiting in the queue. */
+@Injectable()
+export class PlatformAdminInvitationEmailHandler extends AccountEmailHandler<ResetPayload> implements ExternalEffectHandler<ResetPayload, MailMessage, void, CrossTenantTransaction>, OnModuleInit {
+  readonly type = PLATFORM_ADMIN_INVITATION_EVENT;
+  readonly scope = 'platform' as const;
+  readonly schema = platformAdminInvitationPayloadSchema;
+
+  constructor(
+    @Inject(WORKER_SETTINGS) settings: WorkerSettings,
+    @Inject(Mailer) mailer: Mailer,
+    @Inject(WebLinks) private readonly links: WebLinks,
+    @Inject(WorkerTokenRepository) private readonly tokens: WorkerTokenRepository,
+    @Inject(OutboxHandlerRegistry) private readonly registry: OutboxHandlerRegistry,
+  ) {
+    super(settings, mailer);
+  }
+
+  onModuleInit(): void {
+    this.registry.registerExternal(this);
+  }
+
+  async prepare(tx: CrossTenantTransaction, event: ClaimedEvent<ResetPayload>): Promise<MailMessage | null> {
+    const token = this.tokenFor(event);
+    const ttlMinutes = PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS * 24 * 60;
+    const recipient = await this.tokens.issuePasswordReset(tx, { eventId: event.id, userId: event.payload.userId, tokenHash: sha256Hex(token), ttlMinutes });
+    if (recipient === undefined) return null;
+    return this.message(event, recipient.email, renderPlatformAdminInvitationEmail({ firstName: recipient.firstName, url: this.links.resetPassword(token) }));
   }
 }

@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 import pg from 'pg';
-import { createPlatformAdmin, PLATFORM_ADMIN_LINK_VALIDITY_HOURS, PlatformAdminAlreadyExistsError, PlatformLoginRequiredError } from './platform-admin.js';
+import { createPlatformAdmin, PLATFORM_ADMIN_LINK_VALIDITY_HOURS, PlatformAdminAlreadyExistsError, PlatformLoginRequiredError, UserNotActiveError } from './platform-admin.js';
 
 const USAGE = `Usage: DATABASE_URL=<platform login> WEB_BASE_URL=<https://app.example.com> create-platform-admin.js --email <address>
          [--first-name <name>] [--last-name <name>] [--force-additional]`;
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  if (error instanceof PlatformAdminAlreadyExistsError || error instanceof PlatformLoginRequiredError) console.error(error.message);
+  if (error instanceof PlatformAdminAlreadyExistsError || error instanceof PlatformLoginRequiredError || error instanceof UserNotActiveError) console.error(error.message);
   else console.error(error);
   process.exitCode = 1;
 });

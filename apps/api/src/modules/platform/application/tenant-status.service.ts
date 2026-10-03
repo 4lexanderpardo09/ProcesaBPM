@@ -14,22 +14,22 @@ export class TenantStatusService {
     @Inject(PlatformAuditRepository) private readonly audit: PlatformAuditRepository,
   ) {}
 
-  suspend(actorUserId: string, tenantId: string): Promise<TenantStatusResponse> {
-    return this.change(actorUserId, tenantId, 'SUSPENDED', PLATFORM_AUDIT_ACTIONS.tenantSuspended);
+  suspend(actorUserId: string, tenantId: string, reason: string): Promise<TenantStatusResponse> {
+    return this.change(actorUserId, tenantId, 'SUSPENDED', PLATFORM_AUDIT_ACTIONS.tenantSuspended, reason);
   }
 
-  reactivate(actorUserId: string, tenantId: string): Promise<TenantStatusResponse> {
-    return this.change(actorUserId, tenantId, 'ACTIVE', PLATFORM_AUDIT_ACTIONS.tenantReactivated);
+  reactivate(actorUserId: string, tenantId: string, reason?: string): Promise<TenantStatusResponse> {
+    return this.change(actorUserId, tenantId, 'ACTIVE', PLATFORM_AUDIT_ACTIONS.tenantReactivated, reason);
   }
 
-  private change(actorUserId: string, tenantId: string, target: ManagedTenantStatus, action: string): Promise<TenantStatusResponse> {
+  private change(actorUserId: string, tenantId: string, target: ManagedTenantStatus, action: string, reason?: string): Promise<TenantStatusResponse> {
     return this.runner.run(async (tx) => {
       const current = await this.tenants.lockStatus(tx, tenantId);
       if (current === undefined) throw new TenantNotFoundError();
       if (current !== 'ACTIVE' && current !== 'SUSPENDED') throw new InvalidStateError(`A ${current.toLowerCase()} tenant cannot change status`);
       if (current !== target) {
         await this.tenants.updateStatus(tx, tenantId, target);
-        await this.audit.record(tx, { actorUserId, action, targetTenantId: tenantId });
+        await this.audit.record(tx, { actorUserId, action, targetTenantId: tenantId, data: reason === undefined ? {} : { reason } });
       }
       return { tenantId, status: target };
     });
