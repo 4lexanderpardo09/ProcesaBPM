@@ -57,7 +57,7 @@ describe('platform outbox and the worker role', () => {
       }
     });
 
-    it.each([...WORKER_FUNCTIONS, `purge_processed_platform_outbox_events('1 day')`])('cannot call %s', async (call) => {
+    it.each([...WORKER_FUNCTIONS, 'retention_purge_platform_outbox_events(10)'])('cannot call %s', async (call) => {
       expect(await sqlStateOf(() => withoutContext(db.runtime, (client) => client.query(`SELECT * FROM ${call}`)))).toBe(
         SqlState.insufficientPrivilege,
       );
@@ -209,30 +209,6 @@ describe('platform outbox and the worker role', () => {
       const fail = await db.worker.query<{ ok: boolean }>('SELECT fail_platform_outbox_event($1, $2, $3, NULL) AS ok', [id, stale, 'late']);
       expect([complete.rows[0]!.ok, fail.rows[0]!.ok]).toEqual([false, false]);
       expect(await eventRow(id)).toMatchObject({ status: 'PROCESSING', attempts: 2 });
-    });
-  });
-
-  describe('retention', () => {
-    it('purge deletes old FAILED events too (they have no processing date: the creation date counts)', async () => {
-      const [oldFailed, recentFailed] = [await enqueue(), await enqueue()];
-      await db.owner.query(`UPDATE platform_outbox_events SET status = 'FAILED', created_at = now() - interval '10 days' WHERE id = $1`, [oldFailed]);
-      await db.owner.query(`UPDATE platform_outbox_events SET status = 'FAILED' WHERE id = $1`, [recentFailed]);
-      await db.platform.query(`SELECT purge_processed_platform_outbox_events('7 days')`);
-      const remaining = await db.owner.query<{ id: string }>('SELECT id FROM platform_outbox_events WHERE id = ANY($1)', [[oldFailed, recentFailed]]);
-      expect(remaining.rows.map((row) => row.id)).toEqual([recentFailed]);
-    });
-
-    it('purge deletes only old DONE events and only app_platform can run it', async () => {
-      const [oldDone, recentDone, pending] = [await enqueue(), await enqueue(), await enqueue()];
-      await db.owner.query(`UPDATE platform_outbox_events SET status = 'DONE', processed_at = now() - interval '10 days' WHERE id = $1`, [oldDone]);
-      await db.owner.query(`UPDATE platform_outbox_events SET status = 'DONE', processed_at = now() WHERE id = $1`, [recentDone]);
-
-      expect(await sqlStateOf(() => db.worker.query(`SELECT purge_processed_platform_outbox_events('7 days')`))).toBe(SqlState.insufficientPrivilege);
-      const { rows } = await db.platform.query<{ count: string }>(`SELECT purge_processed_platform_outbox_events('7 days') AS count`);
-      expect(Number(rows[0]!.count)).toBeGreaterThanOrEqual(1);
-
-      const remaining = await db.owner.query<{ id: string }>('SELECT id FROM platform_outbox_events WHERE id = ANY($1)', [[oldDone, recentDone, pending]]);
-      expect(remaining.rows.map((row) => row.id).sort()).toEqual([recentDone, pending].sort());
     });
   });
 

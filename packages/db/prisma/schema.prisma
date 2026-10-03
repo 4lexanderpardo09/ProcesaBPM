@@ -536,6 +536,7 @@ model RefreshSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
   @@map("refresh_sessions")
 }
 
@@ -556,6 +557,7 @@ model UserToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type])
+  @@index([expiresAt])
   @@map("user_tokens")
 }
 
@@ -2596,7 +2598,8 @@ model PlatformOutboxEvent {
 /// Append-only trail of platform actions (they bypass row-level security). No tenant_id and no foreign keys.
 model PlatformAuditLog {
   id             String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  actorUserId    String   @map("actor_user_id") @db.Uuid
+  /// Empty only for the system's retention rows (`retention.*`, CHECK platform_audit_actor_required).
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
   action         String
   targetTenantId String?  @map("target_tenant_id") @db.Uuid
   data           Json     @default("{}")
@@ -2605,6 +2608,7 @@ model PlatformAuditLog {
 
   @@index([targetTenantId, createdAt(sort: Desc)])
   @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([createdAt])
   @@map("platform_audit_logs")
 }
 
@@ -2674,6 +2678,7 @@ model AuditLog {
   @@index([tenantId, actorId])
   @@index([supportActorId])
   @@index([tenantId, supportGrantId])
+  @@index([createdAt])
   @@map("audit_logs")
 }
 

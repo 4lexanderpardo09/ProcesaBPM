@@ -232,7 +232,8 @@ export type ListPlatformAuditQuery = z.infer<typeof listPlatformAuditQuerySchema
 
 export interface PlatformAuditEntryResponse {
   readonly id: string;
-  readonly actorUserId: string;
+  /** `null` only for the system's retention runs (`retention.run_started`, `retention.run_finished`). */
+  readonly actorUserId: string | null;
   readonly action: string;
   readonly targetTenantId: string | null;
   readonly data: unknown;

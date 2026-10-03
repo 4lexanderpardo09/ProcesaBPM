@@ -53,6 +53,17 @@ describe('platform console: audit log', () => {
     expect((await query(`?tenantId=${tenant.tenantId}&from=${encodeURIComponent(past)}&to=${encodeURIComponent(future)}`).expect(200)).body.total).toBe(2);
   });
 
+  it('lists the system retention runs, which have no actor', async () => {
+    const runId = randomUUID();
+    await db.owner.query(`INSERT INTO platform_audit_logs (actor_user_id, action, data) VALUES (NULL, 'retention.run_finished', $1)`, [
+      JSON.stringify({ runId, deleted: { audit_logs: 2 }, failed: [], durationMs: 5 }),
+    ]);
+    const runs = await query('?action=retention.run_finished').expect(200);
+    expect(runs.body.items).toContainEqual(
+      expect.objectContaining({ actorUserId: null, action: 'retention.run_finished', targetTenantId: null, data: { runId, deleted: { audit_logs: 2 }, failed: [], durationMs: 5 } }),
+    );
+  });
+
   it('paginates', async () => {
     const page = await query('?pageSize=1&page=2').expect(200);
     expect(page.body).toMatchObject({ page: 2, pageSize: 1 });
