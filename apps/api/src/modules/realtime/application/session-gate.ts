@@ -58,7 +58,8 @@ export class SessionGate {
     try {
       fresh = await check.result;
     } catch (error) {
-      this.fail(socket, error);
+      // Same guard as for an answer: a failure about a state the socket already left (refreshed, ended) is not acted on.
+      if (isActive(session) && session.principal === checked) this.fail(socket, error);
       return undefined;
     }
     // Meanwhile the socket may have ended, entered reauth or refreshed its token: this answer is about the old state.

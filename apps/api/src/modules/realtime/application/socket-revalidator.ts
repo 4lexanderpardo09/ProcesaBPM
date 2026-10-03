@@ -96,7 +96,8 @@ export class SocketRevalidator {
       .filter((socket) => now - sessionOf(socket).verifiedAt >= this.config.REALTIME_REVALIDATE_INTERVAL_MS)
       .sort((a, b) => sessionOf(a).verifiedAt - sessionOf(b).verifiedAt)
       .slice(0, Math.ceil(sockets.length / TICKS_PER_INTERVAL));
-    await this.reverify(due, now);
+    // A check already in flight that started within the interval is good enough for the sweep (no duplicate query).
+    await this.reverify(due, now - this.config.REALTIME_REVALIDATE_INTERVAL_MS);
   }
 
   private flushAccess(): Promise<void> {

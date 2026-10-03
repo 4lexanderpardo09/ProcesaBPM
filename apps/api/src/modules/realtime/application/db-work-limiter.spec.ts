@@ -1,6 +1,6 @@
 import { TemporarilyUnavailableError } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { DbWorkLimiter } from './db-work-limiter.js';
+import { DbWorkLimiter, MAX_WAITING } from './db-work-limiter.js';
 
 function deferred<T = void>() {
   let resolve!: (value: T) => void;
@@ -65,5 +65,35 @@ describe('DbWorkLimiter', () => {
     slow.resolve();
     await new Promise((resolve) => setImmediate(resolve));
     expect(limiter.inFlight).toBe(0);
+  });
+
+  it('refuses new work at once when the line is full', async () => {
+    const limiter = new DbWorkLimiter({ REALTIME_DB_CONCURRENCY: 1 });
+    const blocker = deferred();
+    const running = limiter.run(() => blocker.promise);
+    const waiting = Array.from({ length: MAX_WAITING }, () => limiter.run(() => Promise.resolve()));
+    await expect(limiter.run(() => Promise.resolve())).rejects.toBeInstanceOf(TemporarilyUnavailableError);
+    expect(limiter.waiting).toBe(MAX_WAITING);
+    blocker.resolve();
+    await Promise.all([running, ...waiting]);
+  });
+
+  it('lets interactive work (handshakes, refreshes) go ahead of background fan-out, in order among itself', async () => {
+    const limiter = new DbWorkLimiter({ REALTIME_DB_CONCURRENCY: 1 });
+    const blocker = deferred();
+    const order: string[] = [];
+    const job = (name: string) => async () => {
+      order.push(name);
+    };
+    const jobs = [
+      limiter.run(() => blocker.promise),
+      limiter.run(job('fan-out 1')),
+      limiter.run(job('handshake 1'), undefined, 'interactive'),
+      limiter.run(job('fan-out 2')),
+      limiter.run(job('handshake 2'), undefined, 'interactive'),
+    ];
+    blocker.resolve();
+    await Promise.all(jobs);
+    expect(order).toEqual(['handshake 1', 'handshake 2', 'fan-out 1', 'fan-out 2']);
   });
 });

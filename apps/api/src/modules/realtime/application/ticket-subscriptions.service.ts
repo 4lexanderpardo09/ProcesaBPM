@@ -10,7 +10,7 @@ import { DbWorkLimiter } from './db-work-limiter.js';
 import type { MessageOutcome } from './message-outcome.js';
 import { RealtimeEmitter } from './realtime-emitter.js';
 import { SessionGate, VERIFICATION_TIMEOUT_MS } from './session-gate.js';
-import { type RealtimeSocket, sessionOf } from './socket-session.js';
+import { type RealtimeSocket, sessionOf, type SocketSession, stillVerified } from './socket-session.js';
 
 const refused = (code: AckErrorCode): MessageOutcome<SubscribeAck> => ({ ack: { ok: false, code }, endWith: undefined });
 
@@ -33,15 +33,21 @@ export class TicketSubscriptionsService {
 
   async subscribe(socket: RealtimeSocket, ticketId: string): Promise<MessageOutcome<SubscribeAck>> {
     const session = sessionOf(socket);
-    if (!session.tickets.has(ticketId) && session.tickets.size >= this.config.REALTIME_MAX_TICKET_SUBSCRIPTIONS) return refused('TOO_MANY_SUBSCRIPTIONS');
+    if (this.isFull(session, ticketId)) return refused('TOO_MANY_SUBSCRIPTIONS');
     const principal = await this.gate.verify(socket);
     if (principal === undefined) return refused(session.state === 'reauth' || session.ended ? 'AUTH_REQUIRED' : 'TEMPORARILY_UNAVAILABLE');
     const summary = await this.summaryFor(principal, ticketId);
     if (summary === undefined) return refused('NOT_FOUND');
-    if (session.ended) return refused('AUTH_REQUIRED');
+    // The reads above took time: the session may have entered reauth or refreshed, and other subscriptions may have landed.
+    if (!stillVerified(socket, principal)) return refused('AUTH_REQUIRED');
+    if (this.isFull(session, ticketId)) return refused('TOO_MANY_SUBSCRIPTIONS');
     void socket.join(RoomNames.ticket(principal.tenantId, ticketId));
     session.tickets.add(ticketId);
     return { ack: { ok: true, summary }, endWith: undefined };
+  }
+
+  private isFull(session: SocketSession, ticketId: string): boolean {
+    return !session.tickets.has(ticketId) && session.tickets.size >= this.config.REALTIME_MAX_TICKET_SUBSCRIPTIONS;
   }
 
   unsubscribe(socket: RealtimeSocket, ticketId: string): Promise<MessageOutcome<UnsubscribeAck>> {

@@ -32,13 +32,19 @@ describe('loadWorkerSettings', () => {
     expect(problemsOf(secure)).toEqual([]);
   });
   it('counts the time to draw a PDF in the lease budget', () => {
-    expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '12', OUTBOX_CONCURRENCY: '1', OUTBOX_TX_TIMEOUT_MS: '10000', PDF_RENDER_TIMEOUT_MS: '30000' })).toEqual([expect.stringContaining('PDF_RENDER_TIMEOUT_MS')]);
+    expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '12', OUTBOX_CONCURRENCY: '1', OUTBOX_TX_TIMEOUT_MS: '10000', PDF_RENDER_TIMEOUT_MS: '30000', REALTIME_SIGNALS_ENABLED: 'false' })).toEqual([expect.stringContaining('PDF_RENDER_TIMEOUT_MS')]);
     expect(problemsOf({ ...valid, PDF_RENDER_TIMEOUT_MS: '500000' })).not.toEqual([]);
   });
 
   it('refuses a batch that could outlive the claim lease', () => {
     expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '500', OUTBOX_CONCURRENCY: '1' })).toEqual([expect.stringContaining('outlive the claim lease')]);
     expect(problemsOf({ ...valid, OUTBOX_BATCH_SIZE: '100', OUTBOX_CONCURRENCY: '64' })).toEqual([]);
+  });
+  it('counts the realtime signals published after each commit in the lease budget', () => {
+    const fiveWaves = { ...valid, OUTBOX_BATCH_SIZE: '5', OUTBOX_CONCURRENCY: '1', OUTBOX_TX_TIMEOUT_MS: '30000', PDF_RENDER_TIMEOUT_MS: '10000' };
+    expect(problemsOf(fiveWaves)).toEqual([expect.stringContaining('realtime signals after commit')]);
+    expect(problemsOf({ ...fiveWaves, REALTIME_SIGNALS_ENABLED: 'false' })).toEqual([]);
+    expect(problemsOf({ ...fiveWaves, OUTBOX_TX_TIMEOUT_MS: '20000' })).toEqual([]);
   });
   it('wants the SMTP credentials together', () => {
     expect(problemsOf({ ...valid, SMTP_USER: 'u' })).toEqual(['SMTP_USER and SMTP_PASSWORD go together']);

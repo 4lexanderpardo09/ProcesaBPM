@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { type ConnectErrorCode, RateLimitedError, UnauthenticatedError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
-import { clientAddressOf } from '../../../infrastructure/realtime/realtime-io-adapter.js';
+import { clientAddressOf, markAuthenticated } from '../../../infrastructure/realtime/realtime-io-adapter.js';
 import { RATE_LIMITER, type RateLimiter, type RateLimitRule } from '../../../infrastructure/security/rate-limiter.js';
 import { AccessTokenAuthenticator } from '../../auth/application/access-token-authenticator.js';
 import { connectErrorCodeOf } from '../domain/close-reasons.js';
@@ -10,8 +10,9 @@ import { AUTHENTICATION_TIMEOUT_MS } from '../application/session-refresher.js';
 import { monotonicNow, type RealtimeSocket, SocketSession } from '../application/socket-session.js';
 
 const MAX_TOKEN_LENGTH = 4096;
-const PER_ADDRESS: RateLimitRule = { limit: 60, windowMs: 60_000 };
-const PER_USER: RateLimitRule = { limit: 30, windowMs: 60_000 };
+/** Generous per address: a whole office behind one NAT reconnects at once after a deploy. Per person it stays tight. */
+export const HANDSHAKES_PER_ADDRESS: RateLimitRule = { limit: 600, windowMs: 60_000 };
+export const HANDSHAKES_PER_USER: RateLimitRule = { limit: 30, windowMs: 60_000 };
 const TOKEN_QUERY_KEYS = ['token', 'access_token', 'accessToken', 'authorization'];
 
 export interface ConnectError extends Error {
@@ -66,10 +67,11 @@ export class SocketHandshake {
       throw new UnauthenticatedError();
     }
     const token = tokenOf(socket.handshake.auth);
-    await this.limit(`realtime.handshake:ip:${address}`, PER_ADDRESS);
-    const access = await this.limiter.run(() => this.authenticator.authenticate(token), AUTHENTICATION_TIMEOUT_MS);
-    await this.limit(`realtime.handshake:user:${access.principal.userId}`, PER_USER);
+    await this.limit(`realtime.handshake:ip:${address}`, HANDSHAKES_PER_ADDRESS);
+    const access = await this.limiter.run(() => this.authenticator.authenticate(token), AUTHENTICATION_TIMEOUT_MS, 'interactive');
+    await this.limit(`realtime.handshake:user:${access.principal.userId}`, HANDSHAKES_PER_USER);
     socket.data.session = new SocketSession(access.principal, access.expiresAt, monotonicNow(), address);
+    markAuthenticated(socket.request);
   }
 
   private async limit(key: string, rule: RateLimitRule): Promise<void> {

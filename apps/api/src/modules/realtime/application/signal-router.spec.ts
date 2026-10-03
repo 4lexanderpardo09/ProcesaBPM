@@ -25,7 +25,7 @@ const socketOf = (principal: Principal, accepted = true) =>
   ({ id: Math.random().toString(36), accepted, data: { session: new SocketSession(principal, new Date(), 0, '127.0.0.1') } }) as unknown as RealtimeSocket & { accepted: boolean };
 const summary = { ticketId: TICKET, status: 'OPEN', currentStepId: null, currentLoop: 1, assignees: [], lastEventSeq: '7' };
 
-function setUp(rooms: Record<string, RealtimeSocket[]>, options: { queueMax?: number; readable?: boolean } = {}) {
+function setUp(rooms: Record<string, RealtimeSocket[]>, options: { queueMax?: number; readable?: boolean; summaryFor?: () => Promise<unknown> } = {}) {
   let onSignal!: (signal: RealtimeSignal) => void;
   let onGap!: () => void;
   const source = { onSignal: (listener: typeof onSignal) => (onSignal = listener), onGap: (listener: typeof onGap) => (onGap = listener) } as unknown as RealtimeSignalSource;
@@ -33,7 +33,7 @@ function setUp(rooms: Record<string, RealtimeSocket[]>, options: { queueMax?: nu
   const registry = { socketsIn: (room: string) => rooms[room] ?? [], hasSocketsIn: (room: string) => (rooms[room]?.length ?? 0) > 0, all: () => all } as unknown as ConnectionRegistry;
   const gate = { verify: vi.fn((socket: RealtimeSocket & { accepted: boolean }) => Promise.resolve(socket.accepted ? socket.data.session!.principal : undefined)) } as unknown as SessionGate;
   const revalidator = { handleAccess: vi.fn(), whenIdle: () => Promise.resolve() } as unknown as SocketRevalidator;
-  const subscriptions = { summaryFor: vi.fn(() => Promise.resolve(options.readable === false ? undefined : summary)), drop: vi.fn() } as unknown as TicketSubscriptionsService;
+  const subscriptions = { summaryFor: vi.fn(options.summaryFor ?? (() => Promise.resolve(options.readable === false ? undefined : summary))), drop: vi.fn() } as unknown as TicketSubscriptionsService;
   const notifications = { unreadCountOf: vi.fn(() => Promise.resolve(3)) } as unknown as NotificationsService;
   const emitted: Array<[string[], string, unknown]> = [];
   const emitter = { emit: (sockets: RealtimeSocket[], event: string, payload: unknown) => emitted.push([sockets.map((socket) => socket.id), event, payload]) } as unknown as RealtimeEmitter;
@@ -144,5 +144,35 @@ describe('SignalRouter', () => {
     signal({ v: 1, k: 'notifications', t: T, u: [U] });
     await router.whenIdle();
     expect(emitted).toEqual([]);
+  });
+
+  it('a socket whose session left the verified state during the read gets nothing', async () => {
+    const socket = socketOf(principalOf('s1'));
+    let release!: (value: unknown) => void;
+    const { router, signal, emitted } = setUp({ [RoomNames.ticket(T, TICKET)]: [socket] }, { summaryFor: () => new Promise((resolve) => (release = resolve)) });
+    signal({ v: 1, k: 'ticket', t: T, id: TICKET, e: 'ticket.closed' });
+    await vi.waitFor(() => expect(release).toBeDefined(), { timeout: 2_000 });
+    socket.data.session!.state = 'reauth';
+    release(summary);
+    await router.whenIdle();
+    expect(emitted).toEqual([]);
+  });
+
+  it('flushes one batch at a time: what arrives meanwhile waits in the bounded queue, where overflow is noticed', async () => {
+    const socket = socketOf(principalOf('s1'));
+    const releases: Array<(value: unknown) => void> = [];
+    const { router, signal, subscriptions, emitted } = setUp({ [RoomNames.ticket(T, TICKET)]: [socket] }, { queueMax: 2, summaryFor: () => new Promise((resolve) => releases.push(resolve)) });
+    signal({ v: 1, k: 'ticket', t: T, id: TICKET, e: 'ticket.created' });
+    await vi.waitFor(() => expect(releases).toHaveLength(1), { timeout: 2_000 });
+    for (const kind of ['ticket.assigned', 'ticket.transitioned', 'ticket.commented'] as const) signal({ v: 1, k: 'ticket', t: T, id: TICKET, e: kind });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(subscriptions.summaryFor).toHaveBeenCalledTimes(1);
+    releases[0]!(summary);
+    await vi.waitFor(() => expect(releases).toHaveLength(2), { timeout: 2_000 });
+    releases[1]!(summary);
+    await router.whenIdle();
+    const changes = emitted.filter(([, event]) => event === 'ticket.changed').map(([, , payload]) => (payload as { kinds: string[] }).kinds);
+    expect(changes).toEqual([['ticket.created'], ['ticket.transitioned', 'ticket.commented']]);
+    expect(emitted.filter(([, event]) => event === 'sync.required')).toHaveLength(1);
   });
 });

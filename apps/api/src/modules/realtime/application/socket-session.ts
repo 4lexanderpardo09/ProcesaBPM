@@ -78,6 +78,15 @@ export class SocketSession {
 /** Monotonic milliseconds (immune to a test clock and to wall-clock jumps). */
 export const monotonicNow = (): number => performance.now();
 
+/**
+ * Whether the socket is still in the state the gate verified: active, not ended, same principal. Checked right before
+ * sending anything read after an `await` (a logout or refresh may have happened meanwhile).
+ */
+export function stillVerified(socket: RealtimeSocket, principal: Principal): boolean {
+  const session = socket.data.session;
+  return session !== undefined && !session.ended && session.state === 'active' && session.principal === principal;
+}
+
 /** The session of an authenticated socket. Every socket that reaches the application passed the handshake. */
 export function sessionOf(socket: RealtimeSocket): SocketSession {
   const session = socket.data.session;

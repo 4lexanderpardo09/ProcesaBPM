@@ -14,7 +14,7 @@ import { DbWorkLimiter } from './db-work-limiter.js';
 import { RealtimeEmitter } from './realtime-emitter.js';
 import { SessionGate, VERIFICATION_TIMEOUT_MS } from './session-gate.js';
 import { SocketRevalidator } from './socket-revalidator.js';
-import type { RealtimeSocket } from './socket-session.js';
+import { type RealtimeSocket, stillVerified } from './socket-session.js';
 import { TicketSubscriptionsService } from './ticket-subscriptions.service.js';
 
 export const COALESCING_MS = 250;
@@ -38,6 +38,10 @@ const keyOf = (work: SignalWork): string =>
 const mergeWork = (current: SignalWork, incoming: SignalWork): SignalWork =>
   current.kind === 'ticket' && incoming.kind === 'ticket' ? { ...current, kinds: new Set([...current.kinds, ...incoming.kinds]) } : current;
 
+/** The recipients whose session did not change while their data was being read. */
+const stillVerifiedSockets = (recipients: ReadonlyArray<{ socket: RealtimeSocket; principal: Principal }>): RealtimeSocket[] =>
+  recipients.filter(({ socket, principal }) => stillVerified(socket, principal)).map(({ socket }) => socket);
+
 /** A signal as units of work (a notification signal names up to 100 people). */
 export function workOf(signal: DataSignal): SignalWork[] {
   if (signal.k === 'notifications') return signal.u.map((userId) => ({ kind: 'notifications', tenantId: signal.t, userId }));
@@ -57,6 +61,8 @@ export class SignalRouter {
   private readonly queue: SignalWork[] = [];
   private readonly running = new Set<Promise<unknown>>();
   private flushTimer: NodeJS.Timeout | undefined;
+  /** One flush at a time: while it runs, new work waits in the bounded queue (where overflow is detected). */
+  private flushing = false;
   private lossOccurred = false;
   private lastOverflowSyncAt = -Infinity;
   private stopped = false;
@@ -130,17 +136,28 @@ export class SignalRouter {
       this.lossOccurred = true;
     }
     this.queue.push(work);
-    this.flushTimer ??= setTimeout(() => {
+    this.scheduleFlush();
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushing || this.flushTimer !== undefined || this.stopped) return;
+    this.flushTimer = setTimeout(() => {
       this.flushTimer = undefined;
       void this.track(this.flush());
     }, COALESCING_MS);
   }
 
   private async flush(): Promise<void> {
-    const coalescer = new SignalCoalescer<SignalWork>(mergeWork);
-    for (const work of this.queue.splice(0)) coalescer.add(keyOf(work), work);
-    await Promise.all(coalescer.drain().map((work) => this.dispatch(work)));
-    if (this.lossOccurred && this.queue.length === 0) this.syncAfterOverflow();
+    this.flushing = true;
+    try {
+      const coalescer = new SignalCoalescer<SignalWork>(mergeWork);
+      for (const work of this.queue.splice(0)) coalescer.add(keyOf(work), work);
+      await Promise.all(coalescer.drain().map((work) => this.dispatch(work)));
+    } finally {
+      this.flushing = false;
+    }
+    if (this.queue.length > 0) this.scheduleFlush();
+    else if (this.lossOccurred) this.syncAfterOverflow();
   }
 
   private async dispatch(work: SignalWork): Promise<void> {
@@ -156,11 +173,8 @@ export class SignalRouter {
     const recipients = (await this.verified(this.registry.socketsIn(this.roomOf(work)))).filter(({ principal }) => principal.tenantId === work.tenantId && principal.userId === work.userId);
     if (recipients.length === 0) return;
     const unreadCount = await this.limiter.run(() => this.notifications.unreadCountOf(work.tenantId, work.userId), VERIFICATION_TIMEOUT_MS);
-    this.emitter.emit(
-      recipients.map(({ socket }) => socket),
-      'notifications.changed',
-      { unreadCount },
-    );
+    const sockets = stillVerifiedSockets(recipients);
+    if (sockets.length > 0) this.emitter.emit(sockets, 'notifications.changed', { unreadCount });
   }
 
   private async dispatchTicket(work: Extract<SignalWork, { kind: 'ticket' | 'document' }>): Promise<void> {
@@ -173,12 +187,13 @@ export class SignalRouter {
     const recipients = (await this.verified(group)).filter(({ principal }) => principal.tenantId === work.tenantId);
     const principal = recipients[0]?.principal;
     if (principal === undefined) return;
-    const sockets = recipients.map(({ socket }) => socket);
     const summary = await this.subscriptions.summaryFor(principal, work.ticketId);
     if (summary === undefined) {
-      for (const socket of sockets) this.subscriptions.drop(socket, work.ticketId);
+      for (const { socket } of recipients) this.subscriptions.drop(socket, work.ticketId);
       return;
     }
+    const sockets = stillVerifiedSockets(recipients);
+    if (sockets.length === 0) return;
     if (work.kind === 'ticket') this.emitter.emit(sockets, 'ticket.changed', { ticketId: work.ticketId, kinds: [...work.kinds], summary });
     else this.emitter.emit(sockets, 'ticket.document_generated', { ticketId: work.ticketId, fileId: work.fileId });
   }

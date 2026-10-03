@@ -59,8 +59,12 @@ export class RealtimeGateway implements OnGatewayInit<RealtimeServer>, OnGateway
     this.logger.info('realtime.connected', { event: 'realtime.connected', tenantId: principal.tenantId, userId: principal.userId, socketId: socket.id });
   }
 
+  /** Whatever finishes later (an `auth.refresh`, a verification) finds the session ended and arms nothing. */
   handleDisconnect(socket: RealtimeSocket): void {
-    socket.data.session?.clearTimers();
+    const session = socket.data.session;
+    if (session === undefined) return;
+    session.ended = true;
+    session.clearTimers();
   }
 
   /** Before the database goes away: refuse new sockets, then end the open ones in small batches (clients reconnect elsewhere). */

@@ -31,7 +31,7 @@ export class SessionRefresher {
     const startedAt = monotonicNow();
     let access: AuthenticatedAccess;
     try {
-      access = await this.limiter.run(() => this.authenticator.authenticate(token), AUTHENTICATION_TIMEOUT_MS);
+      access = await this.limiter.run(() => this.authenticator.authenticate(token), AUTHENTICATION_TIMEOUT_MS, 'interactive');
     } catch (error) {
       return refused(refreshFailureOf(error));
     }

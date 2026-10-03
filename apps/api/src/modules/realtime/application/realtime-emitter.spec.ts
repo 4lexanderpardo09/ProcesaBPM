@@ -54,4 +54,13 @@ describe('RealtimeEmitter', () => {
     expect(raw.disconnect).toHaveBeenCalledTimes(1);
     expect(session.expiryTimer).toBeUndefined();
   });
+
+  it('sends no data to a socket that left the active state, but still tells it what to do', () => {
+    const waiting = fakeSocket();
+    waiting.socket.data.session!.state = 'reauth';
+    emitter.emit([waiting.socket], 'ticket.changed', { ticketId: 't', kinds: [], summary: { ticketId: 't', status: 'OPEN', currentStepId: null, currentLoop: 1, assignees: [], lastEventSeq: '1' } });
+    emitter.emit([waiting.socket], 'notifications.changed', { unreadCount: 1 });
+    emitter.emit([waiting.socket], 'auth.required', { reason: 'SESSION_CHANGED', graceMs: 1000 });
+    expect(waiting.emitted).toEqual([['auth.required', { reason: 'SESSION_CHANGED', graceMs: 1000 }]]);
+  });
 });

@@ -29,6 +29,7 @@ export class SessionExpiry {
   /** (Re)arms the timer that asks for a new token when the current one expires. */
   arm(socket: RealtimeSocket): void {
     const session = sessionOf(socket);
+    if (session.ended) return;
     clearTimeout(session.expiryTimer);
     const delay = Math.min(Math.max(0, session.expiresAt.getTime() - this.clock.now().getTime()), MAX_TIMER_MS);
     session.expiryTimer = setTimeout(() => this.requireReauth(socket, 'TOKEN_EXPIRED'), delay);
@@ -49,6 +50,7 @@ export class SessionExpiry {
   /** A new token was accepted: back to normal, with a timer for the new expiry. */
   resume(socket: RealtimeSocket): void {
     const session = sessionOf(socket);
+    if (session.ended) return;
     clearTimeout(session.reauthTimer);
     session.reauthTimer = undefined;
     session.state = 'active';

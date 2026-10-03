@@ -109,7 +109,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 | `OUTBOX_POLL_INTERVAL_MS` | no | `2000` | |
 | `OUTBOX_BATCH_SIZE` | no | `10` (máx. 500) | Eventos reclamados por ronda |
 | `OUTBOX_CONCURRENCY` | no | `4` (máx. 64) | Eventos en paralelo |
-| `OUTBOX_TX_TIMEOUT_MS` | no | `30000` | Tope de la transacción de un evento; el arranque rechaza combinaciones que sobrepasen el arrendamiento de 5 min |
+| `OUTBOX_TX_TIMEOUT_MS` | no | `30000` | Tope de la transacción de un evento; el arranque rechaza combinaciones que sobrepasen el arrendamiento de 5 min (cuenta también hasta 2 señales de tiempo real de 5 s por evento, después del commit) |
 | `PDF_RENDER_TIMEOUT_MS` | no | `30000` (máx. 120000) | |
 | `PDF_MAX_OUTPUT_BYTES` | no | 20 MB (máx. 50 MB) | |
 

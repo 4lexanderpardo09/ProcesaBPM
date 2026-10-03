@@ -1,10 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { JsonLogger } from '../../common/logging/json-logger.js';
-import { WORKER_SETTINGS, type WorkerSettings } from '../../config/worker-settings.js';
+import { SIGNAL_PUBLISH_TIMEOUT_MS, WORKER_SETTINGS, type WorkerSettings } from '../../config/worker-settings.js';
 import { WorkerTransactionRunner } from '../database/worker-transaction-runner.js';
 import { encodeSignals, REALTIME_CHANNEL, type RealtimeSignal } from './realtime-signal.js';
-
-const PUBLISH_TIMEOUT_MS = 5_000;
 
 /**
  * Sends id-only signals to the API instances with `pg_notify`, in a tiny transaction of its own. The outbox dispatcher
@@ -27,7 +25,7 @@ export class RealtimeSignalPublisher {
       async (tx) => {
         for (const payload of payloads) await tx.$executeRaw`SELECT pg_notify(${REALTIME_CHANNEL}, ${payload})`;
       },
-      { timeoutMs: PUBLISH_TIMEOUT_MS },
+      { timeoutMs: SIGNAL_PUBLISH_TIMEOUT_MS },
     );
     this.logger.debug(`Published ${payloads.length} realtime signal(s)`, 'RealtimeSignalPublisher');
   }

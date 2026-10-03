@@ -94,6 +94,8 @@ describe('SocketRevalidator', () => {
     await revalidator.whenIdle();
     expect(verified).toHaveLength(Math.ceil(25 / 12));
     expect(verified.every(([target]) => target !== fresh)).toBe(true);
+    // A check already in flight within the interval is reused: the sweep never forces a duplicate query.
+    expect(verified.every(([, since]) => since <= performance.now() - 60_000 + 1)).toBe(true);
     expect(reauth).toHaveLength(25);
   });
 });

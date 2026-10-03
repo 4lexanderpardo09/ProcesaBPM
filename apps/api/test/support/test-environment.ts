@@ -60,7 +60,8 @@ export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[
       OUTBOX_TOKEN_KEY: TEST_OUTBOX_TOKEN_KEY,
       MAIL_TRANSPORT: 'memory',
       OUTBOX_POLLING_ENABLED: 'false',
-      OUTBOX_BATCH_SIZE: '50',
+      // Two waves of 16: the lease budget also counts the realtime signals published after each commit.
+      OUTBOX_BATCH_SIZE: '32',
       OUTBOX_CONCURRENCY: '16',
       REALTIME_ALLOWED_ORIGINS: TEST_REALTIME_ORIGIN,
       REALTIME_AUTH_GRACE_MS: '1000',

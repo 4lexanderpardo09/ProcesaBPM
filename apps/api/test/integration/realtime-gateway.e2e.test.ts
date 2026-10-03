@@ -9,11 +9,12 @@ import { ConnectionRegistry } from '../../src/modules/realtime/application/conne
 import { SocketRevalidator } from '../../src/modules/realtime/application/socket-revalidator.js';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { seedUser } from '../support/auth-fixtures.js';
-import { refreshCookieOf, type SignedIn, signIn } from '../support/auth-helpers.js';
+import { logIn, refreshCookieOf, type SignedIn, signIn } from '../support/auth-helpers.js';
 import { createTestApp } from '../support/create-test-app.js';
-import { seedRole } from '../support/permission-fixtures.js';
+import { grantEverything, seedRole } from '../support/permission-fixtures.js';
+import { grantSupport, openSupportSession, verifiedAdminOf } from '../support/support-fixtures.js';
 import { seedPlatformAdmin, signInPlatform } from '../support/platform-fixtures.js';
-import { connected, connectError, connectSocket, emitWithAck, nextEvent, notifySignal, recordEvents, startListening } from '../support/realtime-client.js';
+import { connected, connectError, connectSocket, emitWithAck, nextEvent, notifySignal, openUnauthenticatedConnection, recordEvents, startListening } from '../support/realtime-client.js';
 import { TestClock } from '../support/test-clock.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 
@@ -82,6 +83,19 @@ describe('realtime gateway: handshake, session revalidation and limits', () => {
       expect(await connectError(open(platformToken))).toMatchObject({ code: 'UNAUTHENTICATED' });
     });
 
+    it('refuses a support token and a selection token (other audiences)', async () => {
+      const supported = await seedTenant(db.platform);
+      await grantEverything(db, supported);
+      const admin = await verifiedAdminOf(app, db, supported);
+      await grantSupport(app, admin.accessToken).expect(201);
+      const platformToken = await signInPlatform(app, db, await seedPlatformAdmin(db));
+      const supportToken = ((await openSupportSession(app, platformToken, supported.tenantId).expect(201)).body as { accessToken: string }).accessToken;
+      expect(await connectError(open(supportToken))).toMatchObject({ code: 'UNAUTHENTICATED' });
+      const user = await seedUser(db, tenant);
+      const selectionToken = await logIn(app, user.email);
+      expect(await connectError(open(selectionToken))).toMatchObject({ code: 'UNAUTHENTICATED' });
+    });
+
     it('refuses a token in the URL or in a header even when the auth payload is valid', async () => {
       const { accessToken } = await member();
       expect(await connectError(open(accessToken, { query: { token: accessToken } }))).toMatchObject({ code: 'UNAUTHENTICATED' });
@@ -118,6 +132,29 @@ describe('realtime gateway: handshake, session revalidation and limits', () => {
       await connected(newest);
       expect(await ended).toEqual({ reason: 'REPLACED' });
       expect(newest.connected).toBe(true);
+    });
+
+    it('one address cannot hold more than 50 connections that never authenticate; authenticated ones are not counted', async () => {
+      const { accessToken } = await member();
+      await connected(open(accessToken));
+      const held: Array<{ close: () => void }> = [];
+      try {
+        for (let index = 0; index < 50; index += 1) {
+          const connection = await openUnauthenticatedConnection(url);
+          if (connection instanceof Error) throw connection;
+          held.push(connection);
+        }
+        expect(await openUnauthenticatedConnection(url)).toBeInstanceOf(Error);
+        held.pop()!.close();
+        await expect.poll(async () => {
+          const connection = await openUnauthenticatedConnection(url);
+          if (connection instanceof Error) return false;
+          held.push(connection);
+          return true;
+        }).toBe(true);
+      } finally {
+        for (const connection of held) connection.close();
+      }
     });
 
     it('unknown events beyond the allowance end the socket as RATE_LIMITED', async () => {

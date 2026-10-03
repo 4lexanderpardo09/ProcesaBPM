@@ -133,4 +133,26 @@ describe('SessionGate', () => {
     expect(await pending).toBeUndefined();
     expect(ended).toEqual([]);
   });
+
+  it('a failure about a session the socket already refreshed away from is ignored too', async () => {
+    let fail!: (error: unknown) => void;
+    reverify.mockReturnValueOnce(new Promise((_resolve, reject) => (fail = reject)));
+    const socket = staleSocket();
+    const pending = gate.verify(socket);
+    socket.data.session!.principal = { ...principal, sessionId: 's2' };
+    fail(new UnauthenticatedError());
+    expect(await pending).toBeUndefined();
+    expect([reauth, ended]).toEqual([[], []]);
+  });
+
+  it('a failure arriving after the socket ended is not acted on', async () => {
+    let fail!: (error: unknown) => void;
+    reverify.mockReturnValueOnce(new Promise((_resolve, reject) => (fail = reject)));
+    const socket = staleSocket();
+    const pending = gate.verify(socket);
+    socket.data.session!.ended = true;
+    fail(new MfaRequiredError());
+    expect(await pending).toBeUndefined();
+    expect([reauth, ended]).toEqual([[], []]);
+  });
 });

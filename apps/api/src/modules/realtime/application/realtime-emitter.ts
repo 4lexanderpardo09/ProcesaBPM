@@ -6,6 +6,9 @@ import { monotonicNow, type RealtimeSocket, type ServerEventName, type ServerEve
 /** Packets waiting to be written to one socket before it is considered too slow to keep. */
 export const MAX_PENDING_PACKETS = 100;
 
+/** Events that carry data the session must be allowed to read: never sent to a socket that is not active. */
+const DATA_EVENTS: ReadonlySet<ServerEventName> = new Set<ServerEventName>(['notifications.changed', 'ticket.changed', 'ticket.document_generated']);
+
 /** engine.io keeps unsent packets in `writeBuffer` (internal; pinned version, see the emitter spec). */
 interface EngineConnection {
   readonly writeBuffer?: readonly unknown[];
@@ -25,7 +28,10 @@ export class RealtimeEmitter {
 
   emit<E extends ServerEventName>(sockets: Iterable<RealtimeSocket>, event: E, payload: ServerEventPayload<E>): void {
     for (const socket of sockets) {
-      if (socket.data.session?.ended === true || socket.disconnected) continue;
+      const session = socket.data.session;
+      if (session === undefined || session.ended || socket.disconnected) continue;
+      // The gate verified the session, but database work happened since: a socket that left `active` gets no data.
+      if (DATA_EVENTS.has(event) && session.state !== 'active') continue;
       if (pendingPackets(socket) > MAX_PENDING_PACKETS) {
         this.logger.warn('realtime.slow_consumer', { event: 'realtime.slow_consumer', socketId: socket.id });
         this.end(socket, 'SLOW_CONSUMER');

@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { REALTIME_PATH } from '@procesabpm/shared';
 import pg from 'pg';
-import { io, type Socket } from 'socket.io-client';
+import { io, Manager, type Socket } from 'socket.io-client';
 import { REALTIME_CHANNEL } from '../../src/infrastructure/realtime/realtime-signal.js';
 import { TEST_REALTIME_ORIGIN } from './test-environment.js';
 
@@ -96,4 +96,15 @@ export async function notifySignal(url: string, signal: Record<string, unknown>)
 
 export function closeSockets(...sockets: Socket[]): void {
   for (const socket of sockets) socket.disconnect();
+}
+
+/**
+ * A WebSocket connection to the engine that never sends CONNECT (so it never authenticates): what an abusive client
+ * holds open. Resolves with a closer once accepted, or with the transport error when refused before the upgrade.
+ */
+export function openUnauthenticatedConnection(url: string, headers: Record<string, string> = {}): Promise<{ close: () => void } | Error> {
+  const manager = new Manager(url, { path: REALTIME_PATH, transports: ['websocket'], reconnection: false, autoConnect: false, extraHeaders: { origin: TEST_REALTIME_ORIGIN, ...headers } });
+  return new Promise((resolve) => {
+    manager.open((error) => resolve(error ?? { close: () => manager.engine.close() }));
+  });
 }
