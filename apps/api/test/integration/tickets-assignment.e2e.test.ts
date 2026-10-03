@@ -329,7 +329,6 @@ describe('assignment, pool, reassignment', () => {
       expect(await refusals(wait)).toContain('NOT_IMPLEMENTED_WAIT_COMPANY_CUTOFF');
       const ID = '0199a000-0000-7000-8000-0000000000bb';
       const blocks: Array<[StepType, Record<string, unknown>, string]> = [
-        ['NOTIFICATION', { recipients: [{ kind: 'CREATOR' }], channels: ['EMAIL'], subject: 's', body: 'b' }, 'NOT_IMPLEMENTED_NOTIFICATION_BLOCK'],
         ['WEBHOOK', { webhookId: ID }, 'NOT_IMPLEMENTED_WEBHOOK_BLOCK'],
         ['EXPORT', { exportDefinitionId: ID }, 'NOT_IMPLEMENTED_EXPORT_BLOCK'],
       ];

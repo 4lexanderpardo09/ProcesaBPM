@@ -378,6 +378,25 @@ describe('validateWorkflowGraph: block config', () => {
     expect(validateWorkflowGraph(result).warnings[0]).toMatchObject({ code: 'TEMPLATE_UNKNOWN_FIELD', params: { codes: ['GHOST'] } });
   });
 
+  describe('NOTIFICATION texts', () => {
+    const notice = (subject: string, body = 'x') => doc('NOTIFICATION', { recipients: [{ kind: 'CREATOR' }], channels: ['EMAIL'], subject, body });
+    const errors = (value: ReturnType<typeof notice>) => validateWorkflowGraph(value).errors.filter((problem) => problem.code === 'NOTIFICATION_TEXT_INVALID').map((problem) => problem.params);
+
+    it('accepts ticket properties, full field paths, the short form and formatters', () => {
+      expect(errors(notice('Ticket {{ticket.number}} de {{ticket.creatorName}}', 'Total {{field.TOTAL|currency}} / {{NAME}}'))).toEqual([]);
+    });
+
+    it.each([
+      ['an unknown path', 'Hola {{ticket.nope}}', 'UNKNOWN_PATH'],
+      ['an unclosed placeholder', 'Hola {{ticket.number', 'UNCLOSED'],
+      ['an unknown formatter', 'Hola {{ticket.title|shout}}', 'UNKNOWN_FORMATTER'],
+      ['a step that is not there', 'Aprobó {{step.Nadie.completedBy}}', 'DOCUMENT_STEP_UNKNOWN'],
+      ['a table field', 'Filas {{field.TOTAL}} {{row.X}}', 'DOCUMENT_ROW_OUTSIDE_TABLE'],
+    ])('refuses %s', (_name, subject, reason) => expect(errors(notice(subject)).map((params) => `${(params as { reason: string }).reason} ${(params as { detail: string }).detail}`).join('\n')).toContain(reason));
+
+    it('names which part of the block is wrong', () => expect(errors(notice('ok', 'Hola {{ticket.nope}}'))).toEqual([{ part: 'body', reason: 'EXPRESSION_INVALID', detail: expect.stringContaining('UNKNOWN_PATH') }]));
+  });
+
   it('calculator and wait blocks name fields of the version', () => {
     expect(codes(doc('CALCULATOR', { calculatorCode: 'MEAL_ALLOWANCE', inputs: { departure: 'NOPE', return: 'NOPE' }, outputFieldCode: 'TOTAL' }))).toContain('CALCULATOR_UNKNOWN_FIELD');
     expect(codes(doc('WAIT', { mode: 'UNTIL_FIELD_DATE', fieldCode: 'NOPE', offsetBusinessDays: 1 }))).toContain('WAIT_UNKNOWN_FIELD');

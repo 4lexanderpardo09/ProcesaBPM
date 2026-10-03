@@ -14,7 +14,8 @@ export interface PdfProblem {
     | 'DOCUMENT_STEP_UNKNOWN'
     | 'PAGE_AND_PAGES_OUTSIDE_BAND'
     | 'ACROFORM_FIELD_UNKNOWN'
-    | 'COORDINATE_OUT_OF_PAGE';
+    | 'COORDINATE_OUT_OF_PAGE'
+    | 'EXPRESSION_INVALID';
   /** Where in the design or the mapping, e.g. `body[2].items[0].value`. */
   readonly path: string;
   readonly detail?: string;
@@ -92,6 +93,16 @@ function checkBlock(block: PdfBlock, at: string, scope: Scope, inFrame: boolean,
     default:
       break;
   }
+}
+
+/** Checks one piece of expression text (a notification subject or body) against a workflow version: it must parse and name only fields and steps that exist. */
+export function validateExpressionText(text: string, at: string, doc: WorkflowVersionDocument): PdfProblem[] {
+  const parsed = parseExpression(text);
+  if (!parsed.ok) return parsed.errors.map((error) => ({ code: 'EXPRESSION_INVALID' as const, path: at, detail: `${error.code}: ${error.message}` }));
+  const problems: PdfProblem[] = [];
+  const scope = scopeOf(doc);
+  for (const path of pathsOf(parsed.expression as ParsedExpression)) checkPath(path, at, scope, undefined, false, problems);
+  return problems;
 }
 
 /** Checks a designer format against a workflow version: every field, table column and step it names must exist. */

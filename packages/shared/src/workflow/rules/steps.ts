@@ -49,7 +49,7 @@ export function checkSteps({ doc, fieldByCode, problems }: RuleContext): void {
     if (!config.valid) problems.error('BLOCK_CONFIG_INVALID', { ...at, params: { issues: config.issues } });
     else {
       if ('batch' in config.config && config.config.batch !== undefined && !step.allowsBatch) problems.error('BATCH_CONFIG_WITHOUT_ALLOWS_BATCH', at);
-      const codes = [...templateCodes(config.config.subject), ...templateCodes(config.config.body), ...templateCodes(config.config.bodyTemplate)];
+      const codes = templateCodes(config.config.bodyTemplate);
       const unknown = [...new Set(codes.filter((code) => !fieldByCode.has(code)))];
       if (unknown.length > 0) problems.warning('TEMPLATE_UNKNOWN_FIELD', { ...at, params: { codes: unknown } });
       for (const code of Object.values((config.config.inputs ?? {}) as Record<string, string>).concat(typeof config.config.outputFieldCode === 'string' ? [config.config.outputFieldCode] : [])) {
