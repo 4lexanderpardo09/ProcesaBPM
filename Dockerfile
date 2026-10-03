@@ -93,5 +93,5 @@ COPY --chown=root:root packages/db/prisma ./prisma
 COPY --chown=root:root packages/db/prisma.config.ts ./prisma.config.ts
 COPY --from=build --chown=root:root /repo/dist/seed ./seed
 # DATABASE_URL must be the login of the schema owner. To load the global catalog instead (with an app_platform login):
-#   docker run --rm -e DATABASE_URL=... procesabpm-migrate node seed/seed.js
+#   docker run --rm -e DATABASE_URL=... procesabpm-migrate node seed/seed.js (or seed/create-platform-admin.js)
 CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]

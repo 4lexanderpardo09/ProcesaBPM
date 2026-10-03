@@ -122,6 +122,20 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 
 `docker-compose.prod.example.yml` implementa exactamente esa cadena (`postgres → migrate → roles → seed → api, worker`). Es una **guía**, no algo para correr tal cual (el CI solo valida su sintaxis con `docker compose config`; la cadena completa se probó a mano): sustituye Postgres, almacenamiento y correo por servicios administrados, pon un proxy con TLS delante del API y fija versiones reales de las imágenes.
 
+### Primer administrador de plataforma
+
+No hay endpoint público para crearlo. Se crea desde la imagen `migrate`, con el login de `app_platform` en `DATABASE_URL` y la URL pública del web en `WEB_BASE_URL`:
+
+```bash
+docker compose run --rm -e WEB_BASE_URL=https://app.example.com migrate \
+  node seed/create-platform-admin.js --email admin@example.com [--first-name Ada --last-name Root]
+```
+
+- Crea (o reutiliza) el usuario global, lo agrega a `platform_admins` e imprime en la terminal un **enlace de un solo uso, válido 24 h**, para fijar la contraseña. Solo se guarda su hash.
+- La MFA es obligatoria: el primer inicio de sesión exige inscribir el autenticador.
+- **Idempotente:** repetirlo para el único administrador que aún no eligió contraseña emite un enlace nuevo. Si ya existe otro administrador (o este ya tiene contraseña) se niega, salvo con `--force-additional`.
+- Queda registrado en `platform_audit_logs` (`platform_admin.bootstrapped`, `via: cli`). Más administradores se invitan después desde la consola de plataforma.
+
 ## 5. Migrar
 
 - Las migraciones solo avanzan; no hay migraciones inversas. Antes de migrar en producción, **respaldo** de la BD.
