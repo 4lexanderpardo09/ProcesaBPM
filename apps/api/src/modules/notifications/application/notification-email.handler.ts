@@ -19,7 +19,9 @@ import { TicketReaderFilter } from './ticket-reader-filter.js';
 /**
  * Sends the e-mail of a notification. Before sending it checks again that the person is still an active member who
  * may read the ticket (permissions can change between the fan-out and the delivery). The subject is the fixed title
- * with the ticket number: names, titles and comments stay in the (escaped) body, or out of the e-mail altogether.
+ * with the ticket number: names, titles and comments stay in the (escaped) body, or out of the e-mail altogether. The one
+ * exception is a NOTIFICATION block: its subject is written by the workflow's designer, and it travels unencrypted in mail
+ * headers and provider logs, so designers are responsible for not putting sensitive data in it (arquitectura.md §19).
  */
 @Injectable()
 export class NotificationEmailHandler implements ExternalEffectHandler<NotificationEmailPayload, MailMessage>, OnModuleInit {
@@ -72,7 +74,7 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
   private async writtenBy(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<{ subject: string; body: string } | undefined> {
     const block = await this.facts.notificationBlock(tx, tenantId, ticketId, stepId);
     if (block === undefined) return undefined;
-    const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, block.body]);
+    const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, block.body], { stepId });
     return rendered === null ? undefined : { subject: rendered[0]!, body: rendered[1]! };
   }
 
