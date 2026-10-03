@@ -106,6 +106,7 @@ describe('schema conventions', () => {
       'claim_platform_outbox_events',
       'complete_platform_outbox_event',
       'enqueue_platform_event',
+      'enqueue_security_notice',
       'fail_platform_outbox_event',
       'list_failed_platform_outbox_events',
       'platform_outbox_claim_is_current',
