@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.7
+#
+# The unit tests of shared and the API in a throwaway container (deploy/verify.sh). It never runs as a service.
+#   docker build -f Dockerfile.test-unit -t procesabpm-test-unit .
+#
+# It has its own Dockerfile because it needs what the production images must not have: the tests and the vitest
+# configs. BuildKit reads Dockerfile.test-unit.dockerignore for this build and .dockerignore (which excludes the tests)
+# for the production images. Only the `unit` projects run: they need no database, no storage and no Docker. The heap is
+# capped so that it fits in 2 GB of memory.
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+
+FROM ${NODE_IMAGE}
+# Behind a TLS-inspecting proxy, pass its CA: --secret id=extra-ca,src=/path/ca.pem (optional). Only the build steps
+# that mount the secret see it; the running container does not set it.
+ENV CI=true PNPM_HOME=/pnpm PATH=/pnpm:$PATH
+RUN --mount=type=secret,id=extra-ca,required=false NODE_EXTRA_CA_CERTS=/run/secrets/extra-ca npm install --global --no-fund --no-audit pnpm@11.20.0
+WORKDIR /repo
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json apps/api/
+COPY packages/db/package.json packages/db/
+COPY packages/migrate/package.json packages/migrate/
+COPY packages/shared/package.json packages/shared/
+RUN --mount=type=secret,id=extra-ca,required=false --mount=type=cache,id=pnpm-store,target=/pnpm/store NODE_EXTRA_CA_CERTS=/run/secrets/extra-ca pnpm install --frozen-lockfile
+
+COPY tsconfig.base.json ./
+COPY apps/api apps/api
+COPY packages packages
+RUN --mount=type=secret,id=extra-ca,required=false NODE_EXTRA_CA_CERTS=/run/secrets/extra-ca pnpm --filter @procesabpm/db generate
+
+ENV NODE_OPTIONS=--max-old-space-size=1536
+CMD ["sh", "-c", "pnpm --filter @procesabpm/shared exec vitest run --maxWorkers=2 && pnpm --filter @procesabpm/api exec vitest run --project unit --maxWorkers=2"]

@@ -46,7 +46,7 @@ compose() {
 
 if [ "$run_unit" -eq 1 ]; then
   section "Unit tests (shared and API) in a throwaway container, 2 GB of memory"
-  docker build --target test-unit -t "$TEST_IMAGE" . >/tmp/verify-unit-build.log 2>&1
+  docker build -f Dockerfile.test-unit -t "$TEST_IMAGE" . >/tmp/verify-unit-build.log 2>&1
   build_status=$?
   if [ "$build_status" -ne 0 ]; then
     tail -n 30 /tmp/verify-unit-build.log
