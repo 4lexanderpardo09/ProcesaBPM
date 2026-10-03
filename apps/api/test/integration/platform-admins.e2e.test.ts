@@ -50,7 +50,7 @@ describe('platform administrators', () => {
       const response = await http().post('/platform/admins').set(auth()).send(body).expect(201);
       expect(response.body).toMatchObject({ email: body.email.toLowerCase(), mfaEnabled: false });
 
-      const events = await db.owner.query(`SELECT payload FROM platform_outbox_events WHERE type = 'email.password_reset' AND payload ->> 'userId' = $1`, [response.body.userId]);
+      const events = await db.owner.query(`SELECT payload FROM platform_outbox_events WHERE type = 'email.platform_admin_invitation' AND payload ->> 'userId' = $1`, [response.body.userId]);
       expect(events.rows).toHaveLength(1);
       const log = await db.owner.query(`SELECT actor_user_id FROM platform_audit_logs WHERE action = 'platform_admin.invited' AND data ->> 'userId' = $1`, [response.body.userId]);
       expect(log.rows).toEqual([{ actor_user_id: admin.userId }]);
@@ -64,11 +64,14 @@ describe('platform administrators', () => {
       expect(again.body.error.code).toBe('DUPLICATE');
     });
 
-    it('refuses a disabled account and an invalid body', async () => {
+    it('refuses a disabled or locked account and an invalid body', async () => {
       const tenant = await seedTenant(db.platform);
+      for (const status of ['DISABLED', 'LOCKED']) {
+        const member = await seedUser(db, tenant);
+        await db.owner.query(`UPDATE users SET status = $2::user_status WHERE id = $1`, [member.userId, status]);
+        await http().post('/platform/admins').set(auth()).send({ email: member.email, firstName: 'Mem', lastName: 'Ber' }).expect(422);
+      }
       const member = await seedUser(db, tenant);
-      await db.owner.query(`UPDATE users SET status = 'DISABLED' WHERE id = $1`, [member.userId]);
-      await http().post('/platform/admins').set(auth()).send({ email: member.email, firstName: 'Mem', lastName: 'Ber' }).expect(422);
       await http().post('/platform/admins').set(auth()).send({ email: 'not-an-email', firstName: '', lastName: 'x' }).expect(400);
     });
   });
@@ -114,6 +117,20 @@ describe('platform administrators', () => {
       expect(winner).toBe(204);
       expect([401, 409]).toContain(loser);
       expect((await db.owner.query('SELECT 1 FROM platform_admins')).rowCount).toBe(1);
+    });
+
+    it('does not count an admin who cannot sign in: an invited one who never chose a password does not keep the platform alive', async () => {
+      const invited = await http().post('/platform/admins').set(auth()).send(personal()).expect(201);
+      const response = await http().delete(`/platform/admins/${admin.userId}`).set(auth()).expect(409);
+      expect(response.body.error.code).toBe('LAST_PLATFORM_ADMIN');
+      // Once the invited one can sign in (has a password), stepping down is allowed.
+      await db.owner.query(`UPDATE users SET password_hash = 'x' WHERE id = $1`, [invited.body.userId]);
+      await http().delete(`/platform/admins/${admin.userId}`).set(auth()).expect(204);
+    });
+
+    it('an unusable admin can always be removed while a usable one remains', async () => {
+      const invited = await http().post('/platform/admins').set(auth()).send(personal()).expect(201);
+      await http().delete(`/platform/admins/${invited.body.userId}`).set(auth()).expect(204);
     });
 
     it('answers 404 for someone who is not an admin', async () => {

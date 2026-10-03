@@ -19,6 +19,13 @@ export interface CreatePlatformAdminInput {
   webBaseUrl: string;
 }
 
+export class UserNotActiveError extends Error {
+  constructor() {
+    super('The user exists but is not ACTIVE (locked or disabled): an administrator cannot be made from it');
+    this.name = 'UserNotActiveError';
+  }
+}
+
 export class PlatformLoginRequiredError extends Error {
   constructor() {
     super('Connect with the app_platform login (not the schema owner or a superuser): DATABASE_URL must belong to a member of app_platform');
@@ -56,12 +63,13 @@ async function provision(client: ClientBase, input: CreatePlatformAdminInput): P
   await assertPlatformLogin(client);
   await client.query('LOCK TABLE platform_admins IN SHARE ROW EXCLUSIVE MODE');
   const userId = await upsertUser(client, input);
+  if ((await client.query(`SELECT 1 FROM users WHERE id = $1 AND status = 'ACTIVE'`, [userId])).rowCount !== 1) throw new UserNotActiveError();
   await assertAllowed(client, userId, input.forceAdditional);
   await client.query('INSERT INTO platform_admins (user_id) VALUES ($1) ON CONFLICT DO NOTHING', [userId]);
   const hasPassword = (await client.query('SELECT 1 FROM users WHERE id = $1 AND password_hash IS NOT NULL', [userId])).rowCount === 1;
   const link = hasPassword ? null : await issueSetPasswordLink(client, userId, input.webBaseUrl);
   await client.query(
-    `INSERT INTO platform_audit_logs (actor_user_id, action, data) VALUES ($1, $2, $3::jsonb)`,
+    `INSERT INTO platform_audit_logs (actor_user_id, action, data) VALUES ($1, $2, $3::jsonb || jsonb_build_object('databaseLogin', session_user::text))`,
     [userId, PLATFORM_ADMIN_BOOTSTRAP_ACTION, JSON.stringify({ email: input.email, forceAdditional: input.forceAdditional, via: 'cli', linkIssued: link !== null })],
   );
   return { userId, email: input.email, setPasswordLink: link?.url ?? null, expiresAt: link?.expiresAt ?? null };

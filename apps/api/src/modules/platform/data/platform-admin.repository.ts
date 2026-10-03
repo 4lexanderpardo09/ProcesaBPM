@@ -33,10 +33,16 @@ export class PlatformAdminRepository {
     return rows.map(toSummary);
   }
 
-  /** Locks every admin row: two simultaneous revocations cannot both pass the "someone remains" check. */
-  async lockAllIds(tx: PlatformTransaction): Promise<string[]> {
-    const rows = await tx.$queryRaw<Array<{ user_id: string }>>`SELECT user_id::text AS user_id FROM platform_admins FOR UPDATE`;
-    return rows.map((row) => row.user_id);
+  /**
+   * Locks every admin row: two simultaneous revocations cannot both pass the "someone remains" check. `usable` means the
+   * person can sign in today: an active account that has chosen a password (an invited admin who never did cannot).
+   */
+  async lockAll(tx: PlatformTransaction): Promise<Array<{ userId: string; usable: boolean }>> {
+    const rows = await tx.$queryRaw<Array<{ user_id: string; usable: boolean }>>`
+      SELECT pa.user_id::text AS user_id, (u.status = 'ACTIVE' AND u.password_hash IS NOT NULL) AS usable
+      FROM platform_admins pa JOIN users u ON u.id = pa.user_id
+      FOR UPDATE OF pa`;
+    return rows.map((row) => ({ userId: row.user_id, usable: row.usable }));
   }
 
   async findUserByEmail(tx: PlatformTransaction, email: string): Promise<{ id: string; status: string } | undefined> {

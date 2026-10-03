@@ -2,6 +2,9 @@ import { Injectable } from '@nestjs/common';
 import type { FailedOutboxEvent, Page, PlatformMetrics } from '@procesabpm/shared';
 import type { PlatformTransaction } from '../../../infrastructure/database/platform-transaction-runner.js';
 
+/** A tenant handler's error can quote the tenant's data (addresses, names): only the start of it is shown. */
+const TENANT_ERROR_PREVIEW = 80;
+
 @Injectable()
 export class OperationsRepository {
   async listFailedPlatformEvents(tx: PlatformTransaction, page: number, pageSize: number): Promise<Page<FailedOutboxEvent>> {
@@ -29,7 +32,7 @@ export class OperationsRepository {
       tx.outboxEvent.count({ where }),
     ]);
     return {
-      items: rows.map((row) => ({ scope: 'TENANT', tenantId: row.tenantId, id: row.id, type: row.type, attempts: row.attempts, lastError: row.lastError?.slice(0, 500) ?? null, createdAt: row.createdAt.toISOString() })),
+      items: rows.map((row) => ({ scope: 'TENANT', tenantId: row.tenantId, id: row.id, type: row.type, attempts: row.attempts, lastError: row.lastError?.slice(0, TENANT_ERROR_PREVIEW) ?? null, createdAt: row.createdAt.toISOString() })),
       page,
       pageSize,
       total,

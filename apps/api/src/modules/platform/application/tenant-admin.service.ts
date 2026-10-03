@@ -82,6 +82,7 @@ export class TenantAdminService {
       if ((await this.tenants.findProfile(tx, tenantId)) === undefined) throw new TenantNotFoundError();
       const userId = await this.tenants.findOwnerPendingInvitation(tx, tenantId);
       if (userId === undefined) throw new InvalidStateError('The owner has no pending invitation');
+      if ((await this.tenants.findProfile(tx, tenantId))!.status !== 'ACTIVE') throw new InvalidStateError('Invitations are only sent for active tenants');
       await applyDatabaseScope(tx, { tenantId, userId: '' });
       await this.outbox.enqueue(tx, INVITATION_EVENT, { tenantId, userId });
       await this.audit.record(tx, { actorUserId, action: PLATFORM_AUDIT_ACTIONS.tenantOwnerInvitationResent, targetTenantId: tenantId, data: { userId } });

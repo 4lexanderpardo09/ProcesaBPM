@@ -158,6 +158,12 @@ describe('platform console: tenants', () => {
       expect(log.rows).toEqual([{ actor_user_id: adminUserId }]);
     });
 
+    it('refuses (422) for a suspended tenant: the worker would send nothing', async () => {
+      const tenant = await named('Suspended Invite Corp', { status: 'SUSPENDED' });
+      await db.owner.query(`UPDATE memberships SET is_owner = true, status = 'INVITED' WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, tenant.userId]);
+      await http().post(`/platform/tenants/${tenant.tenantId}/owner-invitation`).set(bearer(token)).expect(422);
+    });
+
     it('refuses (422) when the owner already accepted, and answers 404 for an unknown tenant', async () => {
       const tenant = await named('Accepted Corp');
       await db.owner.query(`UPDATE memberships SET is_owner = true WHERE tenant_id = $1 AND user_id = $2`, [tenant.tenantId, tenant.userId]);

@@ -30,7 +30,7 @@ export class AnnouncementAdminService {
     return this.runner.run(async (tx) => {
       const updated = await this.announcements.update(tx, id, request);
       if (updated === undefined) throw new NotFoundError();
-      await this.audit.record(tx, { actorUserId, action: PLATFORM_AUDIT_ACTIONS.announcementUpdated, data: { id } });
+      await this.audit.record(tx, { actorUserId, action: PLATFORM_AUDIT_ACTIONS.announcementUpdated, data: { id, title: updated.title, type: updated.type, startsAt: updated.startsAt, endsAt: updated.endsAt, blocksLogin: updated.blocksLogin } });
       return updated;
     });
   }

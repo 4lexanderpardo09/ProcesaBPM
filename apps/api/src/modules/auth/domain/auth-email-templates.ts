@@ -9,6 +9,7 @@ export interface RenderedMail {
 
 export const PASSWORD_RESET_VALIDITY_MINUTES = 30;
 export const INVITATION_VALIDITY_DAYS = 7;
+export const PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS = 7;
 
 export function renderPasswordResetEmail(input: { firstName: string; url: string }): RenderedMail {
   const t = es.passwordReset;
@@ -23,5 +24,13 @@ export function renderInvitationEmail(input: { firstName: string; organization: 
   return {
     subject: t.subject,
     ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.invited(input.organization), t.validity(INVITATION_VALIDITY_DAYS), t.ignore], action: { label: t.action, url: input.url }, footer: es.footerAutomatic }),
+  };
+}
+
+export function renderPlatformAdminInvitationEmail(input: { firstName: string; url: string }): RenderedMail {
+  const t = es.platformAdminInvitation;
+  return {
+    subject: t.subject,
+    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.invited, t.validity(PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS), t.ignore], action: { label: t.action, url: input.url }, footer: es.footerAutomatic }),
   };
 }

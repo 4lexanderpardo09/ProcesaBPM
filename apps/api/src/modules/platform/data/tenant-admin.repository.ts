@@ -95,13 +95,13 @@ export class TenantAdminRepository {
     return { usedBytes: usage?.bytesUsed ?? 0n, reservedBytes: usage?.bytesReserved ?? 0n };
   }
 
-  /** Last thing a member did: the newest audit entry or sign-in. */
+  /** Last thing a member did in this tenant: the newest audit entry or the newest session opened for it. */
   async lastActivity(tx: PlatformTransaction, tenantId: string): Promise<Date | undefined> {
     const [audit, login] = await Promise.all([
       tx.auditLog.findFirst({ where: { tenantId }, select: { createdAt: true }, orderBy: { createdAt: 'desc' } }),
-      tx.user.findFirst({ where: { memberships: { some: { tenantId } }, lastLoginAt: { not: null } }, select: { lastLoginAt: true }, orderBy: { lastLoginAt: 'desc' } }),
+      tx.refreshSession.findFirst({ where: { activeTenantId: tenantId }, select: { createdAt: true }, orderBy: { createdAt: 'desc' } }),
     ]);
-    const instants = [audit?.createdAt, login?.lastLoginAt].filter((value): value is Date => value instanceof Date);
+    const instants = [audit?.createdAt, login?.createdAt].filter((value): value is Date => value instanceof Date);
     return instants.length === 0 ? undefined : new Date(Math.max(...instants.map((instant) => instant.getTime())));
   }
 

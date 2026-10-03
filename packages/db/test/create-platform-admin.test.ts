@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createPlatformAdmin, PLATFORM_ADMIN_BOOTSTRAP_ACTION, PlatformAdminAlreadyExistsError, PlatformLoginRequiredError } from '../src/seed/platform-admin.js';
+import { createPlatformAdmin, PLATFORM_ADMIN_BOOTSTRAP_ACTION, PlatformAdminAlreadyExistsError, PlatformLoginRequiredError, UserNotActiveError } from '../src/seed/platform-admin.js';
 import { connectTestDatabase, type TestDatabase } from './support/database.js';
 
 const WEB = 'https://app.example.com';
@@ -50,10 +50,11 @@ describe('create-platform-admin command', () => {
 
   it('is recorded in the platform audit log', async () => {
     const admin = await run(`audit-${Date.now()}@example.com`);
-    const log = await db.owner.query<{ action: string; data: { via: string } }>('SELECT action, data FROM platform_audit_logs WHERE actor_user_id = $1', [admin.userId]);
+    const log = await db.owner.query<{ action: string; data: { via: string; databaseLogin: string } }>('SELECT action, data FROM platform_audit_logs WHERE actor_user_id = $1', [admin.userId]);
     expect(log.rows).toHaveLength(1);
     expect(log.rows[0]!.action).toBe(PLATFORM_ADMIN_BOOTSTRAP_ACTION);
     expect(log.rows[0]!.data.via).toBe('cli');
+    expect(log.rows[0]!.data).toMatchObject({ databaseLogin: 'test_platform' });
   });
 
   it('can be repeated for the only admin while no password is set, issuing a fresh link', async () => {
@@ -101,6 +102,13 @@ describe('create-platform-admin command', () => {
     const user = await db.owner.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [admin.userId]);
     expect(user.rows[0]!.password_hash).toBe('existing-hash');
     expect(await adminCount()).toBe(1);
+  });
+
+  it('refuses a locked or disabled user and creates no admin', async () => {
+    const email = `locked-${Date.now()}@example.com`;
+    await db.owner.query(`INSERT INTO users (email, first_name, last_name, status) VALUES ($1, 'Lo', 'Cked', 'LOCKED')`, [email]);
+    await expect(run(email, true)).rejects.toBeInstanceOf(UserNotActiveError);
+    expect(await adminCount()).toBe(0);
   });
 
   it('refuses to run with the schema owner or any superuser, and creates nothing', async () => {

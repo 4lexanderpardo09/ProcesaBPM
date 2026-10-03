@@ -58,7 +58,7 @@ const reasonSchema = z.string().trim().min(3).max(500);
 const bytesSchema = z.string().regex(/^\d{1,18}$/, 'Use a whole number of bytes');
 
 export const listTenantsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(100_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().trim().min(1).max(100).optional(),
   status: tenantStatusSchema.optional(),
@@ -192,7 +192,7 @@ export interface RegeneratedHolidays {
 
 export const listFailedEventsQuerySchema = z.object({
   scope: z.enum(['PLATFORM', 'TENANT']),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(100_000).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
 export type ListFailedEventsQuery = z.infer<typeof listFailedEventsQuerySchema>;
@@ -217,7 +217,7 @@ export interface PlatformMetrics {
 
 export const listPlatformAuditQuerySchema = z
   .object({
-    page: z.coerce.number().int().min(1).default(1),
+    page: z.coerce.number().int().min(1).max(100_000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
     actorUserId: uuidSchema.optional(),
     tenantId: uuidSchema.optional(),
