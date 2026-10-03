@@ -76,6 +76,11 @@ Las obligatorias son las que no tienen valor por defecto. Un valor inválido o f
 | `DB_TX_TIMEOUT_MS` | no | `10000` (máx. 120000) | Duración máxima de una transacción; también `statement_timeout` de la BD |
 | `DB_TX_MAX_WAIT_MS` | no | `5000` (máx. 60000) | Espera máxima de una conexión libre del pool |
 | `DB_LOCK_TIMEOUT_MS` | no | `5000` (máx. 60000) | Espera máxima de un bloqueo de fila: pasada, la BD cancela y el API responde **503** `TEMPORARILY_UNAVAILABLE` con `Retry-After: 1` |
+| `REALTIME_ENABLED` | no | `true` | Activa el WebSocket de tiempo real (`/realtime`) |
+| `REALTIME_ALLOWED_ORIGINS` | sí si `REALTIME_ENABLED` | | Orígenes (esquema, host y puerto, sin ruta) que pueden abrir el socket, separados por comas; `https://` en producción. El compose de ejemplo usa `WEB_BASE_URL` |
+| `REALTIME_DATABASE_URL` | no | `DATABASE_URL` | Conexión directa (no a través de un pooler en modo transacción) para `LISTEN`; el API revisa su salud con un ping propio cada 30 s |
+| `REALTIME_MAX_CONNECTIONS` / `_PER_USER` / `_MAX_TICKET_SUBSCRIPTIONS` | no | `5000` / `10` / `20` | Límites de sockets por instancia, por usuario y de tickets suscritos por socket |
+| `REALTIME_REVALIDATE_INTERVAL_MS` / `_AUTH_GRACE_MS` / `_DB_CONCURRENCY` / `_SIGNAL_QUEUE_MAX` | no | `60000` / `10000` / `4` / `10000` | Revalidación periódica de la sesión, plazo para autenticar tras conectar, trabajos concurrentes a la BD (debe ser menor que `DB_POOL_MAX`) y cola de señales |
 | `STORAGE_ENDPOINT` | sí | | URL S3 compatible (R2, S3, SeaweedFS…) |
 | `STORAGE_BUCKET` | sí | | ≥ 3 caracteres; el bucket debe existir |
 | `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` | sí | | |

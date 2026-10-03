@@ -16,6 +16,7 @@ const valid = {
   STORAGE_BUCKET: 'procesabpm',
   STORAGE_ACCESS_KEY_ID: 'testkey',
   STORAGE_SECRET_ACCESS_KEY: 'testkey',
+  REALTIME_ALLOWED_ORIGINS: 'https://app.example.com',
 };
 const workerUrl = 'postgresql://worker:secret@localhost:5432/procesabpm';
 
@@ -32,6 +33,46 @@ describe('loadApiConfig / loadWorkerConfig', () => {
       TRUST_PROXY: false,
       STORAGE_REGION: 'us-east-1',
       STORAGE_FORCE_PATH_STYLE: false,
+      REALTIME_ENABLED: true,
+      REALTIME_ALLOWED_ORIGINS: ['https://app.example.com'],
+      REALTIME_MAX_CONNECTIONS: 5_000,
+      REALTIME_MAX_CONNECTIONS_PER_USER: 10,
+      REALTIME_MAX_TICKET_SUBSCRIPTIONS: 20,
+      REALTIME_REVALIDATE_INTERVAL_MS: 60_000,
+      REALTIME_AUTH_GRACE_MS: 10_000,
+      REALTIME_DB_CONCURRENCY: 4,
+      REALTIME_SIGNAL_QUEUE_MAX: 10_000,
+    });
+  });
+
+  describe('the realtime gateway', () => {
+    it('needs its allowed origins unless it is switched off', () => {
+      const { REALTIME_ALLOWED_ORIGINS: _origins, ...withoutOrigins } = valid;
+      expect(() => loadApiConfig(withoutOrigins)).toThrow(/REALTIME_ALLOWED_ORIGINS is required/);
+      expect(loadApiConfig({ ...withoutOrigins, REALTIME_ENABLED: 'false' }).REALTIME_ENABLED).toBe(false);
+    });
+
+    it.each(['https://app.example.com/path', 'app.example.com', 'ftp://app.example.com', 'https://app.example.com, nonsense', '*'])('rejects the origins %j', (value) => {
+      expect(() => loadApiConfig({ ...valid, REALTIME_ALLOWED_ORIGINS: value })).toThrow(/REALTIME_ALLOWED_ORIGINS/);
+    });
+
+    it('normalizes origins (lower case, default ports, several entries)', () => {
+      expect(loadApiConfig({ ...valid, REALTIME_ALLOWED_ORIGINS: 'HTTPS://App.Example.com, http://localhost:5173' }).REALTIME_ALLOWED_ORIGINS).toEqual(['https://app.example.com', 'http://localhost:5173']);
+    });
+
+    it('requires https in production', () => {
+      expect(() => loadApiConfig({ ...valid, NODE_ENV: 'production', REALTIME_ALLOWED_ORIGINS: 'http://app.example.com' })).toThrow(/must use https/);
+      expect(loadApiConfig({ ...valid, NODE_ENV: 'production' }).REALTIME_ALLOWED_ORIGINS).toEqual(['https://app.example.com']);
+    });
+
+    it('keeps its database concurrency below the pool, so HTTP requests always find a connection', () => {
+      expect(() => loadApiConfig({ ...valid, DB_POOL_MAX: '4', REALTIME_DB_CONCURRENCY: '4' })).toThrow(/REALTIME_DB_CONCURRENCY must be lower than DB_POOL_MAX/);
+      expect(loadApiConfig({ ...valid, DB_POOL_MAX: '5', REALTIME_DB_CONCURRENCY: '4' }).REALTIME_DB_CONCURRENCY).toBe(4);
+    });
+
+    it('bounds its limits', () => {
+      expect(() => loadApiConfig({ ...valid, REALTIME_MAX_CONNECTIONS_PER_USER: '51' })).toThrow(/REALTIME_MAX_CONNECTIONS_PER_USER/);
+      expect(() => loadApiConfig({ ...valid, REALTIME_AUTH_GRACE_MS: '999' })).toThrow(/REALTIME_AUTH_GRACE_MS/);
     });
   });
 
@@ -171,7 +212,8 @@ describe('loadApiConfig / loadWorkerConfig', () => {
 
   it('lists every problem at once', () => {
     const error = catchError(() => loadApiConfig({}));
-    expect(error.problems).toHaveLength(Object.keys(valid).length);
+    // The origins are only required together with the rest, once the other variables are valid.
+    expect(error.problems).toHaveLength(Object.keys(valid).length - 1);
   });
 
   it('counts the secret in bytes, not characters', () => {
