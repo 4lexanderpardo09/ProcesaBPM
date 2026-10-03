@@ -16,7 +16,7 @@ const thirdParty = (manifest) => Object.keys({ ...manifest.dependencies, ...mani
 
 const targets = [
   { name: 'api', manifest: 'apps/api/package.json', entries: { main: 'apps/api/src/main.ts', worker: 'apps/api/src/worker.ts' }, outdir: 'dist/api' },
-  { name: 'seed', manifest: 'packages/migrate/package.json', entries: { seed: 'packages/db/src/seed/run.ts' }, outdir: 'dist/seed' },
+  { name: 'seed', manifest: 'packages/migrate/package.json', entries: { seed: 'packages/db/src/seed/run.ts', 'create-platform-admin': 'packages/db/src/seed/create-platform-admin.ts' }, outdir: 'dist/seed' },
 ];
 
 for (const target of targets) {

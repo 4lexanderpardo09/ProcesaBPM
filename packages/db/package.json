@@ -24,6 +24,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./seed/platform-admin": "./src/seed/platform-admin.ts",
     "./testing": "./test/support/global-setup.ts",
     "./testing/database": "./test/support/database.ts",
     "./testing/fixtures": "./test/support/fixtures.ts"

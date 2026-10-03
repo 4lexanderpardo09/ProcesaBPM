@@ -122,6 +122,23 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 
 `docker-compose.prod.example.yml` implementa exactamente esa cadena (`postgres → migrate → roles → seed → api, worker`). Es una **guía**, no algo para correr tal cual (el CI solo valida su sintaxis con `docker compose config`; la cadena completa se probó a mano): sustituye Postgres, almacenamiento y correo por servicios administrados, pon un proxy con TLS delante del API y fija versiones reales de las imágenes.
 
+### Primer administrador de plataforma
+
+No hay endpoint público para crearlo. Se crea desde el servicio `seed` (imagen `migrate`), que ya tiene el `DATABASE_URL` del login `procesabpm_platform` (`app_platform`); falta la URL pública del web en `WEB_BASE_URL`:
+
+```bash
+docker compose -f docker-compose.prod.example.yml run --rm -e WEB_BASE_URL=https://app.example.com seed \
+  node seed/create-platform-admin.js --email admin@example.com [--first-name Ada --last-name Root]
+```
+
+El comando **se niega** a correr con el dueño del esquema, con un superusuario o con un login que no sea miembro de `app_platform` (mínimo privilegio): por eso no se usa el servicio `migrate`.
+
+- Crea (o reutiliza) el usuario global, lo agrega a `platform_admins` e imprime en la terminal un **enlace de un solo uso, válido 24 h**, para fijar la contraseña. Solo se guarda su hash.
+- La MFA es obligatoria: el primer inicio de sesión exige inscribir el autenticador.
+- Con `--force-additional` sobre un usuario que ya tiene contraseña no se emite enlace ni se tocan sus tokens: solo se agrega a `platform_admins` (en su próximo login se le exige MFA).
+- **Idempotente:** repetirlo para el único administrador que aún no eligió contraseña emite un enlace nuevo. Si ya existe otro administrador (o este ya tiene contraseña) se niega, salvo con `--force-additional`.
+- Queda registrado en `platform_audit_logs` (`platform_admin.bootstrapped`, `via: cli`). Más administradores se invitan después desde la consola de plataforma.
+
 ## 5. Migrar
 
 - Las migraciones solo avanzan; no hay migraciones inversas. Antes de migrar en producción, **respaldo** de la BD.
