@@ -7,6 +7,10 @@ const schema = z.object({
   MAILPIT_URL: z.url().default('http://mailpit:8025'),
   /** A login of `app_platform`: creates the smoke administrator and removes everything at the end. */
   SMOKE_DATABASE_URL: z.string().min(1),
+  /** The web application's address (the worker has it too): its origin is the one the realtime endpoint must accept. */
+  WEB_BASE_URL: z.url().optional(),
+  /** The origin to present to the realtime endpoint when it is not the one of `WEB_BASE_URL`. */
+  SMOKE_ORIGIN: z.url().optional(),
   /** Plan of the smoke organization. */
   SMOKE_PLAN_CODE: z.string().min(1).default('professional'),
   /** The same variables the API and the worker use: the smoke organization's files are removed from the bucket at the end. */
