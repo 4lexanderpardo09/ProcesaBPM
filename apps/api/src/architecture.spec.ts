@@ -32,7 +32,7 @@ describe('architecture', () => {
   });
 
   it('the worker-only modules (outbox dispatcher, mail, account mail, notifications, documents fan-out and the wait wake-up) are only imported by the worker', () => {
-    const workerOnly = /(outbox-dispatcher\.module|mail\.module|auth-mail\.module|notifications-worker\.module|documents-worker\.module)/;
+    const workerOnly = /(outbox-dispatcher\.module|mail\.module|auth-mail\.module|auth-maintenance\.module|notifications-worker\.module|documents-worker\.module)/;
     const importers = files.filter((file) => importsOf(file).some((source) => workerOnly.test(source))).map(posix);
     expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/engine/wait.module.ts', 'modules/notifications/notifications-worker.module.ts', 'worker.module.ts']);
   });
@@ -43,7 +43,18 @@ describe('architecture', () => {
   });
 
   it('the worker never imports the controllers or the guards of the API', () => {
-    const offenders = files.filter((file) => posix(file).startsWith('modules/') && /notifications-worker|documents-worker|auth-mail|file-purge/.test(posix(file))).filter((file) => importsOf(file).some((source) => /\.controller\.js$|authorization\.module\.js$|\.guard\.js$/.test(source))).map(posix);
+    const offenders = files.filter((file) => posix(file).startsWith('modules/') && /notifications-worker|documents-worker|auth-mail|auth-maintenance|file-purge/.test(posix(file))).filter((file) => importsOf(file).some((source) => /\.controller\.js$|authorization\.module\.js$|\.guard\.js$/.test(source))).map(posix);
     expect(offenders).toEqual([]);
+  });
+
+  it('only the four transaction runners brand a transaction', () => {
+    const importers = files.filter((file) => /\basScoped\b/.test(readFileSync(file, 'utf8'))).map(posix);
+    expect(importers.sort()).toEqual([
+      'infrastructure/database/auth-transaction-runner.ts',
+      'infrastructure/database/platform-transaction-runner.ts',
+      'infrastructure/database/tenant-transaction-runner.ts',
+      'infrastructure/database/transaction-scope.ts',
+      'infrastructure/database/worker-transaction-runner.ts',
+    ]);
   });
 });

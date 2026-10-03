@@ -3,8 +3,9 @@ import { UnauthenticatedError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
-import { type IssuedToken, JwtTokenService } from '../../../infrastructure/security/jwt-token-service.js';
+import { type IssuedToken, JwtTokenService, type SelectionTokenClaims } from '../../../infrastructure/security/jwt-token-service.js';
 import { generateOpaqueToken, sha256Hex } from '../../../infrastructure/security/token-utils.js';
+import { LoginTokenRepository } from '../data/login-token.repository.js';
 import { SessionRepository, type StoredSession } from '../data/session.repository.js';
 import { REFRESH_REUSE_GRACE_MS, REFRESH_SESSION_TTL_MS } from '../domain/auth-policy.js';
 import { TenantAccessService } from './tenant-access.service.js';
@@ -22,7 +23,7 @@ export interface OpenedSession {
 }
 
 type RefreshCheck =
-  | { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date }
+  | { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date; readonly mfaVerified: boolean }
   | { readonly kind: 'invalid' | 'reused' };
 
 type Rotation =
@@ -34,18 +35,25 @@ export class SessionService {
   constructor(
     @Inject(AuthTransactionRunner) private readonly runner: AuthTransactionRunner,
     @Inject(SessionRepository) private readonly sessions: SessionRepository,
+    @Inject(LoginTokenRepository) private readonly loginTokens: LoginTokenRepository,
     @Inject(TenantAccessService) private readonly tenantAccess: TenantAccessService,
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
     @Inject(Clock) private readonly clock: Clock,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
 
-  async open(userId: string, tenantId: string, client: ClientInfo): Promise<OpenedSession> {
+  /**
+   * Consumes the selection token and creates the session in one transaction: a refused or failed selection does not burn
+   * the token, and a token that was already used (or predates a password change) opens nothing.
+   */
+  async openFromSelection(selection: SelectionTokenClaims, tenantId: string, client: ClientInfo): Promise<OpenedSession> {
+    const { userId } = selection;
     const refreshToken = generateOpaqueToken();
     const refreshExpiresAt = new Date(this.clock.now().getTime() + REFRESH_SESSION_TTL_MS);
-    const sessionId = await this.runner.withUserTransaction(userId, (tx) =>
-      this.sessions.create(tx, { userId, activeTenantId: tenantId, tokenHash: sha256Hex(refreshToken), expiresAt: refreshExpiresAt, ...client }),
-    );
+    const sessionId = await this.runner.withUserTransaction(userId, async (tx) => {
+      if (!(await this.loginTokens.consume(tx, selection, 'TENANT_SELECTION'))) throw new UnauthenticatedError();
+      return this.sessions.create(tx, { userId, activeTenantId: tenantId, tokenHash: sha256Hex(refreshToken), expiresAt: refreshExpiresAt, mfaVerified: selection.mfa, ...client });
+    });
     return { accessToken: await this.issueAccessToken(userId, tenantId, sessionId), refreshToken, refreshExpiresAt };
   }
 
@@ -62,7 +70,7 @@ export class SessionService {
     if (check.kind === 'reused') await this.revokeEverySession(owner.userId);
     if (check.kind !== 'valid') throw new UnauthenticatedError();
 
-    await this.tenantAccess.verify({ userId: owner.userId, tenantId: check.tenantId });
+    await this.tenantAccess.verify({ userId: owner.userId, tenantId: check.tenantId, mfaVerified: check.mfaVerified });
     return this.rotate(owner.id, owner.userId, check.tenantId, client);
   }
 
@@ -95,7 +103,7 @@ export class SessionService {
     if (session.revokedAt !== null || session.expiresAt.getTime() <= now || session.activeTenantId === null) {
       return { kind: 'invalid' };
     }
-    return { kind: 'valid', tenantId: session.activeTenantId, expiresAt: session.expiresAt };
+    return { kind: 'valid', tenantId: session.activeTenantId, expiresAt: session.expiresAt, mfaVerified: session.mfaVerified };
   }
 
   /**
@@ -112,6 +120,7 @@ export class SessionService {
         activeTenantId: tenantId,
         tokenHash: sha256Hex(refreshToken),
         expiresAt: check.expiresAt,
+        mfaVerified: check.mfaVerified,
         ...client,
       });
       await this.sessions.markReplaced(tx, sessionId, id, this.clock.now());

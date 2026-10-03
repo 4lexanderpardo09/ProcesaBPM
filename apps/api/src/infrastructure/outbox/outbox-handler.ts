@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { WorkerTransaction } from '../database/worker-transaction-runner.js';
+import type { CrossTenantTransaction, TenantTransaction } from '../database/transaction-scope.js';
 
 export interface ClaimedEvent<P> {
   readonly id: string;
@@ -19,7 +19,7 @@ export interface ClaimedEvent<P> {
 export interface TransactionalHandler<P> {
   readonly type: string;
   readonly schema: z.ZodType<P>;
-  handle(tx: WorkerTransaction, event: ClaimedEvent<P>): Promise<void>;
+  handle(tx: TenantTransaction, event: ClaimedEvent<P>): Promise<void>;
 }
 
 /**
@@ -28,17 +28,31 @@ export interface TransactionalHandler<P> {
  * the event completes (after `record`, when there is one). Delivery is at-least-once: a duplicate needs a crash between `perform` and the completion,
  * and carries the same deterministic message, so the receiver can recognize it.
  */
-export interface ExternalEffectHandler<P, M, R = void> {
+export interface ExternalEffectHandler<P, M, R = void, Tx extends TenantTransaction | CrossTenantTransaction = TenantTransaction> {
   readonly type: string;
-  readonly scope: 'tenant' | 'platform';
+  /** Tenant events run in that tenant's scope; platform events have no tenant, so only the cross-tenant functions. */
+  readonly scope: Tx extends CrossTenantTransaction ? 'platform' : 'tenant';
   readonly schema: z.ZodType<P>;
-  prepare(tx: WorkerTransaction, event: ClaimedEvent<P>): Promise<M | null>;
+  prepare(tx: Tx, event: ClaimedEvent<P>): Promise<M | null>;
   perform(message: M, event: ClaimedEvent<P>): Promise<R>;
   /**
    * Optional: stores what `perform` produced, in the same transaction that completes the event. A claim that lost
    * its lease rolls it back, so whoever owns the event next records it exactly once.
    */
-  record?(tx: WorkerTransaction, result: R, event: ClaimedEvent<P>): Promise<void>;
+  record?(tx: Tx, result: R, event: ClaimedEvent<P>): Promise<void>;
+}
+
+/**
+ * How the dispatcher holds a registered handler: the registration tied `scope` to the transaction type, so the dispatcher
+ * opens the matching scope and hands the transaction over without knowing which brand the handler declared.
+ */
+export interface RegisteredExternalHandler {
+  readonly type: string;
+  readonly scope: 'tenant' | 'platform';
+  readonly schema: z.ZodType<never>;
+  prepare(tx: never, event: ClaimedEvent<never>): Promise<unknown>;
+  perform(message: never, event: ClaimedEvent<never>): Promise<unknown>;
+  record?(tx: never, result: never, event: ClaimedEvent<never>): Promise<void>;
 }
 
 /** Retrying cannot help (an invalid payload, a permanent delivery error): the event goes straight to FAILED. */

@@ -1,6 +1,6 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-settings.js';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { WebLinks } from '../../../infrastructure/mail/links.js';
 import { type MailMessage, Mailer } from '../../../infrastructure/mail/mailer.js';
 import { singleLine } from '../../../infrastructure/mail/html.js';
@@ -40,7 +40,7 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
     this.registry.registerExternal(this);
   }
 
-  async prepare(tx: WorkerTransaction, event: ClaimedEvent<NotificationEmailPayload>): Promise<MailMessage | null> {
+  async prepare(tx: TenantTransaction, event: ClaimedEvent<NotificationEmailPayload>): Promise<MailMessage | null> {
     const tenantId = event.tenantId!;
     const { userId, ticketId, notificationType } = event.payload;
     const tenant = await this.facts.tenant(tx, tenantId);

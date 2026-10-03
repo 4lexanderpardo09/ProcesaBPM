@@ -5,6 +5,7 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { INVITATION_EVENT } from '../../../infrastructure/outbox/platform-event-types.js';
 import { PlatformOutboxRepository } from '../../../infrastructure/outbox/platform-outbox.repository.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { MemberRepository } from '../data/member.repository.js';
 import { assertInvitationPending } from '../domain/member-policy.js';
 import { toMemberResponse } from './members.service.js';
@@ -20,6 +21,7 @@ export class MemberInvitationService {
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(MemberRepository) private readonly members: MemberRepository,
     @Inject(PlatformOutboxRepository) private readonly outbox: PlatformOutboxRepository,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   /** A person who is already a member answers 409 (the membership key); a foreign role or company, 422. */
@@ -33,6 +35,7 @@ export class MemberInvitationService {
       });
       await this.members.replaceCompanies(tx, this.tenantId, userId, request.companyIds);
       await this.sendInvitation(tx, userId);
+      await this.audit.record(tx, { action: 'member.invited', subjectType: 'Membership', subjectId: userId, after: { roleId: request.roleId, companyIds: request.companyIds } });
       // Until the person accepts, the names are the ones sent: the stored ones may come from another organization.
       return { ...toMemberResponse(await this.requireMember(tx, userId)), firstName: request.firstName, lastName: request.lastName };
     });
@@ -44,6 +47,7 @@ export class MemberInvitationService {
       const member = await this.requireMember(tx, userId);
       assertInvitationPending(member);
       await this.sendInvitation(tx, userId);
+      await this.audit.record(tx, { action: 'member.invitation_resent', subjectType: 'Membership', subjectId: userId });
       return toMemberResponse(member);
     });
   }

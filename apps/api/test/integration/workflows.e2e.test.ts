@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminOf, ApiClient, clientWith, connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -129,7 +130,7 @@ describe('workflows API (builder backend)', () => {
       const first = (await putGraph(admin, version(c), { ...taskGraph(c), revision: 0 }).expect(200)).body;
       expect(first.revision).toBe(1);
       const stale = await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [], revision: 0 });
-      expect(stale.status).toBe(409);
+      expectStatus(stale, 409);
       expect(stale.body.error).toMatchObject({ code: 'STALE_REVISION', details: { currentRevision: 1 } });
       expect((await detail(c)).document.steps).toHaveLength(3);
       expect((await putGraph(admin, version(c), { ...taskGraph(c), steps: first.document.steps.map((step: StepDocument) => stepInput(step.id, step.type, { name: step.name, ...(step.assignmentMode === 'NONE' ? {} : { assignmentMode: step.assignmentMode }) })), transitions: first.document.transitions.map((t: { id: string; fromStepId: string; toStepId: string; type: string; label: string }) => edge(t.id, t.fromStepId, t.toStepId, t.type, { label: t.label })), revision: 1 }).expect(200)).body.revision).toBe(2);
@@ -144,7 +145,7 @@ describe('workflows API (builder backend)', () => {
       const taskId = saved.idMap['new:task'] as string;
       let expected = (await detail(c)).version.revision;
       const bumped = (response: { status: number; headers: Record<string, unknown> }, status: number) => {
-        expect(response.status).toBe(status);
+        expectStatus(response, status);
         expected += 1;
         expect(response.headers['workflow-revision']).toBe(String(expected));
       };
@@ -163,7 +164,7 @@ describe('workflows API (builder backend)', () => {
       expect((await detail(c)).version.revision).toBe(expected);
 
       const stale = await admin.put(`${version(c)}/graph`, { ...taskGraph(c), revision: saved.revision });
-      expect(stale.status).toBe(409);
+      expectStatus(stale, 409);
       expect(stale.body.error.details.currentRevision).toBe(expected);
     });
 
@@ -194,7 +195,7 @@ describe('workflows API (builder backend)', () => {
         steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END'), stepInput('new:extra', 'TASK')],
         transitions: [edge('new:ok', c.start, 'new:extra', 'DEFAULT'), edge('new:bad', c.end, 'new:extra', 'DECISION')],
       });
-      expect(response.status).toBe(422);
+      expectStatus(response, 422);
       expect(await detail(c)).toEqual(before);
     });
 
@@ -259,7 +260,7 @@ describe('workflows API (builder backend)', () => {
       const c = await newWorkflow();
       await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200);
       const response = await publishFlow(c).then((r) => r);
-      expect(response.status).toBe(422);
+      expectStatus(response, 422);
       expect(response.body.error.code).toBe('WORKFLOW_NOT_PUBLISHABLE');
       expect(response.body.error.details.errors.map((p: { code: string }) => p.code)).toContain('END_NOT_REACHABLE');
       expect((await detail(c)).version.status).toBe('DRAFT');
@@ -269,7 +270,7 @@ describe('workflows API (builder backend)', () => {
     it('publishes a valid draft and returns the warnings', async () => {
       const c = await newWorkflow();
       await putGraph(admin, version(c), taskGraph(c)).expect(200);
-      const published = (await publishFlow(c).then((r) => { expect(r.status).toBe(200); return r; })).body;
+      const published = (await publishFlow(c).then((r) => { expectStatus(r, 200); return r; })).body;
       expect(published.version).toMatchObject({ status: 'PUBLISHED', number: 1 });
       expect(published.version.publishedAt).not.toBeNull();
       expect(published.version.publishedById).not.toBeNull();
@@ -279,7 +280,7 @@ describe('workflows API (builder backend)', () => {
     it('publishing a new draft archives the previously published version', async () => {
       const c = await newWorkflow();
       await putGraph(admin, version(c), taskGraph(c)).expect(200);
-      await publishFlow(c).then((r) => expect(r.status).toBe(200));
+      await publishFlow(c).then((r) => expectStatus(r, 200));
       const draft = (await admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId }).expect(201)).body;
       expect(draft).toMatchObject({ number: 2, status: 'DRAFT' });
       await admin.post(`${version(c, draft.id)}/publish`, { notes: 'Second' }).expect(200);
@@ -290,7 +291,7 @@ describe('workflows API (builder backend)', () => {
     it('a published or archived version is not published again (409)', async () => {
       const c = await newWorkflow();
       await putGraph(admin, version(c), taskGraph(c)).expect(200);
-      await publishFlow(c).then((r) => expect(r.status).toBe(200));
+      await publishFlow(c).then((r) => expectStatus(r, 200));
       expect((await publishFlow(c)).status).toBe(409);
     });
 
@@ -327,7 +328,7 @@ describe('workflows API (builder backend)', () => {
       });
       await putGraph(admin, version(c), withHook(ANY_ID)).expect(200);
       const refused = await publishFlow(c);
-      expect(refused.status).toBe(422);
+      expectStatus(refused, 422);
       expect(refused.body.error.details.errors.map((p: { code: string; params?: { kind: string } }) => `${p.code}:${p.params?.kind}`)).toContain('BLOCK_REFERENCE_UNKNOWN:WEBHOOK');
       expect((await admin.get(`${version(c)}/validation`).expect(200)).body.errors.map((p: { code: string }) => p.code)).toContain('BLOCK_REFERENCE_UNKNOWN');
       expect((await detail(c)).version.status).toBe('DRAFT');
@@ -335,7 +336,7 @@ describe('workflows API (builder backend)', () => {
       await putGraph(admin, version(c), withHook(webhook)).expect(200);
       // The webhook exists now, but the block does nothing yet: the only reason left to refuse is that.
       const stillRefused = await publishFlow(c);
-      expect(stillRefused.status).toBe(422);
+      expectStatus(stillRefused, 422);
       expect(stillRefused.body.error.details.errors.map((p: { code: string }) => p.code)).toEqual(['NOT_IMPLEMENTED_WEBHOOK_BLOCK']);
     });
 
@@ -362,7 +363,7 @@ describe('workflows API (builder backend)', () => {
     it('every way of editing answers 409', async () => {
       const c = await newWorkflow();
       await putGraph(admin, version(c), taskGraph(c)).expect(200);
-      await publishFlow(c).then((r) => expect(r.status).toBe(200));
+      await publishFlow(c).then((r) => expectStatus(r, 200));
       const d = await detail(c);
       const taskId = d.document.steps.find((s) => s.type === 'TASK')!.id;
       expect((await putGraph(admin, version(c), taskGraph(c)).expect(409)).body.error.code).toBe('IMMUTABLE_DATA');
@@ -379,7 +380,7 @@ describe('workflows API (builder backend)', () => {
     it('the database also refuses direct changes of published content (23001), and the API translates it to 409', async () => {
       const c = await newWorkflow();
       await putGraph(admin, version(c), taskGraph(c)).expect(200);
-      await publishFlow(c).then((r) => expect(r.status).toBe(200));
+      await publishFlow(c).then((r) => expectStatus(r, 200));
       await expect(db.platform.query(`UPDATE steps SET name = 'changed' WHERE version_id = $1`, [c.versionId])).rejects.toMatchObject({ code: '23001' });
     });
   });
@@ -400,7 +401,7 @@ describe('workflows API (builder backend)', () => {
       await admin.put(`${version(c)}/steps/${taskId}/candidates`, { candidates: [{ participantType: 'USER', userId: tenant.userId }] }).expect(200);
       await admin.put(`${version(c)}/steps/${c.start}/initiators`, { initiators: [{ participantType: 'COMPANY', companyId: tenant.companyId }] }).expect(200);
       await admin.put(`${version(c)}/steps/${taskId}/sla-overrides`, { overrides: [{ companyId: tenant.companyId, slaValue: 2, slaUnit: 'BUSINESS_DAYS' }] }).expect(200);
-      await publishFlow(c).then((r) => expect(r.status).toBe(200));
+      await publishFlow(c).then((r) => expectStatus(r, 200));
 
       const draft = (await admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId }).expect(201)).body;
       const source = await detail(c);
@@ -445,7 +446,7 @@ describe('workflows API (builder backend)', () => {
     it('two concurrent copies are numbered one after the other; only one draft survives', async () => {
       const c = await newWorkflow();
       await putGraph(admin, version(c), taskGraph(c)).expect(200);
-      await publishFlow(c).then((r) => expect(r.status).toBe(200));
+      await publishFlow(c).then((r) => expectStatus(r, 200));
       const results = await Promise.all([admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId }), admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId })]);
       expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
     });

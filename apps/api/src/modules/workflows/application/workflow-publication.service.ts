@@ -8,6 +8,7 @@ import {
 } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
 import { WorkflowRepository } from '../data/workflow.repository.js';
 import { PublicationCheckRegistry } from './publication-check.registry.js';
@@ -24,6 +25,7 @@ export class WorkflowPublicationService {
     @Inject(VersionDocumentRepository) private readonly documents: VersionDocumentRepository,
     @Inject(ReferenceValidator) private readonly references: ReferenceValidator,
     @Inject(PublicationCheckRegistry) private readonly extraChecks: PublicationCheckRegistry,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   /**
@@ -47,6 +49,7 @@ export class WorkflowPublicationService {
       await this.workflows.archivePublished(tx, tenantId, workflowId);
       if ((await this.workflows.publish(tx, tenantId, versionId, publishedById, request.notes)) !== 1) throw new ImmutableDataError('The version is no longer a draft');
       const version = (await this.workflows.findVersion(tx, tenantId, workflowId, versionId))!;
+      await this.audit.record(tx, { action: 'workflow.version_published', subjectType: 'Workflow', subjectId: workflowId, after: { versionId, number: version.number, warnings: validation.warnings.length } });
       return { version: toVersionSummary(version), warnings: validation.warnings };
     });
   }

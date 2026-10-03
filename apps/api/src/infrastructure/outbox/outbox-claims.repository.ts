@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { WorkerTransaction } from '../database/worker-transaction-runner.js';
+import type { CrossTenantTransaction, TenantTransaction } from '../database/transaction-scope.js';
 import type { ClaimedEvent } from './outbox-handler.js';
 import { LEASE, MAX_ATTEMPTS } from './retry-policy.js';
 
@@ -23,14 +23,14 @@ const toEvent = (row: ClaimRow): ClaimedEvent<unknown> => ({ id: row.id, tenantI
  */
 @Injectable()
 export class OutboxClaimsRepository {
-  async claimTenant(tx: WorkerTransaction, limit: number, types: readonly string[]): Promise<ClaimedEvent<unknown>[]> {
+  async claimTenant(tx: CrossTenantTransaction, limit: number, types: readonly string[]): Promise<ClaimedEvent<unknown>[]> {
     const rows = await tx.$queryRaw<ClaimRow[]>`
       SELECT id::text AS id, tenant_id::text AS tenant_id, type, payload, attempts, created_at
       FROM claim_outbox_events(${limit}::int, ${[...types]}::text[], ${LEASE}::interval, ${MAX_ATTEMPTS}::int)`;
     return rows.map(toEvent);
   }
 
-  async claimPlatform(tx: WorkerTransaction, limit: number): Promise<ClaimedEvent<unknown>[]> {
+  async claimPlatform(tx: CrossTenantTransaction, limit: number): Promise<ClaimedEvent<unknown>[]> {
     const rows = await tx.$queryRaw<ClaimRow[]>`
       SELECT id::text AS id, type, payload, attempts, created_at
       FROM claim_platform_outbox_events(${limit}::int, ${LEASE}::interval, ${MAX_ATTEMPTS}::int)`;
@@ -38,7 +38,7 @@ export class OutboxClaimsRepository {
   }
 
   /** Whether this worker still owns the claim (not expired, not taken by another worker): asked before an e-mail is sent. */
-  async isCurrent(tx: WorkerTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
+  async isCurrent(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
     const [row] =
       source === 'tenant'
         ? await tx.$queryRaw<Array<{ ok: boolean }>>`
@@ -49,7 +49,7 @@ export class OutboxClaimsRepository {
   }
 
   /** False when the lease ended and another worker owns the event now. */
-  async complete(tx: WorkerTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
+  async complete(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>): Promise<boolean> {
     const [row] =
       source === 'tenant'
         ? await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT complete_outbox_event(${event.id}::uuid, ${event.attempt}::int) AS ok`
@@ -58,7 +58,7 @@ export class OutboxClaimsRepository {
   }
 
   /** `retryAt` null (or the last attempt) is terminal. `error` must never carry payload data. */
-  async fail(tx: WorkerTransaction, source: OutboxSource, event: ClaimedEvent<unknown>, error: string, retryAt: Date | null): Promise<boolean> {
+  async fail(tx: TenantTransaction | CrossTenantTransaction, source: OutboxSource, event: ClaimedEvent<unknown>, error: string, retryAt: Date | null): Promise<boolean> {
     const [row] =
       source === 'tenant'
         ? await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT fail_outbox_event(${event.id}::uuid, ${event.attempt}::int, ${error}, ${retryAt}::timestamptz, ${MAX_ATTEMPTS}::int) AS ok`

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { FileStatus } from '@procesabpm/db';
-import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import type { CrossTenantTransaction, TenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 import { buildStorageKey } from '../domain/storage-key.js';
 
 export interface StoredFileRow {
@@ -175,7 +175,7 @@ export class StoredFileRepository {
   }
 
   /** Tenants that hold abandoned uploads: the one cross-tenant read, through a function only the worker may call. */
-  async findTenantsWithStale(tx: TenantTransaction, cutoff: Date, limit: number): Promise<string[]> {
+  async findTenantsWithStale(tx: CrossTenantTransaction, cutoff: Date, limit: number): Promise<string[]> {
     const rows = await tx.$queryRaw<Array<{ out_tenant_id: string }>>`SELECT out_tenant_id::text AS out_tenant_id FROM find_tenants_with_stale_uploads(${cutoff}, ${limit})`;
     return rows.map((row) => row.out_tenant_id);
   }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface TicketFacts {
   readonly number: string;
@@ -18,26 +18,26 @@ export interface TenantFacts {
 /** Reads, in the tenant's own transaction, what the notification handlers need to decide who to tell. */
 @Injectable()
 export class TicketFactsRepository {
-  async tenant(tx: WorkerTransaction, tenantId: string): Promise<TenantFacts | undefined> {
+  async tenant(tx: TenantTransaction, tenantId: string): Promise<TenantFacts | undefined> {
     const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true, status: true } });
     return tenant === null ? undefined : { name: tenant.name, active: tenant.status === 'ACTIVE' };
   }
 
-  async ticket(tx: WorkerTransaction, tenantId: string, ticketId: string): Promise<TicketFacts | undefined> {
+  async ticket(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<TicketFacts | undefined> {
     const ticket = await tx.ticket.findFirst({ where: { tenantId, id: ticketId, deletedAt: null }, select: { number: true, title: true, creatorId: true, registeredById: true, workflowId: true, closedAt: true } });
     return ticket === null ? undefined : { number: ticket.number.toString(), title: ticket.title, creatorId: ticket.creatorId, registeredById: ticket.registeredById, workflowId: ticket.workflowId, closedAt: ticket.closedAt };
   }
 
-  async event(tx: WorkerTransaction, tenantId: string, eventId: string): Promise<{ actorId: string | null; createdAt: Date } | undefined> {
+  async event(tx: TenantTransaction, tenantId: string, eventId: string): Promise<{ actorId: string | null; createdAt: Date } | undefined> {
     return (await tx.ticketEvent.findFirst({ where: { tenantId, id: eventId }, select: { actorId: true, createdAt: true } })) ?? undefined;
   }
 
-  async assignees(tx: WorkerTransaction, tenantId: string, ticketId: string): Promise<Array<{ userId: string; type: string }>> {
+  async assignees(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<Array<{ userId: string; type: string }>> {
     return tx.ticketAssignee.findMany({ where: { tenantId, ticketId }, select: { userId: true, type: true }, orderBy: { userId: 'asc' } });
   }
 
   /** People who observe the workflow: by name, through an active group or by position. Resolved now, so changes apply at once. */
-  async observerIds(tx: WorkerTransaction, tenantId: string, workflowId: string): Promise<string[]> {
+  async observerIds(tx: TenantTransaction, tenantId: string, workflowId: string): Promise<string[]> {
     const observers = await tx.workflowObserver.findMany({ where: { tenantId, workflowId }, select: { userId: true, groupId: true, positionId: true } });
     const ids = new Set(observers.flatMap((observer) => (observer.userId === null ? [] : [observer.userId])));
     const groupIds = observers.flatMap((observer) => (observer.groupId === null ? [] : [observer.groupId]));
@@ -53,11 +53,11 @@ export class TicketFactsRepository {
     return [...ids].sort();
   }
 
-  async incident(tx: WorkerTransaction, tenantId: string, incidentId: string): Promise<{ createdById: string; assignedToId: string } | undefined> {
+  async incident(tx: TenantTransaction, tenantId: string, incidentId: string): Promise<{ createdById: string; assignedToId: string } | undefined> {
     return (await tx.ticketIncident.findFirst({ where: { tenantId, id: incidentId }, select: { createdById: true, assignedToId: true } })) ?? undefined;
   }
 
-  async clock(tx: WorkerTransaction, tenantId: string, clockId: string): Promise<{ completedAt: Date | null; responsibleId: string | null; ticketStatus: string } | undefined> {
+  async clock(tx: TenantTransaction, tenantId: string, clockId: string): Promise<{ completedAt: Date | null; responsibleId: string | null; ticketStatus: string } | undefined> {
     const clock = await tx.ticketSlaClock.findFirst({ where: { tenantId, id: clockId }, select: { completedAt: true, responsibleId: true, ticket: { select: { status: true } } } });
     return clock === null ? undefined : { completedAt: clock.completedAt, responsibleId: clock.responsibleId, ticketStatus: clock.ticket.status };
   }

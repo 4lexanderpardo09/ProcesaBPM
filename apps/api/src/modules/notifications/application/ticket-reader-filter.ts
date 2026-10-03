@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { SUBJECT_REGISTRY } from '../../authorization/application/ability.service.js';
 import { RolePermissionRepository } from '../../authorization/data/role-permission.repository.js';
 import { buildAbility, type RawPermissionRule } from '../../authorization/domain/build-ability.js';
@@ -23,7 +23,7 @@ export class TicketReaderFilter {
     @Inject(SUBJECT_REGISTRY) private readonly registry: SubjectRegistry,
   ) {}
 
-  async filter(tx: WorkerTransaction, tenantId: string, ticketId: string, userIds: readonly string[]): Promise<string[]> {
+  async filter(tx: TenantTransaction, tenantId: string, ticketId: string, userIds: readonly string[]): Promise<string[]> {
     const members = await this.recipients.activeMembers(tx, tenantId, userIds);
     const rulesByRole = new Map<string, readonly RawPermissionRule[]>();
     const readers: string[] = [];
@@ -35,7 +35,7 @@ export class TicketReaderFilter {
     return readers;
   }
 
-  private async rulesOfRole(tx: WorkerTransaction, tenantId: string, roleId: string, memo: Map<string, readonly RawPermissionRule[]>): Promise<readonly RawPermissionRule[]> {
+  private async rulesOfRole(tx: TenantTransaction, tenantId: string, roleId: string, memo: Map<string, readonly RawPermissionRule[]>): Promise<readonly RawPermissionRule[]> {
     const known = memo.get(roleId);
     if (known !== undefined) return known;
     const rules = (await this.roles.loadRules(tx, tenantId, roleId))?.rules ?? [];

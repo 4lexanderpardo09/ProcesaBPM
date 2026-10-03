@@ -21,6 +21,7 @@ import {
   type UpdateFieldRequest,
   updateFieldRequestSchema,
 } from '@procesabpm/shared';
+import { NotAudited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import type { Response } from 'express';
@@ -43,12 +44,14 @@ export class DraftContentController {
 
   @RequirePermission('update', 'Workflow')
   @Post('fields')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   createField(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Body(new ZodValidationPipe(createFieldRequestSchema)) body: CreateFieldRequest, @Res({ passthrough: true }) response: Response): Promise<FieldDocument> {
     return this.reply(response, this.editor.createField(workflowId, versionId, body));
   }
 
   @RequirePermission('update', 'Workflow')
   @Patch('fields/:fieldId')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   updateField(
     @Param('workflowId', uuid) workflowId: string,
     @Param('versionId', uuid) versionId: string,
@@ -60,6 +63,7 @@ export class DraftContentController {
 
   @RequirePermission('update', 'Workflow')
   @Delete('fields/:fieldId')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteField(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Param('fieldId', uuid) fieldId: string, @Res({ passthrough: true }) response: Response): Promise<void> {
     return this.reply(response, this.editor.deleteField(workflowId, versionId, fieldId));
@@ -67,12 +71,14 @@ export class DraftContentController {
 
   @RequirePermission('update', 'Workflow')
   @Post('amount-rules')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   createAmountRule(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Body(new ZodValidationPipe(createAmountRuleRequestSchema)) body: CreateAmountRuleRequest, @Res({ passthrough: true }) response: Response): Promise<AmountRuleDocument> {
     return this.reply(response, this.editor.createAmountRule(workflowId, versionId, body));
   }
 
   @RequirePermission('update', 'Workflow')
   @Patch('amount-rules/:ruleId')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   updateAmountRule(
     @Param('workflowId', uuid) workflowId: string,
     @Param('versionId', uuid) versionId: string,
@@ -84,6 +90,7 @@ export class DraftContentController {
 
   @RequirePermission('update', 'Workflow')
   @Delete('amount-rules/:ruleId')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteAmountRule(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Param('ruleId', uuid) ruleId: string, @Res({ passthrough: true }) response: Response): Promise<void> {
     return this.reply(response, this.editor.deleteAmountRule(workflowId, versionId, ruleId));
@@ -91,30 +98,35 @@ export class DraftContentController {
 
   @RequirePermission('update', 'Workflow')
   @Put('steps/:stepId/candidates')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   replaceCandidates(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Param('stepId', uuid) stepId: string, @Body(new ZodValidationPipe(replaceCandidatesRequestSchema)) body: ReplaceCandidatesRequest, @Res({ passthrough: true }) response: Response) {
     return this.reply(response, this.editor.replaceCandidates(workflowId, versionId, stepId, body));
   }
 
   @RequirePermission('update', 'Workflow')
   @Put('steps/:stepId/initiators')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   replaceInitiators(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Param('stepId', uuid) stepId: string, @Body(new ZodValidationPipe(replaceInitiatorsRequestSchema)) body: ReplaceInitiatorsRequest, @Res({ passthrough: true }) response: Response) {
     return this.reply(response, this.editor.replaceInitiators(workflowId, versionId, stepId, body));
   }
 
   @RequirePermission('update', 'Workflow')
   @Put('steps/:stepId/signers')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   replaceSigners(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Param('stepId', uuid) stepId: string, @Body(new ZodValidationPipe(replaceSignersRequestSchema)) body: ReplaceSignersRequest, @Res({ passthrough: true }) response: Response) {
     return this.reply(response, this.editor.replaceSigners(workflowId, versionId, stepId, body));
   }
 
   @RequirePermission('update', 'Workflow')
   @Put('steps/:stepId/sla-overrides')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   replaceSlaOverrides(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Param('stepId', uuid) stepId: string, @Body(new ZodValidationPipe(replaceSlaOverridesRequestSchema)) body: ReplaceSlaOverridesRequest, @Res({ passthrough: true }) response: Response) {
     return this.reply(response, this.editor.replaceSlaOverrides(workflowId, versionId, stepId, body));
   }
 
   @RequirePermission('update', 'Workflow')
   @Put('steps/:stepId/files')
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
   replaceFiles(@Param('workflowId', uuid) workflowId: string, @Param('versionId', uuid) versionId: string, @Param('stepId', uuid) stepId: string, @Body(new ZodValidationPipe(replaceStepFilesRequestSchema)) body: ReplaceStepFilesRequest, @Res({ passthrough: true }) response: Response) {
     return this.reply(response, this.editor.replaceFiles(workflowId, versionId, stepId, body));
   }

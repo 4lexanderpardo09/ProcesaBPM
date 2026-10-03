@@ -5,6 +5,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -71,7 +72,7 @@ describe('computed fields: formulas recalculated on creation and on advance', ()
 
   it('never takes a client value for a computed field', async () => {
     const refused = await create({ PRICE: 1000, QTY: 3, TOTAL: 1 });
-    expect(refused.status).toBe(201);
+    expectStatus(refused, 201);
     expect((await valuesOf(refused.body.id)).TOTAL).toBe(3570);
   });
 

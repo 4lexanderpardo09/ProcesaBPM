@@ -33,6 +33,7 @@ import {
   transitionTicketRequestSchema,
 } from '@procesabpm/shared';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequireAnyPermission, RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
@@ -101,6 +102,7 @@ export class TicketsController {
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
   @Get(':id/files/:fileId/download-url')
+  @Audited('file.download_url_issued')
   downloadUrl(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Param('fileId', ParseUUIDPipe) fileId: string): Promise<DownloadUrlResponse> {
     return this.documents.downloadUrl(ability, id, fileId);
   }

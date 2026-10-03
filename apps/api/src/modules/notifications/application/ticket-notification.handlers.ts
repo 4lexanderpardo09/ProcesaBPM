@@ -1,7 +1,7 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { type NotificationTypeValue, uuidSchema } from '@procesabpm/shared';
 import { z } from 'zod';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { ClaimedEvent } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { EmailOutboxRepository } from '../data/email-outbox.repository.js';
@@ -59,7 +59,7 @@ export class TicketNotificationHandlers implements OnModuleInit {
     for (const type of COVERED_ELSEWHERE) this.registry.registerTransactional({ type, schema: z.object({}).passthrough(), handle: () => Promise.resolve() });
   }
 
-  private async handle(tx: WorkerTransaction, kind: TicketEventKind, event: ClaimedEvent<Payload>): Promise<void> {
+  private async handle(tx: TenantTransaction, kind: TicketEventKind, event: ClaimedEvent<Payload>): Promise<void> {
     const tenantId = event.tenantId!;
     const { payload } = event;
     const tenant = await this.facts.tenant(tx, tenantId);
@@ -90,7 +90,7 @@ export class TicketNotificationHandlers implements OnModuleInit {
   }
 
   /** `undefined` when the event no longer matters (an SLA clock that finished or a ticket that closed since). */
-  private async eventFacts(tx: WorkerTransaction, tenantId: string, kind: TicketEventKind, payload: Payload, ticket: { creatorId: string; registeredById: string | null; workflowId: string }): Promise<EventFacts | undefined> {
+  private async eventFacts(tx: TenantTransaction, tenantId: string, kind: TicketEventKind, payload: Payload, ticket: { creatorId: string; registeredById: string | null; workflowId: string }): Promise<EventFacts | undefined> {
     const assignees = await this.facts.assignees(tx, tenantId, payload.ticketId);
     const observerIds = NOTIFIES_OBSERVERS.has(kind) ? await this.facts.observerIds(tx, tenantId, ticket.workflowId) : [];
     const common = { creatorId: ticket.creatorId, registeredById: ticket.registeredById, assigneeIds: assignees.map((assignee) => assignee.userId), observerIds };

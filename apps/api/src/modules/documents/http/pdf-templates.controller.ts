@@ -20,6 +20,7 @@ import {
   type UploadsResponse,
 } from '@procesabpm/shared';
 import type { Response } from 'express';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { UploadConfirmationService } from '../../files/application/upload-confirmation.service.js';
@@ -98,6 +99,7 @@ export class PdfTemplatesController {
 
   @RequirePermission('read', 'PdfDocument')
   @Get('workflows/:workflowId/pdf-templates/:id/file/download-url')
+  @Audited('pdf_template.download_url_issued')
   downloadUrl(@Param('workflowId', uuid) workflowId: string, @Param('id', uuid) id: string): Promise<DownloadUrlResponse> {
     return this.templates.downloadUrl(workflowId, id);
   }

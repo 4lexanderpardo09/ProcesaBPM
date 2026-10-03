@@ -7,6 +7,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type FlowSpec, type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, simpleFlow, SUPERVISOR_GRANTS, TicketWorld, unique, WORKER_GRANTS } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -232,7 +233,7 @@ describe('assignment, pool, reassignment', () => {
     it('a member of the pool can answer without taking it first', async () => {
       const created = await create(flow).expect(201);
       const done = await b.client.post(`/tickets/${created.body.id}/transition`, { transitionId: flow.transition.Done, visitId: created.body.openVisitId });
-      expect(done.status).toBe(200);
+      expectStatus(done, 200);
       expect((await world.events(created.body.id)).find((event) => event.actor_id === b.userId)?.data).toMatchObject({ tookFromPool: true });
       expect((await world.clocks(created.body.id)).map((clock) => clock.responsible_id)).toEqual([b.userId]);
       expect((await b.client.get(`/tickets/${created.body.id}`)).status).toBe(200);

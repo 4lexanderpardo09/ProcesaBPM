@@ -76,14 +76,18 @@ describe('schema conventions', () => {
     expect(rows.map((row) => row.table_name)).toEqual([]);
   });
 
-  it('runs every SECURITY DEFINER function as a platform owner with a fixed search_path', async () => {
+  it('runs every SECURITY DEFINER function as a platform owner with search_path public, pg_temp', async () => {
     // app_platform owns the general ones; app_outbox_owner owns those that touch the platform outbox, so
-    // that the BYPASSRLS login of app_platform cannot read the tokens in it. pg_temp may only come last.
+    // that the BYPASSRLS login of app_platform cannot read the tokens in it. Temp tables cannot shadow real ones.
     const { rows } = await db.owner.query<{ fn: string }>(`
-      SELECT p.proname AS fn FROM pg_proc p
-      WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef
-        AND (pg_get_userbyid(p.proowner) NOT IN ('app_platform', 'app_outbox_owner')
-             OR NOT coalesce(p.proconfig::text[] && ARRAY['search_path=public', 'search_path=public, pg_temp'], false))
+      SELECT p.oid::regprocedure::text AS fn FROM pg_proc p
+      WHERE p.prosecdef
+        AND p.pronamespace NOT IN ('pg_catalog'::regnamespace, 'information_schema'::regnamespace)
+        AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+        AND (p.pronamespace <> 'public'::regnamespace
+             OR pg_get_userbyid(p.proowner) NOT IN ('app_platform', 'app_outbox_owner')
+             OR NOT coalesce(p.proconfig @> ARRAY['search_path=public, pg_temp'], false))
+      ORDER BY 1
     `);
 
     expect(rows.map((row) => row.fn)).toEqual([]);
@@ -106,14 +110,20 @@ describe('schema conventions', () => {
     ]);
   });
 
-  it('ends the search_path of the new SECURITY DEFINER functions with pg_temp (temp tables cannot shadow real ones)', async () => {
-    const { rows } = await db.owner.query<{ fn: string }>(`
-      SELECT p.proname AS fn FROM pg_proc p
-      WHERE p.pronamespace = 'public'::regnamespace AND pg_get_userbyid(p.proowner) = 'app_outbox_owner'
-        AND NOT coalesce(p.proconfig::text[] @> ARRAY['search_path=public, pg_temp'], false)
-    `);
+  it('gives no application login the right to rewrite or empty a history table', async () => {
+    const { rows } = await db.owner.query<{ grant: string }>(`
+      SELECT r.rolname || ' ' || p.privilege || ' on ' || c.relname AS grant
+      FROM pg_class c
+      CROSS JOIN (VALUES ('app_runtime'), ('app_worker'), ('app_platform')) AS r(rolname)
+      CROSS JOIN (VALUES ('UPDATE'), ('DELETE'), ('TRUNCATE')) AS p(privilege)
+      WHERE c.relnamespace = 'public'::regnamespace
+        AND c.relname IN ('audit_logs', 'ticket_events', 'ticket_errors', 'ticket_signatures', 'platform_audit_logs')
+        AND has_table_privilege(r.rolname, c.oid, p.privilege)
+        -- app_platform keeps its rights on the ticket history: tenant purges and sign-up run as that login.
+        AND NOT (r.rolname = 'app_platform' AND c.relname IN ('ticket_events', 'ticket_errors', 'ticket_signatures') AND p.privilege <> 'TRUNCATE')
+      ORDER BY 1`);
 
-    expect(rows.map((row) => row.fn)).toEqual([]);
+    expect(rows.map((row) => row.grant)).toEqual([]);
   });
 
   it('does not let the application roles create temporary tables', async () => {
@@ -123,7 +133,7 @@ describe('schema conventions', () => {
   });
 
   it('gives the application roles no privilege on the platform-only tables', async () => {
-    const platformOnly = ['platform_admins', 'user_tokens', 'platform_outbox_events', 'platform_event_types'];
+    const platformOnly = ['platform_admins', 'user_tokens', 'consumed_auth_tokens', 'user_mfa_backup_codes', 'platform_outbox_events', 'platform_event_types'];
     const { rows } = await db.owner.query<{ grant: string }>(
       `
       SELECT r.rolname || ' on ' || c.relname AS grant

@@ -17,6 +17,7 @@ import {
   type ReplaceApproversRequest,
   replaceApproversRequestSchema,
 } from '@procesabpm/shared';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { ApprovalGroupsService } from '../application/approval-groups.service.js';
@@ -38,6 +39,7 @@ export class ApprovalGroupsController {
   }
 
   @RequirePermission('create', 'ApprovalGroup')
+  @Audited('approval_group.created')
   @Post()
   create(@Body(new ZodValidationPipe(createApprovalGroupRequestSchema)) body: CreateApprovalGroupRequest): Promise<ApprovalGroupResponse> {
     return this.groups.create(body);
@@ -45,12 +47,14 @@ export class ApprovalGroupsController {
 
   @RequirePermission('update', 'ApprovalGroup')
   @Patch(':id')
+  @Audited('approval_group.updated')
   rename(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(renameApprovalGroupRequestSchema)) body: RenameApprovalGroupRequest): Promise<ApprovalGroupResponse> {
     return this.groups.rename(id, body);
   }
 
   @RequirePermission('update', 'ApprovalGroup')
   @Post(':id/activate')
+  @Audited('approval_group.activated')
   @HttpCode(HttpStatus.OK)
   activate(@Param('id', ParseUUIDPipe) id: string): Promise<ApprovalGroupResponse> {
     return this.groups.activate(id);
@@ -58,6 +62,7 @@ export class ApprovalGroupsController {
 
   @RequirePermission('delete', 'ApprovalGroup')
   @Post(':id/deactivate')
+  @Audited('approval_group.deactivated')
   @HttpCode(HttpStatus.OK)
   deactivate(@Param('id', ParseUUIDPipe) id: string): Promise<ApprovalGroupResponse> {
     return this.groups.deactivate(id);
@@ -72,6 +77,7 @@ export class ApprovalGroupsController {
   /** The order of the list is the order of approval. */
   @RequirePermission('update', 'ApprovalGroup')
   @Put(':id/approvers')
+  @Audited('approval_group.approvers_replaced')
   replaceApprovers(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(replaceApproversRequestSchema)) body: ReplaceApproversRequest): Promise<ApproversResponse> {
     return this.groups.replaceApprovers(id, body);
   }
@@ -84,18 +90,21 @@ export class ApprovalGroupsController {
 
   @RequirePermission('update', 'ApprovalGroup')
   @Put(':id/members')
+  @Audited('approval_group.members_replaced')
   replaceMembers(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(replaceApprovalMembersRequestSchema)) body: ReplaceApprovalMembersRequest): Promise<ApprovalMembersResponse> {
     return this.groups.replaceMembers(id, body);
   }
 
   @RequirePermission('update', 'ApprovalGroup')
   @Post(':id/members')
+  @Audited('approval_group.member_added')
   addMember(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(addApprovalMemberRequestSchema)) body: AddApprovalMemberRequest): Promise<ApprovalMembersResponse> {
     return this.groups.addMember(id, body.userId);
   }
 
   @RequirePermission('update', 'ApprovalGroup')
   @Delete(':id/members/:userId')
+  @Audited('approval_group.member_removed')
   @HttpCode(HttpStatus.NO_CONTENT)
   removeMember(@Param('id', ParseUUIDPipe) id: string, @Param('userId', ParseUUIDPipe) userId: string): Promise<void> {
     return this.groups.removeMember(id, userId);

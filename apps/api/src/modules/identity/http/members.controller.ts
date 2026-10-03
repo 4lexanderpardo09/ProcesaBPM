@@ -12,6 +12,7 @@ import {
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { MemberInvitationService } from '../application/member-invitation.service.js';
@@ -38,12 +39,14 @@ export class MembersController {
 
   @RequirePermission('create', 'Membership')
   @Post('invitations')
+  @Audited('member.invited')
   invite(@Body(new ZodValidationPipe(inviteMemberRequestSchema)) body: InviteMemberRequest): Promise<MemberResponse> {
     return this.invitations.invite(body);
   }
 
   @RequirePermission('update', 'Membership')
   @Post(':userId/resend-invitation')
+  @Audited('member.invitation_resent')
   @HttpCode(HttpStatus.OK)
   resend(@Param('userId', ParseUUIDPipe) userId: string): Promise<MemberResponse> {
     return this.invitations.resend(userId);
@@ -51,6 +54,7 @@ export class MembersController {
 
   @RequirePermission('update', 'Membership')
   @Patch(':userId')
+  @Audited('member.updated')
   update(
     @CurrentAbility() ability: AppAbility,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -61,6 +65,7 @@ export class MembersController {
 
   @RequirePermission('update', 'Membership')
   @Post(':userId/activate')
+  @Audited('member.reactivated')
   @HttpCode(HttpStatus.OK)
   activate(@Param('userId', ParseUUIDPipe) userId: string): Promise<MemberResponse> {
     return this.members.activate(userId);
@@ -68,6 +73,7 @@ export class MembersController {
 
   @RequirePermission('delete', 'Membership')
   @Post(':userId/deactivate')
+  @Audited('member.deactivated')
   @HttpCode(HttpStatus.OK)
   deactivate(@CurrentAbility() ability: AppAbility, @CurrentPrincipal() principal: Principal, @Param('userId', ParseUUIDPipe) userId: string): Promise<MemberResponse> {
     return this.members.deactivate(ability, principal.userId, userId);

@@ -12,6 +12,7 @@ import {
   type UpdateRoleRequest,
   updateRoleRequestSchema,
 } from '@procesabpm/shared';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { RolesService } from '../application/roles.service.js';
@@ -34,18 +35,21 @@ export class RolesController {
 
   @RequirePermission('create', 'Role')
   @Post()
+  @Audited('role.created')
   create(@Body(new ZodValidationPipe(createRoleRequestSchema)) body: CreateRoleRequest): Promise<RoleResponse> {
     return this.roles.create(body);
   }
 
   @RequirePermission('update', 'Role')
   @Patch(':id')
+  @Audited('role.updated')
   update(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(updateRoleRequestSchema)) body: UpdateRoleRequest): Promise<RoleResponse> {
     return this.roles.update(id, body);
   }
 
   @RequirePermission('update', 'Role')
   @Post(':id/activate')
+  @Audited('role.activated')
   @HttpCode(HttpStatus.OK)
   activate(@Param('id', ParseUUIDPipe) id: string): Promise<RoleResponse> {
     return this.roles.activate(id);
@@ -53,6 +57,7 @@ export class RolesController {
 
   @RequirePermission('delete', 'Role')
   @Post(':id/deactivate')
+  @Audited('role.deactivated')
   @HttpCode(HttpStatus.OK)
   deactivate(@Param('id', ParseUUIDPipe) id: string): Promise<RoleResponse> {
     return this.roles.deactivate(id);
@@ -60,6 +65,7 @@ export class RolesController {
 
   @RequirePermission('delete', 'Role')
   @Delete(':id')
+  @Audited('role.deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.roles.remove(id);
@@ -73,6 +79,7 @@ export class RolesController {
 
   @RequirePermission('update', 'Role')
   @Put(':id/permissions')
+  @Audited('role.permissions_replaced')
   replacePermissions(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(replaceRolePermissionsRequestSchema)) body: ReplaceRolePermissionsRequest,

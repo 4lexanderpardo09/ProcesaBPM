@@ -16,8 +16,15 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { SUBJECT_REGISTRY } from '../../authorization/application/ability.service.js';
 import type { SubjectRegistry } from '../../authorization/domain/subject-registry.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { RoleRepository, type RoleRow, type RoleWrite } from '../data/role.repository.js';
 import { permissionKey, validateRolePermissions } from '../domain/role-permission-validation.js';
+
+const summaryOf = (row: RoleRow) => ({ name: row.name, isActive: row.isActive, isAdmin: row.isAdmin });
+
+/** `action subject` per permission, flagged when it carries conditions: enough to see who gained or lost what. */
+const permissionSummary = (rows: ReadonlyArray<{ action: string; subject: string; conditions: unknown }>) =>
+  rows.map((row) => `${row.action} ${row.subject}${row.conditions === null ? '' : ' (conditional)'}`).sort();
 
 const toResponse = (row: RoleRow): RoleResponse => ({ ...row, createdAt: row.createdAt.toISOString() });
 
@@ -32,6 +39,7 @@ export class RolesService {
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(RoleRepository) private readonly repository: RoleRepository,
     @Inject(SUBJECT_REGISTRY) private readonly registry: SubjectRegistry,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   list(query: PageQuery): Promise<Page<RoleResponse>> {
@@ -46,21 +54,23 @@ export class RolesService {
   }
 
   create(request: CreateRoleRequest): Promise<RoleResponse> {
-    return this.runner.withTenantTransaction(async (tx) =>
-      toResponse(await this.repository.create(tx, this.tenantId, { name: request.name, ...compact({ description: request.description, isAdmin: request.isAdmin }) })),
-    );
+    return this.runner.withTenantTransaction(async (tx) => {
+      const created = await this.repository.create(tx, this.tenantId, { name: request.name, ...compact({ description: request.description, isAdmin: request.isAdmin }) });
+      await this.audit.record(tx, { action: 'role.created', subjectType: 'Role', subjectId: created.id, after: summaryOf(created) });
+      return toResponse(created);
+    });
   }
 
   update(id: string, request: UpdateRoleRequest): Promise<RoleResponse> {
-    return this.change(id, compact(request));
+    return this.change(id, 'role.updated', compact(request));
   }
 
   activate(id: string): Promise<RoleResponse> {
-    return this.change(id, { isActive: true });
+    return this.change(id, 'role.activated', { isActive: true });
   }
 
   deactivate(id: string): Promise<RoleResponse> {
-    return this.change(id, { isActive: false });
+    return this.change(id, 'role.deactivated', { isActive: false });
   }
 
   /** Base roles (with a `system_role`) and roles that still have members are not deleted. */
@@ -70,6 +80,7 @@ export class RolesService {
       if (role.systemRole !== null) throw new InvalidStateError('A base role cannot be deleted');
       if ((await this.repository.countMembers(tx, this.tenantId, id)) > 0) throw new InvalidStateError('The role still has members');
       await this.repository.remove(tx, this.tenantId, id);
+      await this.audit.record(tx, { action: 'role.deleted', subjectType: 'Role', subjectId: id, before: summaryOf(role) });
     });
   }
 
@@ -85,6 +96,7 @@ export class RolesService {
   replacePermissions(id: string, request: ReplaceRolePermissionsRequest): Promise<RolePermissionResponse[]> {
     return this.runner.withTenantTransaction(async (tx) => {
       await this.require(tx, id);
+      const previous = await this.repository.findPermissions(tx, this.tenantId, id);
       const catalog = await this.repository.findCatalog(tx);
       validateRolePermissions(request.permissions, new Set(catalog.map((entry) => permissionKey(entry.action, entry.subject))), this.registry);
       const idOf = new Map(catalog.map((entry) => [permissionKey(entry.action, entry.subject), entry.id]));
@@ -95,15 +107,18 @@ export class RolesService {
         request.permissions.map((permission) => ({ permissionId: idOf.get(permissionKey(permission.action, permission.subject))!, conditions: permission.conditions ?? null })),
       );
       const rows = await this.repository.findPermissions(tx, this.tenantId, id);
+      await this.audit.record(tx, { action: 'role.permissions_replaced', subjectType: 'Role', subjectId: id, before: permissionSummary(previous), after: permissionSummary(rows) });
       return rows.map((row) => ({ action: row.action, subject: row.subject, conditions: (row.conditions as Record<string, unknown> | null) ?? null }));
     });
   }
 
-  private change(id: string, data: RoleWrite): Promise<RoleResponse> {
+  private change(id: string, action: 'role.updated' | 'role.activated' | 'role.deactivated', data: RoleWrite): Promise<RoleResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.require(tx, id);
+      const before = await this.require(tx, id);
       await this.repository.update(tx, this.tenantId, id, data);
-      return toResponse(await this.require(tx, id));
+      const updated = await this.require(tx, id);
+      await this.audit.record(tx, { action, subjectType: 'Role', subjectId: id, before: summaryOf(before), after: summaryOf(updated) });
+      return toResponse(updated);
     });
   }
 

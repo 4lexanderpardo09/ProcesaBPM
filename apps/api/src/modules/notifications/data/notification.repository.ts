@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import type { NotificationType } from '@procesabpm/db';
 import type { NotificationPreferenceResponse, NotificationResponse, NotificationTypeValue } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
 
 export interface NewNotification {
   readonly userId: string;
@@ -58,7 +57,7 @@ export class NotificationRepository {
   }
 
   /** One notification per person per event: a repeated event writes nothing. */
-  async createMany(tx: WorkerTransaction, tenantId: string, notifications: readonly NewNotification[]): Promise<void> {
+  async createMany(tx: TenantTransaction, tenantId: string, notifications: readonly NewNotification[]): Promise<void> {
     if (notifications.length === 0) return;
     await tx.notification.createMany({ data: notifications.map((notification) => ({ tenantId, ...notification })), skipDuplicates: true });
   }

@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { StorageUnavailableError } from '@procesabpm/shared';
 import { S3ObjectStorage } from '../../../src/infrastructure/storage/s3-object-storage.js';
+import { expectStatus } from '../../support/supertest-diagnostics.js';
 
 describe('S3ObjectStorage against a real S3 server', () => {
   const settings = inject('storage');
@@ -51,7 +52,7 @@ describe('S3ObjectStorage against a real S3 server', () => {
   it('refuses an upload whose length differs from the signed one', async () => {
     const key = newKey();
     const response = await upload(key, new TextEncoder().encode('%PDF-1.4 hello, but much longer'), pdf.length);
-    expect(response.status).toBe(403);
+    expectStatus(response, 403);
     expect(await storage.head(key)).toBeNull();
   });
 
@@ -67,7 +68,7 @@ describe('S3ObjectStorage against a real S3 server', () => {
     await upload(key, pdf);
     const signed = await storage.presignDownload({ key, fileName: 'informe año.pdf', contentType: 'application/pdf', disposition: 'attachment', expiresInSeconds: 120, now: now() });
     const response = await fetch(signed.url);
-    expect(response.status).toBe(200);
+    expectStatus(response, 200);
     expect(response.headers.get('content-disposition')).toContain(`filename*=UTF-8''informe%20a%C3%B1o.pdf`);
     expect(response.headers.get('content-type')).toBe('application/pdf');
     expect(createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex')).toBe(createHash('sha256').update(pdf).digest('hex'));

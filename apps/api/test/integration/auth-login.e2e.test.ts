@@ -3,7 +3,8 @@ import { connectTestDatabase, type TestDatabase } from '@procesabpm/db/testing/d
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
 import { loginResponseSchema } from '@procesabpm/shared';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { PasswordHasher } from '../../src/infrastructure/security/password-hasher.js';
 import { TEST_PASSWORD } from '../support/auth-helpers.js';
 import { addMembership, seedUser, type TestUser, userRow } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
@@ -41,10 +42,11 @@ describe('POST /auth/login', () => {
     const user = await seedUser(db, tenant);
     const response = await login(user.email, user.password).expect(200);
     const body = loginResponseSchema.parse(response.body);
-    expect(body.organizations).toEqual([
-      expect.objectContaining({ tenantId: tenant.tenantId, membershipStatus: 'ACTIVE' }),
-    ]);
-    expect(body.expiresIn).toBe(120);
+    expect(body).toMatchObject({
+      step: 'SELECT_ORGANIZATION',
+      expiresIn: 120,
+      organizations: [expect.objectContaining({ tenantId: tenant.tenantId, membershipStatus: 'ACTIVE', mfaRequired: false })],
+    });
     expect(response.headers['set-cookie']).toBeUndefined();
   });
 
@@ -129,21 +131,26 @@ describe('POST /auth/login', () => {
     });
   });
 
+  it('a burst of parallel logins cannot test more passwords than the lockout allows', async () => {
+    const user = await seedUser(db, tenant);
+    const verify = vi.spyOn(app.get(PasswordHasher), 'verify');
+    try {
+      await Promise.all(Array.from({ length: 20 }, () => login(user.email, 'wrong password')));
+      const testedAgainstTheRealHash = verify.mock.calls.filter(([storedHash]) => storedHash !== null).length;
+      expect(testedAgainstTheRealHash).toBe(5);
+    } finally {
+      verify.mockRestore();
+    }
+    expect(await userRow(db, user.userId)).toMatchObject({ locked_until: expect.any(Date) });
+    await login(user.email, user.password).expect(401);
+  });
+
   it('a successful login resets the failure counter before it locks', async () => {
     const user = await seedUser(db, tenant);
     for (let attempt = 0; attempt < 4; attempt += 1) await login(user.email, 'wrong password').expect(401);
     await login(user.email, user.password).expect(200);
     for (let attempt = 0; attempt < 4; attempt += 1) await login(user.email, 'wrong password').expect(401);
     expect(await userRow(db, user.userId)).toMatchObject({ failed_logins: 4, locked_until: null });
-  });
-
-  it('answers 501 MFA_NOT_IMPLEMENTED only after the right password of an MFA user', async () => {
-    const user = await seedUser(db, tenant);
-    await db.platform.query('UPDATE users SET mfa_enabled = true WHERE id = $1', [user.userId]);
-    const right = await login(user.email, user.password).expect(501);
-    expect(right.body.error.code).toBe('MFA_NOT_IMPLEMENTED');
-    const wrong = await login(user.email, 'wrong password').expect(401);
-    expect(wrong.body.error.code).toBe('INVALID_CREDENTIALS');
   });
 
   it('lists only the organizations where the membership is not inactive', async () => {

@@ -6,6 +6,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type FlowSpec, type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, simpleFlow, SUPERVISOR_GRANTS, TicketWorld, unique, WORKER_GRANTS } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 

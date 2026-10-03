@@ -8,6 +8,8 @@ import { ConfigModule } from './config/config.module.js';
 import { ClockModule } from './infrastructure/clock.module.js';
 import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { StorageModule } from './infrastructure/storage/storage.module.js';
+import { AuditTrailModule } from './modules/audit/audit-trail.module.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { ApprovalsModule } from './modules/approvals/approvals.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CalculatorsModule } from './modules/calculators/calculators.module.js';
@@ -24,7 +26,7 @@ import { PlatformModule } from './modules/platform/platform.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule, StorageModule, HealthModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, TicketsModule, ReportsModule],
+  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, TicketsModule, ReportsModule],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

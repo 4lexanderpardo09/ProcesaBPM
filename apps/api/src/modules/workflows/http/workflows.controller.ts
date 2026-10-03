@@ -10,6 +10,7 @@ import {
   type WorkflowsQuery,
   workflowsQuerySchema,
 } from '@procesabpm/shared';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { WorkflowsService } from '../application/workflows.service.js';
@@ -33,12 +34,14 @@ export class WorkflowsController {
   /** Creating and editing workflows is `update Workflow` (the catalog has no create/delete for them). */
   @RequirePermission('update', 'Workflow')
   @Post()
+  @Audited('workflow.created')
   create(@Body(new ZodValidationPipe(createWorkflowRequestSchema)) body: CreateWorkflowRequest): Promise<WorkflowDetailResponse> {
     return this.workflows.create(body);
   }
 
   @RequirePermission('update', 'Workflow')
   @Patch(':workflowId')
+  @Audited('workflow.updated')
   update(@Param('workflowId', ParseUUIDPipe) workflowId: string, @Body(new ZodValidationPipe(updateWorkflowRequestSchema)) body: UpdateWorkflowRequest): Promise<WorkflowDetailResponse> {
     return this.workflows.update(workflowId, body);
   }

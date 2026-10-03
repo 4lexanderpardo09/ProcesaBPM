@@ -282,30 +282,6 @@ describe('identity security (API role)', () => {
     });
   });
 
-  describe('login lockout', () => {
-    it('locks the account after the maximum failed attempts and clears it on success', async () => {
-      const attempt = (success: boolean) =>
-        withContext(db.runtime, {}, (client) =>
-          client.query('SELECT auth_register_login_attempt($1, $2, 3, 15)', [colleagueId, success]),
-        );
-      const lockState = async () => {
-        const { rows } = await db.owner.query<{ failed_logins: number; locked: boolean }>(
-          'SELECT failed_logins, locked_until > now() AS locked FROM users WHERE id = $1',
-          [colleagueId],
-        );
-        return rows[0];
-      };
-
-      await attempt(false);
-      await attempt(false);
-      expect(await lockState()).toEqual({ failed_logins: 2, locked: null });
-      await attempt(false);
-      expect(await lockState()).toEqual({ failed_logins: 3, locked: true });
-      await attempt(true);
-      expect(await lockState()).toEqual({ failed_logins: 0, locked: null });
-    });
-  });
-
   describe('append-only history', () => {
     it('cannot edit or delete the ticket timeline or the audit log', async () => {
       await asMember(async (client) => {

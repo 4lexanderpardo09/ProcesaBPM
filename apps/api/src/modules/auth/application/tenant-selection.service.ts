@@ -11,10 +11,10 @@ export class TenantSelectionService {
     @Inject(SessionService) private readonly sessions: SessionService,
   ) {}
 
-  /** Opens a session on a tenant where the user who logged in has an ACTIVE membership. */
+  /** Opens a session on a tenant where the user who logged in has an ACTIVE membership. The selection token works once. */
   async select(selectionToken: string, tenantId: string, client: ClientInfo): Promise<OpenedSession> {
-    const userId = await this.tokens.verifySelectionToken(selectionToken);
-    await this.tenantAccess.verify({ userId, tenantId });
-    return this.sessions.open(userId, tenantId, client);
+    const selection = await this.tokens.verifySelectionToken(selectionToken);
+    await this.tenantAccess.verify({ userId: selection.userId, tenantId, mfaVerified: selection.mfa });
+    return this.sessions.openFromSelection(selection, tenantId, client);
   }
 }

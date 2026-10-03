@@ -1,6 +1,7 @@
 import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import type { ModulesContainer } from '@nestjs/core';
+import { AUDITED_KEY, NOT_AUDITED_KEY } from '../audit/audited.decorator.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { AUTHENTICATED_ONLY_KEY, PLATFORM_ADMIN_ONLY_KEY, type PermissionRequirement, REQUIRED_PERMISSIONS_KEY } from './route-access.js';
 
@@ -11,6 +12,8 @@ export interface RouteInfo {
   readonly path: string;
   readonly access: RouteAccess;
   readonly requirement: PermissionRequirement | undefined;
+  /** The audit events the route declares, `'not-audited'` when it opted out on purpose, `undefined` when it says nothing. */
+  readonly audit: readonly string[] | 'not-audited' | undefined;
 }
 
 export interface AccessMetadata {
@@ -57,11 +60,18 @@ export function collectRoutes(modules: ModulesContainer): RouteInfo[] {
           path: normalize(prefix, path),
           access: classifyAccess(metadata),
           requirement: metadata.requirement,
+          audit: auditOf(handler),
         });
       }
     }
   }
   return routes;
+}
+
+function auditOf(handler: object): readonly string[] | 'not-audited' | undefined {
+  const actions = Reflect.getMetadata(AUDITED_KEY, handler) as readonly string[] | undefined;
+  if (actions !== undefined) return actions;
+  return Reflect.getMetadata(NOT_AUDITED_KEY, handler) === undefined ? undefined : 'not-audited';
 }
 
 /** Access declarations of a route handler and its controller class. */

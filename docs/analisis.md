@@ -44,7 +44,7 @@ Recomendación: el SaaS se construye como **proyecto nuevo con un modelo de dato
 | Retención | Los archivos **se guardan siempre**: el borrado es solo lógico, sin purga. |
 | Cuota | Cuota por tenant según su plan (**tabla aprobada**, §7.4.2). Los PDFs del sistema **cuentan**, los borrados **cuentan** y hay **5 % de gracia**. |
 | Reportes de SLA | Miden **ambos**: el SLA de cada responsable y el tiempo total del paso. |
-| Proveedor de archivos | Aún no hay. Se programa contra la API S3, en desarrollo se usa SeaweedFS (MinIO dejó de publicar imágenes y binarios) y en producción se recomienda Cloudflare R2 (§7.4.3). |
+| Proveedor de archivos | Aún no hay. Se programa contra la API S3, en desarrollo se usa SeaweedFS (MinIO dejó de publicar imágenes y binarios) y en pruebas y producción, **AWS S3** (decidido 2026-10-02, §7.4.3). |
 | Despliegue | **Imágenes Docker**, sin atarse a ningún hosting (se elige después): ver §9. |
 | Nombre del producto | **ProcesaBPM**. |
 | Planos | Función **estándar** del SaaS (no es un complemento de pago). |
@@ -388,7 +388,7 @@ Respondidas el 2026-09-30 (ver §0.1): tenant/empresa, motor de BD, migración d
 Siguen abiertas:
 1. **Facturación**: sin definir. Mientras tanto, los tenants se crean a mano desde un panel de plataforma.
 2. **Lo que falta antes de empezar**: ver §12 (cada punto trae una propuesta por defecto).
-7. **Hosting**: sin definir (decidido: todo en imágenes Docker, §9). Se elige más adelante, junto con el proveedor de archivos (§7.4.3).
+7. **Hosting** (decidido 2026-10-02): todo en imágenes Docker (§9). **Pruebas en AWS** (cuenta gratuita: EC2 con Docker y Postgres 18 en contenedor, bucket S3, SES) y **producción después en Contabo** (VPS con docker compose: api, worker y Postgres); los archivos quedan en **AWS S3** en ambos casos. Ver `despliegue.md`.
 
 Respondidas el 2026-09-30 (tercera ronda): tipos de archivo, sin antivirus, retención indefinida y reportes de SLA con ambas medidas.
 
@@ -508,8 +508,8 @@ Lo que muestra el mercado: (1) el plan gratis o de entrada da **2 a 5 GB**; (2) 
 #### 7.4.3 Proveedor de almacenamiento (aún no hay ninguno contratado)
 - **El código no se casa con ningún proveedor:** se programa contra la **API S3** (`@aws-sdk/client-s3`, ya usada hoy), que hablan S3, Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces y Wasabi. Cambiar de proveedor es cambiar 4 variables de entorno (`STORAGE_ENDPOINT`, `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`) y copiar los objetos (`rclone sync`).
 - **Desarrollo: SeaweedFS en Docker** (`chrislusf/seaweedfs`, versión fija; MinIO ya no publica imágenes) (gratis, local, S3-compatible), levantado con el `docker-compose` junto a PostgreSQL. Así el entorno local se comporta igual que producción, y se elimina el modo "disco local".
-- **Producción, recomendado: Cloudflare R2** para empezar. Da 10 GB/mes gratis, luego USD 0,015/GB-mes, **no cobra la descarga** (importante con las URLs firmadas), es compatible con S3 y se crea con tarjeta en minutos. Alternativa más barata a gran escala: Backblaze B2 (USD 0,007/GB). S3 solo si el resto de la infraestructura termina en AWS.
-- **Datos personales (Ley 1581 de Colombia):** los adjuntos llevan datos personales (cédulas, soportes). R2 y B2 guardan fuera de Colombia, como también AWS, que no tiene región en Colombia. Hay que declararlo en la política de tratamiento de datos y en el contrato con el cliente (transferencia/transmisión internacional). No bloquea la elección, pero debe quedar escrito.
+- **Pruebas y producción: AWS S3** (decidido 2026-10-02, por el usuario). Bucket privado en la región más cercana, cifrado SSE-S3, sin versionado (nunca se sobrescribe), usuario IAM con política mínima y CORS solo para el origen de la web; las subidas van del navegador a S3 con URL firmada, así que la latencia entre el servidor (Contabo) y AWS no afecta a las subidas. S3 soporta `If-None-Match: *` en `PUT` (escrituras condicionales). Cloudflare R2 y Backblaze B2 quedan como alternativas de menor costo si la descarga pesa (S3 cobra la transferencia de salida). Configuración paso a paso en `despliegue.md`.
+- **Datos personales (Ley 1581 de Colombia):** los adjuntos llevan datos personales (cédulas, soportes). AWS no tiene región en Colombia (como R2 y B2 tampoco). Hay que declararlo en la política de tratamiento de datos y en el contrato con el cliente (transferencia/transmisión internacional). No bloquea la elección, pero debe quedar escrito.
 - **Momento de la decisión:** no hace falta contratar nada hasta el primer despliegue; hasta entonces todo corre con SeaweedFS.
 
 ---
@@ -564,7 +564,7 @@ Imágenes versionadas por **tag de git/semver** (no solo `latest`), construidas 
 
 ### 9.2 Servicios de apoyo
 - **Desarrollo (`docker-compose.yml`)**: `postgres:18`, `seaweedfs` (`weed mini`, S3 en el puerto 8333; + creación del bucket al arrancar), `redis` (colas BullMQ, caché de permisos, adaptador de WebSocket) y `mailpit` (para ver los correos sin enviarlos).
-- **Producción**: los mismos servicios, pero **gestionados** cuando el hosting lo ofrezca (PostgreSQL gestionado con backups y PITR, Redis gestionado, R2/B2 para archivos). Si al principio es un VPS, pueden correr en el mismo Compose con volúmenes y backups programados (`pg_dump` diario a R2).
+- **Pruebas (AWS)**: una instancia EC2 con Docker Compose (api, worker y Postgres 18 en contenedor), bucket S3 y SES. **Producción (Contabo)**: un VPS con el mismo Compose, backups de Postgres (`pg_dump`/WAL) a S3, TLS con un proxy (Caddy o Traefik) y firewall; los archivos siguen en AWS S3. Si más adelante conviene, PostgreSQL y Redis gestionados.
 
 ### 9.3 Reglas para que la imagen sea portable
 - **Sin estado en el contenedor:** nada en disco local (archivos → S3-compatible, sesiones → no hay, colas → Redis). Cualquier réplica puede morir o duplicarse.

@@ -14,23 +14,122 @@ export const loginRequestSchema = z.object({
 });
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 
+export const changePasswordRequestSchema = z.object({
+  currentPassword: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+  newPassword: newPasswordSchema,
+});
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
+
 export const organizationSchema = z.object({
   tenantId: uuidSchema,
   slug: z.string(),
   name: z.string(),
   membershipStatus: membershipStatusSchema,
+  /** The organization requires two-step verification from its members. */
+  mfaRequired: z.boolean(),
 });
 export type Organization = z.infer<typeof organizationSchema>;
 
-export const loginResponseSchema = z.object({
+const selectOrganizationFields = {
   organizations: z.array(organizationSchema),
-  /** Short-lived token that only works to pick an organization (`POST /auth/select-tenant`). */
+  /** Short-lived, single-use token that only works to pick an organization (`POST /auth/select-tenant`). */
   selectionToken: z.string(),
   expiresIn: z.number().int().positive(),
   /** The user may also open a platform session (`POST /auth/platform/select`). Only they are told. */
   platformAdmin: z.boolean(),
+};
+
+/** The sign-in is complete: pick an organization. */
+export const selectOrganizationResponseSchema = z.object({ step: z.literal('SELECT_ORGANIZATION'), ...selectOrganizationFields });
+export type SelectOrganizationResponse = z.infer<typeof selectOrganizationResponseSchema>;
+
+/** The password was right and the account has two-step verification: send the code to `POST /auth/login/mfa`. */
+export const mfaRequiredResponseSchema = z.object({
+  step: z.literal('MFA_REQUIRED'),
+  challengeToken: z.string(),
+  expiresIn: z.number().int().positive(),
+  methods: z.array(z.enum(['TOTP', 'BACKUP_CODE'])),
 });
+export type MfaRequiredResponse = z.infer<typeof mfaRequiredResponseSchema>;
+
+/** The account must enroll before it can continue (an organization requires it, or the user administers the platform). */
+export const mfaEnrollmentRequiredResponseSchema = z.object({
+  step: z.literal('MFA_ENROLLMENT_REQUIRED'),
+  challengeToken: z.string(),
+  expiresIn: z.number().int().positive(),
+  reason: z.enum(['TENANT_POLICY', 'PLATFORM_ADMIN']),
+});
+export type MfaEnrollmentRequiredResponse = z.infer<typeof mfaEnrollmentRequiredResponseSchema>;
+
+export const loginResponseSchema = z.discriminatedUnion('step', [
+  selectOrganizationResponseSchema,
+  mfaRequiredResponseSchema,
+  mfaEnrollmentRequiredResponseSchema,
+]);
 export type LoginResponse = z.infer<typeof loginResponseSchema>;
+
+const totpCodeSchema = z.string().regex(/^\d{6}$/, 'must be 6 digits');
+const backupCodeSchema = z.string().min(16).max(24);
+
+export const mfaCodeSchema = z.object({ code: totpCodeSchema });
+
+/** Enrolling from a signed-in session also needs the password: a stolen access token alone cannot take over the account's second factor. */
+export const mfaEnrollmentConfirmRequestSchema = z.object({ code: totpCodeSchema, currentPassword: z.string().min(1).max(PASSWORD_MAX_LENGTH) });
+export type MfaEnrollmentConfirmRequest = z.infer<typeof mfaEnrollmentConfirmRequestSchema>;
+export type MfaCode = z.infer<typeof mfaCodeSchema>;
+
+/** Exactly one of the two: the code of the authenticator app, or one of the backup codes. */
+export const mfaFactorSchema = z.union([
+  z.object({ code: totpCodeSchema }).strict(),
+  z.object({ backupCode: backupCodeSchema }).strict(),
+]);
+export type MfaFactor = z.infer<typeof mfaFactorSchema>;
+
+/** Answer of `POST /auth/login/mfa`: the sign-in is complete, plus how many backup codes are left when one was used. */
+export const mfaLoginResponseSchema = selectOrganizationResponseSchema.extend({ backupCodesLeft: z.number().int().min(0).optional() });
+export type MfaLoginResponse = z.infer<typeof mfaLoginResponseSchema>;
+
+export const mfaEnrollmentSchema = z.object({
+  /** Base32 secret, for typing it by hand. */
+  secret: z.string(),
+  /** `otpauth://totp/…`: the web client draws it as a QR code. */
+  otpauthUri: z.string(),
+  issuer: z.string(),
+  accountName: z.string(),
+  algorithm: z.literal('SHA1'),
+  digits: z.literal(6),
+  period: z.literal(30),
+});
+export type MfaEnrollment = z.infer<typeof mfaEnrollmentSchema>;
+
+/** Shown once: the user must save them. */
+export const backupCodesResponseSchema = z.object({ backupCodes: z.array(z.string()).length(10) });
+export type BackupCodesResponse = z.infer<typeof backupCodesResponseSchema>;
+
+/** Answer of the login-time enrollment confirmation: the backup codes plus the completed sign-in. */
+export const mfaEnrollmentConfirmedResponseSchema = mfaLoginResponseSchema.extend({ backupCodes: z.array(z.string()).length(10) });
+export type MfaEnrollmentConfirmedResponse = z.infer<typeof mfaEnrollmentConfirmedResponseSchema>;
+
+export const mfaStatusResponseSchema = z.object({
+  enabled: z.boolean(),
+  enabledAt: z.string().nullable(),
+  backupCodesLeft: z.number().int().min(0),
+  /** An organization requires it (or the user administers the platform): it cannot be turned off. */
+  requiredByPolicy: z.boolean(),
+});
+export type MfaStatusResponse = z.infer<typeof mfaStatusResponseSchema>;
+
+export const disableMfaRequestSchema = z.union([
+  z.object({ password: z.string().min(1).max(PASSWORD_MAX_LENGTH), code: totpCodeSchema }).strict(),
+  z.object({ password: z.string().min(1).max(PASSWORD_MAX_LENGTH), backupCode: backupCodeSchema }).strict(),
+]);
+export type DisableMfaRequest = z.infer<typeof disableMfaRequestSchema>;
+
+export const tenantSecuritySettingsSchema = z.object({ mfaRequired: z.boolean() });
+export type TenantSecuritySettings = z.infer<typeof tenantSecuritySettingsSchema>;
+
+export const tenantSecuritySettingsResponseSchema = tenantSecuritySettingsSchema.extend({ activeMembersWithoutMfa: z.number().int().min(0) });
+export type TenantSecuritySettingsResponse = z.infer<typeof tenantSecuritySettingsResponseSchema>;
 
 export const selectTenantRequestSchema = z.object({ tenantId: uuidSchema });
 export type SelectTenantRequest = z.infer<typeof selectTenantRequestSchema>;

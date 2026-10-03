@@ -64,7 +64,7 @@ describe('platform tenant sign-up', () => {
     db = connectTestDatabase();
     ({ app } = await createTestApp({ controllers: [TenantProbeController] }));
     admin = await seedPlatformAdmin(db);
-    adminToken = await signInPlatform(app, admin.email);
+    adminToken = await signInPlatform(app, db, admin);
     mail = await MailWorker.start();
   });
 
@@ -159,12 +159,16 @@ describe('platform tenant sign-up', () => {
 
       const { rows: audit } = await db.owner.query(`SELECT actor_user_id, action FROM platform_audit_logs WHERE target_tenant_id = $1`, [tenantId]);
       expect(audit).toEqual([{ actor_user_id: admin.userId, action: 'tenant.created' }]);
+      const { rows: origin } = await db.owner.query<{ ip_address: string | null }>(`SELECT ip_address FROM platform_audit_logs WHERE target_tenant_id = $1`, [tenantId]);
+      expect(origin[0]?.ip_address).toBeTruthy();
     });
 
     it('the owner accepts the invitation, signs in, sees the tenant and has full access', async () => {
       const payload = body();
       const { tenantId } = (await signUp(payload).expect(201)).body as { tenantId: string };
       await http().post('/auth/invitations/accept').send({ token: await linkTokenFor(payload.owner.email), password: OWNER_PASSWORD }).expect(200);
+      // Selection tokens issued in the same second as the password change are refused (iat has whole seconds).
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
       const login = await http().post('/auth/login').send({ email: payload.owner.email, password: OWNER_PASSWORD }).expect(200);
       expect(login.body.organizations.map((tenant: { tenantId: string }) => tenant.tenantId)).toEqual([tenantId]);
 
@@ -282,7 +286,7 @@ describe('platform tenant sign-up', () => {
 
     it('the platform session stops working when the administrator is removed', async () => {
       const temporary = await seedPlatformAdmin(db);
-      const token = await signInPlatform(app, temporary.email);
+      const token = await signInPlatform(app, db, temporary);
       await signUp(body(), token).expect(201);
       await db.platform.query('DELETE FROM platform_admins WHERE user_id = $1', [temporary.userId]);
       await signUp(body(), token).expect(401);
@@ -290,7 +294,7 @@ describe('platform tenant sign-up', () => {
 
     it('a password reset revokes the platform session', async () => {
       const temporary = await seedPlatformAdmin(db);
-      const token = await signInPlatform(app, temporary.email);
+      const token = await signInPlatform(app, db, temporary);
       await http().post('/auth/password-reset/request').send({ email: temporary.email }).expect(202);
       await app.get(BackgroundTasks).whenIdle();
       await http().post('/auth/password-reset/confirm').send({ token: await linkTokenFor(temporary.email), newPassword: OWNER_PASSWORD }).expect(204);
@@ -299,7 +303,7 @@ describe('platform tenant sign-up', () => {
 
     it('logging out of the platform revokes the session', async () => {
       const temporary = await seedPlatformAdmin(db);
-      const token = await signInPlatform(app, temporary.email);
+      const token = await signInPlatform(app, db, temporary);
       await http().post('/auth/platform/logout').set(bearer(token)).expect(204);
       await signUp(body(), token).expect(401);
     });

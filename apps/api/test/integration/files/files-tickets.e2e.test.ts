@@ -6,6 +6,7 @@ import { createTestApp } from '../../support/create-test-app.js';
 import { pdf, png, uploadFile } from '../../support/file-uploads.js';
 import { useTestEnvironment } from '../../support/test-environment.js';
 import { type Member, publishFlow, type PublishedFlow, simpleFlow, TicketWorld } from '../../support/ticket-world.js';
+import { expectStatus } from '../../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -62,7 +63,7 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
     it('links loose attachments and FILE field values to the CREATED event, and marks the uploads as linked', async () => {
       const [loose, contract] = [await upload(requester, 'brief.pdf'), await upload(requester, 'contract.pdf')];
       const created = await create({ attachments: [loose], values: { CONTRACT: [contract] } });
-      expect(created.status).toBe(201);
+      expectStatus(created, 201);
       const documents = await documentsOf(created.body.id);
       expect(documents.map((document) => [document.file.id, document.role, document.fieldCode, document.isCurrent])).toEqual(
         expect.arrayContaining([
@@ -81,17 +82,17 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
 
     it('refuses an upload that was already attached to another ticket', async () => {
       const file = await upload(requester, 'once.pdf');
-      await create({ attachments: [file] }).then((response) => expect(response.status).toBe(201));
+      await create({ attachments: [file] }).then((response) => expectStatus(response, 201));
       const again = await create({ attachments: [file] });
-      expect(again.status).toBe(422);
+      expectStatus(again, 422);
       expect(again.body.error).toMatchObject({ code: 'ATTACHMENTS_INVALID', details: { issues: [{ fileId: file, code: 'FILE_NOT_ATTACHABLE' }] } });
     });
 
     it('refuses the same upload in a FILE field after it was attached', async () => {
       const file = await upload(requester, 'twice.pdf');
-      await create({ attachments: [file] }).then((response) => expect(response.status).toBe(201));
+      await create({ attachments: [file] }).then((response) => expectStatus(response, 201));
       const again = await create({ values: { CONTRACT: [file] } });
-      expect(again.status).toBe(422);
+      expectStatus(again, 422);
       expect(again.body.error.details.issues).toEqual([{ code: 'FILE_NOT_ATTACHABLE', fieldCode: 'CONTRACT' }]);
     });
 
@@ -121,7 +122,7 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
       for (let index = 0; index < 16; index += 1) ids.push(await upload(requester, `n${index}.pdf`));
       expect((await create({ attachments: ids })).status).toBe(400);
       const response = await create({ attachments: ids.slice(0, 15) });
-      expect(response.status).toBe(201);
+      expectStatus(response, 201);
     });
 
     it('lets only one of two parallel submissions of the same upload win', async () => {
@@ -134,7 +135,7 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
     it('creates nothing when an attachment is refused: no ticket, no document, the other uploads stay free', async () => {
       const good = await upload(requester, 'good.pdf');
       const tickets = (await db.platform.query('SELECT count(*)::int AS n FROM tickets WHERE tenant_id = $1', [world.tenant.tenantId])).rows[0].n;
-      await create({ attachments: [good, '0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f90'] }).then((response) => expect(response.status).toBe(422));
+      await create({ attachments: [good, '0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f90'] }).then((response) => expectStatus(response, 422));
       expect((await db.platform.query('SELECT count(*)::int AS n FROM tickets WHERE tenant_id = $1', [world.tenant.tenantId])).rows[0].n).toBe(tickets);
       expect((await fileRow(good)).linked_at).toBeNull();
     });
@@ -190,7 +191,7 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
     it('refuses to attach to a comment what somebody else uploaded', async () => {
       const theirs = await upload(worker, 'theirs.pdf');
       const response = await requester.client.post(`/tickets/${ticketId}/comments`, { comment: 'mine', attachments: [theirs] });
-      expect(response.status).toBe(422);
+      expectStatus(response, 422);
       expect(response.body.error.code).toBe('ATTACHMENTS_INVALID');
       expect((await fileRow(theirs)).linked_at).toBeNull();
     });
@@ -233,7 +234,7 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
       expect(lifetime).toBeGreaterThan(0);
       expect(lifetime).toBeLessThanOrEqual(120_000);
       const download = await fetch(response.body.url);
-      expect(download.status).toBe(200);
+      expectStatus(download, 200);
       expect(Buffer.from(await download.arrayBuffer()).equals(content)).toBe(true);
       expect(download.headers.get('content-disposition')).toMatch(/^inline; filename="report\.pdf"/);
       expect(download.headers.get('content-type')).toBe('application/pdf');

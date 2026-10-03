@@ -5,6 +5,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type FlowSpec, type Member, publishFlow, type PublishedFlow, publishVersion, REQUESTER_GRANTS, SUPERVISOR_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
+import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
 
@@ -89,7 +90,7 @@ describe('ticket integrity: concurrency, closing and version pinning', () => {
         await holder.query('BEGIN');
         await holder.query('SELECT id FROM tickets WHERE tenant_id = $1 AND id = $2 FOR UPDATE', [world.tenant.tenantId, created.body.id]);
         const blocked = await move(worker, created.body.id, twoSteps.transition.Next!, created.body.openVisitId);
-        expect(blocked.status).toBe(503);
+        expectStatus(blocked, 503);
         expect(blocked.body.error.code).toBe('TEMPORARILY_UNAVAILABLE');
         expect(blocked.headers['retry-after']).toBe('1');
       } finally {

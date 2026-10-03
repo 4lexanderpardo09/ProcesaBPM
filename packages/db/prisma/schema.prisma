@@ -489,16 +489,25 @@ model User {
   /// TOTP secret encrypted by the application (AES-256-GCM); never stored in clear text.
   mfaSecretEncrypted Bytes?     @map("mfa_secret_encrypted")
   mfaEnabled         Boolean    @default(false) @map("mfa_enabled")
+  mfaEnabledAt       DateTime?  @map("mfa_enabled_at") @db.Timestamptz(3)
+  /// The last accepted TOTP time step (replay protection). Not readable by the application role.
+  mfaLastStep        BigInt?    @map("mfa_last_step")
+  mfaFailedAttempts  Int        @default(0) @map("mfa_failed_attempts")
+  mfaLockedUntil     DateTime?  @map("mfa_locked_until") @db.Timestamptz(3)
   emailVerifiedAt    DateTime?  @map("email_verified_at") @db.Timestamptz(3)
   lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(3)
   failedLogins       Int        @default(0) @map("failed_logins")
   lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(3)
+  /// Tokens issued before this instant are void (password reset, invitation or change). Not readable by the application role.
+  passwordChangedAt  DateTime?  @map("password_changed_at") @db.Timestamptz(3)
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships     Membership[]
   refreshSessions RefreshSession[]
   tokens          UserToken[]
+  consumedAuthTokens ConsumedAuthToken[]
+  mfaBackupCodes     UserMfaBackupCode[]
   platformAdmin   PlatformAdmin?
 
   @@map("users")
@@ -512,6 +521,8 @@ model RefreshSession {
   expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
   revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
   replacedBy     String?   @map("replaced_by") @db.Uuid
+  /// The second factor was verified when this session was opened (or MFA was enrolled in it).
+  mfaVerified    Boolean   @default(false) @map("mfa_verified")
   ipAddress      String?   @map("ip_address")
   userAgent      String?   @map("user_agent")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -540,6 +551,34 @@ model UserToken {
 
   @@index([userId, type])
   @@map("user_tokens")
+}
+
+/// Selection and MFA-challenge tokens already used (by jti), so each works once. Platform-only: no application role reads it.
+model ConsumedAuthToken {
+  jti        String   @id @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  purpose    String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime @default(now()) @map("consumed_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("consumed_auth_tokens")
+}
+
+/// Single-use recovery codes of the second factor (SHA-256 of 80-bit codes). Platform-only: reached through functions.
+model UserMfaBackupCode {
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, codeHash])
+  @@map("user_mfa_backup_codes")
 }
 
 model PlatformAdmin {
@@ -574,6 +613,8 @@ model Tenant {
   name              String
   status            TenantStatus @default(ACTIVE)
   planId            String       @map("plan_id") @db.Uuid
+  /// Members must use two-step verification (changed by an administrator).
+  mfaRequired       Boolean      @default(false) @map("mfa_required")
   countryCode       String       @map("country_code") @db.Char(2)
   timeZone          String       @map("time_zone")
   extraStorageBytes BigInt       @default(0) @map("extra_storage_bytes")
@@ -2591,6 +2632,8 @@ model AuditLog {
   before     Json?
   after      Json?
   ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  requestId  String?  @map("request_id")
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2598,6 +2641,7 @@ model AuditLog {
 
   @@id([tenantId, id])
   @@index([tenantId, entityType, entityId])
+  @@index([tenantId, action, createdAt(sort: Desc)])
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([tenantId, actorId])
   @@map("audit_logs")

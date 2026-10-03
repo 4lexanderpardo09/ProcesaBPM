@@ -17,7 +17,12 @@ export const ERROR_CODES = {
   unauthenticated: 'UNAUTHENTICATED',
   invalidCredentials: 'INVALID_CREDENTIALS',
   invalidToken: 'INVALID_TOKEN',
-  mfaNotImplemented: 'MFA_NOT_IMPLEMENTED',
+  mfaRequired: 'MFA_REQUIRED',
+  invalidMfaCode: 'INVALID_MFA_CODE',
+  mfaAlreadyEnabled: 'MFA_ALREADY_ENABLED',
+  mfaNotEnabled: 'MFA_NOT_ENABLED',
+  mfaRequiredByPolicy: 'MFA_REQUIRED_BY_POLICY',
+  mfaNotVerified: 'MFA_NOT_VERIFIED',
   rateLimited: 'RATE_LIMITED',
   validationFailed: 'VALIDATION_FAILED',
   tenantSuspended: 'TENANT_SUSPENDED',
@@ -186,9 +191,43 @@ export class InvalidTokenError extends DomainError {
   }
 }
 
-export class MfaNotImplementedError extends DomainError {
+/** The organization (or the platform) requires the second factor and this session has not passed it. */
+export class MfaRequiredError extends DomainError {
   constructor() {
-    super(ERROR_CODES.mfaNotImplemented, 'Multi-factor authentication is not available yet');
+    super(ERROR_CODES.mfaRequired, 'Two-step verification is required');
+  }
+}
+
+/** Wrong, repeated or locked-out code: one answer for all three, so an attacker learns nothing from it. */
+export class InvalidMfaCodeError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.invalidMfaCode, 'The verification code is not valid');
+  }
+}
+
+export class MfaAlreadyEnabledError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.mfaAlreadyEnabled, 'Two-step verification is already enabled');
+  }
+}
+
+export class MfaNotEnabledError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.mfaNotEnabled, 'Two-step verification is not enabled');
+  }
+}
+
+/** An organization requires it from its members (or the user is a platform administrator): it cannot be turned off. */
+export class MfaRequiredByPolicyError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.mfaRequiredByPolicy, 'Two-step verification is required and cannot be turned off');
+  }
+}
+
+/** The administrator turning the organization policy on has not passed the second factor in this session. */
+export class MfaNotVerifiedError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.mfaNotVerified, 'Verify your second factor before requiring it from the organization');
   }
 }
 

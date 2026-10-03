@@ -1,7 +1,7 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { z } from 'zod';
 import { Clock } from '../../../infrastructure/clock.js';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type ClaimedEvent } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
@@ -23,7 +23,7 @@ export class WaitElapsedHandler implements OnModuleInit {
     this.registry.registerTransactional({ type: 'ticket.wait_elapsed', schema: payloadSchema, handle: (tx, event) => this.handle(tx, event) });
   }
 
-  private async handle(tx: WorkerTransaction, event: ClaimedEvent<Payload>): Promise<void> {
+  private async handle(tx: TenantTransaction, event: ClaimedEvent<Payload>): Promise<void> {
     if (event.tenantId === null) throw new PermanentEventError('A wait-elapsed event belongs to a tenant');
     await this.resumes.resume(tx, event.tenantId, event.payload, this.clock.now());
   }

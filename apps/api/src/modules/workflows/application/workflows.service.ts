@@ -13,6 +13,7 @@ import { compact } from '../../../common/crud/compact.js';
 import { toPage } from '../../../common/crud/pagination.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
 import { type VersionRow, type WorkflowRow, WorkflowRepository } from '../data/workflow.repository.js';
 import { toVersionSummary } from './version-summary.js';
@@ -64,6 +65,7 @@ export class WorkflowsService {
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(WorkflowRepository) private readonly repository: WorkflowRepository,
     @Inject(VersionDocumentRepository) private readonly documents: VersionDocumentRepository,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
   list(query: WorkflowsQuery): Promise<Page<WorkflowResponse>> {
@@ -84,15 +86,18 @@ export class WorkflowsService {
       const version = await this.repository.createVersion(tx, this.tenantId, { workflowId: workflow.id, number: 1 });
       const [start, end, transition] = await this.documents.allocateIds(tx, 3);
       await this.documents.insertDocument(tx, this.tenantId, version.id, startingDocument({ start: start!, end: end!, transition: transition! }));
+      await this.audit.record(tx, { action: 'workflow.created', subjectType: 'Workflow', subjectId: workflow.id, after: { name: workflow.name, subcategoryId: workflow.subcategoryId } });
       return toDetail(workflow, [version]);
     });
   }
 
   update(id: string, request: UpdateWorkflowRequest): Promise<WorkflowDetailResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.require(tx, id);
+      const before = await this.require(tx, id);
       await this.repository.update(tx, this.tenantId, id, compact(request));
-      return toDetail(await this.require(tx, id), await this.repository.listVersions(tx, this.tenantId, id));
+      const updated = await this.require(tx, id);
+      await this.audit.record(tx, { action: 'workflow.updated', subjectType: 'Workflow', subjectId: id, before: { name: before.name, isActive: before.isActive }, after: { name: updated.name, isActive: updated.isActive } });
+      return toDetail(updated, await this.repository.listVersions(tx, this.tenantId, id));
     });
   }
 

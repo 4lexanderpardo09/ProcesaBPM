@@ -3,7 +3,7 @@ import type { DocumentMoment } from '@procesabpm/db';
 import { uuidSchema } from '@procesabpm/shared';
 import { z } from 'zod';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
-import type { WorkerTransaction } from '../../../infrastructure/database/worker-transaction-runner.js';
+import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { ClaimedEvent } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { DocumentFanoutRepository } from '../data/document-fanout.repository.js';
@@ -39,7 +39,7 @@ export class DocumentFanoutHandlers implements OnModuleInit {
   }
 
   /** A movement that ends the ticket also emits `ticket.closed`, which asks for the documents of the end: asking twice would draw the same thing twice. */
-  private async onTransitioned(tx: WorkerTransaction, event: ClaimedEvent<TicketEventPayload>): Promise<void> {
+  private async onTransitioned(tx: TenantTransaction, event: ClaimedEvent<TicketEventPayload>): Promise<void> {
     const tenantId = event.tenantId!;
     const { ticketId, eventId } = event.payload;
     const at = eventId === undefined ? null : await this.tickets.eventTime(tx, tenantId, ticketId, eventId);
@@ -48,7 +48,7 @@ export class DocumentFanoutHandlers implements OnModuleInit {
     await this.atMoments(tx, event, ['EACH_STEP']);
   }
 
-  private async atMoments(tx: WorkerTransaction, event: ClaimedEvent<TicketEventPayload>, moments: readonly DocumentMoment[]): Promise<void> {
+  private async atMoments(tx: TenantTransaction, event: ClaimedEvent<TicketEventPayload>, moments: readonly DocumentMoment[]): Promise<void> {
     const tenantId = event.tenantId!;
     const { ticketId, eventId } = event.payload;
     if (eventId === undefined) return;
@@ -64,7 +64,7 @@ export class DocumentFanoutHandlers implements OnModuleInit {
     await this.outbox.enqueue(tx, tenantId, unique);
   }
 
-  private async onDocumentBlock(tx: WorkerTransaction, event: ClaimedEvent<z.infer<typeof blockEvent>>): Promise<void> {
+  private async onDocumentBlock(tx: TenantTransaction, event: ClaimedEvent<z.infer<typeof blockEvent>>): Promise<void> {
     const tenantId = event.tenantId!;
     const { ticketId, eventId, stepId } = event.payload;
     if (eventId === undefined) return;

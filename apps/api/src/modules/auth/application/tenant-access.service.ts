@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { TenantSuspendedError, UnauthenticatedError } from '@procesabpm/shared';
+import { MfaRequiredError, TenantSuspendedError, UnauthenticatedError } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -12,11 +12,14 @@ export interface AccessRequest {
   readonly tenantId: string;
   /** When present, the session must be the live one opened for this tenant. */
   readonly sessionId?: string;
+  /** Without a session (tenant selection, refresh): whether the second factor was passed in the sign-in being used. */
+  readonly mfaVerified?: boolean;
 }
 
 /**
  * The check behind every authenticated request, tenant selection and refresh: the account and the
- * membership are ACTIVE, the tenant is ACTIVE and the session has not been revoked. One transaction
+ * membership are ACTIVE, the tenant is ACTIVE, the session has not been revoked and, when the organization requires
+ * two-step verification, the session passed it. One transaction
  * per call, so disabling a user or a membership takes effect on the next request.
  */
 @Injectable()
@@ -37,11 +40,15 @@ export class TenantAccessService {
         const membership = access.membership;
         const allowed = access.userStatus === 'ACTIVE' && access.membershipStatus === 'ACTIVE' && access.tenantStatus !== undefined;
         if (!allowed || membership === undefined) throw new UnauthenticatedError();
+        let mfaVerified = request.mfaVerified === true;
         if (request.sessionId !== undefined) {
           const session = await this.repository.findSession(tx, request.sessionId);
           if (!this.isLive(session, request.tenantId)) throw new UnauthenticatedError();
+          mfaVerified = session!.mfaVerified;
         }
         if (access.tenantStatus !== 'ACTIVE') throw new TenantSuspendedError();
+        // Turning the policy on takes effect at the next request of every member who has not passed the second factor.
+        if (access.tenantMfaRequired && !mfaVerified) throw new MfaRequiredError();
         return membership;
       }),
     );

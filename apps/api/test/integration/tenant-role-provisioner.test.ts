@@ -6,6 +6,7 @@ import { MissingCatalogPermissionError } from '@procesabpm/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlatformPrismaService } from '../../src/infrastructure/database/platform-prisma.service.js';
 import { PlatformTransactionRunner } from '../../src/infrastructure/database/platform-transaction-runner.js';
+import { asScoped, type PlatformTransaction } from '../../src/infrastructure/database/transaction-scope.js';
 import { TenantRoleProvisioner } from '../../src/modules/platform/application/tenant-role-provisioner.js';
 import { TenantRoleRepository } from '../../src/modules/platform/data/tenant-role.repository.js';
 import { bearer, signIn } from '../support/auth-helpers.js';
@@ -131,7 +132,8 @@ describe('TenantRoleProvisioner (platform service)', () => {
   it('joins the transaction of the caller: if the caller fails afterwards, the roles are rolled back too', async () => {
     const tenantId = await bareTenant();
     await expect(
-      platform.$transaction(async (tx) => {
+      platform.$transaction(async (rawTx) => {
+        const tx = asScoped<PlatformTransaction>(rawTx);
         await provisioner.createBaseRoles(tenantId, tx);
         expect((await tx.role.count({ where: { tenantId } }))).toBe(ROLE_TEMPLATES.length);
         throw new Error('sign-up failed after provisioning');
