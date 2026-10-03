@@ -32,3 +32,18 @@ ALTER ROLE procesabpm_worker PASSWORD :'worker_password';
 ALTER ROLE procesabpm_worker SET role = 'app_worker';
 ALTER ROLE procesabpm_platform PASSWORD :'platform_password';
 ALTER ROLE procesabpm_platform SET role = 'app_platform';
+
+-- NOLOGIN owner roles (docs/base-de-datos.md §6.3). The migrations create them and give them their objects and privileges
+-- (the only source of those privileges); this re-asserts what must never change on them, in case someone did by hand:
+-- they cannot log in, do not bypass row-level security, and nobody is a member of them. Every membership is revoked
+-- (whoever granted it, to whichever role), except the one of the role running this script: the schema owner already owns
+-- every object these roles own, and on a managed database without a superuser it needs that membership to migrate.
+ALTER ROLE app_outbox_owner NOLOGIN NOBYPASSRLS;
+ALTER ROLE app_retention_owner NOLOGIN NOINHERIT NOBYPASSRLS;
+SELECT format('REVOKE %I FROM %I GRANTED BY %I', owner_role.rolname, member.rolname, grantor.rolname)
+FROM pg_auth_members membership
+JOIN pg_roles owner_role ON owner_role.oid = membership.roleid
+JOIN pg_roles member ON member.oid = membership.member
+JOIN pg_roles grantor ON grantor.oid = membership.grantor
+WHERE owner_role.rolname IN ('app_outbox_owner', 'app_retention_owner')
+  AND member.rolname <> current_user \gexec

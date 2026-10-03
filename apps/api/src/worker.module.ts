@@ -11,6 +11,7 @@ import { AuthMaintenanceModule } from './modules/auth/auth-maintenance.module.js
 import { AuthMailModule } from './modules/auth/auth-mail.module.js';
 import { DocumentsWorkerModule } from './modules/documents/documents-worker.module.js';
 import { NotificationsWorkerModule } from './modules/notifications/notifications-worker.module.js';
+import { RetentionModule } from './modules/retention/retention.module.js';
 import { TenantPurgeModule } from './modules/tenant-purge/tenant-purge.module.js';
 import { FilePurgeModule } from './modules/files/file-purge.module.js';
 import { DispatchModule } from './modules/engine/dispatch.module.js';
@@ -19,7 +20,7 @@ import { SlaModule } from './modules/sla/sla.module.js';
 import { WorkerLifecycle } from './worker-lifecycle.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('worker'), LoggingModule, ClockModule, DatabaseModule.forEntry('worker'), AuditTrailModule, StorageModule, SlaModule, DispatchModule, WaitModule, FilePurgeModule, TenantPurgeModule, OutboxDispatcherModule, AuthMailModule, AuthMaintenanceModule, NotificationsWorkerModule, DocumentsWorkerModule, RealtimeWorkerModule],
+  imports: [ConfigModule.forEntry('worker'), LoggingModule, ClockModule, DatabaseModule.forEntry('worker'), AuditTrailModule, StorageModule, SlaModule, DispatchModule, WaitModule, FilePurgeModule, TenantPurgeModule, RetentionModule, OutboxDispatcherModule, AuthMailModule, AuthMaintenanceModule, NotificationsWorkerModule, DocumentsWorkerModule, RealtimeWorkerModule],
   providers: [WorkerLifecycle],
 })
 export class WorkerModule {}

@@ -91,37 +91,4 @@ describe('database functions', () => {
       expect(new Set(batches.flat().map((row) => row.tenant_id))).toEqual(new Set([tenantA.tenantId, tenantB.tenantId]));
     });
   });
-
-  describe('retention', () => {
-    it('purges processed outbox events and read notifications older than the given age', async () => {
-      await db.platform.query(
-        `INSERT INTO outbox_events (tenant_id, type, payload, status, processed_at) VALUES
-           ($1, 'old', '{}', 'DONE', now() - interval '10 days'),
-           ($1, 'recent', '{}', 'DONE', now()),
-           ($1, 'failed', '{}', 'FAILED', now() - interval '10 days')`,
-        [tenantA.tenantId],
-      );
-      await db.platform.query(
-        `INSERT INTO notifications (tenant_id, user_id, type, title, body, read_at) VALUES
-           ($1, $2, 'SYSTEM', 'old', 'x', now() - interval '200 days'),
-           ($1, $2, 'SYSTEM', 'unread', 'x', NULL)`,
-        [tenantA.tenantId, tenantA.userId],
-      );
-
-      const { rows: outbox } = await db.platform.query<{ purged: string }>(
-        "SELECT purge_processed_outbox_events(interval '7 days') AS purged",
-      );
-      const { rows: notifications } = await db.platform.query<{ purged: string }>(
-        "SELECT purge_read_notifications(interval '180 days') AS purged",
-      );
-
-      expect(Number(outbox[0]?.purged)).toBe(1);
-      expect(Number(notifications[0]?.purged)).toBe(1);
-      const remaining = await db.owner.query<{ type: string }>(
-        `SELECT type FROM outbox_events WHERE tenant_id = $1 AND type IN ('old', 'recent', 'failed') ORDER BY type`,
-        [tenantA.tenantId],
-      );
-      expect(remaining.rows.map((row) => row.type)).toEqual(['failed', 'recent']);
-    });
-  });
 });

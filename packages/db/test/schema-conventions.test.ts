@@ -78,14 +78,16 @@ describe('schema conventions', () => {
 
   it('runs every SECURITY DEFINER function as a platform owner with search_path public, pg_temp', async () => {
     // app_platform owns the general ones; app_outbox_owner owns those that touch the platform outbox, so
-    // that the BYPASSRLS login of app_platform cannot read the tokens in it. Temp tables cannot shadow real ones.
+    // that the BYPASSRLS login of app_platform cannot read the tokens in it; app_retention_owner owns only retention
+    // functions. Temp tables cannot shadow real ones.
     const { rows } = await db.owner.query<{ fn: string }>(`
       SELECT p.oid::regprocedure::text AS fn FROM pg_proc p
       WHERE p.prosecdef
         AND p.pronamespace NOT IN ('pg_catalog'::regnamespace, 'information_schema'::regnamespace)
         AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
         AND (p.pronamespace <> 'public'::regnamespace
-             OR pg_get_userbyid(p.proowner) NOT IN ('app_platform', 'app_outbox_owner')
+             OR pg_get_userbyid(p.proowner) NOT IN ('app_platform', 'app_outbox_owner', 'app_retention_owner')
+             OR (pg_get_userbyid(p.proowner) = 'app_retention_owner' AND p.proname NOT LIKE 'retention\\_%')
              OR NOT coalesce(p.proconfig @> ARRAY['search_path=public, pg_temp'], false))
       ORDER BY 1
     `);
@@ -107,9 +109,74 @@ describe('schema conventions', () => {
       'fail_platform_outbox_event',
       'list_failed_platform_outbox_events',
       'platform_outbox_claim_is_current',
-      'purge_processed_platform_outbox_events',
+      'retention_purge_platform_outbox_events',
       'retry_failed_platform_outbox_event',
     ]);
+  });
+
+  it('gives app_retention_owner only the trail purges, and on the trails only reading the columns it filters on and deleting', async () => {
+    const { rows: functions } = await db.owner.query<{ fn: string }>(`
+      SELECT p.proname AS fn FROM pg_proc p WHERE pg_get_userbyid(p.proowner) = 'app_retention_owner' ORDER BY 1`);
+    expect(functions.map((row) => row.fn)).toEqual([
+      'retention_purge_audit_logs',
+      'retention_purge_platform_audit_logs',
+      'retention_purge_support_access_grants',
+      'retention_purge_support_sessions',
+    ]);
+
+    const { rows: tables } = await db.owner.query<{ grant: string }>(`
+      SELECT c.relname || ' ' || p.privilege AS grant
+      FROM pg_class c
+      CROSS JOIN (VALUES ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE'), ('REFERENCES'), ('TRIGGER')) AS p(privilege)
+      WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'v', 'm')
+        AND has_table_privilege('app_retention_owner', c.oid, p.privilege)
+      ORDER BY 1`);
+    expect(tables.map((row) => row.grant)).toEqual([
+      'audit_logs DELETE',
+      'platform_audit_logs DELETE',
+      'support_access_grants DELETE',
+      'support_sessions DELETE',
+    ]);
+
+    const { rows: columns } = await db.owner.query<{ grant: string }>(`
+      SELECT c.relname || '.' || a.attname AS grant
+      FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+      WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
+        AND has_column_privilege('app_retention_owner', c.oid, a.attnum, 'SELECT')
+      ORDER BY 1`);
+    expect(columns.map((row) => row.grant)).toEqual([
+      'audit_logs.created_at',
+      'audit_logs.id',
+      'audit_logs.support_grant_id',
+      'audit_logs.tenant_id',
+      'platform_audit_logs.created_at',
+      'platform_audit_logs.id',
+      'support_access_grants.expires_at',
+      'support_access_grants.id',
+      'support_access_grants.tenant_id',
+      'support_sessions.grant_id',
+      'support_sessions.id',
+      'support_sessions.opened_at',
+      'support_sessions.tenant_id',
+    ]);
+    const { rows: updates } = await db.owner.query<{ grant: string }>(`
+      SELECT c.relname || '.' || a.attname AS grant
+      FROM pg_class c JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+      WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
+        AND (has_column_privilege('app_retention_owner', c.oid, a.attnum, 'UPDATE') OR has_column_privilege('app_retention_owner', c.oid, a.attnum, 'INSERT'))`);
+    expect(updates).toEqual([]);
+  });
+
+  it('runs every retention function only from the worker', async () => {
+    const { rows } = await db.owner.query<{ fn: string; worker: boolean; runtime: boolean; platform: boolean }>(`
+      SELECT p.oid::regprocedure::text AS fn,
+             has_function_privilege('app_worker', p.oid, 'EXECUTE') AS worker,
+             has_function_privilege('app_runtime', p.oid, 'EXECUTE') AS runtime,
+             has_function_privilege('app_platform', p.oid, 'EXECUTE') AS platform
+      FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND p.proname LIKE 'retention\\_%'
+      ORDER BY 1`);
+    expect(rows).toHaveLength(11);
+    expect(rows.filter((row) => !row.worker || row.runtime || row.platform)).toEqual([]);
   });
 
   it('gives no application login the right to rewrite or empty a history table', async () => {
@@ -165,9 +232,19 @@ describe('schema conventions', () => {
 
   it('keeps the application roles without BYPASSRLS', async () => {
     const { rows } = await db.owner.query<{ rolname: string }>(
-      `SELECT rolname FROM pg_roles WHERE rolname IN ('app_runtime', 'app_worker', 'app_outbox_owner') AND rolbypassrls`,
+      `SELECT rolname FROM pg_roles WHERE rolname IN ('app_runtime', 'app_worker', 'app_outbox_owner', 'app_retention_owner') AND rolbypassrls`,
     );
 
     expect(rows).toEqual([]);
+  });
+
+  it('keeps the owner roles unable to log in, and no login a member of app_retention_owner', async () => {
+    const { rows } = await db.owner.query<{ rolname: string; rolcanlogin: boolean; members: number }>(`
+      SELECT r.rolname, r.rolcanlogin, (SELECT count(*)::int FROM pg_auth_members m WHERE m.roleid = r.oid) AS members
+      FROM pg_roles r WHERE r.rolname IN ('app_outbox_owner', 'app_retention_owner') ORDER BY 1`);
+    expect(rows).toEqual([
+      { rolname: 'app_outbox_owner', rolcanlogin: false, members: expect.any(Number) },
+      { rolname: 'app_retention_owner', rolcanlogin: false, members: 0 },
+    ]);
   });
 });
