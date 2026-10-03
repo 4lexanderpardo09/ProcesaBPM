@@ -4,6 +4,7 @@ import pg from 'pg';
 import { base32Decode, stepOf, totpCode } from '../modules/auth/domain/totp.js';
 import { ApiClient, sleep, text } from './api-client.js';
 import { Mailbox, tokenFromMail } from './mailbox.js';
+import { probeRealtime } from './realtime-probe.js';
 import type { SmokeConfig } from './smoke-config.js';
 
 /** Everything the smoke run creates is named so that it can be recognized (and only it removed) afterwards. */
@@ -153,6 +154,19 @@ export class SmokeRun {
     const response = await fetch(text(link.url, 'download url'));
     if (!response.ok) throw new Error(`The presigned download answered ${response.status}`);
     if (!Buffer.from(await response.arrayBuffer()).equals(this.fileContent)) throw new Error('The downloaded file is not the one that was uploaded');
+  }
+
+  /** The WebSocket works through the proxy: the web's origin and the owner's token connect, a foreign origin and a bad token do not. */
+  async realtime(): Promise<void> {
+    const source = this.config.SMOKE_ORIGIN ?? this.config.WEB_BASE_URL;
+    if (source === undefined) throw new Error('Set WEB_BASE_URL (or SMOKE_ORIGIN): the realtime check needs the origin of the web application');
+    const origin = new URL(source).origin;
+    const connected = await probeRealtime(this.config.BASE_URL, { origin, token: this.ownerToken });
+    if (connected.outcome !== 'CONNECTED') throw new Error(`The owner's socket was not accepted (${JSON.stringify(connected)}): does the proxy forward WebSocket upgrades on /realtime, and is REALTIME_ALLOWED_ORIGINS ${origin}?`);
+    const foreign = await probeRealtime(this.config.BASE_URL, { origin: 'https://not-allowed.invalid', token: this.ownerToken });
+    if (foreign.outcome !== 'NOT_UPGRADED') throw new Error(`A foreign Origin was not refused (${JSON.stringify(foreign)})`);
+    const forged = await probeRealtime(this.config.BASE_URL, { origin, token: 'not-a-token' });
+    if (forged.outcome !== 'REFUSED' || forged.code !== 'UNAUTHENTICATED') throw new Error(`A bad token was not refused with UNAUTHENTICATED (${JSON.stringify(forged)})`);
   }
 
   async report(): Promise<void> {

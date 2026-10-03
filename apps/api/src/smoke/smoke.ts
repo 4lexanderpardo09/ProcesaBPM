@@ -19,6 +19,7 @@ async function main(): Promise<void> {
     ['upload a file with a presigned URL and confirm it', () => run.upload()],
     ['create, advance and close a ticket', () => run.ticketFlow()],
     ['download the file with a presigned URL', () => run.download()],
+    ['realtime: WebSocket through the proxy, origin and token checks', () => run.realtime()],
     ['report', () => run.report()],
   ];
 

@@ -9,7 +9,7 @@ import { cleanUp } from '../../src/smoke/smoke-cleanup.js';
 import { loadSmokeConfig, type SmokeConfig } from '../../src/smoke/smoke-config.js';
 import { SmokeRun } from '../../src/smoke/smoke-run.js';
 import { createTestApp } from '../support/create-test-app.js';
-import { useTestEnvironment } from '../support/test-environment.js';
+import { TEST_REALTIME_ORIGIN, useTestEnvironment } from '../support/test-environment.js';
 import { MailWorker } from '../support/worker-mail.js';
 
 useTestEnvironment();
@@ -63,6 +63,7 @@ describe('the smoke test of a deployment (deploy/verify.sh)', () => {
       BASE_URL: `http://127.0.0.1:${((app.getHttpServer() as Server).address() as AddressInfo).port}`,
       MAILPIT_URL: `http://127.0.0.1:${(mailpit.address() as AddressInfo).port}`,
       SMOKE_DATABASE_URL: inject('platformUrl'),
+      SMOKE_ORIGIN: TEST_REALTIME_ORIGIN,
       STORAGE_ENDPOINT: bucket.endpoint,
       STORAGE_REGION: bucket.region,
       STORAGE_BUCKET: bucket.bucket,
@@ -88,6 +89,7 @@ describe('the smoke test of a deployment (deploy/verify.sh)', () => {
     await run.upload();
     await run.ticketFlow();
     await run.download();
+    await run.realtime();
     await run.report();
 
     const tenantId = run.state.tenantId!;
