@@ -47,6 +47,27 @@ describe('architecture', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('real time: the API and the worker each import only their own side', () => {
+    const importersOf = (pattern: RegExp) => files.filter((file) => importsOf(file).some((source) => pattern.test(source))).map(posix).sort();
+    expect(importersOf(/realtime-worker\.module/)).toEqual(['worker.module.ts']);
+    expect(importersOf(/realtime-signal-publisher\.module/)).toEqual(['modules/documents/documents-worker.module.ts', 'modules/notifications/notifications-worker.module.ts', 'modules/realtime/realtime-worker.module.ts']);
+    expect(importersOf(/\/realtime\.module/)).toEqual(['app.module.ts']);
+    expect(importersOf(/realtime-listener\.module/)).toEqual(['modules/realtime/realtime.module.ts']);
+  });
+
+  it('no WebSocket message handler is declared with @SubscribeMessage (the global HTTP guard would refuse it): ClientMessageRouter wires them', () => {
+    const offenders = files.filter((file) => /^\s*@SubscribeMessage\b|import\s*\{[^}]*\bSubscribeMessage\b[^}]*\}\s*from\s*'@nestjs\/websockets'/m.test(readFileSync(file, 'utf8'))).map(posix);
+    expect(offenders).toEqual([]);
+  });
+
+  it('in the realtime module only RealtimeEmitter sends to or closes a socket, and nothing broadcasts to a room', () => {
+    const offenders = files
+      .filter((file) => posix(file).startsWith('modules/realtime/') && posix(file) !== 'modules/realtime/application/realtime-emitter.ts')
+      .filter((file) => /\.to\(|\.in\(|\.broadcast\b|\bserver\.emit\(|(?<!emitter)\.emit\(|\.disconnect\(|\.disconnectSockets\(/.test(readFileSync(file, 'utf8')))
+      .map(posix);
+    expect(offenders).toEqual([]);
+  });
+
   it('only the four transaction runners brand a transaction', () => {
     const importers = files.filter((file) => /\basScoped\b/.test(readFileSync(file, 'utf8'))).map(posix);
     expect(importers.sort()).toEqual([

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigError, loadApiConfig, loadWorkerConfig } from './app-config.js';
+import { ConfigError, loadApiConfig, loadWorkerConfig, realtimeEnabledIn } from './app-config.js';
 
 const KEY_A = Buffer.alloc(32, 1).toString('base64');
 const KEY_B = Buffer.alloc(32, 2).toString('base64');
@@ -68,6 +68,16 @@ describe('loadApiConfig / loadWorkerConfig', () => {
     it('keeps its database concurrency below the pool, so HTTP requests always find a connection', () => {
       expect(() => loadApiConfig({ ...valid, DB_POOL_MAX: '4', REALTIME_DB_CONCURRENCY: '4' })).toThrow(/REALTIME_DB_CONCURRENCY must be lower than DB_POOL_MAX/);
       expect(loadApiConfig({ ...valid, DB_POOL_MAX: '5', REALTIME_DB_CONCURRENCY: '4' }).REALTIME_DB_CONCURRENCY).toBe(4);
+      expect(() => loadApiConfig({ ...valid, DB_POOL_MAX: '1' })).toThrow(/REALTIME_DB_CONCURRENCY/);
+      expect(loadApiConfig({ ...valid, DB_POOL_MAX: '1', REALTIME_ENABLED: 'false' }).DB_POOL_MAX).toBe(1);
+    });
+
+    it('decides the registration of its modules exactly as the validated configuration does', () => {
+      for (const value of [undefined, 'true', 'false']) {
+        const env = value === undefined ? valid : { ...valid, REALTIME_ENABLED: value };
+        expect(realtimeEnabledIn(env)).toBe(loadApiConfig(env).REALTIME_ENABLED);
+      }
+      expect(() => loadApiConfig({ ...valid, REALTIME_ENABLED: 'no' })).toThrow(/REALTIME_ENABLED/);
     });
 
     it('bounds its limits', () => {

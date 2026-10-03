@@ -142,7 +142,7 @@ function apiRules(config: z.infer<typeof apiSchema>, context: z.RefinementCtx): 
     context.addIssue({ code: 'custom', path: ['REALTIME_ALLOWED_ORIGINS'], message: 'must use https:// in production' });
   }
   // (A pool size that already failed its own rule is not reported twice.)
-  if (config.DB_POOL_MAX >= 1 && config.REALTIME_DB_CONCURRENCY >= config.DB_POOL_MAX) {
+  if (config.REALTIME_ENABLED && config.DB_POOL_MAX >= 1 && config.REALTIME_DB_CONCURRENCY >= config.DB_POOL_MAX) {
     context.addIssue({ code: 'custom', path: ['REALTIME_DB_CONCURRENCY'], message: `must be lower than DB_POOL_MAX (${config.DB_POOL_MAX}) so that the HTTP requests keep connections` });
   }
 }
@@ -202,6 +202,15 @@ function parseOrThrow<S extends z.ZodType>(schema: S, env: Environment): z.infer
       return env[variable] === undefined ? `${variable} is required` : `${variable} ${issue.message}`;
     }),
   );
+}
+
+/**
+ * Whether the API registers its real-time modules at all. Module registration happens before the configuration provider
+ * runs, so this reads the raw variable; the value is still validated with the rest (anything but `true`/`false` stops the
+ * process), and the default is the schema's (`true`).
+ */
+export function realtimeEnabledIn(env: Environment): boolean {
+  return env.REALTIME_ENABLED !== 'false';
 }
 
 /** Reads and validates the API's environment; the process must not start when it throws. */

@@ -26,9 +26,11 @@ import { WorkflowsModule } from './modules/workflows/workflows.module.js';
 import { TicketsModule } from './modules/tickets/tickets.module.js';
 import { PlatformModule } from './modules/platform/platform.module.js';
 import { AuthorizationModule } from './modules/authorization/authorization.module.js';
+import { RealtimeModule } from './modules/realtime/realtime.module.js';
+import { realtimeEnabledIn } from './config/app-config.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, ReportsModule],
+  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, ReportsModule, ...(realtimeEnabledIn(process.env) ? [RealtimeModule] : [])],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

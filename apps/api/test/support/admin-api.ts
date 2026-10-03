@@ -15,6 +15,11 @@ export class ApiClient {
     private readonly token: string,
   ) {}
 
+  /** The bearer token, for clients other than HTTP (a socket's handshake). */
+  get accessToken(): string {
+    return this.token;
+  }
+
   call(method: Method, path: string, body?: unknown): request.Test {
     const call = request(this.app.getHttpServer())[method](path).set(bearer(this.token));
     return body === undefined ? call : call.send(body as object);

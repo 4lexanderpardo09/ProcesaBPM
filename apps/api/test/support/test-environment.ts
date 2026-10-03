@@ -32,6 +32,7 @@ const VARIABLES = [
   'REALTIME_ALLOWED_ORIGINS',
   'REALTIME_AUTH_GRACE_MS',
   'REALTIME_REVALIDATE_INTERVAL_MS',
+  'REALTIME_MAX_CONNECTIONS_PER_USER',
 ] as const;
 
 /** Points the application configuration at the test database for the duration of a test file. */
