@@ -105,6 +105,7 @@ describe('schema conventions', () => {
     expect(rows.map((row) => row.fn)).toEqual([
       'claim_platform_outbox_events',
       'complete_platform_outbox_event',
+      'enqueue_member_security_notice',
       'enqueue_platform_event',
       'enqueue_security_notice',
       'fail_platform_outbox_event',

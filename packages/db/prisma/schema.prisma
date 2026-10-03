@@ -504,6 +504,8 @@ model User {
   lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(3)
   /// Tokens issued before this instant are void (password reset, invitation or change). Not readable by the application role.
   passwordChangedAt  DateTime?  @map("password_changed_at") @db.Timestamptz(3)
+  /// Last reset of the second factor by a platform administrator: login tokens issued before it are void. Not readable by the application role.
+  mfaResetAt         DateTime?  @map("mfa_reset_at") @db.Timestamptz(3)
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
