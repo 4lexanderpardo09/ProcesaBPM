@@ -13,6 +13,7 @@ import { LoginTokenRepository } from '../data/login-token.repository.js';
 import { MfaRepository } from '../data/mfa.repository.js';
 import { MfaEnrollmentService } from './mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './mfa-factor-verifier.js';
+import { SecurityNotifier } from './security-notifier.js';
 import { SelectionIssuer } from './selection-issuer.js';
 
 /**
@@ -31,6 +32,7 @@ export class MfaLoginService {
     @Inject(CredentialsRepository) private readonly credentials: CredentialsRepository,
     @Inject(LoginTokenRepository) private readonly loginTokens: LoginTokenRepository,
     @Inject(SelectionIssuer) private readonly selection: SelectionIssuer,
+    @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
   ) {}
 
   /** The user has the second factor: a right code completes the sign-in. */
@@ -59,6 +61,7 @@ export class MfaLoginService {
     await this.verifier.verify(userId, { code }, false, async (tx) => {
       await this.consumeChallenge(tx, challenge);
       await this.mfa.enable(tx, backupCodes.hashes, null);
+      await this.notifier.notify(tx, userId, 'MFA_ENABLED');
       await this.credentials.recordPasswordSuccess(tx, userId, true);
     });
     return { ...(await this.selection.issue(userId, true)), backupCodes: backupCodes.displayed };

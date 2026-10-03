@@ -15,6 +15,7 @@ import { AccountAudit } from './account-audit.js';
 import { CurrentPasswordVerifier } from './current-password-verifier.js';
 import { MfaEnrollmentService } from './mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './mfa-factor-verifier.js';
+import { SecurityNotifier } from './security-notifier.js';
 
 /** Two-step verification managed by a signed-in member from their account. */
 @Injectable()
@@ -27,6 +28,7 @@ export class MfaAccountService {
     @Inject(MfaFactorVerifier) private readonly verifier: MfaFactorVerifier,
     @Inject(CurrentPasswordVerifier) private readonly currentPassword: CurrentPasswordVerifier,
     @Inject(AccountAudit) private readonly audit: AccountAudit,
+    @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
   ) {}
 
   async status(principal: Principal): Promise<MfaStatusResponse> {
@@ -46,7 +48,10 @@ export class MfaAccountService {
   async confirmEnrollment(principal: Principal, code: string, currentPassword: string): Promise<BackupCodesResponse> {
     await this.currentPassword.verify(principal.userId, currentPassword);
     const backupCodes = this.enrollment.newBackupCodes();
-    await this.verifier.verify(principal.userId, { code }, false, (tx) => this.mfa.enable(tx, backupCodes.hashes, principal.sessionId));
+    await this.verifier.verify(principal.userId, { code }, false, async (tx) => {
+      await this.mfa.enable(tx, backupCodes.hashes, principal.sessionId);
+      await this.notifier.notify(tx, principal.userId, 'MFA_ENABLED');
+    });
     await this.audit.record(principal, 'account.mfa_enabled');
     return { backupCodes: backupCodes.displayed };
   }
@@ -62,7 +67,10 @@ export class MfaAccountService {
     if (requiredByPolicy) throw new MfaRequiredByPolicyError();
     await this.currentPassword.verify(userId, request.password);
     const factor = 'code' in request ? { code: request.code } : { backupCode: request.backupCode };
-    await this.verifier.verify(userId, factor, true, (tx) => this.mfa.disable(tx, principal.sessionId));
+    await this.verifier.verify(userId, factor, true, async (tx) => {
+      await this.mfa.disable(tx, principal.sessionId);
+      await this.notifier.notify(tx, userId, 'MFA_DISABLED');
+    });
     await this.audit.record(principal, 'account.mfa_disabled');
   }
 
@@ -72,7 +80,10 @@ export class MfaAccountService {
     const { enabled } = await this.runner.withUserTransaction(userId, (tx) => this.mfa.status(tx));
     if (!enabled) throw new MfaNotEnabledError();
     const backupCodes = this.enrollment.newBackupCodes();
-    await this.verifier.verify(userId, { code }, true, (tx) => this.mfa.replaceBackupCodes(tx, backupCodes.hashes));
+    await this.verifier.verify(userId, { code }, true, async (tx) => {
+      await this.mfa.replaceBackupCodes(tx, backupCodes.hashes);
+      await this.notifier.notify(tx, userId, 'MFA_BACKUP_CODES_REGENERATED');
+    });
     await this.audit.record(principal, 'account.mfa_backup_codes_regenerated');
     return { backupCodes: backupCodes.displayed };
   }

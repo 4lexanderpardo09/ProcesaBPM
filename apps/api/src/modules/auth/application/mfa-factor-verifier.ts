@@ -8,6 +8,7 @@ import { MfaSecretCipher } from '../../../infrastructure/security/mfa-secret-cip
 import { MfaRepository } from '../data/mfa.repository.js';
 import { hashDisplayedCode } from '../domain/backup-codes.js';
 import { matchTotp } from '../domain/totp.js';
+import { SecurityNotifier } from './security-notifier.js';
 
 export interface VerifiedFactor {
   /** Set when a backup code was used. */
@@ -28,16 +29,26 @@ export class MfaFactorVerifier {
     @Inject(MfaSecretCipher) private readonly cipher: MfaSecretCipher,
     @Inject(Clock) private readonly clock: Clock,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
+    @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
   ) {}
 
   /**
    * `enabled`: whether the code verifies an active MFA (login, disabling) or the pending secret of an enrollment, which
-   * only accepts a TOTP code (a user without MFA has no backup codes).
+   * only accepts a TOTP code (a user without MFA has no backup codes). When the attempt that locked the second factor was
+   * wrong, the user is told.
    */
   async verify(userId: string, factor: MfaFactor, enabled: boolean, alsoInSameTransaction: (tx: AuthTransaction) => Promise<void>): Promise<VerifiedFactor> {
-    const claimed = await this.runner.withUserTransaction(userId, (tx) => this.mfa.claimAttempt(tx));
-    if (!claimed) throw new InvalidMfaCodeError();
+    const claim = await this.runner.withUserTransaction(userId, (tx) => this.mfa.claimAttempt(tx));
+    if (!claim.claimed) throw new InvalidMfaCodeError();
+    try {
+      return await this.checkClaimed(userId, factor, enabled, alsoInSameTransaction);
+    } catch (error) {
+      if (claim.locking && error instanceof InvalidMfaCodeError) await this.notifier.notifyLockout(userId, 'MFA_LOCKED');
+      throw error;
+    }
+  }
 
+  private async checkClaimed(userId: string, factor: MfaFactor, enabled: boolean, alsoInSameTransaction: (tx: AuthTransaction) => Promise<void>): Promise<VerifiedFactor> {
     if ('backupCode' in factor) {
       const hash = hashDisplayedCode(factor.backupCode);
       if (!enabled || hash === undefined) throw new InvalidMfaCodeError();

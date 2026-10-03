@@ -4,6 +4,7 @@ import { CredentialsRepository } from '../data/credentials.repository.js';
 import { PlatformOutboxRepository } from '../../../infrastructure/outbox/platform-outbox.repository.js';
 import { PASSWORD_RESET_EVENT } from '../../../infrastructure/outbox/platform-event-types.js';
 import { OneTimeTokenService } from './one-time-token.service.js';
+import { SecurityNotifier } from './security-notifier.js';
 
 @Injectable()
 export class PasswordResetService {
@@ -12,6 +13,7 @@ export class PasswordResetService {
     @Inject(CredentialsRepository) private readonly credentials: CredentialsRepository,
     @Inject(PlatformOutboxRepository) private readonly outbox: PlatformOutboxRepository,
     @Inject(OneTimeTokenService) private readonly oneTimeTokens: OneTimeTokenService,
+    @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
   ) {}
 
   /**
@@ -25,8 +27,8 @@ export class PasswordResetService {
     await this.runner.withAnonymousTransaction((tx) => this.outbox.enqueue(tx, PASSWORD_RESET_EVENT, { userId: candidate.id }));
   }
 
-  /** Sets the new password; the database also clears the lockout and revokes every session. */
+  /** Sets the new password; the database also clears the lockout and revokes every session. The user is told by e-mail. */
   async confirm(token: string, newPassword: string): Promise<void> {
-    await this.oneTimeTokens.consume('PASSWORD_RESET', token, newPassword);
+    await this.oneTimeTokens.consume('PASSWORD_RESET', token, newPassword, (tx, consumed) => this.notifier.notify(tx, consumed.userId, 'PASSWORD_RESET'));
   }
 }

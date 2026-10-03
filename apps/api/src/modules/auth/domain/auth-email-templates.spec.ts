@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { renderInvitationEmail, renderPasswordResetEmail } from './auth-email-templates.js';
+import { SECURITY_NOTICE_KINDS } from '../../../infrastructure/outbox/platform-event-types.js';
+import { renderInvitationEmail, renderPasswordResetEmail, renderSecurityNoticeEmail } from './auth-email-templates.js';
 
 const ATTACK = `Ana "><script>alert(1)</script>`;
 
@@ -20,5 +21,57 @@ describe('account e-mails', () => {
     expect(mail.html).toContain('Acme &lt;b&gt;S.A.&lt;/b&gt;');
     expect(mail.html).not.toContain('<b>S.A.</b>');
     expect(mail.text).toContain('7 días');
+  });
+
+  describe('security notices', () => {
+    const RESET_PAGE = 'https://app.test/forgot-password';
+    const base = { firstName: 'Ana', occurredAt: new Date('2026-10-03T15:04:00Z'), timeZone: null, resetUrl: RESET_PAGE } as const;
+    const origin = { ipAddress: '203.0.113.7', userAgent: 'Agent/1.0' };
+
+    it.each(SECURITY_NOTICE_KINDS)('%s: Spanish text, a fixed subject without names, the plain reset page and no secret', (kind) => {
+      const mail = renderSecurityNoticeEmail({ ...base, kind, firstName: ATTACK, origin });
+      expect(mail.subject).not.toContain('Ana');
+      expect(mail.subject).not.toMatch(/[\r\n]/);
+      expect(mail.html).not.toContain('<script');
+      expect(mail.text).toContain('Si no fuiste tú');
+      expect(mail.text).toContain(RESET_PAGE);
+      expect(mail.text).not.toMatch(/token|#|[A-Za-z0-9_-]{32,}/);
+      expect([...mail.html.matchAll(/href="([^"]*)"/g)].map((match) => match[1])).toEqual([RESET_PAGE]);
+      expect(mail.text).toContain('3 de octubre de 2026');
+    });
+
+    it('shows where a platform sign-in came from, escaped', () => {
+      const mail = renderSecurityNoticeEmail({ ...base, kind: 'PLATFORM_ADMIN_SIGN_IN', origin: { ipAddress: '203.0.113.7', userAgent: '<b>Agent</b>' } });
+      expect(mail.text).toContain('203.0.113.7');
+      expect(mail.html).toContain('&lt;b&gt;Agent&lt;/b&gt;');
+      expect(mail.html).not.toContain('<b>Agent</b>');
+    });
+
+    it('says "desconocido" when the session has no origin', () => {
+      const mail = renderSecurityNoticeEmail({ ...base, kind: 'PLATFORM_ADMIN_SIGN_IN', origin: { ipAddress: null, userAgent: null } });
+      expect(mail.text).toContain('desconocido');
+    });
+
+    it.each(SECURITY_NOTICE_KINDS.filter((kind) => kind !== 'PLATFORM_ADMIN_SIGN_IN'))('%s does not show the origin', (kind) => {
+      const mail = renderSecurityNoticeEmail({ ...base, kind, origin });
+      expect(mail.text).not.toContain('203.0.113.7');
+      expect(mail.text).not.toContain('Agent/1.0');
+    });
+
+    it('tells how long a lock lasts', () => {
+      expect(renderSecurityNoticeEmail({ ...base, kind: 'ACCOUNT_LOCKED' }).text).toContain('15 minutos');
+      expect(renderSecurityNoticeEmail({ ...base, kind: 'MFA_LOCKED' }).text).toContain('15 minutos');
+    });
+
+    it('a reset mail says the password was reset; a change mail says it was changed', () => {
+      expect(renderSecurityNoticeEmail({ ...base, kind: 'PASSWORD_RESET' }).subject).toContain('restableció');
+      expect(renderSecurityNoticeEmail({ ...base, kind: 'PASSWORD_CHANGED' }).subject).toContain('cambió');
+    });
+
+    it('writes the date in the user’s zone, and in Bogotá when it has none or an invalid one', () => {
+      expect(renderSecurityNoticeEmail({ ...base, kind: 'MFA_ENABLED', timeZone: 'Europe/Madrid' }).text).toContain('(Europe/Madrid)');
+      expect(renderSecurityNoticeEmail({ ...base, kind: 'MFA_ENABLED', timeZone: null }).text).toContain('10:04');
+      expect(renderSecurityNoticeEmail({ ...base, kind: 'MFA_ENABLED', timeZone: 'Not/AZone' }).text).toContain('(America/Bogota)');
+    });
   });
 });

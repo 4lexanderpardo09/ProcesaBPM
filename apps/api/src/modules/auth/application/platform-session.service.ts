@@ -9,6 +9,7 @@ import { LoginTokenRepository } from '../data/login-token.repository.js';
 import { PlatformAccessRepository } from '../data/platform-access.repository.js';
 import { SessionRepository } from '../data/session.repository.js';
 import { PLATFORM_SESSION_TTL_MS } from '../domain/auth-policy.js';
+import { SecurityNotifier } from './security-notifier.js';
 import type { ClientInfo } from './session.service.js';
 
 /**
@@ -27,9 +28,13 @@ export class PlatformSessionService {
     @Inject(PlatformAccessRepository) private readonly access: PlatformAccessRepository,
     @Inject(JwtTokenService) private readonly tokens: JwtTokenService,
     @Inject(Clock) private readonly clock: Clock,
+    @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
   ) {}
 
-  /** With the selection token of the login. Anyone who is not a (current, active) platform admin gets 403. */
+  /**
+   * With the selection token of the login. Anyone who is not a (current, active) platform admin gets 403. Every platform
+   * session is mailed to the administrator, with where it was opened from.
+   */
   async open(selectionToken: string, client: ClientInfo): Promise<IssuedToken> {
     const selection = await this.tokens.verifySelectionToken(selectionToken);
     // Platform administrators always use the second factor: a token from a sign-in without it opens nothing (and is not consumed).
@@ -38,7 +43,7 @@ export class PlatformSessionService {
     const sessionId = await this.runner.withUserTransaction(userId, async (tx) => {
       if (!(await this.loginTokens.consume(tx, selection, 'TENANT_SELECTION'))) throw new UnauthenticatedError();
       if (!(await this.credentials.isPlatformAdmin(tx, userId))) throw new PlatformAccessDeniedError();
-      return this.sessions.create(tx, {
+      const id = await this.sessions.create(tx, {
         userId,
         activeTenantId: null,
         tokenHash: sha256Hex(generateOpaqueToken()),
@@ -46,6 +51,8 @@ export class PlatformSessionService {
         mfaVerified: selection.mfa,
         ...client,
       });
+      await this.notifier.notify(tx, userId, 'PLATFORM_ADMIN_SIGN_IN', id);
+      return id;
     });
     return this.tokens.issuePlatformToken({ sub: userId, sid: sessionId });
   }

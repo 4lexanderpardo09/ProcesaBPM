@@ -16,7 +16,9 @@ import { AccountAudit } from './application/account-audit.js';
 import { MfaEnrollmentService } from './application/mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './application/mfa-factor-verifier.js';
 import { MfaLoginService } from './application/mfa-login.service.js';
+import { SecurityNotifier } from './application/security-notifier.js';
 import { SelectionIssuer } from './application/selection-issuer.js';
+import { SecurityNoticeRepository } from './data/security-notice.repository.js';
 import { MfaRepository } from './data/mfa.repository.js';
 import { InvitationService } from './application/invitation.service.js';
 import { LoginService } from './application/login.service.js';
@@ -80,6 +82,8 @@ import { AuthController } from './http/auth.controller.js';
     TenantSecurityRepository,
     CurrentPasswordVerifier,
     MfaRepository,
+    SecurityNoticeRepository,
+    SecurityNotifier,
     SupportSessionRepository,
     SupportSessionVerifier,
     AccessTokenAuthenticator,

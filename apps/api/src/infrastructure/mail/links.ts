@@ -13,6 +13,11 @@ export class WebLinks {
     return this.build('/reset-password', undefined, token);
   }
 
+  /** The page where a person asks for a reset link: no token, safe to put in any e-mail. */
+  forgotPassword(): string {
+    return this.build('/forgot-password');
+  }
+
   acceptInvitation(token: string): string {
     return this.build('/accept-invitation', undefined, token);
   }

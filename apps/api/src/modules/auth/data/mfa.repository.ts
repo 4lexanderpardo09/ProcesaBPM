@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AuthTransaction } from '../../../infrastructure/database/auth-transaction-runner.js';
+import { type AttemptClaim, toAttemptClaim } from '../domain/attempt-claim.js';
 import { MFA_POLICY } from '../domain/auth-policy.js';
 
 export interface MfaStatus {
@@ -26,11 +27,11 @@ export class MfaRepository {
     await tx.$executeRaw`SELECT auth_store_pending_mfa_secret(${sealedSecret}::bytea)`;
   }
 
-  /** Counts one attempt before the code is checked; `false` = locked (or the account is not active). */
-  async claimAttempt(tx: AuthTransaction): Promise<boolean> {
-    const [row] = await tx.$queryRaw<Array<{ claimed: boolean }>>`
-      SELECT auth_claim_mfa_attempt(${MFA_POLICY.maxFailedAttempts}::int, ${MFA_POLICY.lockMinutes}::int) AS claimed`;
-    return row?.claimed === true;
+  /** Counts one attempt before the code is checked; not `claimed` = locked (or the account is not active). */
+  async claimAttempt(tx: AuthTransaction): Promise<AttemptClaim> {
+    const [row] = await tx.$queryRaw<Array<{ claim: number | null }>>`
+      SELECT auth_claim_mfa_attempt_counted(${MFA_POLICY.maxFailedAttempts}::int, ${MFA_POLICY.lockMinutes}::int) AS claim`;
+    return toAttemptClaim(row?.claim, MFA_POLICY.maxFailedAttempts);
   }
 
   /** `false` when the step was already accepted (or an older one): a code works once. */

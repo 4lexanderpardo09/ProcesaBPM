@@ -6,6 +6,7 @@ import { PasswordHasher } from '../../../infrastructure/security/password-hasher
 import { CredentialsRepository } from '../data/credentials.repository.js';
 import { AccountAudit } from './account-audit.js';
 import { CurrentPasswordVerifier } from './current-password-verifier.js';
+import { SecurityNotifier } from './security-notifier.js';
 
 @Injectable()
 export class ChangePasswordService {
@@ -15,15 +16,20 @@ export class ChangePasswordService {
     @Inject(PasswordHasher) private readonly hasher: PasswordHasher,
     @Inject(CurrentPasswordVerifier) private readonly currentPassword: CurrentPasswordVerifier,
     @Inject(AccountAudit) private readonly audit: AccountAudit,
+    @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
   ) {}
 
   /**
-   * The database stores the change, clears the lockout and revokes every other session; the one that asked stays.
+   * The database stores the change, clears the lockout and revokes every other session; the one that asked stays. The user
+   * is told by e-mail.
    */
   async change(principal: Principal, request: ChangePasswordRequest): Promise<void> {
     await this.currentPassword.verify(principal.userId, request.currentPassword);
     const newHash = await this.hasher.hash(request.newPassword);
-    await this.runner.withUserTransaction(principal.userId, (tx) => this.credentials.changeOwnPassword(tx, newHash, principal.sessionId));
+    await this.runner.withUserTransaction(principal.userId, async (tx) => {
+      await this.credentials.changeOwnPassword(tx, newHash, principal.sessionId);
+      await this.notifier.notify(tx, principal.userId, 'PASSWORD_CHANGED');
+    });
     await this.audit.record(principal, 'account.password_changed');
   }
 }
