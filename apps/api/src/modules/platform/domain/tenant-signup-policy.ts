@@ -2,6 +2,8 @@ export const PLATFORM_AUDIT_ACTIONS = {
   tenantCreated: 'tenant.created',
   tenantSuspended: 'tenant.suspended',
   tenantReactivated: 'tenant.reactivated',
+  adminInvited: 'platform_admin.invited',
+  adminRevoked: 'platform_admin.revoked',
 } as const;
 
 /** Calendar year of `instant` as lived in `timeZone` (the holidays of the country follow its calendar). */

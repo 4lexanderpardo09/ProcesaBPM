@@ -32,3 +32,22 @@ export const tenantStatusResponseSchema = z.object({
   status: z.enum(['ACTIVE', 'SUSPENDED']),
 });
 export type TenantStatusResponse = z.infer<typeof tenantStatusResponseSchema>;
+
+export const invitePlatformAdminRequestSchema = z.object({
+  email: emailSchema,
+  firstName: personNameSchema,
+  lastName: personNameSchema,
+});
+export type InvitePlatformAdminRequest = z.infer<typeof invitePlatformAdminRequestSchema>;
+
+export const platformAdminSummarySchema = z.object({
+  userId: uuidSchema,
+  email: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  status: z.enum(['ACTIVE', 'LOCKED', 'DISABLED']),
+  mfaEnabled: z.boolean(),
+  lastLoginAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type PlatformAdminSummary = z.infer<typeof platformAdminSummarySchema>;

@@ -53,6 +53,9 @@ const PLATFORM_ROUTES = [
   'POST /platform/tenants',
   'POST /platform/tenants/:id/suspend',
   'POST /platform/tenants/:id/reactivate',
+  'GET /platform/admins',
+  'POST /platform/admins',
+  'DELETE /platform/admins/:userId',
 ];
 
 /** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */

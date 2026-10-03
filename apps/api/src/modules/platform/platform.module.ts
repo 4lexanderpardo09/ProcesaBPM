@@ -5,22 +5,27 @@ import { PlatformOutboxRepository } from '../../infrastructure/outbox/platform-o
 import { TenantDefaultsProvisioner } from './application/tenant-defaults-provisioner.js';
 import { TenantOwnerInviter } from './application/tenant-owner-inviter.js';
 import { BASE_ROLE_TEMPLATES, TenantRoleProvisioner } from './application/tenant-role-provisioner.js';
+import { PlatformAdminsService } from './application/platform-admins.service.js';
 import { TenantSignupService } from './application/tenant-signup.service.js';
 import { TenantStatusService } from './application/tenant-status.service.js';
+import { PlatformAdminRepository } from './data/platform-admin.repository.js';
 import { PlatformAuditRepository } from './data/platform-audit.repository.js';
 import { TenantDefaultsRepository } from './data/tenant-defaults.repository.js';
 import { TenantOwnerRepository } from './data/tenant-owner.repository.js';
 import { TenantRepository } from './data/tenant.repository.js';
 import { TenantRoleRepository } from './data/tenant-role.repository.js';
+import { PlatformAdminsController } from './http/platform-admins.controller.js';
 import { PlatformTenantsController } from './http/platform-tenants.controller.js';
 
 /** Platform administration: it acts on tenants with the login that bypasses row-level security. */
 @Module({
   imports: [PlatformDatabaseModule],
-  controllers: [PlatformTenantsController],
+  controllers: [PlatformTenantsController, PlatformAdminsController],
   providers: [
     PlatformOutboxRepository,
     PlatformAuditRepository,
+    PlatformAdminRepository,
+    PlatformAdminsService,
     TenantRepository,
     TenantDefaultsRepository,
     TenantOwnerRepository,
