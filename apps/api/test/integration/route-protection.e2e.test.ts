@@ -58,6 +58,8 @@ const PLATFORM_ROUTES = [
   'PUT /platform/tenants/:id/plan',
   'PUT /platform/tenants/:id/extra-storage',
   'POST /platform/tenants/:id/owner-invitation',
+  'GET /platform/plans',
+  'PUT /platform/plans/:code',
   'GET /platform/admins',
   'POST /platform/admins',
   'DELETE /platform/admins/:userId',

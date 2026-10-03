@@ -5,10 +5,12 @@ import { PlatformOutboxRepository } from '../../infrastructure/outbox/platform-o
 import { TenantDefaultsProvisioner } from './application/tenant-defaults-provisioner.js';
 import { TenantOwnerInviter } from './application/tenant-owner-inviter.js';
 import { BASE_ROLE_TEMPLATES, TenantRoleProvisioner } from './application/tenant-role-provisioner.js';
+import { PlanAdminService } from './application/plan-admin.service.js';
 import { TenantAdminService } from './application/tenant-admin.service.js';
 import { PlatformAdminsService } from './application/platform-admins.service.js';
 import { TenantSignupService } from './application/tenant-signup.service.js';
 import { TenantStatusService } from './application/tenant-status.service.js';
+import { PlanAdminRepository } from './data/plan-admin.repository.js';
 import { TenantAdminRepository } from './data/tenant-admin.repository.js';
 import { PlatformAdminRepository } from './data/platform-admin.repository.js';
 import { PlatformAuditRepository } from './data/platform-audit.repository.js';
@@ -17,12 +19,13 @@ import { TenantOwnerRepository } from './data/tenant-owner.repository.js';
 import { TenantRepository } from './data/tenant.repository.js';
 import { TenantRoleRepository } from './data/tenant-role.repository.js';
 import { PlatformAdminsController } from './http/platform-admins.controller.js';
+import { PlatformPlansController } from './http/platform-plans.controller.js';
 import { PlatformTenantsController } from './http/platform-tenants.controller.js';
 
 /** Platform administration: it acts on tenants with the login that bypasses row-level security. */
 @Module({
   imports: [PlatformDatabaseModule],
-  controllers: [PlatformTenantsController, PlatformAdminsController],
+  controllers: [PlatformTenantsController, PlatformAdminsController, PlatformPlansController],
   providers: [
     PlatformOutboxRepository,
     PlatformAuditRepository,
@@ -40,6 +43,8 @@ import { PlatformTenantsController } from './http/platform-tenants.controller.js
     TenantStatusService,
     TenantAdminRepository,
     TenantAdminService,
+    PlanAdminRepository,
+    PlanAdminService,
   ],
 })
 export class PlatformModule {}

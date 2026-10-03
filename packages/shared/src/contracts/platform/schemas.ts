@@ -106,3 +106,27 @@ export type SuspendTenantRequest = z.infer<typeof suspendTenantRequestSchema>;
 
 export const reactivateTenantRequestSchema = z.object({ reason: reasonSchema.optional() });
 export type ReactivateTenantRequest = z.infer<typeof reactivateTenantRequestSchema>;
+
+export interface PlanSummary {
+  readonly code: string;
+  readonly name: string;
+  readonly storageBaseBytes: string;
+  readonly storagePerUserBytes: string;
+  readonly storageGracePercent: number;
+  readonly maxUsers: number | null;
+  readonly isActive: boolean;
+  readonly tenants: number;
+}
+
+/** Limits only: prices live outside the platform. `maxUsers: null` removes the cap. */
+export const updatePlanRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    storageBaseBytes: bytesSchema,
+    storagePerUserBytes: bytesSchema,
+    storageGracePercent: z.number().int().min(0).max(100),
+    maxUsers: z.number().int().min(1).max(1_000_000).nullable(),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, 'Send at least one field');
+export type UpdatePlanRequest = z.infer<typeof updatePlanRequestSchema>;
