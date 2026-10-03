@@ -48,7 +48,7 @@ async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, work
 
 /**
  * Claims the due events of both outboxes (platform first: those are security e-mails) and runs their handlers.
- * Every claim carries a lease; the handler's result is fenced by the attempt number, so a worker that lost its
+ * Every claim carries a lease; the handler's result is fenced by the claim's token, so a worker that lost its
  * lease can neither complete nor fail an event somebody else owns. Failures are retried with exponential
  * backoff until the last attempt, which is terminal (FAILED). Several workers can run at once.
  */

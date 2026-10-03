@@ -11,13 +11,17 @@ import { MAX_ATTEMPTS } from './retry-policy.js';
 import { TestClock } from '../../../test/support/test-clock.js';
 
 const NOW = '2026-10-02T10:00:00Z';
-const event = (overrides: Partial<ClaimedEvent<unknown>> = {}): ClaimedEvent<unknown> => ({ id: 'e1', tenantId: 't1', type: 'demo', attempt: 1, createdAt: new Date(NOW), payload: { value: 1 }, ...overrides });
+const CLAIM_TOKEN = '0192a1b2-0000-4000-8000-00000000c1a1';
+const event = (overrides: Partial<ClaimedEvent<unknown>> = {}): ClaimedEvent<unknown> => ({ id: 'e1', tenantId: 't1', type: 'demo', attempt: 1, claimToken: CLAIM_TOKEN, createdAt: new Date(NOW), payload: { value: 1 }, ...overrides });
 
 function setup(claimed: ClaimedEvent<unknown>[], options: { completes?: boolean; current?: boolean; batch?: number; concurrency?: number } = {}) {
   let inTransaction = false;
   const calls: string[] = [];
   const fails: Array<{ error: string; retryAt: Date | null }> = [];
   const warnings: unknown[] = [];
+  /** Which claim token each fenced call carried. */
+  const fences: string[] = [];
+  const fence = (call: string, claimed: ClaimedEvent<unknown>) => fences.push(`${call}:${claimed.claimToken}`);
   let running = 0;
   let peak = 0;
   const tx = {} as never;
@@ -35,12 +39,17 @@ function setup(claimed: ClaimedEvent<unknown>[], options: { completes?: boolean;
   const claims = {
     claimTenant: async () => claimed,
     claimPlatform: async () => [],
-    isCurrent: async () => options.current ?? true,
-    complete: async () => {
+    isCurrent: async (_tx: unknown, _source: string, claimed: ClaimedEvent<unknown>) => {
+      fence('isCurrent', claimed);
+      return options.current ?? true;
+    },
+    complete: async (_tx: unknown, _source: string, claimed: ClaimedEvent<unknown>) => {
+      fence('complete', claimed);
       calls.push('complete');
       return options.completes ?? true;
     },
-    fail: async (_tx: unknown, _source: string, _event: unknown, error: string, retryAt: Date | null) => {
+    fail: async (_tx: unknown, _source: string, claimed: ClaimedEvent<unknown>, error: string, retryAt: Date | null) => {
+      fence('fail', claimed);
       fails.push({ error, retryAt });
       return true;
     },
@@ -49,7 +58,7 @@ function setup(claimed: ClaimedEvent<unknown>[], options: { completes?: boolean;
   const logger = { warn: (message: unknown) => warnings.push(message), error: (message: unknown) => warnings.push(message) } as unknown as JsonLogger;
   const settings = { OUTBOX_BATCH_SIZE: options.batch ?? 10, OUTBOX_CONCURRENCY: options.concurrency ?? 4, OUTBOX_TX_TIMEOUT_MS: 1000 } as WorkerSettings;
   const dispatcher = new OutboxDispatcher(runner, registry, claims, new TestClock(NOW), logger, settings);
-  return { dispatcher, registry, calls, fails, warnings, inTransaction: () => inTransaction, concurrency: { enter: () => { running += 1; peak = Math.max(peak, running); }, leave: () => { running -= 1; }, peak: () => peak } };
+  return { dispatcher, registry, calls, fails, fences, warnings, inTransaction: () => inTransaction, concurrency: { enter: () => { running += 1; peak = Math.max(peak, running); }, leave: () => { running -= 1; }, peak: () => peak } };
 }
 
 const schema = z.object({ value: z.number() });
@@ -234,6 +243,29 @@ describe('OutboxDispatcher', () => {
     });
     expect(await ctx.dispatcher.runOnce()).toMatchObject({ claimed: 9, done: 9, full: true });
     expect(ctx.concurrency.peak()).toBe(3);
+  });
+
+  describe('claim fencing', () => {
+    it('an e-mail checks and completes its claim with the claim\'s own token', async () => {
+      const { dispatcher, registry, fences } = setup([event()]);
+      registry.registerExternal({ type: 'demo', scope: 'tenant', schema, prepare: () => Promise.resolve({}), perform: () => Promise.resolve() });
+      await dispatcher.runOnce();
+      expect(fences).toEqual([`isCurrent:${CLAIM_TOKEN}`, `complete:${CLAIM_TOKEN}`]);
+    });
+
+    it('a failure is recorded with the claim\'s own token', async () => {
+      const { dispatcher, registry, fences } = setup([event()]);
+      registry.registerTransactional({ type: 'demo', schema, handle: () => Promise.reject(new Error('boom')) });
+      await dispatcher.runOnce();
+      expect(fences).toEqual([`fail:${CLAIM_TOKEN}`]);
+    });
+
+    it('each event of a batch is fenced by its own token', async () => {
+      const { dispatcher, registry, fences } = setup([event({ id: 'a', claimToken: 'token-a' }), event({ id: 'b', claimToken: 'token-b' })]);
+      registry.registerTransactional({ type: 'demo', schema, handle: () => Promise.resolve() });
+      await dispatcher.runOnce();
+      expect(fences.sort()).toEqual(['complete:token-a', 'complete:token-b']);
+    });
   });
 
   it('never logs payload data', async () => {
