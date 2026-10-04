@@ -105,6 +105,7 @@ describe('schema conventions', () => {
     expect(rows.map((row) => row.fn)).toEqual([
       'claim_platform_outbox_events',
       'complete_platform_outbox_event',
+      'enqueue_data_export_ready',
       'enqueue_member_security_notice',
       'enqueue_platform_event',
       'enqueue_security_notice',
@@ -177,7 +178,7 @@ describe('schema conventions', () => {
              has_function_privilege('app_platform', p.oid, 'EXECUTE') AS platform
       FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND p.proname LIKE 'retention\\_%'
       ORDER BY 1`);
-    expect(rows).toHaveLength(11);
+    expect(rows).toHaveLength(13);
     expect(rows.filter((row) => !row.worker || row.runtime || row.platform)).toEqual([]);
   });
 
