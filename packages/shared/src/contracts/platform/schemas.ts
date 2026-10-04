@@ -254,3 +254,65 @@ export interface TenantDeletionResponse {
   /** When the purge becomes possible; empty after the deletion was cancelled. */
   readonly purgeAfter: string | null;
 }
+
+/** Exact e-mail only: no search and no prefix, so the lookup cannot be used to list accounts. */
+export const platformUserLookupQuerySchema = z.object({ email: emailSchema }).strict();
+export type PlatformUserLookupQuery = z.infer<typeof platformUserLookupQuerySchema>;
+
+export interface PlatformUserMembership {
+  readonly tenantId: string;
+  readonly tenantName: string;
+  readonly status: 'INVITED' | 'ACTIVE' | 'INACTIVE';
+  readonly isOwner: boolean;
+}
+
+/** What support sees of an account before resetting its second factor; never a secret. */
+export interface PlatformUserResponse {
+  readonly id: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly status: 'ACTIVE' | 'LOCKED' | 'DISABLED';
+  readonly mfaEnabled: boolean;
+  readonly isPlatformAdmin: boolean;
+  readonly memberships: readonly PlatformUserMembership[];
+}
+
+/** How support verified who asked for the reset (recorded, not automated). */
+export const MFA_RESET_VERIFICATION_METHODS = ['VIDEO_CALL', 'CALLBACK_KNOWN_NUMBER', 'TENANT_ADMIN_REQUEST', 'IN_PERSON'] as const;
+export type MfaResetVerificationMethod = (typeof MFA_RESET_VERIFICATION_METHODS)[number];
+
+/**
+ * Trimmed text whose length counts code points, as the database's `length()` does (an emoji is one character, not two
+ * UTF-16 units): what passes here also passes `platform_reset_user_mfa`.
+ */
+const codePointText = (min: number, max: number) =>
+  z
+    .string()
+    .trim()
+    .refine((value) => [...value].length >= min, { message: `Use at least ${min} characters` })
+    .refine((value) => [...value].length <= max, { message: `Use at most ${max} characters` });
+
+export const mfaResetRequestSchema = z
+  .object({
+    reason: codePointText(10, 500),
+    verification: z
+      .object({
+        method: z.enum(MFA_RESET_VERIFICATION_METHODS),
+        /** A ticket or case id; never a document number. */
+        reference: codePointText(3, 200),
+        /** The organization administrator who asked: required for, and only for, `TENANT_ADMIN_REQUEST`. */
+        tenantAdminUserId: uuidSchema.optional(),
+      })
+      .strict()
+      .refine((value) => (value.method === 'TENANT_ADMIN_REQUEST') === (value.tenantAdminUserId !== undefined), {
+        path: ['tenantAdminUserId'],
+        message: 'Give the requesting administrator for, and only for, a tenant administrator request',
+      }),
+  })
+  .strict();
+export type MfaResetRequest = z.infer<typeof mfaResetRequestSchema>;
+
+export interface MfaResetResponse {
+  readonly resetAt: string;
+  readonly revokedSessions: number;
+}

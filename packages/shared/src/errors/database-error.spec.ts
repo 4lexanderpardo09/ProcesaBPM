@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractSqlState, mapDatabaseError } from './database-error.js';
+import { extractSqlState, hasSqlState, mapDatabaseError } from './database-error.js';
 import {
   DomainError,
   DuplicateError,
@@ -110,5 +110,25 @@ describe('extractSqlState', () => {
     let error: Error = pgError('23505');
     for (let i = 0; i < 12; i += 1) error = new Error('wrapper', { cause: error });
     expect(extractSqlState(error)).toBeUndefined();
+  });
+});
+
+describe('hasSqlState', () => {
+  const adapterError = (originalCode: string) =>
+    Object.assign(new Error('prisma'), { code: 'P2010', meta: { driverAdapterError: { name: 'DriverAdapterError', cause: { originalCode, kind: 'postgres' } } } });
+
+  it('finds an unmapped SQLSTATE in a Prisma driver error and down the cause chain', () => {
+    expect(hasSqlState(adapterError('22023'), '22023')).toBe(true);
+    expect(hasSqlState(new Error('outer', { cause: pgError('22023') }), '22023')).toBe(true);
+  });
+
+  it('is false for another code or something that is not an error', () => {
+    expect(hasSqlState(adapterError('23514'), '22023')).toBe(false);
+    expect(hasSqlState('22023', '22023')).toBe(false);
+    expect(hasSqlState(undefined, '22023')).toBe(false);
+  });
+
+  it('leaves 22023 unmapped for everybody else (an internal argument error stays a 500)', () => {
+    expect(mapDatabaseError(pgError('22023'))).toBeUndefined();
   });
 });

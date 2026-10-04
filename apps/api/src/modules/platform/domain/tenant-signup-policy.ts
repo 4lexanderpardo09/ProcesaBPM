@@ -20,6 +20,9 @@ export const PLATFORM_AUDIT_ACTIONS = {
   tenantDeletionCancelled: 'tenant.deletion_cancelled',
   adminInvited: 'platform_admin.invited',
   adminRevoked: 'platform_admin.revoked',
+  userLookedUp: 'user.looked_up',
+  /** Written by `platform_reset_user_mfa` itself, in the same transaction as the reset. */
+  userMfaReset: 'user.mfa_reset',
 } as const;
 
 /** Calendar year of `instant` as lived in `timeZone` (the holidays of the country follow its calendar). */

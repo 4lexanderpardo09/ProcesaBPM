@@ -185,6 +185,8 @@ Con Compose, `up -d` con imágenes nuevas corre `migrate` **antes** de recrear e
 
 **La migración `20261017000200` (correos de seguridad, base-de-datos.md §8.28) no exige nada especial:** agrega funciones y un tipo de evento sin cambiar las que usa la versión anterior, así que un API viejo sigue funcionando durante un despliegue gradual (orden normal: `migrate` → `api`/`worker`). Si un worker viejo reclama un `email.security_notice` (no tiene manejador), el evento se reintenta con espera y lo envía el worker nuevo; solo se perdería si el worker viejo siguiera vivo unas 3 h (10 intentos con espera exponencial).
 
+**Migraciones `20261017000300` y `20261017000310` (restablecimiento del MFA por soporte y fecha de `audit_logs`, base-de-datos.md §8.29 y §8.21).** Despliega el **worker antes o junto con el API**: el aviso a los dueños (`MEMBER_MFA_RESET_BY_SUPPORT`) viaja en `email.security_notice` con un payload que el worker de la versión anterior no reconoce (su esquema es estricto), y lo marca `FAILED` para siempre en vez de reintentarlo; el aviso al propio usuario sí lo entiende. El API viejo sigue funcionando (su cliente de Prisma no selecciona la columna nueva `users.mfa_reset_at`). Cada migración usa `lock_timeout` de 10 s; el trigger de `audit_logs` va en la segunda para no esperar su bloqueo mientras se tiene el de `users`.
+
 ## 6. Salud y apagado ordenado
 
 - **API:** `GET /health` (vivo; no toca la BD) y `GET /ready` (listo; comprueba la BD). El `HEALTHCHECK` de la imagen usa `/health`, para que una caída de la BD no reinicie el API en bucle; usa **`/ready` como sondeo de disponibilidad** del balanceador u orquestador.

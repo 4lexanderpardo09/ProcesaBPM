@@ -83,6 +83,8 @@ const PLATFORM_ROUTES = [
   'GET /platform/admins',
   'POST /platform/admins',
   'DELETE /platform/admins/:userId',
+  'GET /platform/users',
+  'POST /platform/users/:userId/mfa-reset',
 ];
 
 /** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */

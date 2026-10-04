@@ -22,6 +22,10 @@ export const SECURITY_NOTICE_KINDS = [
 ] as const;
 export type SecurityNoticeKind = (typeof SECURITY_NOTICE_KINDS)[number];
 
+/** Notices to the owner of an organization about one of its members (`enqueue_member_security_notice`). */
+export const MEMBER_SECURITY_NOTICE_KINDS = ['MEMBER_MFA_RESET_BY_SUPPORT'] as const;
+export type MemberSecurityNoticeKind = (typeof MEMBER_SECURITY_NOTICE_KINDS)[number];
+
 /**
  * Platform events carry only ids: the worker reads the address from `users` and issues the one-time token itself,
  * so no secret and no address chosen by a caller ever sits in the outbox. Strict on purpose: an event queued by
@@ -31,7 +35,13 @@ export const passwordResetPayloadSchema = z.object({ userId: uuidSchema }).stric
 export const platformAdminInvitationPayloadSchema = z.object({ userId: uuidSchema }).strict();
 export const tenantDeletionRequestedPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
 export const invitationPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
-export const securityNoticePayloadSchema = z.object({ userId: uuidSchema, kind: z.enum(SECURITY_NOTICE_KINDS), sessionId: uuidSchema.optional() }).strict();
+const personalSecurityNoticePayloadSchema = z.object({ userId: uuidSchema, kind: z.enum(SECURITY_NOTICE_KINDS), sessionId: uuidSchema.optional() }).strict();
+/** `userId` is the owner who gets the mail; `memberId` the member of `tenantId` it is about. */
+const memberSecurityNoticePayloadSchema = z.object({ userId: uuidSchema, kind: z.enum(MEMBER_SECURITY_NOTICE_KINDS), tenantId: uuidSchema, memberId: uuidSchema }).strict();
+export const securityNoticePayloadSchema = z.discriminatedUnion('kind', [personalSecurityNoticePayloadSchema, memberSecurityNoticePayloadSchema]);
+export type PersonalSecurityNoticePayload = z.infer<typeof personalSecurityNoticePayloadSchema>;
+export type MemberSecurityNoticePayload = z.infer<typeof memberSecurityNoticePayloadSchema>;
+export type SecurityNoticePayload = z.infer<typeof securityNoticePayloadSchema>;
 
 export interface PlatformEventPayloads {
   readonly [PASSWORD_RESET_EVENT]: z.infer<typeof passwordResetPayloadSchema>;

@@ -83,16 +83,19 @@ describe('retention', () => {
        VALUES ($1, $2, $3, 'Sup Port', $4, ${openedAt}) RETURNING id`,
       [tenant.tenantId, grantId, adminId, randomUUID()],
     );
-  const insertAudit = (client: pg.PoolClient, tenant: SeededTenant, createdAt: At, grantId?: string) =>
-    insertReturningId(
+  /** The triggers date every new trail row with now(): the owner backdates it afterwards, inside the test's transaction. */
+  const insertAudit = async (client: pg.PoolClient, tenant: SeededTenant, createdAt: At, grantId?: string) => {
+    const id = await insertReturningId(
       client,
       grantId === undefined
-        ? `INSERT INTO audit_logs (tenant_id, actor_id, action, entity_type, created_at) VALUES ($1, $2, 'role.updated', 'Role', ${createdAt}) RETURNING id`
-        : `INSERT INTO audit_logs (tenant_id, action, entity_type, support_actor_id, support_grant_id, created_at)
-           VALUES ($1, 'support.request', 'Ticket', $3, $2, ${createdAt}) RETURNING id`,
+        ? `INSERT INTO audit_logs (tenant_id, actor_id, action, entity_type) VALUES ($1, $2, 'role.updated', 'Role') RETURNING id`
+        : `INSERT INTO audit_logs (tenant_id, action, entity_type, support_actor_id, support_grant_id)
+           VALUES ($1, 'support.request', 'Ticket', $3, $2) RETURNING id`,
       grantId === undefined ? [tenant.tenantId, tenant.userId] : [tenant.tenantId, grantId, adminId],
     );
-  /** The trigger dates every new row with now(): the owner backdates it afterwards, inside the test's transaction. */
+    await client.query(`UPDATE audit_logs SET created_at = ${createdAt} WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, id]);
+    return id;
+  };
   const insertPlatformAudit = async (client: pg.PoolClient, createdAt: At) => {
     const id = await insertReturningId(client, `INSERT INTO platform_audit_logs (actor_user_id, action) VALUES ($1, 'tenant.suspended') RETURNING id`, [adminId]);
     await client.query(`UPDATE platform_audit_logs SET created_at = ${createdAt} WHERE id = $1`, [id]);

@@ -33,6 +33,35 @@ describe('audit log', () => {
     expect(Math.abs(rows[0]!.created_at.getTime() - Date.now())).toBeLessThan(60_000);
   });
 
+  describe('database clock (trigger audit_logs_database_clock)', () => {
+    /** Inserts two rows dated by the caller, one in the purge window and one in the future, and tells whether both got now(). */
+    const insertDated = (client: Parameters<Parameters<typeof withContext>[2]>[0], who: SeededTenant, actorId: string | null) =>
+      client.query<{ dated_now: boolean; inserted: number }>(
+        `WITH inserted AS (
+           INSERT INTO audit_logs (tenant_id, actor_id, action, entity_type, created_at)
+           VALUES ($1, $2, 'role.updated', 'Role', now() - interval '3 years'), ($1, $2, 'role.updated', 'Role', now() + interval '1 year')
+           RETURNING created_at)
+         SELECT bool_and(abs(extract(epoch FROM created_at - now())) < 0.001) AS dated_now, count(*)::int AS inserted FROM inserted`,
+        [who.tenantId, actorId],
+      );
+
+    it.each(['runtime', 'worker'] as const)('dates every row written by the %s login with now(), whatever date it sends', async (login) => {
+      const { rows } = await asMember(tenant, (client) => insertDated(client, tenant, tenant.userId), db[login]);
+      expect(rows[0]).toEqual({ dated_now: true, inserted: 2 });
+    });
+
+    it('also dates the rows of the platform login (support and MFA reset rows), which bypasses RLS', async () => {
+      const { rows } = await withContext(db.platform, {}, (client) => insertDated(client, tenant, null));
+      expect(rows[0]).toEqual({ dated_now: true, inserted: 2 });
+    });
+
+    it('lets nobody but the schema owner change a date afterwards (the trail stays append-only)', async () => {
+      for (const pool of [db.runtime, db.worker, db.platform]) {
+        expect(await sqlStateOf(() => asMember(tenant, (client) => client.query(`UPDATE audit_logs SET created_at = now() - interval '3 years'`), pool))).toBe(SqlState.insufficientPrivilege);
+      }
+    });
+  });
+
   it('refuses a row of another tenant (RLS WITH CHECK)', async () => {
     expect(await sqlStateOf(() => insert(tenant, { tenantId: other.tenantId }))).toBe(SqlState.insufficientPrivilege);
   });

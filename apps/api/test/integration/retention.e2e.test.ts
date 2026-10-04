@@ -59,13 +59,16 @@ describe('retention job (worker, real database)', () => {
 
   /** Rows of one tenant on both sides of every window it has. */
   async function seedAges(tenant: SeededTenant) {
-    const audit = (age: string) =>
-      one(`INSERT INTO audit_logs (tenant_id, actor_id, action, entity_type, after, created_at) VALUES ($1, $2, 'role.updated', 'Role', $3, now() - $4::interval) RETURNING id`, [
+    // The trail is dated by the database clock on insert: backdate it afterwards, as the schema owner.
+    const audit = async (age: string) => {
+      const id = await one(`INSERT INTO audit_logs (tenant_id, actor_id, action, entity_type, after) VALUES ($1, $2, 'role.updated', 'Role', $3) RETURNING id`, [
         tenant.tenantId,
         tenant.userId,
         JSON.stringify({ note: SECRET_MARKER }),
-        age,
       ]);
+      await db.owner.query(`UPDATE audit_logs SET created_at = now() - $3::interval WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, id, age]);
+      return id;
+    };
     const notification = (age: string) =>
       one(`INSERT INTO notifications (tenant_id, user_id, type, title, body, created_at) VALUES ($1, $2, 'SYSTEM', $3, 'b', now() - $4::interval) RETURNING id`, [
         tenant.tenantId,

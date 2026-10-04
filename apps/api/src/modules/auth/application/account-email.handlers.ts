@@ -3,14 +3,14 @@ import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-set
 import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 import { type MailMessage, Mailer } from '../../../infrastructure/mail/mailer.js';
 import { WebLinks } from '../../../infrastructure/mail/links.js';
-import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema, PLATFORM_ADMIN_INVITATION_EVENT, platformAdminInvitationPayloadSchema, SECURITY_NOTICE_EVENT, type SecurityNoticeKind, securityNoticePayloadSchema, TENANT_DELETION_REQUESTED_EVENT, tenantDeletionRequestedPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
+import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema, PLATFORM_ADMIN_INVITATION_EVENT, platformAdminInvitationPayloadSchema, type MemberSecurityNoticePayload, type PersonalSecurityNoticePayload, SECURITY_NOTICE_EVENT, type SecurityNoticePayload, securityNoticePayloadSchema, TENANT_DELETION_REQUESTED_EVENT, tenantDeletionRequestedPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
 import { type ClaimedEvent, type ExternalEffectHandler, PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { SecurityNoticeRecipientRepository } from '../data/security-notice-recipient.repository.js';
 import { WorkerTokenRepository } from '../data/worker-token.repository.js';
-import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS, renderInvitationEmail, renderPasswordResetEmail, renderPlatformAdminInvitationEmail, renderSecurityNoticeEmail, renderTenantDeletionEmail, type RenderedMail } from '../domain/auth-email-templates.js';
+import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS, renderInvitationEmail, renderMemberSecurityNoticeEmail, renderPasswordResetEmail, renderPlatformAdminInvitationEmail, renderSecurityNoticeEmail, renderTenantDeletionEmail, type RenderedMail } from '../domain/auth-email-templates.js';
 import { deriveEmailLinkToken } from '../domain/email-link-token.js';
 
 /** A reset request that waited longer than this in the queue is not mailed: the person asked again by now. */
@@ -156,9 +156,10 @@ export class TenantDeletionEmailHandler extends AccountEmailHandler<InvitationPa
   }
 }
 
-type SecurityNoticePayload = { userId: string; kind: SecurityNoticeKind; sessionId?: string | undefined };
-
-/** Tells the user about a change to the security of their account. The worker reads the address; no token, no secret link. */
+/**
+ * Tells the user about a change to the security of their account, or the owner of an organization about one made by
+ * support to one of its members. The worker reads the addresses; no token, no secret link.
+ */
 @Injectable()
 export class SecurityNoticeEmailHandler extends AccountEmailHandler<SecurityNoticePayload> implements ExternalEffectHandler<SecurityNoticePayload, MailMessage, void, CrossTenantTransaction>, OnModuleInit {
   readonly type = SECURITY_NOTICE_EVENT;
@@ -182,16 +183,34 @@ export class SecurityNoticeEmailHandler extends AccountEmailHandler<SecurityNoti
 
   async prepare(tx: CrossTenantTransaction, event: ClaimedEvent<SecurityNoticePayload>): Promise<MailMessage | null> {
     if (this.clock.now().getTime() - event.createdAt.getTime() > SECURITY_NOTICE_MAX_QUEUE_AGE_MS) throw new PermanentEventError('The security notice is too old to be mailed');
-    const { userId, kind, sessionId } = event.payload;
-    const recipient = await this.recipients.find(tx, userId, sessionId ?? null);
+    const { payload } = event;
+    return payload.kind === 'MEMBER_MFA_RESET_BY_SUPPORT' ? this.prepareForOwner(tx, event, payload) : this.prepareForUser(tx, event, payload);
+  }
+
+  private async prepareForUser(tx: CrossTenantTransaction, event: ClaimedEvent<SecurityNoticePayload>, payload: PersonalSecurityNoticePayload): Promise<MailMessage | null> {
+    const recipient = await this.recipients.find(tx, payload.userId, payload.sessionId ?? null);
     if (recipient === undefined) return null;
     const mail = renderSecurityNoticeEmail({
-      kind,
+      kind: payload.kind,
       firstName: recipient.firstName,
       occurredAt: event.createdAt,
       timeZone: recipient.timeZone,
       origin: { ipAddress: recipient.ipAddress, userAgent: recipient.userAgent },
       resetUrl: this.links.forgotPassword(),
+    });
+    return this.message(event, recipient.email, mail);
+  }
+
+  private async prepareForOwner(tx: CrossTenantTransaction, event: ClaimedEvent<SecurityNoticePayload>, payload: MemberSecurityNoticePayload): Promise<MailMessage | null> {
+    const recipient = await this.recipients.findOwner(tx, payload.userId, payload.tenantId, payload.memberId);
+    if (recipient === undefined) return null;
+    const mail = renderMemberSecurityNoticeEmail({
+      kind: payload.kind,
+      firstName: recipient.firstName,
+      organization: recipient.organization,
+      memberName: recipient.memberName,
+      occurredAt: event.createdAt,
+      timeZone: recipient.timeZone,
     });
     return this.message(event, recipient.email, mail);
   }

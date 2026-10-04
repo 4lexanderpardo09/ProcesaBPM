@@ -1,5 +1,5 @@
 import { renderEmail } from '../../../infrastructure/mail/layout.js';
-import type { SecurityNoticeKind } from '../../../infrastructure/outbox/platform-event-types.js';
+import type { MemberSecurityNoticeKind, SecurityNoticeKind } from '../../../infrastructure/outbox/platform-event-types.js';
 import { authMailEs as es } from '../i18n/es.js';
 import { LOGIN_LOCKOUT, MFA_POLICY } from './auth-policy.js';
 
@@ -70,6 +70,25 @@ export function renderSecurityNoticeEmail(input: SecurityNoticeInput): RenderedM
   return {
     subject: t.subject[input.kind],
     ...renderEmail({ title: t.subject[input.kind], greeting: t.greeting(input.firstName), paragraphs, action: { label: t.action, url: input.resetUrl }, footer: es.footerAutomatic }),
+  };
+}
+
+export interface MemberSecurityNoticeInput {
+  readonly kind: MemberSecurityNoticeKind;
+  readonly firstName: string;
+  readonly organization: string;
+  readonly memberName: string;
+  readonly occurredAt: Date;
+  readonly timeZone: string | null;
+}
+
+/** Tells an owner that support changed the security of one of the organization's members. No link: nothing to act on. */
+export function renderMemberSecurityNoticeEmail(input: MemberSecurityNoticeInput): RenderedMail {
+  const t = es.memberSecurityNotice;
+  const paragraphs = [t.happened[input.kind](input.memberName, input.organization), es.securityNotice.when(formatNoticeDate(input.occurredAt, input.timeZone)), t.audit, t.unexpected];
+  return {
+    subject: t.subject[input.kind],
+    ...renderEmail({ title: t.subject[input.kind], greeting: t.greeting(input.firstName), paragraphs, footer: es.footerAutomatic }),
   };
 }
 
