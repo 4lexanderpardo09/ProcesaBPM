@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
-import type { RetentionRunClaim, RetentionRunSummary, RetentionStep } from '../domain/retention-step.js';
+import type { ExpiredExportObject, RetentionRunClaim, RetentionRunSummary, TableRetentionStep } from '../domain/retention-step.js';
 
 type DeletedRows = Array<{ deleted: number }>;
 
 /** One batch of each step: the only way the worker can delete these rows (the functions are `app_worker`-only). */
-const PURGE_BATCH: Readonly<Record<RetentionStep, (tx: CrossTenantTransaction, limit: number) => Promise<DeletedRows>>> = {
+const PURGE_BATCH: Readonly<Record<TableRetentionStep, (tx: CrossTenantTransaction, limit: number) => Promise<DeletedRows>>> = {
   outbox_events: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_outbox_events(${limit}::int) AS deleted`,
   platform_outbox_events: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_platform_outbox_events(${limit}::int) AS deleted`,
   notifications: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_notifications(${limit}::int) AS deleted`,
@@ -29,9 +29,23 @@ export class RetentionRepository {
   }
 
   /** Deletes at most `limit` rows of the step's table that are past its window; returns how many it deleted. */
-  async purgeBatch(tx: CrossTenantTransaction, step: RetentionStep, limit: number): Promise<number> {
+  async purgeBatch(tx: CrossTenantTransaction, step: TableRetentionStep, limit: number): Promise<number> {
     const [row] = await PURGE_BATCH[step](tx, limit);
     return row?.deleted ?? 0;
+  }
+
+  /**
+   * Marks READY exports past their expiry as EXPIRED and returns their objects, first those an earlier run could not
+   * delete. The objects are deleted after this transaction commits.
+   */
+  async expireExports(tx: CrossTenantTransaction, limit: number): Promise<ExpiredExportObject[]> {
+    const rows = await tx.$queryRaw<Array<{ tenant_id: string; export_id: string; storage_key: string }>>`
+      SELECT out_tenant_id::text AS tenant_id, out_export_id::text AS export_id, out_storage_key AS storage_key FROM retention_expire_tenant_exports(${limit}::int)`;
+    return rows.map((row) => ({ tenantId: row.tenant_id, exportId: row.export_id, storageKey: row.storage_key }));
+  }
+
+  async markExportObjectDeleted(tx: CrossTenantTransaction, object: ExpiredExportObject): Promise<void> {
+    await tx.$queryRaw`SELECT retention_mark_export_object_deleted(${object.tenantId}::uuid, ${object.exportId}::uuid)`;
   }
 
   /** Writes the run's counts to the platform trail (`retention.run_finished`). */

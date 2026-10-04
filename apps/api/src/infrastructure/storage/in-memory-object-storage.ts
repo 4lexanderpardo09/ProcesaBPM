@@ -1,9 +1,11 @@
-import { ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput, type PutObjectInput } from './object-storage.js';
+import { type MultipartWrite, ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput, type PutObjectInput } from './object-storage.js';
 
 /** Test double: keeps objects in memory. */
 export class InMemoryObjectStorage extends ObjectStorage {
   private readonly objects = new Map<string, Uint8Array>();
   readonly presignedUploads: PresignUploadInput[] = [];
+  /** Multipart uploads by state, for the tests that check what was left behind. */
+  readonly multipart = { opened: 0, completed: 0, aborted: 0 };
 
   /** Stands in for the browser's PUT in tests. */
   seed(key: string, content: Uint8Array): void {
@@ -58,5 +60,34 @@ export class InMemoryObjectStorage extends ObjectStorage {
   async deleteMany(keys: readonly string[]): Promise<{ failed: readonly string[] }> {
     for (const key of keys) this.objects.delete(key);
     return { failed: [] };
+  }
+
+  async openMultipartWrite(key: string): Promise<MultipartWrite> {
+    this.multipart.opened += 1;
+    const chunks: Uint8Array[] = [];
+    let state: 'open' | 'completed' | 'aborted' = 'open';
+    const assertOpen = () => {
+      if (state !== 'open') throw new Error(`The multipart upload is ${state}`);
+    };
+    return {
+      write: async (chunk) => {
+        assertOpen();
+        chunks.push(Buffer.from(chunk));
+      },
+      complete: async () => {
+        assertOpen();
+        state = 'completed';
+        this.multipart.completed += 1;
+        const body = Buffer.concat(chunks);
+        // Like S3: completing replaces what an earlier attempt left at the key.
+        this.objects.set(key, body);
+        return { sizeBytes: body.length };
+      },
+      abort: async () => {
+        if (state !== 'open') return;
+        state = 'aborted';
+        this.multipart.aborted += 1;
+      },
+    };
   }
 }

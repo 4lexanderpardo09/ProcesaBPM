@@ -16,6 +16,12 @@ describe('loadWorkerSettings', () => {
   it('fills the documented defaults', () => {
     expect(loadWorkerSettings(valid)).toMatchObject({ MAIL_TRANSPORT: 'smtp', SMTP_PORT: 1025, SMTP_SECURE: false, OUTBOX_POLLING_ENABLED: true, OUTBOX_POLL_INTERVAL_MS: 2000, OUTBOX_BATCH_SIZE: 10, OUTBOX_CONCURRENCY: 4, OUTBOX_TX_TIMEOUT_MS: 30_000 });
   });
+  it('bounds the data export by 4 hours and 100 GiB unless configured, never beyond what a multipart upload holds', () => {
+    expect(loadWorkerSettings(valid)).toMatchObject({ DATA_EXPORT_MAX_RUN_MS: 4 * 3_600_000, DATA_EXPORT_MAX_BYTES: 100 * 1024 ** 3 });
+    expect(loadWorkerSettings({ ...valid, DATA_EXPORT_MAX_BYTES: '1048576' }).DATA_EXPORT_MAX_BYTES).toBe(1_048_576);
+    expect(problemsOf({ ...valid, DATA_EXPORT_MAX_BYTES: String(200 * 1024 ** 3) })).toEqual([expect.stringContaining('DATA_EXPORT_MAX_BYTES')]);
+    expect(problemsOf({ ...valid, DATA_EXPORT_MAX_RUN_MS: '0' })).toEqual([expect.stringContaining('DATA_EXPORT_MAX_RUN_MS')]);
+  });
   it('requires the base URL and the token key', () => {
     expect(problemsOf({ ...valid, WEB_BASE_URL: undefined })).toEqual(['WEB_BASE_URL is required']);
     expect(problemsOf({ ...valid, OUTBOX_TOKEN_KEY: 'short' })).toEqual([expect.stringContaining('OUTBOX_TOKEN_KEY')]);

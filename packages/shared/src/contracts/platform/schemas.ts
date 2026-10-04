@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { emailSchema, isoDateSchema } from '../common.js';
+import type { DataExportStatus } from '../data-exports/schemas.js';
 import { uuidSchema } from '../ids.js';
 
 /** Same pattern as the CHECK constraint `tenants_slug_format` of the database. */
@@ -95,6 +96,8 @@ export interface TenantDetail extends TenantListItem {
   readonly suspension: { readonly reason: string; readonly at: string } | null;
   /** Set while the deletion is pending (and on the tombstone). */
   readonly deletion: { readonly requestedAt: string; readonly purgeAfter: string | null; readonly purgedAt: string | null } | null;
+  /** The newest organization data export: its state and failure code only (never its content or its object). */
+  readonly dataExport: { readonly status: DataExportStatus; readonly errorCode: string | null } | null;
 }
 
 export const changeTenantPlanRequestSchema = z.object({ planCode: z.string().trim().min(1).max(64) });

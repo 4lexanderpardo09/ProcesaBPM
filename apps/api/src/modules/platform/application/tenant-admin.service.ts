@@ -95,13 +95,14 @@ export class TenantAdminService {
     const profile = await this.tenants.findProfile(tx, tenantId);
     if (profile === undefined) throw new TenantNotFoundError();
     const since = new Date(this.clock.now().getTime() - ACTIVITY_WINDOW_DAYS * DAY_MS);
-    const [owner, companies, activeUsers, tickets, usage, activity] = await Promise.all([
+    const [owner, companies, activeUsers, tickets, usage, activity, dataExport] = await Promise.all([
       this.tenants.findOwner(tx, tenantId),
       this.tenants.countCompanies(tx, tenantId),
       this.tenants.countActiveUsers(tx, tenantId),
       this.tenants.countTicketsSince(tx, tenantId, since),
       this.tenants.readUsage(tx, tenantId),
       this.tenants.lastActivity(tx, tenantId),
+      this.tenants.latestDataExport(tx, tenantId),
     ]);
     const limits = quotaLimits(this.tenants.quotaTermsOf(profile, activeUsers));
     const suspension = profile.status === 'SUSPENDED' ? await this.tenants.lastSuspension(tx, tenantId, PLATFORM_AUDIT_ACTIONS.tenantSuspended) : undefined;
@@ -129,6 +130,7 @@ export class TenantAdminService {
       lastActivityAt: activity?.toISOString() ?? null,
       suspension: suspension ? { reason: suspension.reason, at: suspension.at.toISOString() } : null,
       deletion: profile.deletionRequestedAt === null ? null : { requestedAt: profile.deletionRequestedAt.toISOString(), purgeAfter: profile.purgeAfter?.toISOString() ?? null, purgedAt: profile.purgedAt?.toISOString() ?? null },
+      dataExport: dataExport ?? null,
     };
   }
 }

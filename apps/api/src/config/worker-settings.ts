@@ -1,5 +1,6 @@
 import { PDF_LIMITS } from '@procesabpm/shared';
 import { z } from 'zod';
+import { MULTIPART_MAX_PARTS, MULTIPART_PART_BYTES } from '../infrastructure/storage/s3-multipart-write.js';
 import { ConfigError } from './app-config.js';
 
 const httpUrl = z.string().refine((value) => /^https?:\/\//.test(value), 'must be an http(s) URL');
@@ -9,6 +10,11 @@ const boolean = (defaultValue: boolean) =>
     .default(defaultValue ? 'true' : 'false')
     .transform((value) => value === 'true');
 const positiveInteger = (defaultValue: number, max: number) => z.coerce.number().int().min(1).max(max).default(defaultValue);
+
+const HOUR_MS = 60 * 60_000;
+const GIB = 1024 ** 3;
+/** 10 000 parts of 16 MiB: the largest object the export's multipart upload can write. */
+const MAX_MULTIPART_OBJECT_BYTES = MULTIPART_MAX_PARTS * MULTIPART_PART_BYTES;
 
 /** Worst case allowed for one batch: half of the 5-minute lease. */
 const MAX_BATCH_PROCESSING_MS = 150_000;
@@ -46,6 +52,10 @@ const settingsSchema = z.object({
   /** How long drawing one PDF may take before the event fails for good. */
   PDF_RENDER_TIMEOUT_MS: positiveInteger(PDF_LIMITS.defaultRenderTimeoutMs, PDF_LIMITS.maxRenderTimeoutMs),
   PDF_MAX_OUTPUT_BYTES: positiveInteger(PDF_LIMITS.maxOutputBytes, 50 * 1024 * 1024),
+  /** Time budget of one organization data export attempt (decision B16: 4 h); past it the export fails (EXPORT_TIMEOUT). */
+  DATA_EXPORT_MAX_RUN_MS: positiveInteger(4 * HOUR_MS, 24 * HOUR_MS),
+  /** Size cap of one export archive (decision B16: 100 GiB); past it the export fails (EXPORT_TOO_LARGE). */
+  DATA_EXPORT_MAX_BYTES: positiveInteger(100 * GIB, MAX_MULTIPART_OBJECT_BYTES),
 });
 
 export type WorkerSettings = Omit<z.infer<typeof settingsSchema>, 'NODE_ENV'>;

@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { StorageUnavailableError } from '@procesabpm/shared';
 import { S3ObjectStorage } from '../../../src/infrastructure/storage/s3-object-storage.js';
@@ -90,6 +90,33 @@ describe('S3ObjectStorage against a real S3 server', () => {
     expect(await storage.deleteMany([second, `tenants/t/missing/${randomUUID()}`])).toEqual({ failed: [] });
     expect(await storage.head(first)).toBeNull();
     expect(await storage.head(second)).toBeNull();
+  });
+
+  describe('multipart writes', () => {
+    it('writes an object larger than one part, in chunks, and nothing is visible before complete', async () => {
+      const key = newKey();
+      const content = randomBytes(17 * 1024 * 1024 + 123);
+      const upload = await storage.openMultipartWrite(key, 'application/zip');
+      for (let offset = 0; offset < content.length; offset += 1024 * 1024) await upload.write(content.subarray(offset, offset + 1024 * 1024));
+      expect(await storage.head(key)).toBeNull();
+      expect(await upload.complete()).toEqual({ sizeBytes: content.length });
+      expect(Buffer.from(await storage.read(key, content.length)).equals(content)).toBe(true);
+    });
+
+    it('abort leaves no object, and completing replaces what an earlier attempt left at the key', async () => {
+      const key = newKey();
+      const aborted = await storage.openMultipartWrite(key, 'application/zip');
+      await aborted.write(randomBytes(1000));
+      await aborted.abort();
+      await aborted.abort();
+      expect(await storage.head(key)).toBeNull();
+
+      await upload(key, pdf);
+      const retry = await storage.openMultipartWrite(key, 'application/zip');
+      await retry.write(new TextEncoder().encode('second attempt'));
+      await retry.complete();
+      expect(Buffer.from(await storage.read(key, 100)).toString()).toBe('second attempt');
+    });
   });
 
   it('reports an unreachable storage as unavailable', async () => {

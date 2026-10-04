@@ -26,6 +26,11 @@ export class WebLinks {
     return this.build(`/tickets/${encodeURIComponent(ticketId)}`, { tenant: tenantId });
   }
 
+  /** The organization's data export page: the e-mail never links to the archive itself. */
+  dataExports(tenantId: string): string {
+    return this.build('/data-exports', { tenant: tenantId });
+  }
+
   private build(path: string, query?: Record<string, string>, token?: string): string {
     // Relative to the base so that an app served under a path (https://host/app) keeps it.
     const base = this.settings.WEB_BASE_URL.endsWith('/') ? this.settings.WEB_BASE_URL : `${this.settings.WEB_BASE_URL}/`;

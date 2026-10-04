@@ -8,6 +8,9 @@ export const TENANT_DELETION_REQUESTED_EVENT = 'email.tenant_deletion_requested'
 /** Queued only through `enqueue_security_notice` (the database refuses it in `enqueue_platform_event`). */
 export const SECURITY_NOTICE_EVENT = 'email.security_notice';
 
+/** Queued only by `finish_tenant_export`, in the transaction that marks the export READY (§8.31). */
+export const DATA_EXPORT_READY_EVENT = 'email.data_export_ready';
+
 /** The same list as `enqueue_security_notice`. */
 export const SECURITY_NOTICE_KINDS = [
   'PASSWORD_CHANGED',
@@ -35,6 +38,8 @@ export const passwordResetPayloadSchema = z.object({ userId: uuidSchema }).stric
 export const platformAdminInvitationPayloadSchema = z.object({ userId: uuidSchema }).strict();
 export const tenantDeletionRequestedPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
 export const invitationPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
+export const dataExportReadyPayloadSchema = z.object({ tenantId: uuidSchema, exportId: uuidSchema, userId: uuidSchema }).strict();
+export type DataExportReadyPayload = z.infer<typeof dataExportReadyPayloadSchema>;
 const personalSecurityNoticePayloadSchema = z.object({ userId: uuidSchema, kind: z.enum(SECURITY_NOTICE_KINDS), sessionId: uuidSchema.optional() }).strict();
 /** `userId` is the owner who gets the mail; `memberId` the member of `tenantId` it is about. */
 const memberSecurityNoticePayloadSchema = z.object({ userId: uuidSchema, kind: z.enum(MEMBER_SECURITY_NOTICE_KINDS), tenantId: uuidSchema, memberId: uuidSchema }).strict();

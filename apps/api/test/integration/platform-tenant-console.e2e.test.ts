@@ -85,6 +85,7 @@ describe('platform console: tenants', () => {
         activeUsers: 2,
         ticketsLast30Days: 0,
         suspension: null,
+        dataExport: null,
         owner: { membershipStatus: 'ACTIVE' },
       });
       // professional: 25 GiB + 2 GiB per active user (2) + 0 extra; 5 % grace.

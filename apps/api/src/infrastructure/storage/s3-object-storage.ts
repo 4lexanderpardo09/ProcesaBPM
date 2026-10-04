@@ -1,8 +1,9 @@
-import { DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { CreateMultipartUploadCommand, DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { StorageUnavailableError } from '@procesabpm/shared';
 import { contentDisposition } from './content-disposition.js';
-import { ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput, type PutObjectInput } from './object-storage.js';
+import { S3MultipartWrite } from './s3-multipart-write.js';
+import { type MultipartWrite, ObjectStorage, type PresignDownloadInput, type PresignedDownload, type PresignedUpload, type PresignUploadInput, type PutObjectInput } from './object-storage.js';
 
 export interface S3StorageSettings {
   readonly endpoint: string;
@@ -122,5 +123,15 @@ export class S3ObjectStorage extends ObjectStorage {
       }
     }
     return { failed };
+  }
+
+  async openMultipartWrite(key: string, contentType: string): Promise<MultipartWrite> {
+    try {
+      const { UploadId } = await this.client.send(new CreateMultipartUploadCommand({ Bucket: this.settings.bucket, Key: key, ContentType: contentType }));
+      if (UploadId === undefined) throw new Error('The storage did not return an upload id');
+      return new S3MultipartWrite(this.client, { bucket: this.settings.bucket, key, uploadId: UploadId });
+    } catch (error) {
+      throw new StorageUnavailableError({ cause: error });
+    }
   }
 }

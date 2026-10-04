@@ -99,7 +99,8 @@ function describeSecurityNotice(kind: SecurityNoticeKind): string {
   return happened[kind];
 }
 
-function formatNoticeDate(date: Date, timeZone: string | null): string {
+/** A date and time in the person's zone (or Bogotá when theirs is unknown or invalid), with the zone named. */
+export function formatNoticeDate(date: Date, timeZone: string | null): string {
   const format = (zone: string) => `${date.toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short', timeZone: zone })} (${zone})`;
   try {
     return format(timeZone ?? DEFAULT_NOTICE_TIME_ZONE);

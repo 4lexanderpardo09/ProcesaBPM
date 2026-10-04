@@ -3,8 +3,9 @@ import { extractSqlState } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
+import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
 import { RetentionRepository } from '../data/retention.repository.js';
-import { RETENTION_STEPS, type RetentionRunSummary, type RetentionStep } from '../domain/retention-step.js';
+import { EXPORT_EXPIRY_STEP, RETENTION_STEPS, type RetentionRunSummary, type RetentionStep } from '../domain/retention-step.js';
 
 /** Rows per call: one short transaction each, so no lock is held for long. */
 export const RETENTION_BATCH_SIZE = 5_000;
@@ -12,10 +13,23 @@ export const RETENTION_BATCH_SIZE = 5_000;
 export const RETENTION_MAX_BATCHES_PER_STEP = 200;
 export const RETENTION_STEP_BUDGET_MS = 3 * 60_000;
 export const RETENTION_BATCH_TIMEOUT_MS = 60_000;
+/** Expired export archives per batch: each one is a delete in the storage. */
+export const EXPORT_EXPIRY_BATCH_SIZE = 100;
 
 interface StepResult {
   readonly deleted: number;
   readonly failed: boolean;
+}
+
+interface BatchResult {
+  readonly rows: number;
+  /** Another batch may find more. */
+  readonly more: boolean;
+}
+
+/** Every object of an expiry batch failed to delete: the storage is down; the next run tries them again. */
+class ExportObjectsNotDeletedError extends Error {
+  override readonly name = 'ExportObjectsNotDeletedError';
 }
 
 const NOT_STOPPED: AbortSignal = new AbortController().signal;
@@ -32,6 +46,7 @@ export class RetentionJob {
   constructor(
     @Inject(WorkerTransactionRunner) private readonly runner: WorkerTransactionRunner,
     @Inject(RetentionRepository) private readonly retention: RetentionRepository,
+    @Inject(ObjectStorage) private readonly storage: ObjectStorage,
     @Inject(Clock) private readonly clock: Clock,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
@@ -63,9 +78,9 @@ export class RetentionJob {
     let deleted = 0;
     try {
       for (let batch = 0; batch < RETENTION_MAX_BATCHES_PER_STEP; batch += 1) {
-        const rows = await this.runner.withoutTenant((tx) => this.retention.purgeBatch(tx, step, RETENTION_BATCH_SIZE), { timeoutMs: RETENTION_BATCH_TIMEOUT_MS });
+        const { rows, more } = await this.runBatch(step);
         deleted += rows;
-        if (rows < RETENTION_BATCH_SIZE || signal.aborted || this.clock.now().getTime() - startedAt >= RETENTION_STEP_BUDGET_MS) break;
+        if (!more || signal.aborted || this.clock.now().getTime() - startedAt >= RETENTION_STEP_BUDGET_MS) break;
       }
       this.logger.info('retention.step_done', { event: 'retention.step_done', step, rows: deleted, ms: this.clock.now().getTime() - startedAt });
       return { deleted, failed: false };
@@ -79,5 +94,32 @@ export class RetentionJob {
       });
       return { deleted, failed: true };
     }
+  }
+
+  private async runBatch(step: RetentionStep): Promise<BatchResult> {
+    if (step === EXPORT_EXPIRY_STEP) return this.expireExportBatch();
+    const rows = await this.runner.withoutTenant((tx) => this.retention.purgeBatch(tx, step, RETENTION_BATCH_SIZE), { timeoutMs: RETENTION_BATCH_TIMEOUT_MS });
+    return { rows, more: rows >= RETENTION_BATCH_SIZE };
+  }
+
+  /**
+   * Expired data exports: the rows become EXPIRED in one transaction, then each archive is deleted from the storage (never
+   * inside the transaction) and marked. A delete that fails is returned again by the next call or run; a batch where
+   * every delete failed ends the step (the storage is down), so the loop never spins on the same objects.
+   */
+  private async expireExportBatch(): Promise<BatchResult> {
+    const objects = await this.runner.withoutTenant((tx) => this.retention.expireExports(tx, EXPORT_EXPIRY_BATCH_SIZE), { timeoutMs: RETENTION_BATCH_TIMEOUT_MS });
+    let deleted = 0;
+    for (const object of objects) {
+      try {
+        await this.storage.delete(object.storageKey);
+        await this.runner.withoutTenant((tx) => this.retention.markExportObjectDeleted(tx, object));
+        deleted += 1;
+      } catch (error) {
+        this.logger.warn('retention.export_object_not_deleted', { event: 'retention.export_object_not_deleted', tenantId: object.tenantId, exportId: object.exportId, errorName: error instanceof Error ? error.name : typeof error });
+      }
+    }
+    if (objects.length > 0 && deleted === 0) throw new ExportObjectsNotDeletedError();
+    return { rows: deleted, more: objects.length >= EXPORT_EXPIRY_BATCH_SIZE };
   }
 }

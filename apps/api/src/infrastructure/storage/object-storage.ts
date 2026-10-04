@@ -35,6 +35,17 @@ export interface PresignDownloadInput {
 }
 
 /**
+ * A large object written in parts, front to back, with bounded memory. Each `write` resolves when more can be sent
+ * (backpressure). The object only appears on `complete`; `abort` discards every part already sent (idempotent, and a
+ * no-op once completed). Completing replaces an object left at the key by an earlier attempt.
+ */
+export interface MultipartWrite {
+  write(chunk: Uint8Array): Promise<void>;
+  complete(): Promise<{ readonly sizeBytes: number }>;
+  abort(): Promise<void>;
+}
+
+/**
  * Port of the S3-compatible object storage. Signing a URL is local computation; every other method is a
  * network call and must never run inside a database transaction.
  */
@@ -54,4 +65,6 @@ export abstract class ObjectStorage {
   abstract listKeys(prefix: string, limit: number): Promise<string[]>;
   /** Returns the keys it could not delete. */
   abstract deleteMany(keys: readonly string[]): Promise<{ readonly failed: readonly string[] }>;
+  /** Starts a multipart upload for what the system produces in a stream (the organization data export). */
+  abstract openMultipartWrite(key: string, contentType: string): Promise<MultipartWrite>;
 }

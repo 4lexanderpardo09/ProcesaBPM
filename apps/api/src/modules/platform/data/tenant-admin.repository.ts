@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { ListTenantsQuery, Page, TenantListItem } from '@procesabpm/shared';
+import type { DataExportStatus, ListTenantsQuery, Page, TenantListItem } from '@procesabpm/shared';
 import type { Prisma } from '@procesabpm/db';
 import type { PlatformTransaction } from '../../../infrastructure/database/platform-transaction-runner.js';
 import type { QuotaTerms, QuotaUsage } from '../../files/domain/quota-policy.js';
@@ -99,6 +99,12 @@ export class TenantAdminRepository {
   async readUsage(tx: PlatformTransaction, tenantId: string): Promise<QuotaUsage> {
     const usage = await tx.tenantUsage.findUnique({ where: { tenantId }, select: { bytesUsed: true, bytesReserved: true } });
     return { usedBytes: usage?.bytesUsed ?? 0n, reservedBytes: usage?.bytesReserved ?? 0n };
+  }
+
+  /** The newest data export of the tenant: state and code only. */
+  async latestDataExport(tx: PlatformTransaction, tenantId: string): Promise<{ status: DataExportStatus; errorCode: string | null } | undefined> {
+    const row = await tx.tenantDataExport.findFirst({ where: { tenantId }, select: { status: true, errorCode: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ?? undefined;
   }
 
   /** Last thing a member did in this tenant: the newest audit entry or the newest session opened for it. */
