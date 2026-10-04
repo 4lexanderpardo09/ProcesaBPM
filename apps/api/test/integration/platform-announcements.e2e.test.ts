@@ -19,6 +19,7 @@ describe('platform announcements', () => {
   let app: INestApplication;
   let token: string;
   let memberToken: string;
+  let tenantId: string;
   const http = () => request(app.getHttpServer());
   const create = (body: object) => http().post('/platform/announcements').set(bearer(token)).send(body);
 
@@ -27,6 +28,7 @@ describe('platform announcements', () => {
     ({ app } = await createTestApp());
     token = await signInPlatform(app, db, await seedPlatformAdmin(db));
     const tenant = await seedTenant(db.platform);
+    tenantId = tenant.tenantId;
     const user = await seedUser(db, tenant);
     memberToken = (await signIn(app, user.email, tenant.tenantId)).accessToken;
     await db.owner.query('DELETE FROM platform_announcements');
@@ -53,6 +55,36 @@ describe('platform announcements', () => {
 
     const actions = await db.owner.query(`SELECT action FROM platform_audit_logs WHERE data ->> 'id' = $1 ORDER BY created_at`, [id]);
     expect(actions.rows.map((row) => row.action)).toEqual(['announcement.created', 'announcement.updated', 'announcement.deleted']);
+  });
+
+  it('names the organizations of a TENANTS announcement, replaces them on update and audits the audience', async () => {
+    const other = (await seedTenant(db.platform)).tenantId;
+    const created = await create({ type: 'MAINTENANCE', title: 'Some', body: 'x', startsAt: at(1), audience: 'TENANTS', tenantIds: [tenantId, other] }).expect(201);
+    expect(created.body).toMatchObject({ audience: 'TENANTS', tenantIds: [tenantId, other].sort() });
+    const id = created.body.id as string;
+
+    const moved = await http().put(`/platform/announcements/${id}`).set(bearer(token)).send({ type: 'INFO', title: 'Some', body: 'x', startsAt: at(1), audience: 'TENANTS', tenantIds: [other] }).expect(200);
+    expect(moved.body).toMatchObject({ audience: 'TENANTS', tenantIds: [other] });
+    const everybody = await http().put(`/platform/announcements/${id}`).set(bearer(token)).send({ type: 'INFO', title: 'Some', body: 'x', startsAt: at(1) }).expect(200);
+    expect(everybody.body).toMatchObject({ audience: 'ALL', tenantIds: [] });
+    const listed = (await http().get('/platform/announcements').set(bearer(token)).expect(200)).body.find((a: { id: string }) => a.id === id);
+    expect(listed).toMatchObject({ audience: 'ALL', tenantIds: [] });
+
+    const audits = await db.owner.query(`SELECT action, data FROM platform_audit_logs WHERE data ->> 'id' = $1 ORDER BY created_at, id`, [id]);
+    expect(audits.rows.map((row) => [row.action, row.data.audience, row.data.tenantIds])).toEqual([
+      ['announcement.created', 'TENANTS', [tenantId, other].sort()],
+      ['announcement.updated', 'TENANTS', [other]],
+      ['announcement.updated', 'ALL', []],
+    ]);
+  });
+
+  it('refuses TENANTS without organizations (400) and an unknown organization (422), leaving nothing behind', async () => {
+    const before = (await db.owner.query('SELECT count(*)::int AS n FROM platform_announcements')).rows[0].n as number;
+    await create({ type: 'INFO', title: 'x', body: 'x', startsAt: at(1), audience: 'TENANTS', tenantIds: [] }).expect(400);
+    await create({ type: 'INFO', title: 'x', body: 'x', startsAt: at(1), tenantIds: [tenantId] }).expect(400);
+    const unknown = await create({ type: 'INFO', title: 'x', body: 'x', startsAt: at(1), audience: 'TENANTS', tenantIds: ['018f3c1e-7b2a-7c3d-9e4f-0123456789ab'] }).expect(422);
+    expect(unknown.body.error.code).toBe('INVALID_REFERENCE');
+    expect((await db.owner.query('SELECT count(*)::int AS n FROM platform_announcements')).rows[0].n).toBe(before);
   });
 
   it('refuses an end before the start, an unknown type and an empty title', async () => {

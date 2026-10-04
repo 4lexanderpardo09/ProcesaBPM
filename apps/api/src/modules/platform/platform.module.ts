@@ -3,6 +3,7 @@ import { ROLE_TEMPLATES } from '@procesabpm/db';
 import { JwtTokenService } from '../../infrastructure/security/jwt-token-service.js';
 import { PlatformDatabaseModule } from '../../infrastructure/database/platform-database.module.js';
 import { AuthModule } from '../auth/auth.module.js';
+import { LoginBlocksModule } from '../announcements/login-blocks.module.js';
 import { PlatformOutboxRepository } from '../../infrastructure/outbox/platform-outbox.repository.js';
 import { TenantDefaultsProvisioner } from './application/tenant-defaults-provisioner.js';
 import { TenantOwnerInviter } from './application/tenant-owner-inviter.js';
@@ -48,7 +49,7 @@ import { PlatformUsersController } from './http/platform-users.controller.js';
 /** Platform administration: it acts on tenants with the login that bypasses row-level security. */
 @Module({
   // AuthModule only for the shared rate limiter (support's lookups and MFA resets are limited per administrator and user).
-  imports: [PlatformDatabaseModule, AuthModule],
+  imports: [PlatformDatabaseModule, AuthModule, LoginBlocksModule],
   controllers: [
     PlatformTenantsController,
     PlatformAdminsController,
