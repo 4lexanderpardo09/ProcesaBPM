@@ -77,6 +77,13 @@ enum AnnouncementType {
   @@map("announcement_type")
 }
 
+enum AnnouncementAudience {
+  ALL
+  TENANTS
+
+  @@map("announcement_audience")
+}
+
 enum WorkflowVersionStatus {
   DRAFT
   PUBLISHED
@@ -607,10 +614,26 @@ model PlatformAnnouncement {
   body        String
   startsAt    DateTime         @map("starts_at") @db.Timestamptz(3)
   endsAt      DateTime?        @map("ends_at") @db.Timestamptz(3)
-  blocksLogin Boolean          @default(false) @map("blocks_login")
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  blocksLogin Boolean              @default(false) @map("blocks_login")
+  audience    AnnouncementAudience @default(ALL)
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  targets PlatformAnnouncementTenant[]
 
   @@map("platform_announcements")
+}
+
+/// The tenants a TENANTS-audience announcement is meant for. Members see only their own tenant's rows (RLS); only the platform writes.
+model PlatformAnnouncementTenant {
+  tenantId       String @map("tenant_id") @db.Uuid
+  announcementId String @map("announcement_id") @db.Uuid
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  announcement PlatformAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, announcementId])
+  @@index([announcementId])
+  @@map("platform_announcement_tenants")
 }
 
 // ============================================================================
@@ -729,6 +752,7 @@ model Tenant {
   auditLogs               AuditLog[]
   textTemplates           TextTemplate[]
   textTemplateShares      TextTemplateShare[]
+  announcementTargets     PlatformAnnouncementTenant[]
 
   @@index([status])
   @@index([countryCode])
