@@ -178,6 +178,7 @@ CREATE FUNCTION enqueue_data_export_ready(p_tenant uuid, p_export uuid, p_user u
 -- ---------------------------------------------------------------------------
 -- Work is done for an ACTIVE tenant or for one pending deletion whose period is not over: once the purge is due, nothing is
 -- claimed, renewed or finished (the purge waits at most one lease for a running export, see claim_due_tenant_purges).
+-- Leases are capped at 30 minutes, so that wait is bounded.
 
 -- Claims due exports: PENDING (or RUNNING with an expired lease) whose retry time has come, at most 3 attempts. Each claim
 -- gets a fresh token that the later calls present, so a worker whose lease expired cannot touch what the new owner does.
@@ -188,8 +189,8 @@ CREATE FUNCTION claim_due_tenant_exports(p_limit integer, p_lease interval DEFAU
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
   BEGIN
-    IF p_lease IS NULL OR p_lease < interval '1 minute' OR p_lease > interval '2 hours' THEN
-      RAISE EXCEPTION 'the lease must be between 1 minute and 2 hours' USING ERRCODE = '22023';
+    IF p_lease IS NULL OR p_lease < interval '1 minute' OR p_lease > interval '30 minutes' THEN
+      RAISE EXCEPTION 'the lease must be between 1 minute and 30 minutes' USING ERRCODE = '22023';
     END IF;
     UPDATE tenant_data_exports x
     SET status = 'FAILED', error_code = 'LEASE_EXPIRED', claim_token = NULL, lease_until = NULL, completed_at = now()
@@ -222,8 +223,8 @@ CREATE FUNCTION renew_tenant_export_lease(p_tenant uuid, p_id uuid, p_token uuid
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
   BEGIN
-    IF p_lease IS NULL OR p_lease < interval '1 minute' OR p_lease > interval '2 hours' THEN
-      RAISE EXCEPTION 'the lease must be between 1 minute and 2 hours' USING ERRCODE = '22023';
+    IF p_lease IS NULL OR p_lease < interval '1 minute' OR p_lease > interval '30 minutes' THEN
+      RAISE EXCEPTION 'the lease must be between 1 minute and 30 minutes' USING ERRCODE = '22023';
     END IF;
     UPDATE tenant_data_exports x SET lease_until = now() + p_lease
     FROM tenants t
@@ -347,6 +348,9 @@ CREATE FUNCTION retention_mark_export_object_deleted(p_tenant uuid, p_id uuid) R
 -- ---------------------------------------------------------------------------
 -- The purge waits for a running export: same function as before, with one more condition. The export stops renewing once
 -- the purge is due, so the wait is at most one lease (30 minutes).
+-- Boundary: an export claimed just before purge_after and the purge claimed just after its lease ends can overlap; the
+-- export then cannot renew or finish (both refuse once the purge is due), the worker must stop writing and delete what it
+-- wrote, and anything it leaves under tenants/<id>/ is removed by the purge's final sweep of the prefix.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION claim_due_tenant_purges(p_limit integer, p_lease interval DEFAULT interval '30 minutes')
   RETURNS TABLE (out_tenant_id uuid, out_attempt integer)

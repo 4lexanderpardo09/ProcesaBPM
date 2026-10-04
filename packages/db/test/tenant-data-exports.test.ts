@@ -40,7 +40,15 @@ describe('tenant data exports', () => {
     );
   const worker = <T extends pg.QueryResultRow>(sql: string, params: unknown[] = []) => withoutContext(db.worker, async (client) => (await client.query<T>(sql, params)).rows);
   const claim = (limit = 10, lease = '30 minutes') => worker<Claim>('SELECT * FROM claim_due_tenant_exports($1, $2::interval)', [limit, lease]);
-  const claimOf = async (exportId: string) => (await claim()).find((row) => row.out_export_id === exportId);
+  /** Claims until this export comes up (rows left due by other tests are claimed along the way) or nothing is due. */
+  async function claimOf(exportId: string): Promise<Claim | undefined> {
+    for (let round = 0; round < 20; round += 1) {
+      const rows = await claim();
+      const mine = rows.find((row) => row.out_export_id === exportId);
+      if (mine !== undefined || rows.length === 0) return mine;
+    }
+    return undefined;
+  }
   const renew = (c: Claim, lease = '30 minutes') => worker<{ ok: boolean }>('SELECT renew_tenant_export_lease($1, $2, $3, $4::interval) AS ok', [c.out_tenant_id, c.out_export_id, c.out_claim_token, lease]).then((r) => r[0]!.ok);
   const finish = (c: Claim, counts: object = { tickets: 3 }) =>
     worker<{ ok: boolean }>('SELECT finish_tenant_export($1, $2, $3, $4, $5, $6::jsonb) AS ok', [c.out_tenant_id, c.out_export_id, c.out_claim_token, 1234, SHA, JSON.stringify(counts)]).then((r) => r[0]!.ok);
@@ -182,7 +190,13 @@ describe('tenant data exports', () => {
     it('never gives the same export to two workers at once', async () => {
       const ids = await Promise.all([pending(), pending(), pending()].map(async (t) => request(await t)));
       const results = await Promise.all(Array.from({ length: 6 }, () => claim(10)));
-      for (const id of ids) expect(results.filter((rows) => rows.some((r) => r.out_export_id === id))).toHaveLength(1);
+      for (const id of ids) {
+        const claimedBy = results.filter((rows) => rows.some((r) => r.out_export_id === id)).length;
+        expect(claimedBy).toBeLessThanOrEqual(1);
+        // Rows left due by other tests can crowd it out of the race; it is then claimed later, but never twice.
+        if (claimedBy === 0) expect(await claimOf(id)).toBeDefined();
+        else expect(await claimOf(id)).toBeUndefined();
+      }
     });
 
     it('works for a tenant pending deletion, not once its purge is due, and not for a suspended tenant', async () => {
@@ -284,6 +298,12 @@ describe('tenant data exports', () => {
     it('validates the lease', async () => {
       expect(await sqlStateOf(() => claim(1, '10 seconds'))).toBe('22023');
       expect(await sqlStateOf(() => claim(1, '3 hours'))).toBe('22023');
+      // Capped at 30 minutes, so the purge never waits longer than that for a running export.
+      expect(await sqlStateOf(() => claim(1, '31 minutes'))).toBe('22023');
+      const tenant = await pending();
+      const c = (await claimOf(await request(tenant)))!;
+      expect(await sqlStateOf(() => renew(c, '1 hour'))).toBe('22023');
+      expect(await renew(c, '30 minutes')).toBe(true);
     });
   });
 
