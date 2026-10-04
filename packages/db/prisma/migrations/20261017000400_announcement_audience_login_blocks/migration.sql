@@ -42,8 +42,10 @@ SELECT app_enable_tenant_rls('platform_announcement_tenants');
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON platform_announcement_tenants FROM app_runtime, app_worker;
 
 -- A TENANTS announcement needs at least one tenant, checked at COMMIT so the API can replace the targets in one
--- transaction. A tenant that is deleted (purge) takes its target rows with it: an announcement left without tenants
--- reaches nobody, which is harmless, so that case is let through instead of making the purge fail.
+-- transaction. A tenant that is purged takes its target rows with it: an announcement left without tenants reaches
+-- nobody, which is harmless, so that case is let through instead of making the purge fail. finish_tenant_purge re-inserts
+-- the tenant as a PURGED tombstone (same id) in the same transaction, so a PURGED row counts as gone (the same rule as
+-- assert_tenant_keeps_admin).
 CREATE FUNCTION announcement_audience_has_targets() RETURNS trigger
   LANGUAGE plpgsql SET search_path = public, pg_temp
   AS $$
@@ -53,7 +55,7 @@ CREATE FUNCTION announcement_audience_has_targets() RETURNS trigger
     IF TG_TABLE_NAME = 'platform_announcements' THEN
       v_announcement_id := NEW.id;
     ELSE
-      IF NOT EXISTS (SELECT 1 FROM tenants WHERE id = OLD.tenant_id) THEN
+      IF NOT EXISTS (SELECT 1 FROM tenants WHERE id = OLD.tenant_id AND status <> 'PURGED') THEN
         RETURN NULL;
       END IF;
       v_announcement_id := OLD.announcement_id;

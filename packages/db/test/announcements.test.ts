@@ -28,6 +28,8 @@ describe('announcement audience and login blocks', () => {
   let db: TestDatabase;
   let tenantA: SeededTenant;
   let tenantB: SeededTenant;
+  /** Announcements are global: every row this file creates is removed at the end (open-ended blocks would linger). */
+  const created: string[] = [];
 
   beforeAll(async () => {
     db = connectTestDatabase();
@@ -35,6 +37,7 @@ describe('announcement audience and login blocks', () => {
   });
 
   afterAll(async () => {
+    await db.owner.query('DELETE FROM platform_announcements WHERE id = ANY($1::uuid[])', [created]);
     await db.close();
   });
 
@@ -49,6 +52,7 @@ describe('announcement audience and login blocks', () => {
   const createAnnouncement = (input: AnnouncementInput, tenantIds: readonly string[] = []) =>
     withPlatformTransaction(db.platform, async (tx) => {
       const id = await insertReturningId(tx, INSERT_ANNOUNCEMENT, announcementParams(input));
+      created.push(id);
       for (const tenantId of tenantIds) {
         await tx.query('INSERT INTO platform_announcement_tenants (tenant_id, announcement_id) VALUES ($1, $2)', [tenantId, id]);
       }
@@ -101,17 +105,48 @@ describe('announcement audience and login blocks', () => {
       expect(await targetsOf(id)).toEqual([]);
     });
 
-    it('lets the purge of a tenant remove its targets, even the last one of an announcement', async () => {
-      const doomed = await seedTenant(db.platform);
-      const onlyDoomed = await createAnnouncement({ audience: 'TENANTS' }, [doomed.tenantId]);
-      const shared = await createAnnouncement({ audience: 'TENANTS' }, [doomed.tenantId, tenantA.tenantId]);
+    describe('the purge of a targeted tenant (finish_tenant_purge leaves a PURGED tombstone with the same id)', () => {
+      /** A tenant whose purge is due, with the attempt number the worker would hold (no claim: it would take other tests' tenants). */
+      async function dueForPurge(): Promise<SeededTenant> {
+        const tenant = await seedTenant(db.platform);
+        const requester = await insertReturningId(db.platform, `INSERT INTO users (email, first_name, last_name) VALUES ($1, 'Op', 'Erator') RETURNING id`, [`purge-${tenant.tenantId}@example.com`]);
+        await db.owner.query(
+          `UPDATE tenants SET status = 'PENDING_DELETION', deletion_requested_at = now() - interval '31 days', deletion_requested_by_id = $2,
+                  purge_after = now() - interval '1 day', purge_attempts = 1 WHERE id = $1`,
+          [tenant.tenantId, requester],
+        );
+        return tenant;
+      }
 
-      await withoutContext(db.platform, (client) => client.query('SELECT purge_tenant($1)', [doomed.tenantId]));
+      const finishPurge = (tenant: SeededTenant, immediate: boolean) =>
+        withoutContext(db.worker, async (client) => {
+          if (immediate) await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+          return (await client.query<{ ok: boolean }>('SELECT finish_tenant_purge($1, 1) AS ok', [tenant.tenantId])).rows[0]!.ok;
+        });
 
-      expect(await targetsOf(onlyDoomed)).toEqual([]);
-      expect(await targetsOf(shared)).toEqual([tenantA.tenantId]);
-      const { rowCount } = await db.owner.query('SELECT 1 FROM platform_announcements WHERE id = $1', [onlyDoomed]);
-      expect(rowCount).toBe(1);
+      it.each([
+        ['checked at COMMIT', false],
+        ['checked at once (SET CONSTRAINTS ALL IMMEDIATE)', true],
+      ])('removes its targets, even the last one of an announcement, %s', async (_label, immediate) => {
+        const doomed = await dueForPurge();
+        const onlyDoomed = await createAnnouncement({ audience: 'TENANTS' }, [doomed.tenantId]);
+        const shared = await createAnnouncement({ audience: 'TENANTS' }, [doomed.tenantId, tenantA.tenantId]);
+
+        expect(await finishPurge(doomed, immediate)).toBe(true);
+
+        const { rows } = await db.owner.query<{ status: string }>('SELECT status FROM tenants WHERE id = $1', [doomed.tenantId]);
+        expect(rows).toEqual([{ status: 'PURGED' }]);
+        expect(await targetsOf(onlyDoomed)).toEqual([]);
+        expect(await targetsOf(shared)).toEqual([tenantA.tenantId]);
+        const { rowCount } = await db.owner.query('SELECT 1 FROM platform_announcements WHERE id = $1', [onlyDoomed]);
+        expect(rowCount).toBe(1);
+      });
+
+      it('still refuses removing the last target of a tenant that is only pending deletion', async () => {
+        const pending = await dueForPurge();
+        const id = await createAnnouncement({ audience: 'TENANTS' }, [pending.tenantId]);
+        expect(await sqlStateOf(() => db.platform.query('DELETE FROM platform_announcement_tenants WHERE announcement_id = $1', [id]))).toBe(SqlState.checkViolation);
+      });
     });
 
     it('refuses an end that is not after the start', async () => {
