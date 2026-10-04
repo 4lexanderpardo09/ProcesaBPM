@@ -80,6 +80,26 @@ describe('signing in to an organization pending deletion', () => {
     expect({ status: again.status, code: again.body?.error?.code }).toEqual({ status: 403, code: 'TENANT_PENDING_DELETION' });
   });
 
+  it('still applies a maintenance announcement that blocks the organization (503), to the selection and to a live session', async () => {
+    const { tenant, owner } = await deleted();
+    const { accessToken } = await signIn(app, owner.email, tenant.tenantId);
+    const announcement = (
+      await http()
+        .post('/platform/announcements')
+        .set(bearer(platformToken))
+        .send({ type: 'MAINTENANCE', title: 'Planned maintenance', body: 'Back soon', startsAt: new Date(Date.now() - 60_000).toISOString(), endsAt: new Date(Date.now() + 3_600_000).toISOString(), blocksLogin: true, audience: 'TENANTS', tenantIds: [tenant.tenantId] })
+        .expect(201)
+    ).body as { id: string };
+    try {
+      const me = await http().get('/auth/me').set(bearer(accessToken));
+      expect({ status: me.status, code: me.body?.error?.code }).toEqual({ status: 503, code: 'MAINTENANCE' });
+      const selected = await select(owner.email, tenant.tenantId);
+      expect({ status: selected.status, code: selected.body?.error?.code }).toEqual({ status: 503, code: 'MAINTENANCE' });
+    } finally {
+      await http().delete(`/platform/announcements/${announcement.id}`).set(bearer(platformToken)).expect(204);
+    }
+  });
+
   it('gives no real-time connection: there is nothing to watch', async () => {
     const { tenant, owner } = await deleted();
     const { accessToken } = await signIn(app, owner.email, tenant.tenantId);

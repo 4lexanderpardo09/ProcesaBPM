@@ -1,5 +1,14 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post } from '@nestjs/common';
-import { type DataExportListResponse, type DataExportResponse, type DownloadUrlResponse, type RequestDataExport, requestDataExportSchema, uuidSchema } from '@procesabpm/shared';
+import {
+  type DataExportListResponse,
+  type DataExportResponse,
+  type DownloadUrlResponse,
+  type IssueDataExportDownload,
+  issueDataExportDownloadSchema,
+  type RequestDataExport,
+  requestDataExportSchema,
+  uuidSchema,
+} from '@procesabpm/shared';
 import { Audited } from '../../../common/audit/audited.decorator.js';
 import { AvailableDuringDeletion } from '../../../common/auth/available-during-deletion.decorator.js';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
@@ -44,7 +53,11 @@ export class DataExportsController {
   @HttpCode(HttpStatus.OK)
   @AvailableDuringDeletion()
   @Audited('data_export.download_url_issued')
-  downloadUrl(@CurrentPrincipal() principal: Principal, @Param('id', new ZodValidationPipe(uuidSchema)) id: string): Promise<DownloadUrlResponse> {
-    return this.downloads.issueUrl(principal, id);
+  downloadUrl(
+    @CurrentPrincipal() principal: Principal,
+    @Param('id', new ZodValidationPipe(uuidSchema)) id: string,
+    @Body(new ZodValidationPipe(issueDataExportDownloadSchema)) body: IssueDataExportDownload,
+  ): Promise<DownloadUrlResponse> {
+    return this.downloads.issueUrl(principal, id, body);
   }
 }

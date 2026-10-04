@@ -44,11 +44,10 @@ export interface TenantDeadline {
   readonly purgeAfter: Date | null;
 }
 
-export interface CountedDownload {
+export interface DownloadableExport {
   readonly storageKey: string;
   readonly expiresAt: Date;
   readonly completedAt: Date;
-  readonly downloadCount: number;
 }
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
@@ -114,15 +113,20 @@ export class DataExportRepository {
     return row === null ? undefined : toResponse(row);
   }
 
-  /**
-   * Counts one download of a READY export that has not expired, in one statement against the database clock (the same
-   * clock the expiry and the trigger use). `undefined`: there is no such export to download.
-   */
-  async countDownload(tx: TenantTransaction, tenantId: string, id: string): Promise<CountedDownload | undefined> {
-    const [row] = await tx.$queryRaw<Array<{ storage_key: string; expires_at: Date; completed_at: Date; download_count: number }>>`
+  /** A READY export that has not expired by the database clock (the clock the expiry and the trigger use). */
+  async findDownloadable(tx: TenantTransaction, tenantId: string, id: string): Promise<DownloadableExport | undefined> {
+    const [row] = await tx.$queryRaw<Array<{ storage_key: string; expires_at: Date; completed_at: Date }>>`
+      SELECT storage_key, expires_at, completed_at FROM tenant_data_exports
+      WHERE tenant_id = ${tenantId}::uuid AND id = ${id}::uuid AND status = 'READY' AND expires_at > now()`;
+    return row === undefined ? undefined : { storageKey: row.storage_key, expiresAt: row.expires_at, completedAt: row.completed_at };
+  }
+
+  /** Counts one download of a READY export that has not expired, in one statement. `undefined`: it is no longer downloadable. */
+  async countDownload(tx: TenantTransaction, tenantId: string, id: string): Promise<number | undefined> {
+    const [row] = await tx.$queryRaw<Array<{ download_count: number }>>`
       UPDATE tenant_data_exports SET download_count = download_count + 1, last_downloaded_at = now()
       WHERE tenant_id = ${tenantId}::uuid AND id = ${id}::uuid AND status = 'READY' AND expires_at > now()
-      RETURNING storage_key, expires_at, completed_at, download_count`;
-    return row === undefined ? undefined : { storageKey: row.storage_key, expiresAt: row.expires_at, completedAt: row.completed_at, downloadCount: row.download_count };
+      RETURNING download_count`;
+    return row?.download_count;
   }
 }

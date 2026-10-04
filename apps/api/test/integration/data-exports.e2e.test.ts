@@ -12,7 +12,7 @@ import { TenantPurgeJob } from '../../src/modules/tenant-purge/application/tenan
 import { WorkerModule } from '../../src/worker.module.js';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { seedUser, type TestUser } from '../support/auth-fixtures.js';
-import { bearer, signIn } from '../support/auth-helpers.js';
+import { bearer, signIn, TEST_PASSWORD } from '../support/auth-helpers.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { deletedOrganization } from '../support/deletion-fixtures.js';
 import { grantEverything, seedRole } from '../support/permission-fixtures.js';
@@ -38,14 +38,19 @@ describe('organization data export (requests and downloads)', () => {
 
   const deleted = () => deletedOrganization(app, db, platformToken);
   const tokenOf = async (user: TestUser, tenant: SeededTenant) => (await signIn(app, user.email, tenant.tenantId)).accessToken;
-  const requestExport = (token: string, body: object = {}) => http().post('/data-exports').set(bearer(token)).send({ currentPassword: 'correct horse battery staple', ...body });
+  const requestExport = (token: string, body: object = {}) => http().post('/data-exports').set(bearer(token)).send({ currentPassword: TEST_PASSWORD, ...body });
+  const downloadUrl = (token: string, id: string, body: object = { currentPassword: TEST_PASSWORD }) => http().post(`/data-exports/${id}/download-url`).set(bearer(token)).send(body);
 
   /** What the export worker (next change) does, through the same database functions: claim, write the zip, finish. */
   async function claimed(exportId: string): Promise<Claim> {
-    const rows = await withoutContext(db.worker, async (c) => (await c.query<Claim>('SELECT * FROM claim_due_tenant_exports(10)')).rows);
-    const claim = rows.find((row) => row.out_export_id === exportId);
-    if (claim === undefined) throw new Error(`export ${exportId} was not claimed`);
-    return claim;
+    // Rows left due by other tests are claimed along the way: only this export is asserted.
+    for (let round = 0; round < 20; round += 1) {
+      const rows = await withoutContext(db.worker, async (c) => (await c.query<Claim>('SELECT * FROM claim_due_tenant_exports(10)')).rows);
+      const claim = rows.find((row) => row.out_export_id === exportId);
+      if (claim !== undefined) return claim;
+      if (rows.length === 0) break;
+    }
+    throw new Error(`export ${exportId} was not claimed`);
   }
   async function buildExport(exportId: string, bytes = new TextEncoder().encode(`zip of ${exportId}`)): Promise<{ key: string; bytes: Uint8Array }> {
     const claim = await claimed(exportId);
@@ -68,6 +73,7 @@ describe('organization data export (requests and downloads)', () => {
   }
   const auditRows = async (tenantId: string, action: string) =>
     (await db.owner.query<{ actor_id: string; entity_id: string; after: unknown }>('SELECT actor_id, entity_id, after FROM audit_logs WHERE tenant_id = $1 AND action = $2 ORDER BY created_at', [tenantId, action])).rows;
+  const tenantStatus = async (tenantId: string) => (await db.owner.query<{ status: string }>('SELECT status FROM tenants WHERE id = $1', [tenantId])).rows[0]!.status;
   const failedLogins = async (userId: string) => (await db.owner.query<{ failed_logins: number }>('SELECT failed_logins FROM users WHERE id = $1', [userId])).rows[0]!.failed_logins;
 
   beforeAll(async () => {
@@ -141,7 +147,7 @@ describe('organization data export (requests and downloads)', () => {
       const detail = (await http().get(`/data-exports/${id}`).set(bearer(token)).expect(200)).body;
       expect(detail).toMatchObject({ status: 'READY', sizeBytes: bytes.length, counts: { tickets: 2 }, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
 
-      const link = await http().post(`/data-exports/${id}/download-url`).set(bearer(token)).expect(200);
+      const link = await downloadUrl(token, id).expect(200);
       const seconds = (Date.parse(link.body.expiresAt) - Date.now()) / 1000;
       expect(seconds).toBeGreaterThan(250);
       expect(seconds).toBeLessThanOrEqual(300);
@@ -155,15 +161,32 @@ describe('organization data export (requests and downloads)', () => {
       expect(await auditRows(org.tenant.tenantId, 'data_export.download_url_issued')).toEqual([{ actor_id: org.owner.userId, entity_id: id, after: { downloadCount: 1 } }]);
     });
 
+    it('asks for the current password again: a session alone cannot take the archive out', async () => {
+      const org = await deleted();
+      const ownerToken = await tokenOf(org.owner, org.tenant);
+      const { id } = await readyExport(ownerToken);
+      // Any member with full access may download it, not only who asked for it.
+      const adminToken = await tokenOf(org.admin, org.tenant);
+      const missing = await downloadUrl(adminToken, id, {});
+      expect({ status: missing.status, code: missing.body.error?.code }).toEqual({ status: 400, code: 'VALIDATION_FAILED' });
+      const wrong = await downloadUrl(adminToken, id, { currentPassword: 'not my password' });
+      expect({ status: wrong.status, code: wrong.body.error?.code }).toEqual({ status: 401, code: 'INVALID_CREDENTIALS' });
+      expect(await failedLogins(org.admin.userId)).toBe(1);
+      expect((await db.owner.query('SELECT download_count FROM tenant_data_exports WHERE id = $1', [id])).rows[0].download_count).toBe(0);
+      expect(await auditRows(org.tenant.tenantId, 'data_export.download_url_issued')).toEqual([]);
+      await downloadUrl(adminToken, id).expect(200);
+      expect(await auditRows(org.tenant.tenantId, 'data_export.download_url_issued')).toEqual([{ actor_id: org.admin.userId, entity_id: id, after: { downloadCount: 1 } }]);
+    });
+
     it('answers 409 while it is not built, 410 once it expired and 404 for an unknown export', async () => {
       const org = await deleted();
       const token = await tokenOf(org.owner, org.tenant);
       const pending = (await requestExport(token).expect(202)).body.id as string;
-      expect((await http().post(`/data-exports/${pending}/download-url`).set(bearer(token)).expect(409)).body.error.code).toBe('EXPORT_NOT_READY');
+      expect((await downloadUrl(token, pending).expect(409)).body.error.code).toBe('EXPORT_NOT_READY');
       await buildExport(pending);
       await db.owner.query(`UPDATE tenant_data_exports SET expires_at = now() - interval '1 second' WHERE id = $1`, [pending]);
-      expect((await http().post(`/data-exports/${pending}/download-url`).set(bearer(token)).expect(410)).body.error.code).toBe('EXPORT_EXPIRED');
-      await http().post(`/data-exports/${randomUUID()}/download-url`).set(bearer(token)).expect(404);
+      expect((await downloadUrl(token, pending).expect(410)).body.error.code).toBe('EXPORT_EXPIRED');
+      await downloadUrl(token, randomUUID()).expect(404);
       await http().get(`/data-exports/${randomUUID()}`).set(bearer(token)).expect(404);
       expect(await auditRows(org.tenant.tenantId, 'data_export.download_url_issued')).toEqual([]);
     });
@@ -186,7 +209,7 @@ describe('organization data export (requests and downloads)', () => {
           ['post', '/data-exports'],
           ['post', `/data-exports/${exportId}/download-url`],
         ] as const) {
-          const response = await http()[method](path).set(bearer(token)).send({ currentPassword: 'correct horse battery staple' });
+          const response = await http()[method](path).set(bearer(token)).send({ currentPassword: TEST_PASSWORD });
           refusals.push([who, `${method.toUpperCase()} ${path.replace(exportId, ':id')}`, response.status, response.body?.error?.code]);
         }
       };
@@ -223,11 +246,11 @@ describe('organization data export (requests and downloads)', () => {
 
       expect((await http().get('/data-exports').set(bearer(tokenB)).expect(200)).body.items.map((item: { id: string }) => item.id)).toEqual([exportB.id]);
       await http().get(`/data-exports/${exportA.id}`).set(bearer(tokenB)).expect(404);
-      await http().post(`/data-exports/${exportA.id}/download-url`).set(bearer(tokenB)).expect(404);
+      await downloadUrl(tokenB, exportA.id).expect(404);
       expect((await db.owner.query('SELECT download_count FROM tenant_data_exports WHERE id = $1', [exportA.id])).rows[0].download_count).toBe(0);
 
       // Each link points at the organization's own object.
-      const link = (await http().post(`/data-exports/${exportB.id}/download-url`).set(bearer(tokenB)).expect(200)).body.url as string;
+      const link = (await downloadUrl(tokenB, exportB.id).expect(200)).body.url as string;
       expect(link).toContain(`tenants/${b.tenant.tenantId}/exports/${exportB.id}.zip`);
       expect(link).not.toContain(a.tenant.tenantId);
     });
@@ -241,7 +264,8 @@ describe('organization data export (requests and downloads)', () => {
       await db.owner.query(`UPDATE tenants SET purge_after = now() - interval '1 minute' WHERE id = $1`, [org.tenant.tenantId]);
 
       worker = await Test.createTestingModule({ imports: [WorkerModule] }).overrideProvider(LOG_WRITER).useValue(() => undefined).compile();
-      await worker.get(TenantPurgeJob).runOnce();
+      // A run purges at most 3 tenants: tenants left due by other tests may go first.
+      for (let run = 0; run < 10 && (await tenantStatus(org.tenant.tenantId)) !== 'PURGED'; run += 1) await worker.get(TenantPurgeJob).runOnce();
 
       expect(await storage.head(key)).toBeNull();
       expect((await db.owner.query('SELECT status FROM tenants WHERE id = $1', [org.tenant.tenantId])).rows[0].status).toBe('PURGED');
