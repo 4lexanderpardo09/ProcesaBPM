@@ -22,8 +22,10 @@ export interface ExportManifest {
   readonly tenant: ExportOrganization;
   readonly generatedAt: string;
   readonly includeFiles: boolean;
-  /** Rows per dataset. */
+  /** Rows written per dataset (data/*.jsonl). */
   readonly datasets: Readonly<Record<string, number>>;
+  /** Rows written per CSV (read again for the CSV: the counts can differ if the organization changed in between). */
+  readonly csv: Readonly<Record<string, number>>;
   /** Files written under files/. */
   readonly files: number;
   readonly missingFiles: readonly MissingFile[];
@@ -35,6 +37,7 @@ export interface ManifestInput {
   readonly generatedAt: Date;
   readonly includeFiles: boolean;
   readonly datasets: Readonly<Record<string, number>>;
+  readonly csv: Readonly<Record<string, number>>;
   readonly files: number;
   readonly missingFiles: readonly MissingFile[];
 }
@@ -47,6 +50,7 @@ export function buildManifest(input: ManifestInput): ExportManifest {
     generatedAt: input.generatedAt.toISOString(),
     includeFiles: input.includeFiles,
     datasets: input.datasets,
+    csv: input.csv,
     files: input.files,
     missingFiles: input.missingFiles,
   };
@@ -57,12 +61,21 @@ export function exportCounts(manifest: ExportManifest): Record<string, number> {
   return { ...manifest.datasets, files: manifest.files, missing_files: manifest.missingFiles.length };
 }
 
-/** LEEME.txt: what the archive holds and how to read it, in Spanish. CRLF so that every editor shows the lines. */
-export function renderReadme(manifest: ExportManifest): string {
+export interface ReadmeInput {
+  readonly tenant: ExportOrganization;
+  readonly generatedAt: Date;
+  readonly includeFiles: boolean;
+}
+
+/**
+ * LEEME.txt, the first entry: what the archive holds and how to read it, in Spanish (the counts are in manifest.json, the
+ * last entry). CRLF so that every editor shows the lines.
+ */
+export function renderReadme(input: ReadmeInput): string {
   const t = es.readme;
   const lines = [
-    t.title(manifest.tenant.name),
-    t.generatedAt(manifest.generatedAt.replace('T', ' ').slice(0, 19)),
+    t.title(input.tenant.name),
+    t.generatedAt(input.generatedAt.toISOString().replace('T', ' ').slice(0, 19)),
     '',
     t.intro,
     '',
@@ -73,8 +86,9 @@ export function renderReadme(manifest: ExportManifest): string {
     ...EXPORT_GROUPS.map((group) => `- ${t.groups[group]}`),
     '',
     t.excluded,
+    '',
+    t.consistency,
   ];
-  if (!manifest.includeFiles) lines.push('', t.withoutFiles);
-  else if (manifest.missingFiles.length > 0) lines.push('', t.missingFiles(manifest.missingFiles.length));
+  lines.push('', input.includeFiles ? t.missingFiles : t.withoutFiles);
   return `${lines.join('\r\n')}\r\n`;
 }

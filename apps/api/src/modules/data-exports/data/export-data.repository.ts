@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@procesabpm/db';
 import type { TenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 import { EXPORT_DATASET_BY_NAME, type ExportDatasetName } from '../domain/export-datasets.js';
 import { formatRow } from '../domain/export-encoding.js';
@@ -23,9 +22,6 @@ export interface ExportFileRow {
   readonly documentRole: string | null;
 }
 
-/** Every row of a dataset is under this many: the count wraps the page query with no practical limit. */
-const ALL_ROWS = 2_147_483_647;
-
 /**
  * Reads the tenant's data for its export, always in that tenant's transaction (RLS) and with `tenant_id` filtered in
  * every query. Only the allow-listed readers run (docs/arquitectura.md §20).
@@ -43,13 +39,6 @@ export class ExportDataRepository {
     const rows = await tx.$queryRaw<ExportRow[]>(reader.page(tenantId, after ?? reader.start, limit));
     const { formats } = EXPORT_DATASET_BY_NAME[dataset];
     return formats === undefined ? rows : rows.map((row) => formatRow(row, formats));
-  }
-
-  /** The rows the pages of `dataset` will return, counted by the same query. */
-  async count(tx: TenantTransaction, tenantId: string, dataset: ExportDatasetName): Promise<number> {
-    const reader = DATASET_READERS[dataset];
-    const [row] = await tx.$queryRaw<Array<{ rows: number }>>(Prisma.sql`SELECT count(*)::int AS rows FROM (${reader.page(tenantId, reader.start, ALL_ROWS)}) AS dataset`);
-    return row?.rows ?? 0;
   }
 
   /** CONFIRMED files of the tenant after `afterId`, by id. */

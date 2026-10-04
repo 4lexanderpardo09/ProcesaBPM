@@ -1,6 +1,6 @@
 import { StorageUnavailableError } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { ExportInconsistentError, ExportLeaseLostError, ExportStoppedError, ExportTimeoutError, ExportTooLargeError, exportFailureOf } from './export-errors.js';
+import { ExportLeaseLostError, ExportStoppedError, ExportTimeoutError, ExportTooLargeError, exportFailureOf } from './export-errors.js';
 
 describe('exportFailureOf', () => {
   it('maps each known failure to its stored code and whether to retry', () => {
@@ -8,7 +8,6 @@ describe('exportFailureOf', () => {
     expect(exportFailureOf(new ExportTimeoutError())).toEqual({ code: 'EXPORT_TIMEOUT', retry: 'never' });
     expect(exportFailureOf(new ExportLeaseLostError())).toEqual({ code: 'LEASE_LOST', retry: 'later' });
     expect(exportFailureOf(new ExportStoppedError())).toEqual({ code: 'WORKER_STOPPED', retry: 'soon' });
-    expect(exportFailureOf(new ExportInconsistentError())).toEqual({ code: 'EXPORT_INCONSISTENT', retry: 'later' });
     expect(exportFailureOf(new StorageUnavailableError())).toEqual({ code: 'STORAGE_UNAVAILABLE', retry: 'later' });
   });
 

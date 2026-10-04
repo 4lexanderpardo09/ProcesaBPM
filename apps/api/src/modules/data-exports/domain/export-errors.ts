@@ -1,7 +1,7 @@
 import { StorageUnavailableError } from '@procesabpm/shared';
 
 /** Why an export attempt failed, as stored in `tenant_data_exports.error_code` (codes only: never data of the tenant). */
-export type ExportFailureCode = 'EXPORT_TOO_LARGE' | 'EXPORT_TIMEOUT' | 'LEASE_LOST' | 'WORKER_STOPPED' | 'EXPORT_INCONSISTENT' | 'STORAGE_UNAVAILABLE' | 'EXPORT_FAILED';
+export type ExportFailureCode = 'EXPORT_TOO_LARGE' | 'EXPORT_TIMEOUT' | 'LEASE_LOST' | 'WORKER_STOPPED' | 'STORAGE_UNAVAILABLE' | 'EXPORT_FAILED';
 
 /** `never`: retrying cannot help (the owner can ask again without files). `soon`/`later`: another attempt is worth it. */
 export type ExportRetry = 'never' | 'soon' | 'later';
@@ -34,13 +34,6 @@ export class ExportStoppedError extends ExportAttemptError {
   override readonly name = 'ExportStoppedError';
   readonly code = 'WORKER_STOPPED';
   readonly retry = 'soon';
-}
-
-/** A dataset or the file list changed while the archive was written: it would not match its manifest. */
-export class ExportInconsistentError extends ExportAttemptError {
-  override readonly name = 'ExportInconsistentError';
-  readonly code = 'EXPORT_INCONSISTENT';
-  readonly retry = 'later';
 }
 
 export interface ExportFailure {

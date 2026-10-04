@@ -7,7 +7,7 @@ export const dataExportsEs = {
       'Este archivo contiene una copia de los datos de tu organización en ProcesaBPM, tal como estaban al generarla. Guárdalo en un lugar seguro: incluye datos personales de tus miembros y clientes.',
     contentsTitle: 'Contenido',
     contents: [
-      'manifest.json: resumen técnico (versión del formato, cantidad de filas por conjunto, archivos incluidos y los que no se encontraron).',
+      'manifest.json (al final del archivo): resumen técnico (versión del formato, filas escritas por conjunto, archivos incluidos y los que no se encontraron).',
       'data/<conjunto>.jsonl: todos los datos, un objeto JSON por línea. Las fechas van en ISO 8601 (UTC); los números grandes y los decimales, como texto.',
       'csv/<conjunto>.csv: tickets, valores de los campos, eventos (historial y comentarios), miembros y auditoría, para abrir en una hoja de cálculo (UTF-8, separados por comas). Un texto que empieza con =, +, - o @ lleva un apóstrofo delante para que la hoja no lo ejecute como fórmula.',
       'files/<id del archivo>/<nombre>: los archivos subidos y los documentos generados.',
@@ -24,7 +24,8 @@ export const dataExportsEs = {
     },
     excluded:
       'No se incluyen contraseñas, códigos de verificación ni secretos de ninguna clase, ni las notificaciones, preferencias y colas internas del sistema.',
-    missingFiles: (count: number) => `${count} ${count === 1 ? 'archivo no se encontró' : 'archivos no se encontraron'} en el almacenamiento: aparecen en manifest.json (missingFiles) y en files/index.csv.`,
+    missingFiles: 'Si algún archivo no se encontró en el almacenamiento, aparece en manifest.json (missingFiles) y en files/index.csv, marcado como no incluido.',
+    consistency: 'Cada conjunto se leyó por partes mientras se armaba el archivo: manifest.json dice cuántas filas tiene cada uno.',
     withoutFiles: 'Esta exportación se pidió sin archivos: solo contiene los datos.',
   },
   readyMail: {

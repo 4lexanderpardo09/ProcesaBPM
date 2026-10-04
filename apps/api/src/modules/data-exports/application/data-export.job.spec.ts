@@ -19,7 +19,7 @@ const CLAIM: DataExportClaim = { tenantId: '0199a8f0-0000-7000-8000-00000000000a
 const KEY = `tenants/${CLAIM.tenantId}/exports/${CLAIM.exportId}.zip`;
 const START = Date.parse('2026-10-04T10:00:00Z');
 
-const manifest: ExportManifest = buildManifest({ exportId: CLAIM.exportId, tenant: { id: CLAIM.tenantId, name: 'Acme', slug: 'acme' }, generatedAt: new Date(START), includeFiles: true, datasets: { tickets: 2 }, files: 0, missingFiles: [] });
+const manifest: ExportManifest = buildManifest({ exportId: CLAIM.exportId, tenant: { id: CLAIM.tenantId, name: 'Acme', slug: 'acme' }, generatedAt: new Date(START), includeFiles: true, datasets: { tickets: 2 }, csv: { tickets: 2 }, files: 0, missingFiles: [] });
 
 class FakeClaims {
   renewals: boolean[] = [];

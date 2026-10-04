@@ -19,19 +19,17 @@ const file = (id: string, name: string): ExportFileRow => ({ id, storageKey: `te
 class FakeData {
   readonly pageCalls: Array<{ dataset: string; after: unknown }> = [];
   constructor(
-    private readonly rows: Record<string, ExportRow[]>,
+    readonly rows: Record<string, ExportRow[]>,
     private readonly files: ExportFileRow[] = [],
-    private readonly countDelta: Record<string, number> = {},
+    private readonly onPage: (dataset: string, data: FakeData) => void = () => undefined,
   ) {}
   async organization() {
     return { id: TENANT, name: 'Acme', slug: 'acme' };
   }
-  async count(_tx: unknown, _tenant: string, dataset: string) {
-    return (this.rows[dataset]?.length ?? 0) + (this.countDelta[dataset] ?? 0);
-  }
   async page(_tx: unknown, tenantId: string, dataset: string, after: unknown[] | null, limit: number) {
     expect(tenantId).toBe(TENANT);
     this.pageCalls.push({ dataset, after });
+    this.onPage(dataset, this);
     const all = this.rows[dataset] ?? [];
     const start = after === null ? 0 : all.findIndex((row) => row.id === after[0]) + 1;
     return all.slice(start, start + limit);
@@ -60,24 +58,40 @@ async function build(data: FakeData, storage = new InMemoryObjectStorage(), clai
 }
 
 describe('ExportArchiveBuilder', () => {
-  it('writes the manifest and LEEME.txt first, then every dataset as JSONL (and CSV where decided), then the files', async () => {
+  it('writes LEEME.txt first, then every dataset as JSONL (and CSV where decided), the files and their index, and manifest.json last', async () => {
     const storage = new InMemoryObjectStorage();
     storage.seed(file('0199a8f0-0000-7000-8000-0000000000f1', 'a.pdf').storageKey, Buffer.from('pdf'));
     const data = new FakeData({ tickets: [ticket(1), ticket(2)] }, [file('0199a8f0-0000-7000-8000-0000000000f1', '../a.pdf')]);
     const { entries, manifest } = await build(data, storage);
     const names = entries.map((entry) => entry.name);
-    expect(names.slice(0, 2)).toEqual(['manifest.json', 'LEEME.txt']);
+    expect(names[0]).toBe('LEEME.txt');
     expect(names).toContain('data/tickets.jsonl');
     expect(names).toContain('csv/tickets.csv');
     expect(names.filter((name) => name.startsWith('data/'))).toHaveLength(EXPORT_DATASETS.length);
-    expect(names.slice(-2)).toEqual(['files/index.csv', 'files/0199a8f0-0000-7000-8000-0000000000f1/_a.pdf']);
-    expect(JSON.parse(entries[0]!.content.toString())).toEqual(JSON.parse(JSON.stringify(manifest)));
+    expect(names.slice(-3)).toEqual(['files/0199a8f0-0000-7000-8000-0000000000f1/_a.pdf', 'files/index.csv', 'manifest.json']);
+    expect(JSON.parse(entries.at(-1)!.content.toString())).toEqual(JSON.parse(JSON.stringify(manifest)));
+    expect(manifest).toMatchObject({ files: 1, missingFiles: [] });
     expect(manifest.datasets.tickets).toBe(2);
+    expect(manifest.csv).toEqual({ tickets: 2, ticket_field_values: 0, ticket_events: 0, members: 0, audit_logs: 0 });
     expect(entries.find((entry) => entry.name === 'data/tickets.jsonl')!.content.toString().trim().split('\n').map((line) => JSON.parse(line).title)).toEqual(['=cmd|calc', 'Ticket 2']);
     const csv = entries.find((entry) => entry.name === 'csv/tickets.csv')!.content.toString('utf8');
-    expect(csv.startsWith('﻿')).toBe(true);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
     expect(csv).toContain("'=cmd|calc");
-    expect(entries.at(-1)!.content.toString()).toBe('pdf');
+    expect(entries.find((entry) => entry.name.endsWith('_a.pdf'))!.content.toString()).toBe('pdf');
+  });
+
+  it('records what it actually wrote when the organization changes during the export (audit rows added and deleted)', async () => {
+    let changed = false;
+    const data = new FakeData({ tickets: [ticket(1)], audit_logs: [ticket(5), ticket(6)] }, [], (dataset, fake) => {
+      // While the tickets are written, one audit row is added and an old one deleted (a download link, the retention).
+      if (dataset === 'tickets' && !changed) {
+        changed = true;
+        fake.rows.audit_logs = [ticket(6), ticket(7), ticket(8)];
+      }
+    });
+    const { manifest, entries } = await build(data, undefined, { ...CLAIM, includeFiles: false });
+    expect(manifest.datasets.audit_logs).toBe(3);
+    expect(entries.find((entry) => entry.name === 'data/audit_logs.jsonl')!.content.toString().trim().split('\n')).toHaveLength(3);
   });
 
   it('lists a missing or oversized object in the manifest and the index, and still finishes', async () => {
@@ -88,6 +102,7 @@ describe('ExportArchiveBuilder', () => {
     storage.seed(present.storageKey, Buffer.from('pdf'));
     storage.seed(huge.storageKey, new Uint8Array(EXPORT_MAX_FILE_BYTES + 1));
     const { manifest, entries } = await build(new FakeData({}, [present, absent, huge]), storage);
+    expect(entries.at(-1)!.name).toBe('manifest.json');
     expect(manifest.files).toBe(1);
     expect(manifest.missingFiles).toEqual([
       { fileId: absent.id, name: 'gone.pdf', reason: 'MISSING' },
@@ -105,10 +120,6 @@ describe('ExportArchiveBuilder', () => {
     const calls = data.pageCalls.filter((call) => call.dataset === 'tickets');
     // JSONL and CSV: two pages each.
     expect(calls.map((call) => call.after)).toEqual([null, [rows[EXPORT_PAGE_SIZE - 1]!.id], null, [rows[EXPORT_PAGE_SIZE - 1]!.id]]);
-  });
-
-  it('fails as inconsistent when a dataset changed between its count and its rows', async () => {
-    await expect(build(new FakeData({ tickets: [ticket(1)] }, [], { tickets: 1 }), undefined, { ...CLAIM, includeFiles: false })).rejects.toMatchObject({ code: 'EXPORT_INCONSISTENT' });
   });
 
   it('writes no files and no index without includeFiles', async () => {

@@ -8,7 +8,6 @@ import type { KeyValue } from '../data/dataset-readers/index.js';
 import { ExportDataRepository, type ExportFileRow, type ExportRow } from '../data/export-data.repository.js';
 import { EXPORT_DATASETS, type ExportDataset, type ExportDatasetName } from '../domain/export-datasets.js';
 import { CSV_BOM, csvRecord, csvRow, jsonLine } from '../domain/export-encoding.js';
-import { ExportInconsistentError } from '../domain/export-errors.js';
 import { exportedFilePath } from '../domain/export-file-name.js';
 import { buildManifest, type ExportManifest, type MissingFile, renderReadme } from '../domain/export-manifest.js';
 import type { ExportBudget } from './export-budget.js';
@@ -17,18 +16,17 @@ import type { ExportBudget } from './export-budget.js';
 export const EXPORT_PAGE_SIZE = 1_000;
 /** No stored file is larger (4 MB uploads, 20 MB generated PDFs): anything bigger is listed, not read. */
 export const EXPORT_MAX_FILE_BYTES = 25 * 1024 * 1024;
-/** Counting a large table can take longer than an ordinary transaction. */
-const COUNT_TIMEOUT_MS = 120_000;
 const FILE_INDEX_COLUMNS = ['file_id', 'path', 'original_name', 'mime_type', 'size_bytes', 'sha256', 'origin', 'created_at', 'ticket_id', 'field_code', 'document_role', 'included'] as const;
 
 const utf8 = (text: string) => Buffer.from(text, 'utf8');
 
 /**
- * Writes the archive of one organization: manifest.json and LEEME.txt first (so their counts are taken before the data
- * is written, and checked again after each dataset), then data/*.jsonl and csv/*.csv, then files/index.csv and the
- * files. Every read is a short transaction of the tenant (RLS) with the tenant filtered explicitly; nothing is held
- * open while bytes go to the storage. The tenant is frozen during its deletion period, so a count that changes means
- * something wrote meanwhile: the attempt fails (EXPORT_INCONSISTENT) and is tried again.
+ * Writes the archive of one organization: LEEME.txt first, then data/*.jsonl and csv/*.csv, the files with
+ * files/index.csv, and manifest.json last, with the rows and files actually written. The organization is not frozen
+ * (a download link adds an audit row, the nightly retention deletes old ones), so nothing is counted ahead: each
+ * dataset is a consistent read page by page and the manifest says what each file holds. Every read is a short
+ * transaction of the tenant (RLS) with the tenant filtered explicitly; nothing is held open while bytes go to the
+ * storage, and rows are written one at a time (memory: one page of rows, one file, the upload's two parts).
  */
 @Injectable()
 export class ExportArchiveBuilder {
@@ -41,15 +39,18 @@ export class ExportArchiveBuilder {
 
   async build(zip: ZipArchive, claim: DataExportClaim, budget: ExportBudget): Promise<ExportManifest> {
     try {
-      const manifest = await this.plan(claim, budget);
-      await zip.addBytes('manifest.json', utf8(`${JSON.stringify(manifest, null, 2)}\n`));
-      await zip.addBytes('LEEME.txt', utf8(renderReadme(manifest)));
+      const generatedAt = this.clock.now();
+      const tenant = await this.runner.withTenant(claim.tenantId, (tx) => this.data.organization(tx, claim.tenantId));
+      await zip.addBytes('LEEME.txt', utf8(renderReadme({ tenant, generatedAt, includeFiles: claim.includeFiles })));
+      const datasets: Record<string, number> = {};
+      const csv: Record<string, number> = {};
       for (const dataset of EXPORT_DATASETS) {
-        const expected = manifest.datasets[dataset.name] ?? 0;
-        await this.writeDataset(zip, claim.tenantId, dataset, 'jsonl', expected, budget);
-        if (dataset.csv) await this.writeDataset(zip, claim.tenantId, dataset, 'csv', expected, budget);
+        datasets[dataset.name] = await this.writeDataset(zip, claim.tenantId, dataset, 'jsonl', budget);
+        if (dataset.csv) csv[dataset.name] = await this.writeDataset(zip, claim.tenantId, dataset, 'csv', budget);
       }
-      if (claim.includeFiles) await this.writeFiles(zip, claim.tenantId, manifest, budget);
+      const { files, missingFiles } = claim.includeFiles ? await this.writeFiles(zip, claim.tenantId, budget) : { files: 0, missingFiles: [] };
+      const manifest = buildManifest({ exportId: claim.exportId, tenant, generatedAt, includeFiles: claim.includeFiles, datasets, csv, files, missingFiles });
+      await zip.addBytes('manifest.json', utf8(`${JSON.stringify(manifest, null, 2)}\n`));
       await zip.finish();
       return manifest;
     } catch (error) {
@@ -58,61 +59,56 @@ export class ExportArchiveBuilder {
     }
   }
 
-  private async plan(claim: DataExportClaim, budget: ExportBudget): Promise<ExportManifest> {
-    const tenant = await this.runner.withTenant(claim.tenantId, (tx) => this.data.organization(tx, claim.tenantId));
-    const datasets: Record<string, number> = {};
-    for (const dataset of EXPORT_DATASETS) {
-      budget.check();
-      datasets[dataset.name] = await this.runner.withTenant(claim.tenantId, (tx) => this.data.count(tx, claim.tenantId, dataset.name), { timeoutMs: COUNT_TIMEOUT_MS });
-    }
-    const { files, missingFiles } = claim.includeFiles ? await this.checkFiles(claim.tenantId, budget) : { files: 0, missingFiles: [] };
-    return buildManifest({ exportId: claim.exportId, tenant, generatedAt: this.clock.now(), includeFiles: claim.includeFiles, datasets, files, missingFiles });
-  }
-
-  /** Which files are there to copy: a missing or oversized object is listed in the manifest, never fails the export. */
-  private async checkFiles(tenantId: string, budget: ExportBudget): Promise<{ files: number; missingFiles: MissingFile[] }> {
-    let files = 0;
-    const missingFiles: MissingFile[] = [];
-    for await (const page of this.filePages(tenantId, budget)) {
-      for (const file of page) {
-        budget.check();
-        const object = await this.storage.head(file.storageKey);
-        if (object === null) missingFiles.push({ fileId: file.id, name: file.originalName, reason: 'MISSING' });
-        else if (object.sizeBytes > EXPORT_MAX_FILE_BYTES) missingFiles.push({ fileId: file.id, name: file.originalName, reason: 'TOO_LARGE' });
-        else files += 1;
-      }
-    }
-    return { files, missingFiles };
-  }
-
-  private async writeDataset(zip: ZipArchive, tenantId: string, dataset: ExportDataset<ExportDatasetName>, format: 'jsonl' | 'csv', expected: number, budget: ExportBudget): Promise<void> {
+  /** Writes one dataset in one format and returns the rows written. */
+  private async writeDataset(zip: ZipArchive, tenantId: string, dataset: ExportDataset<ExportDatasetName>, format: 'jsonl' | 'csv', budget: ExportBudget): Promise<number> {
     let written = 0;
     const path = format === 'jsonl' ? `data/${dataset.name}.jsonl` : `csv/${dataset.name}.csv`;
     await zip.addStreamed(path, async (entry) => {
       if (format === 'csv') await entry.write(CSV_BOM + csvRow(dataset.columns));
       for await (const page of this.rowPages(tenantId, dataset, budget)) {
-        await entry.write(page.map((row) => (format === 'jsonl' ? jsonLine(row) : csvRecord(row, dataset.columns))).join(''));
+        for (const row of page) await entry.write(format === 'jsonl' ? jsonLine(row) : csvRecord(row, dataset.columns));
         written += page.length;
       }
     });
-    if (written !== expected) throw new ExportInconsistentError();
+    return written;
   }
 
-  private async writeFiles(zip: ZipArchive, tenantId: string, manifest: ExportManifest, budget: ExportBudget): Promise<void> {
-    const missing = new Set(manifest.missingFiles.map((file) => file.fileId));
-    await zip.addStreamed('files/index.csv', async (entry) => {
-      await entry.write(CSV_BOM + csvRow(FILE_INDEX_COLUMNS));
-      for await (const page of this.filePages(tenantId, budget)) await entry.write(page.map((file) => csvRow(fileIndexRow(file, !missing.has(file.id)))).join(''));
-    });
-    let copied = 0;
+  /**
+   * The CONFIRMED files, one at a time; an object that is not in the storage (or is bigger than any accepted file) is
+   * listed instead and never fails the export. Then files/index.csv, which says which files are in the archive.
+   */
+  private async writeFiles(zip: ZipArchive, tenantId: string, budget: ExportBudget): Promise<{ files: number; missingFiles: MissingFile[] }> {
+    const copied = new Set<string>();
+    const missingFiles: MissingFile[] = [];
     for await (const page of this.filePages(tenantId, budget)) {
-      for (const file of page.filter((row) => !missing.has(row.id))) {
+      for (const file of page) {
         budget.check();
-        await zip.addBytes(exportedFilePath(file.id, file.originalName), await this.storage.read(file.storageKey, EXPORT_MAX_FILE_BYTES));
-        copied += 1;
+        const content = await this.readFile(file);
+        if (typeof content === 'string') missingFiles.push({ fileId: file.id, name: file.originalName, reason: content });
+        else {
+          await zip.addBytes(exportedFilePath(file.id, file.originalName), content);
+          copied.add(file.id);
+        }
       }
     }
-    if (copied !== manifest.files) throw new ExportInconsistentError();
+    await zip.addStreamed('files/index.csv', async (entry) => {
+      await entry.write(CSV_BOM + csvRow(FILE_INDEX_COLUMNS));
+      for await (const page of this.filePages(tenantId, budget)) for (const file of page) await entry.write(csvRow(fileIndexRow(file, copied.has(file.id))));
+    });
+    return { files: copied.size, missingFiles };
+  }
+
+  private async readFile(file: ExportFileRow): Promise<Uint8Array | MissingFile['reason']> {
+    const object = await this.storage.head(file.storageKey);
+    if (object === null) return 'MISSING';
+    if (object.sizeBytes > EXPORT_MAX_FILE_BYTES) return 'TOO_LARGE';
+    try {
+      return await this.storage.read(file.storageKey, EXPORT_MAX_FILE_BYTES);
+    } catch (error) {
+      // Deleted between the two calls: as missing. Any other failure fails the attempt.
+      if ((await this.storage.head(file.storageKey)) === null) return 'MISSING';
+      throw error;
+    }
   }
 
   private async *rowPages(tenantId: string, dataset: ExportDataset<ExportDatasetName>, budget: ExportBudget): AsyncGenerator<ExportRow[]> {

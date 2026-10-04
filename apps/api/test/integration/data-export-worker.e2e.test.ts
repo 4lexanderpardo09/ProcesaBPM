@@ -2,10 +2,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ObjectStorage } from '../../src/infrastructure/storage/object-storage.js';
 import { DataExportJob } from '../../src/modules/data-exports/application/data-export.job.js';
 import { DataExportScheduler } from '../../src/modules/data-exports/application/data-export.scheduler.js';
+import { ExportDataRepository } from '../../src/modules/data-exports/data/export-data.repository.js';
 import { EXPORT_DATASETS } from '../../src/modules/data-exports/domain/export-datasets.js';
 import { RetentionJob } from '../../src/modules/retention/application/retention.job.js';
 import { TenantPurgeJob } from '../../src/modules/tenant-purge/application/tenant-purge.job.js';
@@ -142,9 +143,10 @@ describe('organization data export: the worker builds a real archive', () => {
     await db?.close();
   });
 
-  it('opens with manifest.json and LEEME.txt, and the manifest counts what the archive holds', () => {
+  it('opens with LEEME.txt, ends with manifest.json, and the manifest counts what the archive holds', () => {
     const names = exportA.entries.map((entry) => entry.name);
-    expect(names.slice(0, 2)).toEqual(['manifest.json', 'LEEME.txt']);
+    expect(names[0]).toBe('LEEME.txt');
+    expect(names.at(-1)).toBe('manifest.json');
     const manifest = JSON.parse(text(exportA.entries, 'manifest.json'));
     expect(manifest).toMatchObject({ formatVersion: 1, exportId: exportA.id, includeFiles: true, tenant: { id: a.world.tenant.tenantId }, files: 1, missingFiles: [] });
     for (const dataset of EXPORT_DATASETS) expect(jsonl(exportA.entries, dataset.name), dataset.name).toHaveLength(manifest.datasets[dataset.name]);
@@ -197,6 +199,33 @@ describe('organization data export: the worker builds a real archive', () => {
     expect(Buffer.concat(exportB.entries.map((entry) => entry.content)).toString('utf8').includes(a.marker)).toBe(false);
     // Each export only through its own organization.
     return http().post(`/data-exports/${exportA.id}/download-url`).set(bearer(exportB.token)).send({ currentPassword: TEST_PASSWORD }).expect(404);
+  });
+
+  it('stays consistent when the organization changes during the export: audit rows added and deleted mid-way, still READY', async () => {
+    const c = await organization('gamma');
+    await requestDeletion(c);
+    const tenantId = c.world.tenant.tenantId;
+    const repository = worker.module.get(ExportDataRepository);
+    const original = repository.page.bind(repository);
+    let changed = false;
+    const spy = vi.spyOn(repository, 'page').mockImplementation(async (tx, pageTenant, dataset, after, limit) => {
+      if (pageTenant === tenantId && dataset === 'tickets' && !changed) {
+        changed = true;
+        // What happens in real life while an export runs: a download link adds an audit row, the retention deletes old ones.
+        await db.owner.query(`INSERT INTO audit_logs (tenant_id, action, entity_type) VALUES ($1, 'data_export.download_url_issued', 'DataExport')`, [tenantId]);
+        await db.owner.query(`DELETE FROM audit_logs WHERE tenant_id = $1 AND id = (SELECT id FROM audit_logs WHERE tenant_id = $1 ORDER BY id LIMIT 1)`, [tenantId]);
+      }
+      return original(tx, pageTenant, dataset, after, limit);
+    });
+    try {
+      const built = await exportOf(c);
+      expect(changed).toBe(true);
+      const manifest = JSON.parse(text(built.entries, 'manifest.json'));
+      expect(manifest.datasets.audit_logs).toBe(jsonl(built.entries, 'audit_logs').length);
+      expect(manifest.csv.audit_logs).toBe(text(built.entries, 'csv/audit_logs.csv').split('\r\n').filter((line) => line !== '').length - 1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('mails the member who asked, with a link to the app page and none to the archive', async () => {
