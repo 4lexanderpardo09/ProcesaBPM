@@ -1,11 +1,8 @@
 -- MFA reset by a platform administrator (docs/base-de-datos.md §8.29): a user who lost the device and the backup codes gets
--- back in through support. One function does the whole reset in the caller's transaction: it clears the factor, revokes
+-- back in through support. Never another platform administrator: their recovery is an operator runbook. One function does the whole reset in the caller's transaction: it clears the factor, revokes
 -- every session of the user (tenant and platform) and closes the support visits they opened, voids the login tokens issued
 -- before it, mails the user and the owners of their organizations, and writes the platform trail (reason and how the
 -- identity was verified) and one row in the trail of every organization where the user is an active member.
---
--- Also: audit_logs is dated by the database clock, like platform_audit_logs (20261017000100), so nobody can backdate a row
--- into the retention window.
 --
 -- Rolling deploys: nothing an API of the previous version calls changes its signature; auth_consume_login_token keeps it.
 
@@ -83,11 +80,14 @@ CREATE FUNCTION worker_member_security_notice_recipient(p_recipient_id uuid, p_t
 -- ===========================================================================
 -- 3. The reset
 -- ===========================================================================
--- p_admin: the platform administrator (re-checked here: in platform_admins, account ACTIVE), never the user themself, so a
--- stolen platform session cannot remove its own factor. The identity verification is recorded, not automated: one of four
+-- p_admin: the platform administrator (re-checked here: in platform_admins, account ACTIVE). The user is never the
+-- administrator themself nor any other platform administrator: a stolen platform session cannot remove its own factor or a
+-- colleague's (recovering a platform administrator's factor is an operator runbook, not an API). The identity verification is recorded, not automated: one of four
 -- methods, a reference (ticket or case id) and, for a request of an organization administrator, who asked, who must be an
 -- ACTIVE owner or active admin of an organization where the user is an ACTIVE member.
 -- No rows: the user does not exist or has no second factor (the API tells 404 from 409 with a read of its own).
+-- Instants: clock_timestamp() taken after the row lock, so a token or a session created while this transaction waited for
+-- the lock is still older than the reset and is voided.
 -- The policy check of auth_disable_mfa does not apply on purpose: a member of an organization that requires MFA cannot work
 -- there until they enroll again (forced at login, and 403 MFA_REQUIRED per request), and this is the only way back in.
 CREATE FUNCTION platform_reset_user_mfa(p_admin uuid, p_user uuid, p_reason text, p_method text, p_reference text,
@@ -96,7 +96,7 @@ CREATE FUNCTION platform_reset_user_mfa(p_admin uuid, p_user uuid, p_reason text
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
   DECLARE
-    v_now        timestamptz := now();
+    v_now        timestamptz;
     v_revoked    integer;
     v_closed     integer;
     v_tenant_ids uuid[];
@@ -109,10 +109,16 @@ CREATE FUNCTION platform_reset_user_mfa(p_admin uuid, p_user uuid, p_reason text
     IF p_admin = p_user THEN
       RAISE EXCEPTION 'a platform administrator cannot reset their own second factor' USING ERRCODE = '23514';
     END IF;
+    IF EXISTS (SELECT 1 FROM platform_admins WHERE user_id = p_user) THEN
+      RAISE EXCEPTION 'the second factor of a platform administrator is not reset through the console' USING ERRCODE = '23514';
+    END IF;
     IF p_method IS NULL OR p_method NOT IN ('VIDEO_CALL', 'CALLBACK_KNOWN_NUMBER', 'TENANT_ADMIN_REQUEST', 'IN_PERSON') THEN
       RAISE EXCEPTION 'unknown verification method' USING ERRCODE = '22023';
     END IF;
-    IF length(btrim(coalesce(p_reason, ''))) NOT BETWEEN 10 AND 500 OR length(btrim(coalesce(p_reference, ''))) NOT BETWEEN 3 AND 200 THEN
+    -- The API counts code points (10..500 and 3..200). length() counts them only in a UTF8 database (in SQL_ASCII it counts
+    -- bytes), so the upper bound is checked in bytes (4 per code point at most): whatever the API accepts passes here.
+    IF length(btrim(coalesce(p_reason, ''))) < 10 OR octet_length(btrim(coalesce(p_reason, ''))) > 2000
+       OR length(btrim(coalesce(p_reference, ''))) < 3 OR octet_length(btrim(coalesce(p_reference, ''))) > 800 THEN
       RAISE EXCEPTION 'the reason (10 to 500 characters) and the reference (3 to 200) are required' USING ERRCODE = '22023';
     END IF;
     IF (p_method = 'TENANT_ADMIN_REQUEST') <> (p_tenant_admin_user_id IS NOT NULL) THEN
@@ -121,6 +127,8 @@ CREATE FUNCTION platform_reset_user_mfa(p_admin uuid, p_user uuid, p_reason text
 
     PERFORM 1 FROM users WHERE id = p_user AND mfa_enabled FOR UPDATE;
     IF NOT FOUND THEN RETURN; END IF;
+    -- Milliseconds, like the timestamptz(3) columns it is written to: the instant returned is the instant stored.
+    v_now := date_trunc('milliseconds', clock_timestamp());
 
     -- Organizations whose trail and owners hear about it: where the user is an ACTIVE member (not purged).
     SELECT coalesce(array_agg(m.tenant_id ORDER BY m.tenant_id), '{}') INTO v_tenant_ids
@@ -147,7 +155,7 @@ CREATE FUNCTION platform_reset_user_mfa(p_admin uuid, p_user uuid, p_reason text
     DELETE FROM user_mfa_backup_codes WHERE user_id = p_user;
 
     -- Every session still usable, tenant and platform (realtime_session_revoked disconnects its sockets), and the support
-    -- visits the user opened as a platform administrator. The password is left alone.
+    -- visits the user still has open from a time they were a platform administrator. The password is left alone.
     WITH revoked AS (
       UPDATE refresh_sessions SET revoked_at = v_now
       WHERE user_id = p_user AND revoked_at IS NULL AND expires_at > v_now RETURNING 1)
@@ -204,21 +212,3 @@ REVOKE ALL ON FUNCTION
 GRANT EXECUTE ON FUNCTION enqueue_member_security_notice(uuid, text, uuid, uuid) TO app_platform;
 GRANT EXECUTE ON FUNCTION worker_member_security_notice_recipient(uuid, uuid, uuid) TO app_worker;
 GRANT EXECUTE ON FUNCTION platform_reset_user_mfa(uuid, uuid, text, text, text, uuid, text) TO app_platform;
-
--- ===========================================================================
--- 5. The tenant trail is dated by the database clock
--- ===========================================================================
--- Same rule as platform_audit_logs_database_clock (20261017000100): whoever inserts (app_runtime, app_worker or
--- app_platform, which writes support and reset rows) cannot backdate a row into the purge window or date one in the
--- future. Last: it takes the table's lock.
-CREATE FUNCTION audit_logs_database_clock() RETURNS trigger
-  LANGUAGE plpgsql SET search_path = public, pg_temp
-  AS $$
-  BEGIN
-    NEW.created_at := now();
-    RETURN NEW;
-  END
-  $$;
-REVOKE ALL ON FUNCTION audit_logs_database_clock() FROM PUBLIC;
-CREATE TRIGGER audit_logs_database_clock BEFORE INSERT ON audit_logs
-  FOR EACH ROW EXECUTE FUNCTION audit_logs_database_clock();

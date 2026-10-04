@@ -146,9 +146,9 @@ describe('platform MFA reset', () => {
       });
     });
 
-    it('revokes every live session of the user, tenant and platform, and closes the support visits they opened', async () => {
+    it('revokes every live session of the user, tenant and platform, and closes the support visits they still have open', async () => {
+      // A former platform administrator: their visit outlived the revocation (it dies lazily on its next request).
       const userId = await memberWithMfa(tenantA);
-      await db.platform.query('INSERT INTO platform_admins (user_id) VALUES ($1)', [userId]);
       const tenantSession = await insertSession(userId, tenantA.tenantId);
       const platformSession = await insertSession(userId, null);
       const expired = await insertSession(userId, null, `- interval '1 minute'`);
@@ -257,11 +257,17 @@ describe('platform MFA reset', () => {
       expect(await tenantAuditRows(userId)).toEqual([]);
     });
 
-    it('also resets another platform administrator (a colleague who lost the device)', async () => {
-      const colleague = await newPlatformAdmin();
-      await db.owner.query(ENABLE_MFA, [colleague]);
-      expect(await reset({ user: colleague })).toHaveLength(1);
-      expect(await noticesFor(colleague)).toEqual([{ userId: colleague, kind: 'MFA_RESET_BY_SUPPORT' }]);
+    it('dates the reset after the row lock (clock_timestamp), not at the start of the transaction', async () => {
+      const userId = await memberWithMfa(tenantA);
+      const { started, resetAt } = await withContext(db.platform, {}, async (client) => {
+        const { rows } = await client.query<{ started: Date }>('SELECT now() AS started');
+        await client.query('SELECT pg_sleep(0.05)');
+        const result = await client.query<ResetRow>('SELECT * FROM platform_reset_user_mfa($1, $2, $3, $4, $5, NULL, NULL)', [adminId, userId, REASON, 'VIDEO_CALL', REFERENCE]);
+        return { started: rows[0]!.started, resetAt: result.rows[0]!.out_reset_at };
+      });
+      expect(resetAt.getTime() - started.getTime()).toBeGreaterThanOrEqual(40);
+      const stored = await db.owner.query<{ mfa_reset_at: Date }>('SELECT mfa_reset_at FROM users WHERE id = $1', [userId]);
+      expect(stored.rows[0]!.mfa_reset_at.getTime()).toBe(resetAt.getTime());
     });
   });
 
@@ -275,6 +281,14 @@ describe('platform MFA reset', () => {
       expect((await userState(userId))?.mfa_enabled).toBe(true);
     });
 
+    it('refuses resetting another platform administrator’s factor (23514): that is an operator runbook', async () => {
+      const colleague = await newPlatformAdmin();
+      await db.owner.query(ENABLE_MFA, [colleague]);
+      expect(await sqlStateOf(() => reset({ user: colleague }))).toBe(SqlState.checkViolation);
+      expect((await userState(colleague))?.mfa_enabled).toBe(true);
+      expect(await noticesFor(colleague)).toEqual([]);
+    });
+
     it('refuses resetting one’s own factor (23514)', async () => {
       const self = await newPlatformAdmin();
       await db.owner.query(ENABLE_MFA, [self]);
@@ -284,15 +298,20 @@ describe('platform MFA reset', () => {
     it.each<[string, Partial<ResetInput>]>([
       ['an unknown method', { method: 'EMAIL' }],
       ['a short reason', { reason: '  short  ' }],
-      ['a long reason', { reason: 'x'.repeat(501) }],
+      ['a reason over 2000 bytes', { reason: 'x'.repeat(2001) }],
       ['a short reference', { reference: ' x ' }],
-      ['a long reference', { reference: 'x'.repeat(201) }],
+      ['a reference over 800 bytes', { reference: 'x'.repeat(801) }],
       ['a tenant administrator request without the requester', { method: 'TENANT_ADMIN_REQUEST' }],
       ['a requester with another method', { method: 'IN_PERSON', tenantAdmin: randomUUID() }],
     ])('refuses %s (22023)', async (_label, input) => {
       const userId = await memberWithMfa(tenantA);
       expect(await sqlStateOf(() => reset({ user: userId, ...input }))).toBe(INVALID_PARAMETER_VALUE);
       expect((await userState(userId))?.mfa_enabled).toBe(true);
+    });
+
+    it('accepts every reason and reference the API accepts, also 500 and 200 four-byte emoji, whatever the database encoding', async () => {
+      const userId = await memberWithMfa(tenantA);
+      expect(await reset({ user: userId, reason: '🔐'.repeat(500), reference: '🔐'.repeat(200) })).toHaveLength(1);
     });
 
     it('runs only with the platform login', async () => {
