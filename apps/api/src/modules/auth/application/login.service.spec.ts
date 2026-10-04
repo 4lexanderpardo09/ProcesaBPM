@@ -1,4 +1,4 @@
-import { InvalidCredentialsError } from '@procesabpm/shared';
+import { InvalidCredentialsError, MaintenanceError } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { BackgroundTasks } from '../../../common/background/background-tasks.js';
 import type { JsonLogger } from '../../../common/logging/json-logger.js';
@@ -10,6 +10,7 @@ import type { CredentialsRepository } from '../data/credentials.repository.js';
 import type { AttemptClaim } from '../domain/attempt-claim.js';
 import type { LoginCandidate } from '../domain/login-candidate.js';
 import type { SecurityNotifier } from './security-notifier.js';
+import type { SignInGate } from './sign-in-gate.js';
 import { LoginService } from './login.service.js';
 
 const active: LoginCandidate = {
@@ -48,6 +49,7 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
   const selection = { issue: vi.fn().mockResolvedValue(SELECTION) };
   const notifier = { notifyLockout: vi.fn().mockResolvedValue(undefined) };
   const background = new BackgroundTasks({ error: vi.fn() } as unknown as JsonLogger);
+  const gate = { refusalFor: vi.fn().mockResolvedValue(undefined) };
   const service = new LoginService(
     runner,
     credentials as unknown as CredentialsRepository,
@@ -56,8 +58,9 @@ function setup(candidate: LoginCandidate | undefined, passwordMatches: boolean, 
     selection as unknown as SelectionIssuer,
     notifier as unknown as SecurityNotifier,
     background,
+    gate as unknown as SignInGate,
   );
-  return { service, background, credentials, hasher, calls, tokens, selection, notifier };
+  return { service, background, credentials, hasher, calls, tokens, selection, notifier, gate };
 }
 
 const request = { email: 'jane@example.com', password: 'secret password' };
@@ -97,10 +100,34 @@ describe('LoginService', () => {
     expect(userId).not.toBe(active.id);
   });
 
-  it('tells nobody about platform rights when the login fails', async () => {
-    const { service, credentials } = setup(undefined, false);
+  it('tells nobody about platform rights or maintenance when the login fails', async () => {
+    const { service, credentials, gate } = setup(undefined, false);
     await expect(service.login(request)).rejects.toBeInstanceOf(InvalidCredentialsError);
     expect(credentials.isPlatformAdmin).not.toHaveBeenCalled();
+    expect(gate.refusalFor).not.toHaveBeenCalled();
+  });
+
+  describe('during a maintenance block for every organization', () => {
+    const refusal = new MaintenanceError({ announcementId: 'a1', title: 'Window', body: 'x', endsAt: null }, undefined);
+
+    it.each([
+      ['without MFA', active],
+      ['with MFA (refused before the second factor)', { ...active, mfaEnabled: true }],
+    ])('refuses a right password %s, gives the attempt back without stamping the sign-in, and issues nothing', async (_label, candidate) => {
+      const { service, credentials, gate, selection, tokens } = setup(candidate, true);
+      gate.refusalFor.mockResolvedValue(refusal);
+      await expect(service.login(request)).rejects.toBe(refusal);
+      expect(credentials.recordPasswordSuccess).toHaveBeenCalledWith(expect.anything(), active.id, false);
+      expect(selection.issue).not.toHaveBeenCalled();
+      expect(tokens.issueMfaChallenge).not.toHaveBeenCalled();
+    });
+
+    it('tells the gate whether the account administers the platform, so it needs no second lookup', async () => {
+      const { service, credentials, gate } = setup({ ...active, mfaEnabled: true }, true);
+      credentials.isPlatformAdmin.mockResolvedValue(true);
+      await service.login(request);
+      expect(gate.refusalFor).toHaveBeenCalledWith(active.id, true);
+    });
   });
 
   describe('the lockout notice', () => {

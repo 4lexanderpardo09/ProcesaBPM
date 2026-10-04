@@ -10,6 +10,7 @@ import type { LoginCandidate } from '../domain/login-candidate.js';
 import { decideLoginStep } from '../domain/login-step.js';
 import { SecurityNotifier } from './security-notifier.js';
 import { SelectionIssuer } from './selection-issuer.js';
+import { SignInGate } from './sign-in-gate.js';
 
 @Injectable()
 export class LoginService {
@@ -21,6 +22,7 @@ export class LoginService {
     @Inject(SelectionIssuer) private readonly selection: SelectionIssuer,
     @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
     @Inject(BackgroundTasks) private readonly background: BackgroundTasks,
+    @Inject(SignInGate) private readonly gate: SignInGate,
   ) {}
 
   /**
@@ -48,7 +50,11 @@ export class LoginService {
     throw new InvalidCredentialsError();
   }
 
-  /** After a correct password: the second factor, the enrollment it forces, or the organization picker. */
+  /**
+   * After a correct password: the second factor, the enrollment it forces, or the organization picker. A maintenance
+   * block for every organization refuses everybody but platform administrators here, after giving the attempt slot back;
+   * the 503 tells that the password was right, as `MFA_REQUIRED` already does.
+   */
   private async nextStep(candidate: LoginCandidate): Promise<LoginResponse> {
     const { id } = candidate;
     const facts = await this.runner.withUserTransaction(id, async (tx) => ({
@@ -57,8 +63,11 @@ export class LoginService {
       tenantRequiresMfa: await this.credentials.requiresMfaByMembership(tx, id),
     }));
     const step = decideLoginStep(facts);
-    // `last_login_at` is stamped when the sign-in is complete; a pending second factor gives the password slot back only.
-    await this.runner.withAnonymousTransaction((tx) => this.credentials.recordPasswordSuccess(tx, id, step.kind === 'SELECT_ORGANIZATION'));
+    const refusal = await this.gate.refusalFor(id, facts.platformAdmin);
+    // `last_login_at` is stamped when the sign-in is complete; a pending second factor or a block gives the password slot back only.
+    const completed = refusal === undefined && step.kind === 'SELECT_ORGANIZATION';
+    await this.runner.withAnonymousTransaction((tx) => this.credentials.recordPasswordSuccess(tx, id, completed));
+    if (refusal !== undefined) throw refusal;
 
     if (step.kind === 'SELECT_ORGANIZATION') return this.selection.issue(id, false);
     if (step.kind === 'MFA_REQUIRED') {
