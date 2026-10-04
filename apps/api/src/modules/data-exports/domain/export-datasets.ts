@@ -194,7 +194,7 @@ export const EXPORT_EXCLUDED_COLUMNS: Readonly<Record<string, Readonly<Record<st
 };
 
 /** Column names that suggest a secret: an exported column may not match unless it is allowed below with a reason. */
-export const SENSITIVE_COLUMN_NAME = /(password|secret|token|hash|encrypted|mfa_|key)/;
+export const SENSITIVE_COLUMN_NAME = /(password|secret|token|hash|encrypted|mfa_|key|credential|otp|salt|session|signing|private|recovery|nonce)/;
 
 export const SENSITIVE_NAMES_ALLOWED: Readonly<Record<string, string>> = {
   'tenants.mfa_required': 'The organization policy flag (whether members must use a second factor), not a secret.',

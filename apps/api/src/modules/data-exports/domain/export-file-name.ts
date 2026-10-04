@@ -1,5 +1,7 @@
 // eslint-disable-next-line no-control-regex
 const UNSAFE_CHARACTERS = /[\u0000-\u001f\u007f<>:"/\\|?*]/g;
+/** Zero-width and bidirectional-control characters: they can make `invoice.exe.pdf` look like `invoice.fdp.exe`. */
+const INVISIBLE_CHARACTERS = /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i;
 export const MAX_EXPORTED_FILE_NAME = 120;
 const MAX_EXTENSION = 16;
@@ -15,11 +17,12 @@ function truncate(name: string, max: number): string {
 
 /**
  * A name a person gave a file, made safe as one path segment in any operating system: no separators or characters
- * Windows refuses, no `..`, no leading or trailing dots or spaces, at most 120 characters (the extension kept).
+ * Windows refuses, no invisible or text-direction characters, no `..`, no leading or trailing dots or spaces, at most 120 characters (the extension kept).
  */
 export function sanitizeExportedFileName(name: string): string {
   const cleaned = name
     .normalize('NFC')
+    .replace(INVISIBLE_CHARACTERS, '')
     .replace(UNSAFE_CHARACTERS, '_')
     .replace(/\.{2,}/g, '.')
     .replace(/^[.\s]+|[.\s]+$/g, '');

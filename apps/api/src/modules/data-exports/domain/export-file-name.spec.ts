@@ -22,6 +22,14 @@ describe('sanitizeExportedFileName', () => {
     expect(sanitizeExportedFileName('')).toBe('file');
   });
 
+  it('removes zero-width and text-direction characters that disguise a name', () => {
+    expect(sanitizeExportedFileName('invoice\u202Efdp.exe')).toBe('invoicefdp.exe');
+    for (const character of ['\u200B', '\u200C', '\u200D', '\u200E', '\u200F', '\u202A', '\u202B', '\u202C', '\u202D', '\u202E', '\u2066', '\u2067', '\u2068', '\u2069', '\uFEFF']) {
+      expect(sanitizeExportedFileName(`a${character}b.pdf`), character.codePointAt(0)!.toString(16)).toBe('ab.pdf');
+    }
+    expect(sanitizeExportedFileName('\u200B\u202E')).toBe('file');
+  });
+
   it('prefixes names Windows reserves', () => {
     expect(sanitizeExportedFileName('CON.txt')).toBe('_CON.txt');
     expect(sanitizeExportedFileName('nul')).toBe('_nul');

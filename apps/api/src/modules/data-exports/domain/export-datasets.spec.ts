@@ -41,7 +41,7 @@ describe('EXPORT_DATASETS', () => {
   });
 
   it('flags names that look like secrets', () => {
-    for (const name of ['password_hash', 'secret_encrypted', 'token_hash', 'mfa_secret', 'code_hash', 'storage_key']) expect(SENSITIVE_COLUMN_NAME.test(name), name).toBe(true);
+    for (const name of ['password_hash', 'secret_encrypted', 'token_hash', 'mfa_secret', 'code_hash', 'storage_key', 'api_credential', 'otp_code', 'salt', 'session_id', 'signing_key', 'private_note', 'recovery_codes', 'nonce']) expect(SENSITIVE_COLUMN_NAME.test(name), name).toBe(true);
     for (const name of ['sha256', 'title', 'document_number']) expect(SENSITIVE_COLUMN_NAME.test(name), name).toBe(false);
   });
 });
