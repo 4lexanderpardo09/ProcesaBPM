@@ -39,10 +39,19 @@ export class ExportLease {
     this.timer = undefined;
   }
 
-  /** Renews now and throws when the lease is no longer ours: the last check before the object becomes visible. */
+  /**
+   * The last check before the object becomes visible: a renewal that must succeed now. A refusal loses the lease, and a
+   * renewal that fails (the database unreachable) fails the attempt too: the object is only completed on a fresh lease.
+   */
   async confirm(): Promise<void> {
-    await this.beat();
     if (this.signal.aborted) throw this.signal.reason;
+    await this.beating;
+    if (this.signal.aborted) throw this.signal.reason;
+    if (!(await this.renew())) {
+      this.lose();
+      throw this.signal.reason;
+    }
+    this.lastRenewedAt = this.clock.now().getTime();
   }
 
   /** One renewal at a time; a beat while one is in flight waits for it. */

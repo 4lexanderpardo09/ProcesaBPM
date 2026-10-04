@@ -22,15 +22,19 @@ const START = Date.parse('2026-10-04T10:00:00Z');
 const manifest: ExportManifest = buildManifest({ exportId: CLAIM.exportId, tenant: { id: CLAIM.tenantId, name: 'Acme', slug: 'acme' }, generatedAt: new Date(START), includeFiles: true, datasets: { tickets: 2 }, csv: { tickets: 2 }, files: 0, missingFiles: [] });
 
 class FakeClaims {
-  renewals: boolean[] = [];
+  renewals: Array<boolean | Error> = [];
+  finishError: Error | undefined;
   finishResult = true;
   readonly finished: FinishedExport[] = [];
   readonly failures: Array<{ code: string; retryAt: Date | null }> = [];
   claimDue = vi.fn(async () => [CLAIM]);
   async renew(): Promise<boolean> {
-    return this.renewals.shift() ?? true;
+    const answer = this.renewals.shift() ?? true;
+    if (answer instanceof Error) throw answer;
+    return answer;
   }
   async finish(_tx: unknown, _claim: DataExportClaim, result: FinishedExport): Promise<boolean> {
+    if (this.finishError !== undefined) throw this.finishError;
     this.finished.push(result);
     return this.finishResult;
   }
@@ -136,6 +140,24 @@ describe('DataExportJob', () => {
     expect(storage.multipart).toEqual({ opened: 1, completed: 0, aborted: 1 });
     expect(storage.has(KEY)).toBe(false);
     expect(claims.failures.map((failure) => failure.code)).toEqual(['LEASE_LOST']);
+  });
+
+  it('does not complete when the renewal before completing throws (no fresh lease, no object)', async () => {
+    const { job, claims, storage } = setup(fakeBuilder(2));
+    claims.renewals = [new Error('db down')];
+    expect(await job.run(CLAIM)).toBe('failed');
+    expect(storage.multipart).toEqual({ opened: 1, completed: 0, aborted: 1 });
+    expect(storage.has(KEY)).toBe(false);
+    expect(claims.failures.map((failure) => failure.code)).toEqual(['EXPORT_FAILED']);
+  });
+
+  it('deletes the completed object when finish throws, so nothing is left behind an export that is not READY', async () => {
+    const { job, claims, storage } = setup(fakeBuilder(2));
+    claims.finishError = new Error('connection lost');
+    expect(await job.run(CLAIM)).toBe('failed');
+    expect(storage.multipart).toEqual({ opened: 1, completed: 1, aborted: 0 });
+    expect(storage.has(KEY)).toBe(false);
+    expect(claims.failures.map((failure) => failure.code)).toEqual(['EXPORT_FAILED']);
   });
 
   it('fails for good when the archive passes the size cap', async () => {

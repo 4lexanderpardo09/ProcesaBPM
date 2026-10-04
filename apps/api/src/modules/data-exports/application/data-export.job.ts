@@ -84,6 +84,7 @@ export class DataExportJob {
     );
     const budget = new ExportBudget(this.clock, this.clock.now().getTime() + this.settings.DATA_EXPORT_MAX_RUN_MS, this.settings.DATA_EXPORT_MAX_BYTES, AbortSignal.any([lease.signal, stop]));
     let upload: MultipartWrite | undefined;
+    let completed = false;
     lease.start();
     try {
       // A previous attempt may have left its object (it never became READY): this attempt writes it again.
@@ -94,9 +95,12 @@ export class DataExportJob {
       await lease.confirm();
       const { sizeBytes } = await upload.complete();
       upload = undefined;
+      completed = true;
       lease.stop();
       return await this.finish(claim, key, { sizeBytes, sha256: sink.sha256(), counts: exportCounts(manifest) });
     } catch (error) {
+      // Completed but not finished (finish threw): the object must not stay behind an export that is not READY.
+      if (completed) await this.storage.delete(key).catch((deleteError: unknown) => this.warn('data_export.discard_failed', claim, deleteError));
       await this.recordFailure(claim, error);
       return 'failed';
     } finally {

@@ -45,4 +45,16 @@ describe('ExportLease', () => {
     await Promise.all([subject.beat(), subject.beat()]);
     expect(renew).toHaveBeenCalledTimes(1);
   });
+
+  it('confirm requires a successful renewal: a renewal that throws fails it, even within the safety window', async () => {
+    const { lease: subject } = lease([new Error('db down')]);
+    await expect(subject.confirm()).rejects.toThrow('db down');
+  });
+
+  it('confirm refuses once the lease is lost, without renewing again', async () => {
+    const { lease: subject, renew } = lease([false]);
+    await subject.beat();
+    await expect(subject.confirm()).rejects.toBeInstanceOf(ExportLeaseLostError);
+    expect(renew).toHaveBeenCalledTimes(1);
+  });
 });
