@@ -21,7 +21,11 @@ export interface ExportDataset<N extends string = string> {
   readonly key: readonly string[];
   /** Also written as CSV for people (decision B15). */
   readonly csv: boolean;
+  /** Columns of type date or time: the driver returns them as instants, the export writes `yyyy-mm-dd` or `hh:mm:ss`. */
+  readonly formats?: Readonly<Record<string, ColumnFormat>>;
 }
+
+export type ColumnFormat = 'date' | 'time';
 
 /** Keeps the dataset's name as a literal type while its lists stay plain string lists. */
 function dataset<N extends string>(spec: ExportDataset<N>): ExportDataset<N> {
@@ -29,8 +33,8 @@ function dataset<N extends string>(spec: ExportDataset<N>): ExportDataset<N> {
 }
 
 /** A dataset that is one table, read column for column. */
-function table<N extends string>(name: N, group: ExportGroup, columns: readonly string[], key: readonly string[], options: { csv?: boolean } = {}): ExportDataset<N> {
-  return { name, group, sources: { [name]: columns }, columns, key, csv: options.csv ?? false };
+function table<N extends string>(name: N, group: ExportGroup, columns: readonly string[], key: readonly string[], options: { csv?: boolean; formats?: Record<string, ColumnFormat> } = {}): ExportDataset<N> {
+  return { name, group, sources: { [name]: columns }, columns, key, csv: options.csv ?? false, ...(options.formats === undefined ? {} : { formats: options.formats }) };
 }
 
 export const EXPORT_DATASETS = [
@@ -48,14 +52,14 @@ export const EXPORT_DATASETS = [
   table('site_levels', 'organization', ['tenant_id', 'level', 'name'], ['level']),
   table('sites', 'organization', ['tenant_id', 'id', 'parent_id', 'level', 'name', 'is_central', 'is_active', 'created_at'], ['id']),
   table('calendars', 'organization', ['tenant_id', 'id', 'name', 'country_code', 'is_default', 'created_at'], ['id']),
-  table('calendar_working_hours', 'organization', ['tenant_id', 'id', 'calendar_id', 'weekday', 'start_time', 'end_time'], ['id']),
-  table('calendar_holidays', 'organization', ['tenant_id', 'calendar_id', 'date', 'name'], ['calendar_id', 'date']),
+  table('calendar_working_hours', 'organization', ['tenant_id', 'id', 'calendar_id', 'weekday', 'start_time', 'end_time'], ['id'], { formats: { start_time: 'time', end_time: 'time' } }),
+  table('calendar_holidays', 'organization', ['tenant_id', 'calendar_id', 'date', 'name'], ['calendar_id', 'date'], { formats: { date: 'date' } }),
   dataset({
     name: 'members',
     group: 'identity',
     sources: {
       memberships: ['tenant_id', 'user_id', 'role_id', 'position_id', 'department_id', 'site_id', 'status', 'is_owner', 'signature_file_id', 'joined_at', 'created_at', 'updated_at'],
-      users: ['id', 'email', 'first_name', 'last_name', 'document_number', 'status', 'locale', 'time_zone'],
+      users: ['email', 'first_name', 'last_name', 'document_number', 'status', 'locale', 'time_zone'],
     },
     columns: ['tenant_id', 'user_id', 'email', 'first_name', 'last_name', 'document_number', 'account_status', 'locale', 'time_zone', 'role_id', 'position_id', 'department_id', 'site_id', 'status', 'is_owner', 'signature_file_id', 'joined_at', 'created_at', 'updated_at'],
     key: ['user_id'],
@@ -163,6 +167,7 @@ export const EXPORT_EXCLUDED_COLUMNS: Readonly<Record<string, Readonly<Record<st
     purged_at: 'Purge job internals.',
   },
   users: {
+    id: 'Join key only: exported as members.user_id (from memberships).',
     password_hash: 'Secret.',
     mfa_secret_encrypted: 'Secret.',
     mfa_enabled: 'Account security state, not organization data.',
@@ -195,6 +200,8 @@ export const SENSITIVE_NAMES_ALLOWED: Readonly<Record<string, string>> = {
   'tenants.mfa_required': 'The organization policy flag (whether members must use a second factor), not a secret.',
   'dataset_rows.lookup_key': 'The business key a ticket field looks a row up by (e.g. an employee code), not a credential.',
 };
+
+export const EXPORT_DATASET_BY_NAME: Readonly<Record<ExportDatasetName, ExportDataset<ExportDatasetName>>> = Object.fromEntries(EXPORT_DATASETS.map((dataset) => [dataset.name, dataset])) as Record<ExportDatasetName, ExportDataset<ExportDatasetName>>;
 
 /** The datasets also written as CSV. */
 export const CSV_DATASETS: readonly ExportDatasetName[] = EXPORT_DATASETS.filter((dataset) => dataset.csv).map((dataset) => dataset.name);

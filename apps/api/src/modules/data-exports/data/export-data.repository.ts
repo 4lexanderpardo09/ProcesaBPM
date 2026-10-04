@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
 import type { TenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
-import type { ExportDatasetName } from '../domain/export-datasets.js';
+import { EXPORT_DATASET_BY_NAME, type ExportDatasetName } from '../domain/export-datasets.js';
+import { formatRow } from '../domain/export-encoding.js';
 import type { ExportOrganization } from '../domain/export-manifest.js';
 import { DATASET_READERS, type KeyValue } from './dataset-readers/index.js';
 
@@ -37,9 +38,11 @@ export class ExportDataRepository {
     return row;
   }
 
-  page(tx: TenantTransaction, tenantId: string, dataset: ExportDatasetName, after: readonly KeyValue[] | null, limit: number): Promise<ExportRow[]> {
+  async page(tx: TenantTransaction, tenantId: string, dataset: ExportDatasetName, after: readonly KeyValue[] | null, limit: number): Promise<ExportRow[]> {
     const reader = DATASET_READERS[dataset];
-    return tx.$queryRaw<ExportRow[]>(reader.page(tenantId, after ?? reader.start, limit));
+    const rows = await tx.$queryRaw<ExportRow[]>(reader.page(tenantId, after ?? reader.start, limit));
+    const { formats } = EXPORT_DATASET_BY_NAME[dataset];
+    return formats === undefined ? rows : rows.map((row) => formatRow(row, formats));
   }
 
   /** The rows the pages of `dataset` will return, counted by the same query. */

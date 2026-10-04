@@ -8,8 +8,8 @@ export const IDENTITY_READERS = {
   members: {
     start: [NIL_UUID],
     page: (tenantId, [userId], limit) => Prisma.sql`
-      SELECT m.tenant_id, m.user_id, u.email, u.first_name, u.last_name, u.document_number, u.status::text AS account_status,
-             u.locale, u.time_zone, m.role_id, m.position_id, m.department_id, m.site_id, m.status::text AS status,
+      SELECT m.tenant_id, m.user_id, u.email, u.first_name, u.last_name, u.document_number, u.status AS account_status,
+             u.locale, u.time_zone, m.role_id, m.position_id, m.department_id, m.site_id, m.status,
              m.is_owner, m.signature_file_id, m.joined_at, m.created_at, m.updated_at
       FROM memberships m JOIN users u ON u.id = m.user_id
       WHERE m.tenant_id = ${tenantId}::uuid AND m.user_id > ${userId}::uuid
@@ -25,7 +25,7 @@ export const IDENTITY_READERS = {
   roles: {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`
-      SELECT tenant_id, id, name, description, system_role::text AS system_role, is_admin, is_active, created_at,
+      SELECT tenant_id, id, name, description, system_role, is_admin, is_active, created_at,
              permissions_version
       FROM roles WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,

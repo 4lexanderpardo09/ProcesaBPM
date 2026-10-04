@@ -7,7 +7,7 @@ export const ORGANIZATION_READERS = {
   tenants: {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`
-      SELECT id, slug, name, status::text AS status, country_code, time_zone, primary_color, logo_file_id, mfa_required,
+      SELECT id, slug, name, status, country_code, time_zone, primary_color, logo_file_id, mfa_required,
              cancelled_at, deletion_requested_at, purge_after, created_at, updated_at
       FROM tenants WHERE id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
@@ -58,14 +58,14 @@ export const ORGANIZATION_READERS = {
   calendar_working_hours: {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`
-      SELECT tenant_id, id, calendar_id, weekday, start_time::text AS start_time, end_time::text AS end_time
+      SELECT tenant_id, id, calendar_id, weekday, start_time, end_time
       FROM calendar_working_hours WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
   },
   calendar_holidays: {
     start: [NIL_UUID, '-infinity'],
     page: (tenantId, [calendarId, date], limit) => Prisma.sql`
-      SELECT tenant_id, calendar_id, date::text AS date, name
+      SELECT tenant_id, calendar_id, date, name
       FROM calendar_holidays WHERE tenant_id = ${tenantId}::uuid AND (calendar_id, date) > (${calendarId}::uuid, ${date}::date)
       ORDER BY calendar_holidays.calendar_id, calendar_holidays.date LIMIT ${limit}`,
   },

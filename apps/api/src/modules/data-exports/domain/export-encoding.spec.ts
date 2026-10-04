@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CSV_BOM, csvField, csvRecord, csvRow, jsonLine } from './export-encoding.js';
+import { Prisma } from '@procesabpm/db';
+import { CSV_BOM, csvField, csvRecord, csvRow, formatRow, jsonLine } from './export-encoding.js';
 
 describe('jsonLine', () => {
   it('writes one JSON object per line with ISO dates and big integers as text', () => {
@@ -36,5 +37,19 @@ describe('CSV', () => {
 
   it('follows the column order of the dataset', () => {
     expect(csvRecord({ b: 2, a: 1 }, ['a', 'b', 'c'])).toBe('1,2,\r\n');
+  });
+});
+
+describe('values as the driver returns them', () => {
+  it('writes decimals as their digits, in JSON and in CSV', () => {
+    const amount = new Prisma.Decimal('12.50');
+    expect(jsonLine({ amount })).toBe('{"amount":"12.5"}\n');
+    expect(csvField(amount)).toBe('12.5');
+  });
+
+  it('writes date and time columns as the database shows them', () => {
+    const row = { date: new Date('2026-09-09T00:00:00Z'), start_time: new Date('1970-01-01T08:30:00Z'), at: new Date('2026-09-09T10:00:00Z') };
+    expect(formatRow(row, { date: 'date', start_time: 'time' })).toEqual({ date: '2026-09-09', start_time: '08:30:00', at: row.at });
+    expect(formatRow(row, undefined)).toBe(row);
   });
 });
