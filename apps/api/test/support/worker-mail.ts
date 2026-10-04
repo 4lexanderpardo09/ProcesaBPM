@@ -7,6 +7,9 @@ import { OutboxDispatcher } from '../../src/infrastructure/outbox/outbox-dispatc
 import { WorkerModule } from '../../src/worker.module.js';
 import { connectTestDatabase } from './admin-api.js';
 
+/** Lets a test hold the outbox to itself: every worker takes this lock shared around each dispatch round. */
+const DISPATCH_LOCK_KEY = 7_731_204_551;
+
 export const tokenOf = (message: MailMessage): string => /#token=([A-Za-z0-9_-]+)/.exec(message.text)![1]!;
 
 /** A worker (outbox dispatcher plus an in-memory mailbox) running next to the API under test; the test decides when it delivers. */
@@ -38,11 +41,45 @@ export class MailWorker {
     do {
       for (let round = 0; round < 500; round += 1) {
         if (retries) await this.retryNow();
-        if ((await this.dispatcher.runOnce()).claimed === 0) break;
+        if ((await this.dispatchShared()).claimed === 0) break;
       }
       if ((await this.inFlight()) === 0) return;
       await new Promise((resolve) => setTimeout(resolve, 25));
     } while (Date.now() < deadline);
+  }
+
+  /** One dispatch round that waits while a test holds the outbox exclusively (see `exclusively`). */
+  private async dispatchShared(): Promise<{ claimed: number }> {
+    const client = await this.db.owner.connect();
+    try {
+      await client.query('SELECT pg_advisory_lock_shared($1)', [DISPATCH_LOCK_KEY]);
+      try {
+        return await this.dispatcher.runOnce();
+      } finally {
+        await client.query('SELECT pg_advisory_unlock_shared($1)', [DISPATCH_LOCK_KEY]);
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Runs `action` while no worker of any test file dispatches: test files run side by side against one database and every
+   * worker claims the due events of every tenant, so a test that needs "nobody else touches this event" takes the outbox
+   * to itself. Inside `action`, drive this worker with `dispatcher.runOnce()` directly (not `deliver`).
+   */
+  async exclusively<T>(action: () => Promise<T>): Promise<T> {
+    const client = await this.db.owner.connect();
+    try {
+      await client.query('SELECT pg_advisory_lock($1)', [DISPATCH_LOCK_KEY]);
+      try {
+        return await action();
+      } finally {
+        await client.query('SELECT pg_advisory_unlock($1)', [DISPATCH_LOCK_KEY]);
+      }
+    } finally {
+      client.release();
+    }
   }
 
   /**
