@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTenantRequestSchema, mfaResetRequestSchema, platformUserLookupQuerySchema, TENANT_SLUG_PATTERN } from './schemas.js';
+import { ANNOUNCEMENT_MAX_TENANTS, announcementRequestSchema, createTenantRequestSchema, mfaResetRequestSchema, platformUserLookupQuerySchema, TENANT_SLUG_PATTERN } from './schemas.js';
 
 const valid = {
   slug: 'acme-co',
@@ -99,5 +99,40 @@ describe('platformUserLookupQuerySchema', () => {
     expect(platformUserLookupQuerySchema.safeParse({ email: 'ana@' }).success).toBe(false);
     expect(platformUserLookupQuerySchema.safeParse({}).success).toBe(false);
     expect(platformUserLookupQuerySchema.safeParse({ email: 'ana@example.com', prefix: 'an' }).success).toBe(false);
+  });
+});
+
+describe('announcementRequestSchema', () => {
+  const base = { type: 'MAINTENANCE', title: 'Window', body: 'Down', startsAt: '2026-10-05T10:00:00Z' };
+  const tenantA = '018f3c1e-7b2a-7c3d-9e4f-0123456789ab';
+  const tenantB = '018f3c1e-7b2a-7c3d-9e4f-0123456789ac';
+  const issuesOf = (value: object) => announcementRequestSchema.safeParse(value).error?.issues.map((issue) => issue.path.join('.')) ?? [];
+
+  it('defaults to every organization, no tenants and no block', () => {
+    expect(announcementRequestSchema.parse(base)).toMatchObject({ audience: 'ALL', tenantIds: [], blocksLogin: false, endsAt: null });
+  });
+
+  it('accepts named organizations with the TENANTS audience', () => {
+    expect(announcementRequestSchema.parse({ ...base, audience: 'TENANTS', tenantIds: [tenantA, tenantB] }).tenantIds).toEqual([tenantA, tenantB]);
+  });
+
+  it.each([
+    ['TENANTS without organizations', { audience: 'TENANTS', tenantIds: [] }],
+    ['TENANTS with the list missing', { audience: 'TENANTS' }],
+    ['ALL with organizations', { audience: 'ALL', tenantIds: [tenantA] }],
+    ['a repeated organization', { audience: 'TENANTS', tenantIds: [tenantA, tenantA.toUpperCase()] }],
+  ])('refuses %s', (_label, extra) => {
+    expect(issuesOf({ ...base, ...extra })).toEqual(['tenantIds']);
+  });
+
+  it('refuses an id that is not a UUID, an unknown audience and too many organizations', () => {
+    expect(issuesOf({ ...base, audience: 'TENANTS', tenantIds: ['nope'] })).toContain('tenantIds.0');
+    expect(issuesOf({ ...base, audience: 'SOME' })).toContain('audience');
+    const many = Array.from({ length: ANNOUNCEMENT_MAX_TENANTS + 1 }, (_, index) => `018f3c1e-7b2a-7c3d-9e4f-${index.toString(16).padStart(12, '0')}`);
+    expect(issuesOf({ ...base, audience: 'TENANTS', tenantIds: many })).toContain('tenantIds');
+  });
+
+  it('still refuses an end that is not after the start', () => {
+    expect(issuesOf({ ...base, endsAt: base.startsAt })).toEqual(['endsAt']);
   });
 });

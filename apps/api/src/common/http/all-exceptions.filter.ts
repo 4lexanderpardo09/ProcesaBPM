@@ -1,5 +1,5 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Inject } from '@nestjs/common';
-import { DomainError, extractSqlState, isTransactionTimeout, mapDatabaseError, RateLimitedError, TemporarilyUnavailableError } from '@procesabpm/shared';
+import { DomainError, extractSqlState, isTransactionTimeout, MaintenanceError, mapDatabaseError, RateLimitedError, TemporarilyUnavailableError } from '@procesabpm/shared';
 import type { Response } from 'express';
 import { JsonLogger } from '../logging/json-logger.js';
 import { RequestContext } from '../logging/request-context.js';
@@ -15,6 +15,12 @@ export interface ErrorBody {
 }
 
 const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR';
+
+/** Errors that tell the client when to try again. A maintenance window without an end sends no header. */
+function retryAfterOf(error: DomainError): number | undefined {
+  if (error instanceof RateLimitedError || error instanceof TemporarilyUnavailableError || error instanceof MaintenanceError) return error.retryAfterSeconds;
+  return undefined;
+}
 
 interface Resolved {
   readonly status: number;
@@ -37,7 +43,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const resolved = this.resolve(exception);
-    if (resolved.status >= 500 && resolved.status !== HttpStatus.NOT_IMPLEMENTED) {
+    // A maintenance block is the platform's own decision, not a failure: no error log per refused request.
+    if (resolved.status >= 500 && resolved.status !== HttpStatus.NOT_IMPLEMENTED && !(exception instanceof MaintenanceError)) {
       this.logger.error(exception, 'AllExceptionsFilter');
     } else if (!(exception instanceof DomainError) && !(exception instanceof HttpException) && resolved.status !== HttpStatus.INTERNAL_SERVER_ERROR) {
       // A database rule or timeout became a 4xx/503: the response is generic by design, so the log is where the real reason is.
@@ -74,14 +81,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (status === HttpStatus.INTERNAL_SERVER_ERROR) {
       return { status, code: INTERNAL_ERROR_CODE, message };
     }
+    const retryAfter = retryAfterOf(domainError);
     return {
       status,
       code: domainError.code,
       message,
       details: domainError.details,
-      ...(domainError instanceof RateLimitedError || domainError instanceof TemporarilyUnavailableError
-        ? { headers: { 'Retry-After': String(domainError.retryAfterSeconds) } }
-        : {}),
+      ...(retryAfter === undefined ? {} : { headers: { 'Retry-After': String(retryAfter) } }),
     };
   }
 }

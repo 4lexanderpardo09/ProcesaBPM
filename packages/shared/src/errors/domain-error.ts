@@ -79,6 +79,7 @@ export const ERROR_CODES = {
   lastReopeningType: 'LAST_REOPENING_TYPE',
   ticketWaiting: 'TICKET_WAITING',
   temporarilyUnavailable: 'TEMPORARILY_UNAVAILABLE',
+  maintenance: 'MAINTENANCE',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -256,6 +257,26 @@ export class TemporarilyUnavailableError extends DomainError {
     options?: { cause?: unknown },
   ) {
     super(ERROR_CODES.temporarilyUnavailable, 'The service is busy: try again', options);
+  }
+}
+
+export interface MaintenanceDetails {
+  readonly announcementId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly endsAt: string | null;
+}
+
+/**
+ * A platform announcement blocks signing in (or entering this organization) right now. `details` is the announcement
+ * that applies to the caller, never one meant for other organizations. `retryAfterSeconds` is absent when it has no end.
+ */
+export class MaintenanceError extends DomainError {
+  constructor(
+    override readonly details: MaintenanceDetails,
+    readonly retryAfterSeconds: number | undefined,
+  ) {
+    super(ERROR_CODES.maintenance, 'The service is under maintenance', { details });
   }
 }
 
