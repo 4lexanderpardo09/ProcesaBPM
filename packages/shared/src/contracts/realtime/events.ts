@@ -40,6 +40,7 @@ export const SESSION_END_REASONS = [
   'SESSION_ENDED',
   'MFA_REQUIRED',
   'TENANT_SUSPENDED',
+  'MAINTENANCE',
   'PERMISSIONS_CHANGED',
   'REPLACED',
   'SLOW_CONSUMER',
@@ -58,11 +59,12 @@ export const ACK_ERROR_CODES = [
   'UNAUTHENTICATED',
   'MFA_REQUIRED',
   'TENANT_SUSPENDED',
+  'MAINTENANCE',
   'PERMISSIONS_CHANGED',
 ] as const;
 export type AckErrorCode = (typeof ACK_ERROR_CODES)[number];
 
-export const CONNECT_ERROR_CODES = ['UNAUTHENTICATED', 'MFA_REQUIRED', 'TENANT_SUSPENDED', 'RATE_LIMITED', 'TEMPORARILY_UNAVAILABLE'] as const;
+export const CONNECT_ERROR_CODES = ['UNAUTHENTICATED', 'MFA_REQUIRED', 'TENANT_SUSPENDED', 'MAINTENANCE', 'RATE_LIMITED', 'TEMPORARILY_UNAVAILABLE'] as const;
 export type ConnectErrorCode = (typeof CONNECT_ERROR_CODES)[number];
 
 /** What a subscriber may see of a ticket: no title, fields, comments or names. */

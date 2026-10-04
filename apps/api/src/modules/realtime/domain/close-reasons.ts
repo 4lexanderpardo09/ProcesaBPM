@@ -1,6 +1,7 @@
 import {
   type AckErrorCode,
   type ConnectErrorCode,
+  MaintenanceError,
   mapDatabaseError,
   MfaRequiredError,
   RateLimitedError,
@@ -35,6 +36,7 @@ export function connectErrorCodeOf(error: unknown): ConnectErrorCode {
   if (error instanceof RateLimitedError) return 'RATE_LIMITED';
   if (error instanceof MfaRequiredError) return 'MFA_REQUIRED';
   if (isTenantClosed(error)) return 'TENANT_SUSPENDED';
+  if (error instanceof MaintenanceError) return 'MAINTENANCE';
   if (isTransient(error)) return 'TEMPORARILY_UNAVAILABLE';
   return 'UNAUTHENTICATED';
 }
@@ -43,12 +45,14 @@ export function verificationFailureOf(error: unknown): VerificationFailure {
   if (error instanceof UnauthenticatedError) return { kind: 'reauth' };
   if (error instanceof MfaRequiredError) return { kind: 'end', reason: 'MFA_REQUIRED' };
   if (isTenantClosed(error)) return { kind: 'end', reason: 'TENANT_SUSPENDED' };
+  if (error instanceof MaintenanceError) return { kind: 'end', reason: 'MAINTENANCE' };
   return { kind: 'skip' };
 }
 
 export function refreshFailureOf(error: unknown): RefreshFailure {
   if (error instanceof MfaRequiredError) return { code: 'MFA_REQUIRED', end: 'MFA_REQUIRED' };
   if (isTenantClosed(error)) return { code: 'TENANT_SUSPENDED', end: 'TENANT_SUSPENDED' };
+  if (error instanceof MaintenanceError) return { code: 'MAINTENANCE', end: 'MAINTENANCE' };
   if (isTransient(error)) return { code: 'TEMPORARILY_UNAVAILABLE', end: undefined };
   return { code: 'UNAUTHENTICATED', end: 'SESSION_ENDED' };
 }

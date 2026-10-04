@@ -153,7 +153,7 @@ export class AuthController {
     try {
       return this.deliver(await this.sessions.refresh(readRefreshCookie(request), clientOf(request)), response);
     } catch (error) {
-      // A suspended tenant (403) keeps the session: it works again when the tenant is reactivated.
+      // A suspended tenant (403) or a maintenance block (503) keeps the session: it works again afterwards.
       if (error instanceof UnauthenticatedError) clearRefreshCookie(response);
       throw error;
     }

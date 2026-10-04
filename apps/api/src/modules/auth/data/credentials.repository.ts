@@ -5,6 +5,9 @@ import { type AttemptClaim, toAttemptClaim } from '../domain/attempt-claim.js';
 import { LOGIN_LOCKOUT } from '../domain/auth-policy.js';
 import type { LoginCandidate } from '../domain/login-candidate.js';
 
+/** An organization of the sign-in list, before the maintenance notice is added. */
+export type OrganizationMembership = Omit<Organization, 'maintenance'>;
+
 export type UserTokenType = 'PASSWORD_RESET' | 'INVITATION' | 'EMAIL_VERIFICATION' | 'EMAIL_CHANGE';
 
 export interface StoredUserToken {
@@ -66,8 +69,8 @@ export class CredentialsRepository {
   }
 
   /** Needs `app.user_id` = `userId`: the function only lists the caller's own organizations. */
-  listOrganizations(tx: AuthTransaction, userId: string): Promise<Organization[]> {
-    return tx.$queryRaw<Organization[]>`
+  listOrganizations(tx: AuthTransaction, userId: string): Promise<OrganizationMembership[]> {
+    return tx.$queryRaw<OrganizationMembership[]>`
       SELECT tenant_id AS "tenantId", tenant_slug AS slug, tenant_name AS name,
              membership_status::text AS "membershipStatus", tenant_mfa_required AS "mfaRequired"
       FROM auth_list_memberships(${userId}::uuid)

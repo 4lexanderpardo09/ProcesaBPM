@@ -82,6 +82,7 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.reportTooLarge]: { status: 422, message: 'The report is too large to export: narrow the filters' },
   [ERROR_CODES.reportTimeout]: { status: 422, message: 'The report took too long: narrow the filters' },
   [ERROR_CODES.temporarilyUnavailable]: { status: 503, message: 'The service is busy: try again' },
+  [ERROR_CODES.maintenance]: { status: 503, message: 'The service is under maintenance' },
   [ERROR_CODES.ticketWaiting]: { status: 422, message: 'The ticket is waiting and cannot be acted on until it resumes' },
   [ERROR_CODES.lastReopeningType]: { status: 409, message: 'The last active reopening error type cannot be deactivated or changed' },
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },

@@ -13,7 +13,8 @@ const NOT_SET = '';
 /**
  * Transactions for the steps that happen before a tenant is chosen (login, refresh, password reset).
  * The tenant setting is explicitly empty, so tenant tables answer nothing; only the `auth_*`
- * functions and the user's own rows (`refresh_sessions`) are reachable. Only the auth module uses it.
+ * functions and the user's own rows (`refresh_sessions`) are reachable. Only the auth module and the announcements that
+ * must be read before signing in (login blocks, the public banner) use it.
  */
 @Injectable()
 export class AuthTransactionRunner {

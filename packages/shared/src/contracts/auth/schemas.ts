@@ -27,6 +27,8 @@ export const organizationSchema = z.object({
   membershipStatus: membershipStatusSchema,
   /** The organization requires two-step verification from its members. */
   mfaRequired: z.boolean(),
+  /** A platform announcement blocks entering it right now: selecting it answers 503 `MAINTENANCE`. */
+  maintenance: z.object({ title: z.string(), endsAt: z.string().nullable() }).nullable(),
 });
 export type Organization = z.infer<typeof organizationSchema>;
 

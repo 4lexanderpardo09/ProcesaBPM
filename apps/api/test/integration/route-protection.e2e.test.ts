@@ -24,6 +24,7 @@ const PUBLIC_ROUTES = [
   'POST /auth/password-reset/request',
   'POST /auth/password-reset/confirm',
   'POST /auth/invitations/accept',
+  'GET /announcements/login',
   'GET /test/public-companies',
 ];
 

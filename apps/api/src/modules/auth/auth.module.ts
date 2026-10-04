@@ -42,12 +42,15 @@ import { AccessTokenGuard } from './http/access-token.guard.js';
 import { TenantSecurityController } from './http/tenant-security.controller.js';
 import { MfaController } from './http/mfa.controller.js';
 import { AuthController } from './http/auth.controller.js';
+import { SignInGate } from './application/sign-in-gate.js';
+import { LoginBlocksModule } from '../announcements/login-blocks.module.js';
 
 /**
  * Authentication. The global guard that applies it (together with the permission check) is registered
  * by the authorization module, which orders the two.
  */
 @Module({
+  imports: [LoginBlocksModule],
   controllers: [AuthController, MfaController, TenantSecurityController],
   providers: [
     PasswordHasher,
@@ -73,6 +76,7 @@ import { AuthController } from './http/auth.controller.js';
     ProfileService,
     ChangePasswordService,
     SelectionIssuer,
+    SignInGate,
     MfaFactorVerifier,
     MfaEnrollmentService,
     MfaLoginService,

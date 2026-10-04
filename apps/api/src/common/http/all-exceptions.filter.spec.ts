@@ -3,6 +3,7 @@ import {
   InvalidCredentialsError,
   InvalidStateError,
   InvalidMfaCodeError,
+  MaintenanceError,
   MfaRequiredError,
   MissingTenantContextError,
   RateLimitedError,
@@ -103,6 +104,21 @@ describe('AllExceptionsFilter', () => {
     const response = respond(new RateLimitedError(42));
     expect(response.status).toBe(429);
     expect(response.headers['Retry-After']).toBe('42');
+  });
+
+  it('answers a maintenance block with 503, the announcement and when it ends, without an error log', () => {
+    const details = { announcementId: 'a1', title: 'Window', body: 'Back at noon', endsAt: '2026-10-05T12:00:00.000Z' };
+    const response = respond(new MaintenanceError(details, 600));
+    expect(response.status).toBe(503);
+    expect(response.body.error).toMatchObject({ code: 'MAINTENANCE', details });
+    expect(response.headers['Retry-After']).toBe('600');
+    expect(response.logged).toHaveLength(0);
+  });
+
+  it('sends no Retry-After for a maintenance block without an end', () => {
+    const response = respond(new MaintenanceError({ announcementId: 'a1', title: 'Window', body: 'x', endsAt: null }, undefined));
+    expect(response.status).toBe(503);
+    expect(response.headers).toEqual({});
   });
 
   it('keeps database and domain messages out of the response', () => {

@@ -133,6 +133,12 @@ export const updatePlanRequestSchema = z
   .refine((value) => Object.keys(value).length > 0, 'Send at least one field');
 export type UpdatePlanRequest = z.infer<typeof updatePlanRequestSchema>;
 
+export const ANNOUNCEMENT_MAX_TENANTS = 500;
+
+export const announcementAudienceSchema = z.enum(['ALL', 'TENANTS']);
+export type AnnouncementAudience = z.infer<typeof announcementAudienceSchema>;
+
+/** `tenantIds` only with the TENANTS audience (one at least, no repeats); ALL reaches every organization. */
 export const announcementRequestSchema = z
   .object({
     type: z.enum(['MAINTENANCE', 'RELEASE_NOTES', 'INFO']),
@@ -141,10 +147,18 @@ export const announcementRequestSchema = z
     startsAt: z.iso.datetime({ offset: true }),
     endsAt: z.iso.datetime({ offset: true }).nullable().default(null),
     blocksLogin: z.boolean().default(false),
+    audience: announcementAudienceSchema.default('ALL'),
+    tenantIds: z.array(uuidSchema).max(ANNOUNCEMENT_MAX_TENANTS).default([]),
   })
-  .refine((value) => value.endsAt === null || new Date(value.endsAt) > new Date(value.startsAt), { path: ['endsAt'], message: 'The end must be after the start' });
+  .refine((value) => value.endsAt === null || new Date(value.endsAt) > new Date(value.startsAt), { path: ['endsAt'], message: 'The end must be after the start' })
+  .refine((value) => (value.audience === 'TENANTS') === (value.tenantIds.length > 0), {
+    path: ['tenantIds'],
+    message: 'Name the organizations exactly when the audience is TENANTS',
+  })
+  .refine((value) => new Set(value.tenantIds.map((id) => id.toLowerCase())).size === value.tenantIds.length, { path: ['tenantIds'], message: 'An organization is repeated' });
 export type AnnouncementRequest = z.infer<typeof announcementRequestSchema>;
 
+/** What members (and the public sign-in page) see: never the audience's organizations. */
 export interface AnnouncementResponse {
   readonly id: string;
   readonly type: 'MAINTENANCE' | 'RELEASE_NOTES' | 'INFO';
@@ -153,6 +167,13 @@ export interface AnnouncementResponse {
   readonly startsAt: string;
   readonly endsAt: string | null;
   readonly blocksLogin: boolean;
+}
+
+/** The platform console also sees who the announcement is for. */
+export interface PlatformAnnouncementResponse extends AnnouncementResponse {
+  readonly audience: AnnouncementAudience;
+  /** Empty for ALL; for TENANTS it may become empty when every target organization was purged. */
+  readonly tenantIds: readonly string[];
 }
 
 export const createCountryRequestSchema = z.object({

@@ -15,11 +15,13 @@ import { MfaEnrollmentService } from './mfa-enrollment.service.js';
 import { MfaFactorVerifier } from './mfa-factor-verifier.js';
 import { SecurityNotifier } from './security-notifier.js';
 import { SelectionIssuer } from './selection-issuer.js';
+import { SignInGate } from './sign-in-gate.js';
 
 /**
  * The second step of the sign-in. Each route takes the challenge token the login returned (proof of the password); the
  * challenge is consumed in the same transaction that accepts the factor, so a wrong code does not burn it (the attempt
- * counter bounds the retries) and a right one cannot be replayed.
+ * counter bounds the retries) and a right one cannot be replayed. A maintenance block is checked before the code, so it
+ * neither burns the challenge nor counts as an attempt.
  */
 @Injectable()
 export class MfaLoginService {
@@ -33,12 +35,14 @@ export class MfaLoginService {
     @Inject(LoginTokenRepository) private readonly loginTokens: LoginTokenRepository,
     @Inject(SelectionIssuer) private readonly selection: SelectionIssuer,
     @Inject(SecurityNotifier) private readonly notifier: SecurityNotifier,
+    @Inject(SignInGate) private readonly gate: SignInGate,
   ) {}
 
   /** The user has the second factor: a right code completes the sign-in. */
   async verify(challengeToken: string, factor: MfaFactor): Promise<MfaLoginResponse> {
     const challenge = await this.tokens.verifyMfaChallenge(challengeToken, 'VERIFY');
     const { userId } = challenge;
+    await this.gate.assertOpen(userId);
     const verified = await this.verifier.verify(userId, factor, true, async (tx) => {
       await this.consumeChallenge(tx, challenge);
       await this.credentials.recordPasswordSuccess(tx, userId, true);
@@ -57,6 +61,7 @@ export class MfaLoginService {
   async confirmEnrollment(challengeToken: string, code: string): Promise<MfaEnrollmentConfirmedResponse> {
     const challenge = await this.tokens.verifyMfaChallenge(challengeToken, 'ENROLL');
     const { userId } = challenge;
+    await this.gate.assertOpen(userId);
     const backupCodes = this.enrollment.newBackupCodes();
     await this.verifier.verify(userId, { code }, false, async (tx) => {
       await this.consumeChallenge(tx, challenge);

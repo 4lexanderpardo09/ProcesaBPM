@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { MfaRequiredError, TenantPendingDeletionError, TenantSuspendedError, UnauthenticatedError } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
+import { LoginBlockRegistry } from '../../announcements/application/login-block-registry.js';
+import { maintenanceErrorFor } from '../../announcements/domain/login-block-policy.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type SessionState, type TenantAccess, TenantAccessRepository } from '../data/tenant-access.repository.js';
@@ -19,8 +21,9 @@ export interface AccessRequest {
 /**
  * The check behind every authenticated request, tenant selection and refresh: the account and the
  * membership are ACTIVE, the tenant is ACTIVE, the session has not been revoked and, when the organization requires
- * two-step verification, the session passed it. One transaction
- * per call, so disabling a user or a membership takes effect on the next request.
+ * two-step verification, the session passed it, and no platform announcement blocks the organization (that one is
+ * checked only after the membership, so a non-member never learns of it). One transaction per call, so disabling a user
+ * or a membership takes effect on the next request.
  */
 @Injectable()
 export class TenantAccessService {
@@ -29,11 +32,14 @@ export class TenantAccessService {
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(TenantAccessRepository) private readonly repository: TenantAccessRepository,
     @Inject(Clock) private readonly clock: Clock,
+    @Inject(LoginBlockRegistry) private readonly blocks: LoginBlockRegistry,
   ) {}
 
   /** Returns the role and placement of the member, read in the same transaction as the checks. */
-  verify(request: AccessRequest): Promise<VerifiedAccess> {
+  async verify(request: AccessRequest): Promise<VerifiedAccess> {
     const scope = { tenantId: request.tenantId, userId: request.userId };
+    // Read before the transaction (a refresh of the cache opens its own); applied after the membership checks.
+    const block = await this.blocks.blockFor({ tenantId: request.tenantId });
     return this.tenantContext.run(scope, () =>
       this.runner.withTenantTransaction(async (tx) => {
         const access = await this.repository.findAccess(tx, request.tenantId, request.userId);
@@ -48,6 +54,7 @@ export class TenantAccessService {
         }
         if (access.tenantStatus === 'PENDING_DELETION') throw new TenantPendingDeletionError();
         if (access.tenantStatus !== 'ACTIVE') throw new TenantSuspendedError();
+        if (block !== undefined) throw maintenanceErrorFor(block, this.clock.now());
         // Turning the policy on takes effect at the next request of every member who has not passed the second factor.
         if (access.tenantMfaRequired && !mfaVerified) throw new MfaRequiredError();
         return membership;
