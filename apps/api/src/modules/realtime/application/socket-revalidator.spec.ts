@@ -9,7 +9,7 @@ import { SocketRevalidator, socketsTargetedBy } from './socket-revalidator.js';
 import { type RealtimeSocket, SocketSession } from './socket-session.js';
 
 const T = 't1';
-const principal: Principal = { userId: 'u1', tenantId: T, sessionId: 's1', roleId: 'r1', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null } };
+const principal: Principal = { userId: 'u1', tenantId: T, sessionId: 's1', roleId: 'r1', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' };
 const socket = (verifiedAt: number) => {
   const session = new SocketSession(principal, new Date(Date.now() + 60_000), 0, '127.0.0.1');
   session.verifiedAt = verifiedAt;

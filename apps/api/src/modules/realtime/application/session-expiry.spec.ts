@@ -5,7 +5,7 @@ import type { RealtimeEmitter } from './realtime-emitter.js';
 import { SessionExpiry } from './session-expiry.js';
 import { type RealtimeSocket, SocketSession } from './socket-session.js';
 
-const principal: Principal = { userId: 'u', tenantId: 't', sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null } };
+const principal: Principal = { userId: 'u', tenantId: 't', sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' };
 
 function setUp(expiresInMs = 60_000) {
   const events: Array<[string, unknown]> = [];

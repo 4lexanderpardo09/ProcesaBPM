@@ -20,7 +20,7 @@ const U = '0199a000-0000-7000-8000-00000000000c';
 const TICKET = '0199a000-0000-7000-8000-00000000000d';
 const FILE = '0199a000-0000-7000-8000-00000000000e';
 
-const principalOf = (sessionId: string, tenantId = T, userId = U): Principal => ({ userId, tenantId, sessionId, roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null } });
+const principalOf = (sessionId: string, tenantId = T, userId = U): Principal => ({ userId, tenantId, sessionId, roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' });
 const socketOf = (principal: Principal, accepted = true) =>
   ({ id: Math.random().toString(36), accepted, data: { session: new SocketSession(principal, new Date(), 0, '127.0.0.1') } }) as unknown as RealtimeSocket & { accepted: boolean };
 const summary = { ticketId: TICKET, status: 'OPEN', currentStepId: null, currentLoop: 1, assignees: [], lastEventSeq: '7' };

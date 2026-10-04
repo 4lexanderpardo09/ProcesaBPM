@@ -88,6 +88,12 @@ const PLATFORM_ROUTES = [
   'POST /platform/users/:userId/mfa-reset',
 ];
 
+/**
+ * The only routes a member signed in to an organization pending deletion can reach (`@AvailableDuringDeletion`): every
+ * other one answers 403 TENANT_PENDING_DELETION to them. Sign-in, refresh and logout are public, so they need no mark.
+ */
+const AVAILABLE_DURING_DELETION_ROUTES = ['GET /auth/me'];
+
 /** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */
 const AUDITED_SUBJECTS = new Set(['Membership', 'Role', 'Group', 'ApprovalGroup', 'Workflow', 'Setting', 'SupportAccess']);
 
@@ -137,6 +143,12 @@ describe('route protection (deny by default)', () => {
   it('only the expected routes are platform-only, and every /platform route is one of them', () => {
     expect(routes.filter((route) => route.access === 'platform').map(label).sort()).toEqual([...PLATFORM_ROUTES].sort());
     expect(routes.filter((route) => route.path.startsWith('/platform')).every((route) => route.access === 'platform')).toBe(true);
+  });
+
+  it('only the expected routes stay open during the deletion period, and all of them need a signed-in member', () => {
+    const marked = routes.filter((route) => route.availableDuringDeletion);
+    expect(marked.map(label).sort()).toEqual([...AVAILABLE_DURING_DELETION_ROUTES].sort());
+    expect(marked.filter((route) => route.access !== 'authenticated-only').map(label)).toEqual([]);
   });
 
   it('every other route of the application declares a permission, and none mixes declarations', () => {

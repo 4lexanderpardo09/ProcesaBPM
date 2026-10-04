@@ -111,8 +111,11 @@ describe('response schemas', () => {
         role: { id: uuid, name: 'Admin', isAdmin: true },
         companies: [{ id: uuid, name: 'Main', isDefault: true }],
       },
+      tenantMode: 'ACTIVE',
     };
     expect(meResponseSchema.safeParse(me).success).toBe(true);
+    expect(meResponseSchema.safeParse({ ...me, tenantMode: 'DELETION_PENDING' }).success).toBe(true);
+    expect(meResponseSchema.safeParse({ ...me, tenantMode: 'SUSPENDED' }).success).toBe(false);
   });
 
   it('access token claims are exactly sub, tid and sid', () => {

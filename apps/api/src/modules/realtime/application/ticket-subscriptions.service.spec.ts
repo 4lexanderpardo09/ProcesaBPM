@@ -9,7 +9,7 @@ import type { SessionGate } from './session-gate.js';
 import { type RealtimeSocket, SocketSession } from './socket-session.js';
 import { TicketSubscriptionsService } from './ticket-subscriptions.service.js';
 
-const principal: Principal = { userId: 'u', tenantId: 't', sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null } };
+const principal: Principal = { userId: 'u', tenantId: 't', sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' };
 const summaryOf = (ticketId: string) => ({ ticketId, status: 'OPEN', currentStepId: null, currentLoop: 1, assignees: [], lastEventSeq: '1' });
 
 function setUp(max = 2) {

@@ -5,7 +5,7 @@ import { MAX_PENDING_PACKETS, RealtimeEmitter } from './realtime-emitter.js';
 import { type RealtimeSocket, SocketSession } from './socket-session.js';
 
 const logger = { info: vi.fn(), warn: vi.fn() } as unknown as JsonLogger;
-const principal = { userId: 'u', tenantId: 't', sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null } } satisfies Principal;
+const principal = { userId: 'u', tenantId: 't', sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' } satisfies Principal;
 
 function fakeSocket(pending = 0) {
   const emitted: Array<[string, unknown]> = [];

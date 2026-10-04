@@ -18,7 +18,7 @@ const principal: Principal = {
   roleIsAdmin: false,
   isOwner: false,
   permissionsVersion: 1,
-  membership: { departmentId: null, siteId: null, positionId: null },
+  membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE',
 };
 
 const read: RawPermissionRule = { action: 'read', subject: 'Company', conditions: null };

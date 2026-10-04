@@ -5,7 +5,7 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 @Injectable()
 export class ProfileRepository {
   /** Public columns only: the sensitive ones are omitted by the client and not readable by the role. */
-  async findProfile(tx: TenantTransaction, tenantId: string, userId: string): Promise<MeResponse | undefined> {
+  async findProfile(tx: TenantTransaction, tenantId: string, userId: string): Promise<Omit<MeResponse, 'tenantMode'> | undefined> {
     const user = await tx.user.findUnique({
       where: { id: userId },
       select: {

@@ -43,7 +43,7 @@ function setup(authorization?: string, options: { support?: boolean; method?: st
   const recordSupport = vi.fn().mockResolvedValue(undefined);
   const verifyAccessToken = vi.fn().mockResolvedValue(claims);
   const inspectAccessToken = vi.fn(async (token: string) => ({ claims: (await verifyAccessToken(token)) as typeof claims, expiresAt: new Date(Date.now() + 900_000) }));
-  const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null, positionId: null };
+  const access = { roleId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ae', roleActive: true, roleIsAdmin: true, permissionsVersion: 7, isOwner: false, departmentId: null, siteId: null, positionId: null, tenantMode: 'ACTIVE' };
   const verify = vi.fn().mockResolvedValue(access);
   const verifyPlatformToken = vi.fn().mockResolvedValue({ sub: claims.sub, sid: claims.sid });
   const verifyPlatformSession = vi.fn().mockResolvedValue(undefined);
@@ -102,7 +102,8 @@ describe('AccessTokenGuard', () => {
     const { guard, context, request, verifyAccessToken, verify } = setup('Bearer a.b.c');
     await expect(guard.canActivate(context('protectedRoute'))).resolves.toBe(true);
     expect(verifyAccessToken).toHaveBeenCalledWith('a.b.c');
-    expect(verify).toHaveBeenCalledWith({ userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid });
+    // HTTP lets a full-access member of an organization pending deletion in; RequestAuthGuard confines them.
+    expect(verify).toHaveBeenCalledWith({ userId: claims.sub, tenantId: claims.tid, sessionId: claims.sid, allowDeletionPending: true });
     expect(request.principal).toEqual({
       userId: claims.sub,
       tenantId: claims.tid,
@@ -113,6 +114,7 @@ describe('AccessTokenGuard', () => {
       isOwner: false,
       permissionsVersion: 7,
       membership: { departmentId: null, siteId: null, positionId: null },
+      tenantMode: 'ACTIVE',
     });
   });
 
@@ -176,7 +178,7 @@ describe('AccessTokenGuard', () => {
     it('open a read-only principal that is not a member and carries the grant', async () => {
       const { guard, context, request, verify, verifySupport, verifyAccessToken } = setup('Bearer support', { support: true });
       await expect(guard.canActivate(context('protectedRoute'))).resolves.toBe(true);
-      expect(request.principal).toMatchObject({ userId: supportClaims.sub, tenantId: supportClaims.tid, sessionId: supportClaims.sid, isOwner: false, roleIsAdmin: false, support: { grantId: supportClaims.grant } });
+      expect(request.principal).toMatchObject({ userId: supportClaims.sub, tenantId: supportClaims.tid, sessionId: supportClaims.sid, isOwner: false, roleIsAdmin: false, tenantMode: 'ACTIVE', support: { grantId: supportClaims.grant } });
       expect(verifySupport).toHaveBeenCalledWith(supportClaims);
       expect(verify).not.toHaveBeenCalled();
       expect(verifyAccessToken).not.toHaveBeenCalled();
