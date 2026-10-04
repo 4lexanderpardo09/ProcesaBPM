@@ -479,6 +479,16 @@ describe('retention', () => {
       });
     });
 
+    it('accepts the data export expiry step in the run summary (migration 20261017000600)', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        await asRole('app_worker');
+        const runId = (await startRun(client)).out_run_id!;
+        await finishRun(client, runId, { expire_tenant_exports: 2, audit_logs: 0 }, ['expire_tenant_exports']);
+        await asRole('owner');
+        expect((await runRows(client, runId))[0]).toMatchObject({ data: { deleted: { expire_tenant_exports: 2 }, failed: ['expire_tenant_exports'] } });
+      });
+    });
+
     it('a run_started row dated in the future does not switch retention off', async () => {
       await inRolledBackTransaction(async (client, asRole) => {
         await asRole('app_worker');

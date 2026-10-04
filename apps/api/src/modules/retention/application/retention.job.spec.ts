@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { JsonLogger } from '../../../common/logging/json-logger.js';
 import type { Clock } from '../../../infrastructure/clock.js';
 import type { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
+import { InMemoryObjectStorage } from '../../../infrastructure/storage/in-memory-object-storage.js';
 import type { RetentionRepository } from '../data/retention.repository.js';
-import { RETENTION_STEPS, type RetentionRunClaim, type RetentionRunSummary, type RetentionStep } from '../domain/retention-step.js';
-import { RETENTION_BATCH_SIZE, RETENTION_MAX_BATCHES_PER_STEP, RETENTION_STEP_BUDGET_MS, RetentionJob } from './retention.job.js';
+import { type ExpiredExportObject, RETENTION_STEPS, type RetentionRunClaim, type RetentionRunSummary, type RetentionStep } from '../domain/retention-step.js';
+import { EXPORT_EXPIRY_BATCH_SIZE, RETENTION_BATCH_SIZE, RETENTION_MAX_BATCHES_PER_STEP, RETENTION_STEP_BUDGET_MS, RetentionJob } from './retention.job.js';
 
 const RUN_ID = '0199a8f0-0000-7000-8000-000000000001';
 const BLOCKING_RUN_START = new Date('2026-10-03T06:05:00Z');
@@ -33,22 +34,38 @@ class FakeRetentionRepository {
     return Promise.resolve(this.batches[step]?.shift() ?? 0);
   }
 
+  /** Expired exports handed out per call (then none); marked ones are recorded. */
+  expiredBatches: ExpiredExportObject[][] = [];
+  readonly marked: string[] = [];
+
+  expireExports(_tx: unknown, limit: number): Promise<ExpiredExportObject[]> {
+    this.calls.push({ step: 'expire_tenant_exports', limit });
+    this.onBatch();
+    return Promise.resolve(this.expiredBatches.shift() ?? []);
+  }
+
+  markExportObjectDeleted(_tx: unknown, object: ExpiredExportObject): Promise<void> {
+    this.marked.push(object.exportId);
+    return Promise.resolve();
+  }
+
   finishRun(_tx: unknown, summary: RetentionRunSummary): Promise<void> {
     this.finished = summary;
     return Promise.resolve();
   }
 }
 
-function setup(repository: FakeRetentionRepository, clock: { now: () => Date } = { now: () => new Date('2026-10-03T07:00:00Z') }) {
+function setup(repository: FakeRetentionRepository, clock: { now: () => Date } = { now: () => new Date('2026-10-03T07:00:00Z') }, storage = new InMemoryObjectStorage()) {
   const runner = { withoutTenant: vi.fn((work: (tx: unknown) => Promise<unknown>) => work({})) };
   const logger = { info: vi.fn(), warn: vi.fn() };
   const job = new RetentionJob(
     runner as unknown as WorkerTransactionRunner,
     repository as unknown as RetentionRepository,
+    storage,
     clock as unknown as Clock,
     logger as unknown as JsonLogger,
   );
-  return { job, runner, logger };
+  return { job, runner, logger, storage };
 }
 
 const stepsCalled = (repository: FakeRetentionRepository) => repository.calls.map((call) => call.step);
@@ -93,7 +110,7 @@ describe('RetentionJob', () => {
     const { job } = setup(repository);
     const summary = await job.runOnce();
     expect(stepsCalled(repository)).toEqual([...RETENTION_STEPS]);
-    expect(repository.calls.every((call) => call.limit === RETENTION_BATCH_SIZE)).toBe(true);
+    expect(repository.calls.every((call) => call.limit === (call.step === 'expire_tenant_exports' ? EXPORT_EXPIRY_BATCH_SIZE : RETENTION_BATCH_SIZE))).toBe(true);
     expect(summary).toEqual(repository.finished);
     expect(summary).toMatchObject({ runId: RUN_ID, failed: [], interrupted: false, deleted: Object.fromEntries(RETENTION_STEPS.map((step) => [step, 0])) });
   });
@@ -126,7 +143,7 @@ describe('RetentionJob', () => {
     const { job } = setup(repository, clock);
     await job.runOnce();
     expect(stepsCalled(repository).filter((step) => step === 'refresh_sessions')).toHaveLength(RETENTION_STEP_BUDGET_MS / 60_000);
-    expect(stepsCalled(repository).at(-1)).toBe('platform_audit_logs');
+    expect(stepsCalled(repository).at(-1)).toBe('expire_tenant_exports');
   });
 
   it('logs a failing step without its error message, keeps what it deleted and goes on with the next steps', async () => {
@@ -140,7 +157,7 @@ describe('RetentionJob', () => {
     const summary = await job.runOnce();
 
     expect(summary).toMatchObject({ failed: ['user_tokens'], deleted: { user_tokens: RETENTION_BATCH_SIZE } });
-    expect(stepsCalled(repository).at(-1)).toBe('platform_audit_logs');
+    expect(stepsCalled(repository).at(-1)).toBe('expire_tenant_exports');
     expect(logger.warn).toHaveBeenCalledWith('retention.step_failed', {
       event: 'retention.step_failed',
       step: 'user_tokens',
@@ -170,7 +187,44 @@ describe('RetentionJob', () => {
     const repository = new FakeRetentionRepository({ audit_logs: [RETENTION_BATCH_SIZE, 1] });
     const { job, runner } = setup(repository);
     await job.runOnce();
-    // start + one per batch (the nine steps, audit_logs twice) + finish
+    // start + one per batch (every step, audit_logs twice) + finish
     expect(runner.withoutTenant).toHaveBeenCalledTimes(1 + RETENTION_STEPS.length + 1 + 1);
+  });
+
+  describe('expired data exports', () => {
+    const object = (n: number): ExpiredExportObject => ({ tenantId: 't', exportId: `e${n}`, storageKey: `tenants/t/exports/e${n}.zip` });
+
+    it('deletes each archive after the rows were marked EXPIRED, then marks it deleted, and counts the archives', async () => {
+      const repository = new FakeRetentionRepository();
+      const storage = new InMemoryObjectStorage();
+      repository.expiredBatches = [[object(1), object(2)]];
+      for (const n of [1, 2]) storage.seed(object(n).storageKey, new Uint8Array([n]));
+      const { job } = setup(repository, undefined, storage);
+      const summary = await job.runOnce();
+      expect(storage.keys).toEqual([]);
+      expect(repository.marked).toEqual(['e1', 'e2']);
+      expect(summary).toMatchObject({ deleted: { expire_tenant_exports: 2 }, failed: [] });
+    });
+
+    it('asks for more while batches come back full', async () => {
+      const repository = new FakeRetentionRepository();
+      repository.expiredBatches = [Array.from({ length: EXPORT_EXPIRY_BATCH_SIZE }, (_, n) => object(n)), [object(999)]];
+      const { job } = setup(repository);
+      expect((await job.runOnce())?.deleted.expire_tenant_exports).toBe(EXPORT_EXPIRY_BATCH_SIZE + 1);
+      expect(stepsCalled(repository).filter((step) => step === 'expire_tenant_exports')).toHaveLength(2);
+    });
+
+    it('keeps an archive it could not delete unmarked (the next run retries it), and stops when a whole batch fails', async () => {
+      const repository = new FakeRetentionRepository();
+      const storage = new InMemoryObjectStorage();
+      storage.delete = () => Promise.reject(new Error('storage down'));
+      repository.expiredBatches = [Array.from({ length: EXPORT_EXPIRY_BATCH_SIZE }, (_, n) => object(n)), [object(1)]];
+      const { job, logger } = setup(repository, undefined, storage);
+      const summary = await job.runOnce();
+      expect(repository.marked).toEqual([]);
+      expect(stepsCalled(repository).filter((step) => step === 'expire_tenant_exports')).toHaveLength(1);
+      expect(summary).toMatchObject({ failed: ['expire_tenant_exports'], deleted: { expire_tenant_exports: 0 } });
+      expect(logger.warn).toHaveBeenCalledWith('retention.export_object_not_deleted', expect.objectContaining({ exportId: 'e0', errorName: 'Error' }));
+    });
   });
 });
