@@ -48,6 +48,8 @@ describe('outbox claim fencing (e-mail retried from the platform console)', () =
   const eventRow = async (id: string) =>
     (await db.owner.query<{ status: string; attempts: number; claim_token: string | null }>('SELECT status, attempts, claim_token FROM platform_outbox_events WHERE id = $1', [id])).rows[0]!;
   // available_at has millisecond precision: a second in the past makes the event due for the next claim, deterministically.
+  // Test files run side by side against one database and every worker claims the due events of every tenant, so an event
+  // is made due only right before this file's worker runs.
   const makeDue = (id: string) => db.owner.query(`UPDATE platform_outbox_events SET available_at = now() - interval '1 second' WHERE id = $1`, [id]);
 
   /** What a worker that claimed the event long ago still tries to do with its claim. */
@@ -68,13 +70,15 @@ describe('outbox claim fencing (e-mail retried from the platform console)', () =
 
     // W1 claimed the event as attempt 1 and stalled past its lease.
     const held = await db.owner.query<{ claim_token: string }>(
-      `UPDATE platform_outbox_events SET status = 'PROCESSING', attempts = 1, claim_token = gen_random_uuid(), available_at = now() - interval '1 second'
+      `UPDATE platform_outbox_events SET status = 'PROCESSING', attempts = 1, claim_token = gen_random_uuid(), available_at = now() + interval '1 hour'
        WHERE id = $1 RETURNING claim_token::text`,
       [id],
     );
     const stale: ClaimedEvent<unknown> = { id, tenantId: null, type: 'email.password_reset', attempt: 1, claimToken: held.rows[0]!.claim_token, createdAt: new Date(), payload: {} };
 
-    // W2 reclaims it (attempt 2) and the provider refuses the message for good.
+    // W2 reclaims it (attempt 2) and the provider refuses the message for good. The lease expires only now: until then
+    // the workers that other test files run against the same database cannot claim the event.
+    await makeDue(id);
     mail.mailer.failNextTo(user.email, Object.assign(new Error('550 mailbox unavailable'), { permanent: true }));
     await mail.dispatcher.runOnce();
     expect(await eventRow(id)).toMatchObject({ status: 'FAILED', attempts: 2, claim_token: null });
