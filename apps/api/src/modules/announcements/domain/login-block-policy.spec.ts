@@ -1,6 +1,6 @@
 import { MaintenanceError } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { blockFor, type LoginBlock, MAX_RETRY_AFTER_SECONDS, maintenanceErrorFor, retryAfterSeconds } from './login-block-policy.js';
+import { blockFor, type LoginBlock, MAX_RETRY_AFTER_SECONDS, maintenanceErrorFor, publicNoticesOf, retryAfterSeconds } from './login-block-policy.js';
 
 const NOW = new Date('2026-10-05T10:00:00.000Z');
 const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
@@ -9,6 +9,7 @@ const TENANT_B = '018f3c1e-7b2a-7c3d-9e4f-00000000000b';
 
 const block = (overrides: Partial<LoginBlock> = {}): LoginBlock => ({
   id: 'block-1',
+  type: 'MAINTENANCE',
   title: 'Window',
   body: 'Back soon',
   startsAt: at(-10),
@@ -75,5 +76,20 @@ describe('maintenanceErrorFor', () => {
     expect(error.details).toEqual({ announcementId: 'block-1', title: 'Window', body: 'Back soon', endsAt: at(10).toISOString() });
     expect(error.retryAfterSeconds).toBe(600);
     expect(JSON.stringify(error.details)).not.toContain(TENANT_B);
+  });
+});
+
+describe('publicNoticesOf', () => {
+  it('lists only the blocks for every organization in force now, newest first, without their audience', () => {
+    const older = block({ id: 'older', startsAt: at(-30) });
+    const newer = block({ id: 'newer', startsAt: at(-5), endsAt: null });
+    const targeted = block({ id: 'targeted', allTenants: false, tenantIds: [TENANT_A] });
+    const upcoming = block({ id: 'upcoming', startsAt: at(60), endsAt: at(120) });
+
+    const notices = publicNoticesOf([older, targeted, upcoming, newer], NOW);
+
+    expect(notices.map((notice) => notice.id)).toEqual(['newer', 'older']);
+    expect(notices[0]).toEqual({ id: 'newer', type: 'MAINTENANCE', title: 'Window', body: 'Back soon', startsAt: at(-5).toISOString(), endsAt: null, blocksLogin: true });
+    expect(JSON.stringify(notices)).not.toContain(TENANT_A);
   });
 });

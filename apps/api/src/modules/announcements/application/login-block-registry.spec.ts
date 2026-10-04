@@ -4,7 +4,7 @@ import { Clock } from '../../../infrastructure/clock.js';
 import type { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import type { LoginBlockRepository } from '../data/login-block.repository.js';
 import type { LoginBlock } from '../domain/login-block-policy.js';
-import { LOGIN_BLOCKS_TTL_MS, LoginBlockRegistry } from './login-block-registry.js';
+import { LOGIN_BLOCKS_MAX, LOGIN_BLOCKS_TTL_MS, LoginBlockRegistry } from './login-block-registry.js';
 
 class FakeClock extends Clock {
   constructor(private current: number) {
@@ -23,6 +23,7 @@ class FakeClock extends Clock {
 const START = Date.parse('2026-10-05T10:00:00.000Z');
 const block = (overrides: Partial<LoginBlock> = {}): LoginBlock => ({
   id: 'block-1',
+  type: 'MAINTENANCE',
   title: 'Window',
   body: 'Back soon',
   startsAt: new Date(START - 60_000),
@@ -121,5 +122,23 @@ describe('LoginBlockRegistry', () => {
     const { registry, list } = setup();
     list.mockRejectedValueOnce(new Error('down'));
     await expect(registry.blockFor('SIGN_IN')).resolves.toBeUndefined();
+  });
+
+  it('warns when the database returns as many blocks as the cap, and only then', async () => {
+    const { registry, list, logger, clock } = setup(Array.from({ length: LOGIN_BLOCKS_MAX - 1 }, (_, index) => block({ id: `b${index}` })));
+    await registry.blockFor('SIGN_IN');
+    expect(logger.warn).not.toHaveBeenCalled();
+
+    list.mockResolvedValue(Array.from({ length: LOGIN_BLOCKS_MAX }, (_, index) => block({ id: `b${index}` })));
+    clock.advance(LOGIN_BLOCKS_TTL_MS);
+    await registry.blockFor('SIGN_IN');
+    expect(logger.warn).toHaveBeenCalledWith(expect.any(String), { event: 'announcements.login_blocks_truncated', max: LOGIN_BLOCKS_MAX });
+  });
+
+  it('serves the public banner from the same snapshot, without another query', async () => {
+    const { registry, list } = setup([block({ id: 'global' }), block({ id: 'targeted', allTenants: false, tenantIds: ['tenant-a'] })]);
+    await registry.blockFor('SIGN_IN');
+    await expect(registry.publicNotices()).resolves.toMatchObject([{ id: 'global', blocksLogin: true }]);
+    expect(list).toHaveBeenCalledTimes(1);
   });
 });

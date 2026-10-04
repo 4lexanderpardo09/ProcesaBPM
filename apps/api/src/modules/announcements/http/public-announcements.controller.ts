@@ -12,7 +12,10 @@ const PUBLIC_ANNOUNCEMENTS_RATE_LIMIT: RateLimitPolicy = { name: 'announcements-
 export class PublicAnnouncementsController {
   constructor(@Inject(AnnouncementsService) private readonly announcements: AnnouncementsService) {}
 
-  /** Targeted announcements are never listed here: they would tell which organizations are affected. */
+  /**
+   * Only the sign-in blocks for every organization: targeted ones would tell which organizations are affected, and the
+   * rest (release notes, information) is for members. Served from memory (30 s), so it costs no query per call.
+   */
   @Public()
   @Get('login')
   @Header('Cache-Control', 'public, max-age=30')

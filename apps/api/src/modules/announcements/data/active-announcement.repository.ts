@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import type { AnnouncementResponse } from '@procesabpm/shared';
-import type { AuthTransaction } from '../../../infrastructure/database/auth-transaction-runner.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 type Row = { id: string; type: AnnouncementResponse['type']; title: string; body: string; startsAt: Date; endsAt: Date | null; blocksLogin: boolean };
@@ -34,12 +33,6 @@ export class ActiveAnnouncementRepository {
       select: PUBLIC_FIELDS,
       orderBy: NEWEST_FIRST,
     });
-    return rows.map(toResponse);
-  }
-
-  /** Before signing in nobody has a tenant: only the announcements for every organization are public. */
-  async listForEveryTenant(tx: AuthTransaction, now: Date): Promise<AnnouncementResponse[]> {
-    const rows = await tx.platformAnnouncement.findMany({ where: { ...inForce(now), audience: 'ALL' }, select: PUBLIC_FIELDS, orderBy: NEWEST_FIRST });
     return rows.map(toResponse);
   }
 }

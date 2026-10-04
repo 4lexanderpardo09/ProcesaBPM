@@ -8,7 +8,7 @@ import type { CredentialsRepository } from '../data/credentials.repository.js';
 import { SignInGate } from './sign-in-gate.js';
 
 const USER = '018f3c1e-7b2a-7c3d-9e4f-0123456789ab';
-const BLOCK: LoginBlock = { id: 'b1', title: 'Window', body: 'x', startsAt: new Date(0), endsAt: null, allTenants: true, tenantIds: [] };
+const BLOCK: LoginBlock = { id: 'b1', type: 'MAINTENANCE', title: 'Window', body: 'x', startsAt: new Date(0), endsAt: null, allTenants: true, tenantIds: [] };
 
 function setup(block: LoginBlock | undefined, platformAdmin = false) {
   const blocks = { blockFor: vi.fn().mockResolvedValue(block) };

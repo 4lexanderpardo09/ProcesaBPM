@@ -2,7 +2,8 @@
 --   * audience: ALL (every tenant, the default and what existed before) or TENANTS (the rows of platform_announcement_tenants).
 --     It lives on the announcement because a member only sees their own tenant's target rows (RLS) and could not tell
 --     "no targets" from "targets elsewhere".
---   * auth_login_blocks(): the blocking announcements in force now or starting within 24 hours, for the API's 30 s cache.
+--   * auth_login_blocks(): the blocking announcements in force now or starting within 24 hours, for the API's 30 s cache
+--     (login blocks and the public sign-in banner).
 -- The FK to tenants takes a SHARE ROW EXCLUSIVE lock on it: do not wait behind a long transaction.
 
 SET LOCAL lock_timeout = '10s';
@@ -80,16 +81,17 @@ CREATE CONSTRAINT TRIGGER announcement_audience_has_targets AFTER DELETE OR UPDA
 -- ---------------------------------------------------------------------------
 -- auth_login_blocks(): what the API caches (one call per 30 s per instance, none per request)
 -- ---------------------------------------------------------------------------
--- Blocking announcements in force now or starting within 24 hours, with their audience. The API evaluates the window
--- against its own clock on every request, so start and end take effect on time without a new query. It returns the
--- target tenants of every announcement (app_runtime cannot read other tenants' rows): the API never sends them to a
--- client. At most 200 rows, the earliest first.
+-- Blocking announcements in force now or starting within 24 hours, with their type and audience. The API evaluates the
+-- window against its own clock on every request, so start and end take effect on time without a new query, and serves the
+-- public sign-in banner from the same rows. It returns the target tenants of every announcement (app_runtime cannot read
+-- other tenants' rows): the API never sends them to a client. At most 200 rows: the ones for every tenant first (a new
+-- global block must never be the one cut off), then the earliest; the API logs when the cap is reached.
 CREATE FUNCTION auth_login_blocks()
-  RETURNS TABLE (out_id uuid, out_title text, out_body text, out_starts_at timestamptz, out_ends_at timestamptz,
-                 out_all_tenants boolean, out_tenant_ids uuid[])
+  RETURNS TABLE (out_id uuid, out_type announcement_type, out_title text, out_body text, out_starts_at timestamptz,
+                 out_ends_at timestamptz, out_all_tenants boolean, out_tenant_ids uuid[])
   LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp
   AS $$
-    SELECT a.id, a.title, a.body, a.starts_at, a.ends_at, a.audience = 'ALL',
+    SELECT a.id, a.type, a.title, a.body, a.starts_at, a.ends_at, a.audience = 'ALL',
            coalesce(array_agg(t.tenant_id ORDER BY t.tenant_id) FILTER (WHERE t.tenant_id IS NOT NULL), '{}')
     FROM platform_announcements a
     LEFT JOIN platform_announcement_tenants t ON t.announcement_id = a.id
@@ -97,7 +99,7 @@ CREATE FUNCTION auth_login_blocks()
       AND a.starts_at <= now() + interval '24 hours'
       AND (a.ends_at IS NULL OR a.ends_at > now())
     GROUP BY a.id
-    ORDER BY a.starts_at, a.id
+    ORDER BY a.audience = 'ALL' DESC, a.starts_at, a.id
     LIMIT 200
   $$;
 ALTER FUNCTION auth_login_blocks() OWNER TO app_platform;

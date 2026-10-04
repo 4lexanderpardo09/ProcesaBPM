@@ -1,8 +1,9 @@
-import { MaintenanceError } from '@procesabpm/shared';
+import { type AnnouncementResponse, MaintenanceError } from '@procesabpm/shared';
 
 /** A platform announcement that blocks signing in, as cached by `LoginBlockRegistry`. */
 export interface LoginBlock {
   readonly id: string;
+  readonly type: AnnouncementResponse['type'];
   readonly title: string;
   readonly body: string;
   readonly startsAt: Date;
@@ -34,6 +35,25 @@ const byLatestEnd = (a: LoginBlock, b: LoginBlock): number => endOf(b) - endOf(a
 /** The announcement that blocks `scope` at `now`, if any. */
 export function blockFor(blocks: readonly LoginBlock[], now: Date, scope: BlockScope): LoginBlock | undefined {
   return blocks.filter((block) => isInForce(block, now) && reaches(block, scope)).sort(byLatestEnd)[0];
+}
+
+/**
+ * The public sign-in banner: the blocks for every organization in force now, newest first. Nothing that is not a sign-in
+ * block (release notes, information for members) and nothing targeted ever becomes public.
+ */
+export function publicNoticesOf(blocks: readonly LoginBlock[], now: Date): AnnouncementResponse[] {
+  return blocks
+    .filter((block) => block.allTenants && isInForce(block, now))
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime() || b.id.localeCompare(a.id))
+    .map((block) => ({
+      id: block.id,
+      type: block.type,
+      title: block.title,
+      body: block.body,
+      startsAt: block.startsAt.toISOString(),
+      endsAt: block.endsAt?.toISOString() ?? null,
+      blocksLogin: true,
+    }));
 }
 
 /** Seconds until the block ends (at least 1, at most a day); none when it has no end. */

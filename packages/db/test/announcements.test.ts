@@ -210,11 +210,39 @@ describe('announcement audience and login blocks', () => {
       expect(byId.get(targeted)).toMatchObject({ out_all_tenants: false, out_tenant_ids: [tenantA.tenantId, tenantB.tenantId].sort() });
     });
 
-    it('returns the earliest first, 200 at most', async () => {
+    it('returns the ones for every tenant first, then the earliest', async () => {
+      await createAnnouncement({ audience: 'TENANTS', startsIn: '-3 hours' }, [tenantA.tenantId]);
+      await createAnnouncement({ audience: 'ALL', startsIn: '-1 hour' });
       const rows = await loginBlocks();
-      const starts = rows.map((row) => row.out_starts_at.getTime());
-      expect(starts).toEqual([...starts].sort((a, b) => a - b));
-      expect(rows.length).toBeLessThanOrEqual(200);
+      const firstTargeted = rows.findIndex((row) => !row.out_all_tenants);
+      const lastAll = rows.map((row) => row.out_all_tenants).lastIndexOf(true);
+      expect(firstTargeted).toBeGreaterThan(lastAll);
+      for (const group of [rows.filter((row) => row.out_all_tenants), rows.filter((row) => !row.out_all_tenants)]) {
+        const starts = group.map((row) => row.out_starts_at.getTime());
+        expect(starts).toEqual([...starts].sort((a, b) => a - b));
+      }
+    });
+
+    it('stops at 200 rows without dropping a new block for every tenant', async () => {
+      // Inside a transaction that is rolled back: the 200 rows never reach the other tests (and the audience rule, checked at
+      // COMMIT, never runs).
+      const client = await db.platform.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO platform_announcements (type, title, body, starts_at, ends_at, blocks_login, audience)
+           SELECT 'MAINTENANCE', 'Old targeted ' || n, 'x', now() - interval '2 hours', NULL, true, 'TENANTS' FROM generate_series(1, 200) AS n`,
+        );
+        const newest = await insertReturningId(client, INSERT_ANNOUNCEMENT, announcementParams({ audience: 'ALL', startsIn: '-1 minute' }));
+        const { rows } = await client.query<LoginBlockRow & { out_type: string }>('SELECT * FROM auth_login_blocks()');
+
+        expect(rows).toHaveLength(200);
+        expect(rows.find((row) => row.out_id === newest)).toMatchObject({ out_type: 'MAINTENANCE', out_all_tenants: true });
+        expect(rows.filter((row) => !row.out_all_tenants).length).toBeLessThan(200);
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
     });
 
     it('runs as a SECURITY DEFINER of app_platform that the API may execute and PUBLIC may not', async () => {
