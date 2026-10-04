@@ -181,3 +181,47 @@ Las tres primeras son cortas porque las tablas ya existen. Las tres "por confirm
    - Un PR por funcionalidad, con squash; nunca push a `main`.
    - Unitarias y pruebas grandes.
    - Nunca poner credenciales, `.pem`, contraseñas, secretos TOTP ni códigos de respaldo en el chat ni en el repo.
+
+## 8. Configuración de pasos de los flujos: mesa de ayuda frente a ProcesaBPM
+
+Revisión de `tm_flujo_paso` y sus tablas relacionadas en la mesa contra `stepGraphInputSchema` y los endpoints de pasos de ProcesaBPM. Los flags sueltos de la mesa se convirtieron en modos excluyentes, como pedía `analisis.md` §220.
+
+### Cubierto
+
+| Mesa de ayuda | ProcesaBPM |
+|---|---|
+| `cargo_id_asignado` | `assignmentMode: POSITION` + `positionId` |
+| `paso_flujo_usuario` (usuarios fijos) | `USERS` + candidatos (usuario, cargo o grupo) |
+| `asignar_a_creador` | `CREATOR` |
+| `necesita_aprobacion_jefe`, `requiere_confirmacion_jefe`, `campo_id_referencia_jefe` | `APPROVER` + `approvalLevel` (1–5) + tipo de grupo de aprobación |
+| `es_pool` | `POOL` |
+| `es_paralelo` + `paso_firma` | `PARALLEL` + firmantes |
+| `despacho_aleatorio`, `despacho_intervalo_minutos` | `RANDOM_DISPATCH` + `dispatchIntervalMin` |
+| `requiere_seleccion_manual` | `manualSelection` |
+| `es_tarea_nacional` | `siteScope`: `SAME_SITE`, `PARENT_SITE` o `ANY_SITE` |
+| `permite_cerrar`, `cerrar_ticket_obligatorio` | `closeRule`: `NOT_ALLOWED`, `ALLOWED` o `REQUIRED` |
+| `paso_tiempo_habil` (SLA) | `slaValue` + `slaUnit`, en horas o días hábiles. Nuevo: SLA distinto por empresa |
+| `deadline_tipo`, `deadline_campo_fecha`, `deadline_dias_habiles` | `deadlineType` (`SLA`/`CUTOFF`), `deadlineFieldCode`, `deadlineBusinessDays` |
+| `tm_flujo_corte` | cortes (`cutoffDay`, `graceBusinessDays`) |
+| `tm_flujo_regla_monto` | reglas de monto: `BLOCK`, `WARN`, `EXTRA_APPROVAL` |
+| Transición `solo_tope` | transición `SYSTEM_ONLY` |
+| `paso_flujo_iniciador` | iniciadores (usuario, cargo, grupo, departamento, empresa o sede) |
+| `paso_adjunto` | archivos del paso |
+| `paso_campo` (tipo, requerido, inmutable, orden, captura) | campos con 15 tipos y captura `CREATION`, `STEP` o `BOTH` |
+| `campo_query` (SQL guardado en la BD) | reemplazado por calculadoras y datasets, por seguridad (S5) |
+| `requiere_firma` | bloque `SIGNATURE` y firmantes |
+| Plantilla PDF del flujo | bloque `DOCUMENT` + plantillas y formatos PDF |
+
+**Nuevo en ProcesaBPM, sin equivalente en la mesa:**
+- Bloques `CONDITION`, `DECISION`, `EXPORT`, `NOTIFICATION`, `WEBHOOK`, `CALCULATOR`, `WAIT` y `END`.
+- Observadores.
+- Tope de vueltas en ciclos (`maxLoops`).
+- Delegaciones.
+
+### Falta o hay que confirmar
+
+| Mesa de ayuda | Estado |
+|---|---|
+| **Despacho masivo / lote** (`permite_despacho_masivo`, `paso_lote_config`): procesar varios tickets de un paso a la vez | El flag `allowsBatch` existe en el paso, pero **no hay endpoint para actuar en lote**. Falta |
+| `campo_trigger` (un campo que dispara el llenado de otros) | Por confirmar si las calculadoras y los datasets cubren el mismo caso |
+| Jefe elegido manualmente desde un campo del ticket (`campo_id_referencia_jefe` apuntando a un campo) | Por confirmar si `APPROVER` + `manualSelection` cubre ese caso |
