@@ -5,10 +5,11 @@ import request from 'supertest';
 import type { Socket } from 'socket.io-client';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { LoginBlockRegistry } from '../../src/modules/announcements/application/login-block-registry.js';
-import { bearer, logIn, refreshSetCookieOf, signIn, TEST_PASSWORD } from '../support/auth-helpers.js';
+import { base32Decode } from '../../src/modules/auth/domain/totp.js';
+import { bearer, logIn, REFRESH_COOKIE_NAME, refreshSetCookieOf, signIn, TEST_PASSWORD } from '../support/auth-helpers.js';
 import { addMembership, seedUser, type TestUser } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
-import { currentCode, enableMfa, rewindReplayGuard } from '../support/mfa-fixtures.js';
+import { currentCode, enableMfa, logInWithMfa, rewindReplayGuard } from '../support/mfa-fixtures.js';
 import { grantEverything } from '../support/permission-fixtures.js';
 import { seedPlatformAdmin, signInPlatform } from '../support/platform-fixtures.js';
 import { connectError, connectSocket, startListening } from '../support/realtime-client.js';
@@ -153,6 +154,42 @@ describe('announcements that block sign-in', () => {
       await http().get('/companies').set(bearer(admin.accessToken)).expect(503);
     });
 
+    it('refuses the forced enrollment confirmation too, without burning the challenge', async () => {
+      const policyTenant = await seedTenant(db.platform);
+      await db.owner.query('UPDATE tenants SET mfa_required = true WHERE id = $1', [policyTenant.tenantId]);
+      const user = await seedUser(db, policyTenant);
+      const first = await login(user).expect(200);
+      expect(first.body.step).toBe('MFA_ENROLLMENT_REQUIRED');
+      const challenge = first.body.challengeToken as string;
+      const begun = await http().post('/auth/login/mfa/enrollment').set(bearer(challenge)).expect(200);
+      const secret = base32Decode(begun.body.secret as string);
+
+      const announcement = await announce({});
+      const refused = await http().post('/auth/login/mfa/enrollment/confirm').set(bearer(challenge)).send({ code: currentCode(secret) }).expect(503);
+      expect(refused.body.error.code).toBe('MAINTENANCE');
+      const { rows } = await db.owner.query('SELECT mfa_enabled FROM users WHERE id = $1', [user.userId]);
+      expect(rows[0]).toEqual({ mfa_enabled: false });
+
+      await withdraw(announcement);
+      const confirmed = await http().post('/auth/login/mfa/enrollment/confirm').set(bearer(challenge)).send({ code: currentCode(secret) }).expect(200);
+      expect(confirmed.body.step).toBe('SELECT_ORGANIZATION');
+    });
+
+    it('still answers a revoked session or an inactive membership with 401 (and clears the cookie), not 503', async () => {
+      const revoked = await signIn(app, (await seedUser(db, tenantA)).email, tenantA.tenantId);
+      const deactivated = await seedUser(db, tenantA);
+      const inactive = await signIn(app, deactivated.email, tenantA.tenantId);
+      await http().post('/auth/logout').set('cookie', revoked.refreshCookie).expect(204);
+      await db.platform.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenantA.tenantId, deactivated.userId]);
+      await announce({});
+
+      for (const session of [revoked, inactive]) {
+        expect((await http().get('/auth/me').set(bearer(session.accessToken)).expect(401)).body.error.code).toBe('UNAUTHENTICATED');
+        const refresh = await http().post('/auth/refresh').set('cookie', session.refreshCookie).expect(401);
+        expect(refreshSetCookieOf(refresh)).toMatch(new RegExp(`^${REFRESH_COOKIE_NAME}=;`));
+      }
+    });
+
     it('does not block before it starts, and does not block when it does not ask to', async () => {
       const user = await seedUser(db, tenantA);
       await announce({ startsAt: at(60), endsAt: at(120) });
@@ -176,6 +213,17 @@ describe('announcements that block sign-in', () => {
       const refused = await http().post('/auth/select-tenant').set(bearer(selectionToken)).send({ tenantId: tenantA.tenantId }).expect(503);
       expect(refused.body.error.details.announcementId).toBe(announcement.id);
       await http().post('/auth/select-tenant').set(bearer(selectionToken)).send({ tenantId: tenantB.tenantId }).expect(200);
+    });
+
+    it('refuses a platform administrator entering the blocked organization as a member (the console stays open)', async () => {
+      const admin = await seedPlatformAdmin(db);
+      await addMembership(db, tenantA, admin.userId);
+      await announce({ audience: 'TENANTS', tenantIds: [tenantA.tenantId] });
+
+      const selectionToken = await logInWithMfa(app, db, admin, admin.mfa);
+      const refused = await http().post('/auth/select-tenant').set(bearer(selectionToken)).send({ tenantId: tenantA.tenantId }).expect(503);
+      expect(refused.body.error.code).toBe('MAINTENANCE');
+      await http().post('/auth/platform/select').set(bearer(selectionToken)).expect(200);
     });
 
     it('stops the sessions of that organization only', async () => {
@@ -212,24 +260,26 @@ describe('announcements that block sign-in', () => {
         expect(listedToA.every((announcement) => !('tenantIds' in announcement) && !('audience' in announcement))).toBe(true);
       });
 
-      it('never lists a targeted announcement on the public sign-in banner', async () => {
+      it('lists on the public sign-in banner only the sign-in blocks for every organization, from memory', async () => {
         await announce({ type: 'INFO', title: 'Only for A', blocksLogin: false, audience: 'TENANTS', tenantIds: [tenantA.tenantId] });
         await announce({ title: 'Blocking A', audience: 'TENANTS', tenantIds: [tenantA.tenantId] });
-        const everybody = await announce({ type: 'INFO', title: 'For everybody', blocksLogin: false });
+        await announce({ type: 'INFO', title: 'News for members', blocksLogin: false });
+        await announce({ type: 'RELEASE_NOTES', title: 'Release notes', blocksLogin: false });
+        await announce({ title: 'Tomorrow', startsAt: at(60 * 20), endsAt: at(60 * 21) });
+        const global = await announce({ title: 'Global maintenance' });
 
         const response = await http().get('/announcements/login').expect(200);
         expect(response.headers['cache-control']).toBe('public, max-age=30');
-        expect(response.body.map((a: { id: string }) => a.id)).toEqual([everybody.id]);
-        expect(response.body[0]).toEqual({
-          id: everybody.id,
-          type: 'INFO',
-          title: 'For everybody',
-          body: 'Back in one hour',
-          startsAt: expect.any(String),
-          endsAt: everybody.endsAt,
-          blocksLogin: false,
-        });
+        expect(response.body).toEqual([
+          { id: global.id, type: 'MAINTENANCE', title: 'Global maintenance', body: 'Back in one hour', startsAt: expect.any(String), endsAt: global.endsAt, blocksLogin: true },
+        ]);
         expect(JSON.stringify(response.body)).not.toContain(tenantA.tenantId);
+
+        // Served from the cached snapshot: a row written behind the console's back shows only after the cache is dropped.
+        await db.owner.query(`UPDATE platform_announcements SET title = 'Changed in the database' WHERE id = $1`, [global.id]);
+        expect((await http().get('/announcements/login').expect(200)).body[0].title).toBe('Global maintenance');
+        app.get(LoginBlockRegistry).invalidate();
+        expect((await http().get('/announcements/login').expect(200)).body[0].title).toBe('Changed in the database');
       });
     });
   });
