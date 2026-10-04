@@ -16,4 +16,8 @@ describe('WebLinks', () => {
     expect(links('https://host.test/app').resetPassword('t')).toBe('https://host.test/app/reset-password#token=t');
     expect(links('https://host.test/app/').ticket('tenant-1', 'ticket-1')).toBe('https://host.test/app/tickets/ticket-1?tenant=tenant-1');
   });
+
+  it('points the data export e-mail at the app page, never at the archive', () => {
+    expect(links('https://host.test/app').dataExports('tenant-1')).toBe('https://host.test/app/data-exports?tenant=tenant-1');
+  });
 });
