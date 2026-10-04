@@ -11,7 +11,7 @@ const base: Principal = {
   roleIsAdmin: false,
   isOwner: false,
   permissionsVersion: 3,
-  membership: { departmentId: 'd', siteId: 'site', positionId: 'p' },
+  membership: { departmentId: 'd', siteId: 'site', positionId: 'p' }, tenantMode: 'ACTIVE',
 };
 
 describe('sameAuthorization', () => {

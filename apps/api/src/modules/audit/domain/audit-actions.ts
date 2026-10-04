@@ -47,6 +47,8 @@ export const AUDIT_ACTIONS = [
   'file.download_url_issued',
   'pdf_template.download_url_issued',
   'report.exported',
+  'data_export.requested',
+  'data_export.download_url_issued',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

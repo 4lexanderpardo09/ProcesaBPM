@@ -184,6 +184,8 @@ export const meResponseSchema = z.object({
     role: z.object({ id: uuidSchema, name: z.string(), isAdmin: z.boolean() }),
     companies: z.array(z.object({ id: uuidSchema, name: z.string(), isDefault: z.boolean() })),
   }),
+  /** `DELETION_PENDING`: the organization is pending deletion; the session only serves the profile and the data export. */
+  tenantMode: z.enum(['ACTIVE', 'DELETION_PENDING']),
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
 

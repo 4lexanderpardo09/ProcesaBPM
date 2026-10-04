@@ -18,7 +18,7 @@ const principal: Principal = {
   roleIsAdmin: false,
   isOwner: false,
   permissionsVersion: 1,
-  membership: { departmentId: null, siteId: null, positionId: null },
+  membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE',
 };
 
 const socketWith = (session = new SocketSession(principal, new Date(Date.now() + 60_000), monotonicNow(), '127.0.0.1')) =>

@@ -2,6 +2,7 @@ import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import type { ModulesContainer } from '@nestjs/core';
 import { AUDITED_KEY, NOT_AUDITED_KEY } from '../audit/audited.decorator.js';
+import { isAvailableDuringDeletion } from './available-during-deletion.decorator.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { AUTHENTICATED_ONLY_KEY, PLATFORM_ADMIN_ONLY_KEY, type PermissionRequirement, REQUIRED_PERMISSIONS_KEY } from './route-access.js';
 
@@ -14,6 +15,8 @@ export interface RouteInfo {
   readonly requirement: PermissionRequirement | undefined;
   /** The audit events the route declares, `'not-audited'` when it opted out on purpose, `undefined` when it says nothing. */
   readonly audit: readonly string[] | 'not-audited' | undefined;
+  /** Marked `@AvailableDuringDeletion()`: reachable by a member exporting an organization pending deletion. */
+  readonly availableDuringDeletion: boolean;
 }
 
 export interface AccessMetadata {
@@ -61,6 +64,7 @@ export function collectRoutes(modules: ModulesContainer): RouteInfo[] {
           access: classifyAccess(metadata),
           requirement: metadata.requirement,
           audit: auditOf(handler),
+          availableDuringDeletion: isAvailableDuringDeletion(handler),
         });
       }
     }

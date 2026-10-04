@@ -12,7 +12,7 @@ import { TicketVisibility } from './ticket-visibility.js';
 const TENANT = '0199a000-0000-7000-8000-000000000001';
 const USER = '0199a000-0000-7000-8000-000000000002';
 const TICKET = '0199a000-0000-7000-8000-000000000003';
-const principal: Principal = { userId: USER, tenantId: TENANT, sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null } };
+const principal: Principal = { userId: USER, tenantId: TENANT, sessionId: 's', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' };
 const { ability } = buildAbility([{ action: 'read_created', subject: 'Ticket', conditions: null }], { userId: USER, membership: principal.membership }, new SubjectRegistry().register('Ticket', ticketSubject));
 
 function setUp(rows: { summary?: unknown; ids?: string[] } = {}) {

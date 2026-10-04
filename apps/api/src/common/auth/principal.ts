@@ -2,6 +2,13 @@ import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import { UnauthenticatedError } from '@procesabpm/shared';
 import type { Request } from 'express';
 
+/**
+ * `DELETION_PENDING`: the organization is pending deletion and the caller is a member with full access (owner or active
+ * admin role) who signed in to take its data out. Such a principal only reaches the routes marked
+ * `@AvailableDuringDeletion()`; everyone else is refused at the tenant selection.
+ */
+export type TenantMode = 'ACTIVE' | 'DELETION_PENDING';
+
 /** Who is calling, as verified by the access token guard. */
 export interface Principal {
   readonly userId: string;
@@ -18,6 +25,7 @@ export interface Principal {
   /** Bumped by the database on any change of the role's permissions; the cache is keyed by it. */
   readonly permissionsVersion: number;
   readonly membership: { readonly departmentId: string | null; readonly siteId: string | null; readonly positionId: string | null };
+  readonly tenantMode: TenantMode;
   /**
    * Set only for a platform administrator reading the tenant under a support grant. Then `userId` is the administrator
    * (not a member), `sessionId` is the support session, and the ability is the fixed read-only template.

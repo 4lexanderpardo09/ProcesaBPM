@@ -19,7 +19,7 @@ const principal: Principal = {
   roleIsAdmin: false,
   isOwner: false,
   permissionsVersion: 0,
-  membership: { departmentId: null, siteId: null, positionId: null },
+  membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE',
 };
 
 class Routes {

@@ -13,7 +13,7 @@ const principalOf = (userId: string, sessionId: string): Principal => ({
   roleIsAdmin: false,
   isOwner: false,
   permissionsVersion: 1,
-  membership: { departmentId: null, siteId: null, positionId: null },
+  membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE',
 });
 
 /** Just enough of a Socket.IO server: the rooms and the connected sockets, cleaned on disconnect like the real one. */

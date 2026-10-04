@@ -84,6 +84,17 @@ enum AnnouncementAudience {
   @@map("announcement_audience")
 }
 
+/// Lifecycle of an organization data export (docs/base-de-datos.md §8.31).
+enum DataExportStatus {
+  PENDING
+  RUNNING
+  READY
+  FAILED
+  EXPIRED
+
+  @@map("data_export_status")
+}
+
 enum WorkflowVersionStatus {
   DRAFT
   PUBLISHED
@@ -753,6 +764,7 @@ model Tenant {
   textTemplates           TextTemplate[]
   textTemplateShares      TextTemplateShare[]
   announcementTargets     PlatformAnnouncementTenant[]
+  dataExports             TenantDataExport[]
 
   @@index([status])
   @@index([countryCode])
@@ -863,6 +875,7 @@ model Membership {
   textTemplates           TextTemplate[]
   textTemplateShares      TextTemplateShare[]
   stepRuntimeStates       StepRuntimeState[]
+  dataExportsRequested    TenantDataExport[]
 
   @@id([tenantId, userId])
   @@index([userId])
@@ -2706,6 +2719,40 @@ model AuditLog {
   @@index([tenantId, supportGrantId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// A copy of all the organization's data, requested by its owner or an administrator during the deletion period and
+/// built by the worker into one zip under the tenant's storage prefix. The API only inserts PENDING rows and counts
+/// downloads; every other change goes through the worker functions (claim/renew/finish/fail, retention).
+model TenantDataExport {
+  tenantId         String           @map("tenant_id") @db.Uuid
+  id               String           @default(dbgenerated("uuidv7()")) @db.Uuid
+  requestedById    String           @map("requested_by_id") @db.Uuid
+  includeFiles     Boolean          @map("include_files")
+  status           DataExportStatus @default(PENDING)
+  attempts         Int              @default(0)
+  claimToken       String?          @map("claim_token") @db.Uuid
+  leaseUntil       DateTime?        @map("lease_until") @db.Timestamptz(3)
+  retryAt          DateTime         @default(now()) @map("retry_at") @db.Timestamptz(3)
+  storageKey       String?          @map("storage_key")
+  sizeBytes        BigInt?          @map("size_bytes")
+  sha256           String?
+  counts           Json?
+  errorCode        String?          @map("error_code")
+  downloadCount    Int              @default(0) @map("download_count")
+  lastDownloadedAt DateTime?        @map("last_downloaded_at") @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  startedAt        DateTime?        @map("started_at") @db.Timestamptz(3)
+  completedAt      DateTime?        @map("completed_at") @db.Timestamptz(3)
+  expiresAt        DateTime?        @map("expires_at") @db.Timestamptz(3)
+  storageDeletedAt DateTime?        @map("storage_deleted_at") @db.Timestamptz(3)
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedBy Membership @relation(fields: [tenantId, requestedById], references: [tenantId, userId], onDelete: NoAction)
+
+  @@id([tenantId, id])
+  @@index([tenantId, requestedById])
+  @@map("tenant_data_exports")
 }
 
 // ============================================================================

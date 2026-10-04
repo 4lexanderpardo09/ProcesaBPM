@@ -12,7 +12,7 @@ import { WorkerModule } from '../../src/worker.module.js';
 import { bearer, signIn } from '../support/auth-helpers.js';
 import { seedUser } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
-import { grantEverything } from '../support/permission-fixtures.js';
+import { grantEverything, seedRole } from '../support/permission-fixtures.js';
 import { seedPlatformAdmin, signInPlatform } from '../support/platform-fixtures.js';
 import { grantSupport, openSupportSession, verifiedAdminOf } from '../support/support-fixtures.js';
 import { useTestEnvironment } from '../support/test-environment.js';
@@ -109,8 +109,9 @@ describe('deleting a tenant', () => {
       expect(grants.rows[0].revoked_by_id).toBeNull();
       await openSupportSession(app, platformToken, tenant.tenantId).expect(403);
 
-      // A new sign-in lists the organization and choosing it explains why it is closed.
-      const member = await seedUser(db, tenant);
+      // A new sign-in lists the organization and choosing it explains why it is closed (to a member without full access:
+      // the owner and administrators may enter to export the data, see deletion-period-session.e2e.test.ts).
+      const member = await seedUser(db, tenant, undefined, { roleId: await seedRole(db, tenant.tenantId, 'Agent') });
       const login = await http().post('/auth/login').send({ email: member.email, password: member.password }).expect(200);
       expect(login.body.organizations.map((org: { tenantId: string }) => org.tenantId)).toContain(tenant.tenantId);
       const selected = await http().post('/auth/select-tenant').set(bearer(login.body.selectionToken)).send({ tenantId: tenant.tenantId });

@@ -30,6 +30,7 @@ import { CurrentPlatformPrincipal, CurrentPrincipal, type PlatformPrincipal, typ
 import { Public } from '../../../common/auth/public.decorator.js';
 import { RateLimit, RateLimitGuard } from '../../../common/auth/rate-limit.js';
 import { AuthenticatedOnly, PlatformAdminOnly } from '../../../common/auth/route-access.js';
+import { AvailableDuringDeletion } from '../../../common/auth/available-during-deletion.decorator.js';
 import { BackgroundTasks } from '../../../common/background/background-tasks.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { InvitationService } from '../application/invitation.service.js';
@@ -213,8 +214,12 @@ export class AuthController {
     await this.passwordChange.change(principal, body);
   }
 
-  /** Any signed-in member may read their own profile: no permission of the catalog applies. */
+  /**
+   * Any signed-in member may read their own profile: no permission of the catalog applies. Also during the deletion
+   * period, so the application knows to offer only the data export (`tenantMode`).
+   */
   @AuthenticatedOnly()
+  @AvailableDuringDeletion()
   @Get('me')
   me(@CurrentPrincipal() principal: Principal): Promise<MeResponse> {
     return this.profiles.me(principal);

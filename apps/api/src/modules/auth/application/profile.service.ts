@@ -16,6 +16,6 @@ export class ProfileService {
       this.profiles.findProfile(tx, principal.tenantId, principal.userId),
     );
     if (profile === undefined) throw new UnauthenticatedError();
-    return profile;
+    return { ...profile, tenantMode: principal.tenantMode };
   }
 }

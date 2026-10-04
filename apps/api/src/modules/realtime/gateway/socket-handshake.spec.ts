@@ -7,7 +7,7 @@ import { DbWorkLimiter } from '../application/db-work-limiter.js';
 import type { RealtimeSocket } from '../application/socket-session.js';
 import { HANDSHAKES_PER_ADDRESS, HANDSHAKES_PER_USER, SocketHandshake } from './socket-handshake.js';
 
-const principal: Principal = { userId: 'u1', tenantId: 't1', sessionId: 's1', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null } };
+const principal: Principal = { userId: 'u1', tenantId: 't1', sessionId: 's1', roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' };
 
 function setUp(allowed: (key: string) => boolean = () => true) {
   const hits: Array<[string, RateLimitRule]> = [];

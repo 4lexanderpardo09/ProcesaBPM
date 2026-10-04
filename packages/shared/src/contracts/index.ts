@@ -4,6 +4,7 @@ export * from './auth/index.js';
 export * from './calculators/index.js';
 export * from './catalog/index.js';
 export * from './common.js';
+export * from './data-exports/index.js';
 export * from './documents/index.js';
 export * from './files/index.js';
 export * from './ids.js';

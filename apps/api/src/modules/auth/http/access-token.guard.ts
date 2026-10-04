@@ -46,7 +46,7 @@ export class AccessTokenGuard implements CanActivate {
       return true;
     }
 
-    request.principal = (await this.authenticator.authenticate(token)).principal;
+    request.principal = (await this.authenticator.authenticate(token, { allowDeletionPending: true })).principal;
     return true;
   }
 
@@ -80,6 +80,8 @@ export class AccessTokenGuard implements CanActivate {
       isOwner: false,
       permissionsVersion: 0,
       membership: { departmentId: null, siteId: null, positionId: null },
+      // A support visit never opens on an organization pending deletion (the deletion revokes the grants).
+      tenantMode: 'ACTIVE',
       support: { grantId: claims.grant },
     };
   }
