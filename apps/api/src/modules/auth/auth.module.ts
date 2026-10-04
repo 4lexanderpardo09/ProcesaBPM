@@ -94,6 +94,6 @@ import { LoginBlocksModule } from '../announcements/login-blocks.module.js';
     AccessTokenGuard,
     { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],
-  exports: [AccessTokenGuard, AccessTokenAuthenticator, RATE_LIMITER],
+  exports: [AccessTokenGuard, AccessTokenAuthenticator, CurrentPasswordVerifier, RATE_LIMITER],
 })
 export class AuthModule {}

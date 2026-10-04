@@ -14,6 +14,7 @@ import { AuditTrailModule } from './modules/audit/audit-trail.module.js';
 import { AuditModule } from './modules/audit/audit.module.js';
 import { ApprovalsModule } from './modules/approvals/approvals.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { DataExportsModule } from './modules/data-exports/data-exports.module.js';
 import { CalculatorsModule } from './modules/calculators/calculators.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
@@ -30,7 +31,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module.js';
 import { realtimeEnabledIn } from './config/app-config.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, ReportsModule, ...(realtimeEnabledIn(process.env) ? [RealtimeModule] : [])],
+  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, ReportsModule, DataExportsModule, ...(realtimeEnabledIn(process.env) ? [RealtimeModule] : [])],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

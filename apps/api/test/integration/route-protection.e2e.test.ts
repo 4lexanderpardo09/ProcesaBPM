@@ -47,6 +47,10 @@ const AUTHENTICATED_ONLY_ROUTES = [
   'POST /notifications/read-all',
   'POST /notifications/:id/read',
   'GET /announcements',
+  'POST /data-exports',
+  'GET /data-exports',
+  'GET /data-exports/:id',
+  'POST /data-exports/:id/download-url',
 ];
 
 /** Routes of the platform administrators: they need a platform token, never a tenant one. */
@@ -92,7 +96,13 @@ const PLATFORM_ROUTES = [
  * The only routes a member signed in to an organization pending deletion can reach (`@AvailableDuringDeletion`): every
  * other one answers 403 TENANT_PENDING_DELETION to them. Sign-in, refresh and logout are public, so they need no mark.
  */
-const AVAILABLE_DURING_DELETION_ROUTES = ['GET /auth/me'];
+const AVAILABLE_DURING_DELETION_ROUTES = [
+  'GET /auth/me',
+  'POST /data-exports',
+  'GET /data-exports',
+  'GET /data-exports/:id',
+  'POST /data-exports/:id/download-url',
+];
 
 /** Administrative subjects: a route that changes one must declare `@Audited` (or `@NotAudited` with the reason). */
 const AUDITED_SUBJECTS = new Set(['Membership', 'Role', 'Group', 'ApprovalGroup', 'Workflow', 'Setting', 'SupportAccess']);

@@ -80,6 +80,11 @@ export const ERROR_CODES = {
   ticketWaiting: 'TICKET_WAITING',
   temporarilyUnavailable: 'TEMPORARILY_UNAVAILABLE',
   maintenance: 'MAINTENANCE',
+  exportInProgress: 'EXPORT_IN_PROGRESS',
+  exportLimitReached: 'EXPORT_LIMIT_REACHED',
+  exportTooLate: 'EXPORT_TOO_LATE',
+  exportNotReady: 'EXPORT_NOT_READY',
+  exportExpired: 'EXPORT_EXPIRED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -655,5 +660,40 @@ export class ReportTimeoutError extends DomainError {
 export class LastReopeningTypeError extends DomainError {
   constructor() {
     super(ERROR_CODES.lastReopeningType, 'The last active reopening error type cannot be deactivated or changed');
+  }
+}
+
+/** The organization already has a data export waiting or being built: one at a time. */
+export class ExportInProgressError extends DomainError {
+  constructor(options?: { cause?: unknown }) {
+    super(ERROR_CODES.exportInProgress, 'A data export of the organization is already in progress', options);
+  }
+}
+
+/** The organization used up the data exports it may request during the deletion period. */
+export class ExportLimitReachedError extends DomainError {
+  constructor(readonly maxRequests: number) {
+    super(ERROR_CODES.exportLimitReached, 'No more data exports can be requested', { details: { maxRequests } });
+  }
+}
+
+/** The purge is too close for an export to be built and downloaded in time. */
+export class ExportTooLateError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.exportTooLate, 'The organization is about to be deleted: it is too late to export its data');
+  }
+}
+
+/** The data export is not built (yet, or it failed): there is nothing to download. */
+export class ExportNotReadyError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.exportNotReady, 'The data export is not ready');
+  }
+}
+
+/** The data export was built but its download period is over. */
+export class ExportExpiredError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.exportExpired, 'The data export has expired');
   }
 }
