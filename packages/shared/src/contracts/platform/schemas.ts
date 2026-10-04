@@ -281,14 +281,25 @@ export interface PlatformUserResponse {
 export const MFA_RESET_VERIFICATION_METHODS = ['VIDEO_CALL', 'CALLBACK_KNOWN_NUMBER', 'TENANT_ADMIN_REQUEST', 'IN_PERSON'] as const;
 export type MfaResetVerificationMethod = (typeof MFA_RESET_VERIFICATION_METHODS)[number];
 
+/**
+ * Trimmed text whose length counts code points, as the database's `length()` does (an emoji is one character, not two
+ * UTF-16 units): what passes here also passes `platform_reset_user_mfa`.
+ */
+const codePointText = (min: number, max: number) =>
+  z
+    .string()
+    .trim()
+    .refine((value) => [...value].length >= min, { message: `Use at least ${min} characters` })
+    .refine((value) => [...value].length <= max, { message: `Use at most ${max} characters` });
+
 export const mfaResetRequestSchema = z
   .object({
-    reason: z.string().trim().min(10).max(500),
+    reason: codePointText(10, 500),
     verification: z
       .object({
         method: z.enum(MFA_RESET_VERIFICATION_METHODS),
         /** A ticket or case id; never a document number. */
-        reference: z.string().trim().min(3).max(200),
+        reference: codePointText(3, 200),
         /** The organization administrator who asked: required for, and only for, `TENANT_ADMIN_REQUEST`. */
         tenantAdminUserId: uuidSchema.optional(),
       })

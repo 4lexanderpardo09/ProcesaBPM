@@ -3,7 +3,10 @@ import { connectTestDatabase, type TestDatabase } from '@procesabpm/db/testing/d
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ValidationFailedError } from '@procesabpm/shared';
+import { PlatformTransactionRunner } from '../../src/infrastructure/database/platform-transaction-runner.js';
 import { authMailEs } from '../../src/modules/auth/i18n/es.js';
+import { PlatformUserRepository } from '../../src/modules/platform/data/platform-user.repository.js';
 import { bearer, signIn } from '../support/auth-helpers.js';
 import { addMembership, seedUser, type TestUser } from '../support/auth-fixtures.js';
 import { createTestApp } from '../support/create-test-app.js';
@@ -186,6 +189,25 @@ describe('MFA reset by a platform administrator', () => {
       const outsider = await seedUser(db, tenantB);
       await reset(user.userId, { ...REQUEST, verification: { method: 'TENANT_ADMIN_REQUEST', reference: 'CASE-1', tenantAdminUserId: outsider.userId } }).expect(422);
       expect((await db.owner.query('SELECT mfa_enabled FROM users WHERE id = $1', [user.userId])).rows).toEqual([{ mfa_enabled: true }]);
+    });
+
+    it('refuses another platform administrator’s factor (422 INVALID_STATE): that recovery is an operator runbook', async () => {
+      const colleague = await seedPlatformAdmin(db);
+      expect((await reset(colleague.userId).expect(422)).body.error.code).toBe('INVALID_STATE');
+      expect((await db.owner.query('SELECT mfa_enabled FROM users WHERE id = $1', [colleague.userId])).rows).toEqual([{ mfa_enabled: true }]);
+    });
+
+    it('counts characters like the database: a reason of 300 emoji is accepted end to end', async () => {
+      const user = await mfaMember(tenantA);
+      await reset(user.userId, { ...REQUEST, reason: '🔐'.repeat(300) }).expect(200);
+      const other = await mfaMember(tenantA);
+      await reset(other.userId, { ...REQUEST, reason: '🔐'.repeat(501) }).expect(400);
+    });
+
+    it('turns the function’s own argument checks (22023) into a validation error, not a 500', async () => {
+      const user = await mfaMember(tenantA);
+      const command = { administratorId: admin.userId, userId: user.userId, reason: 'x', method: 'VIDEO_CALL', reference: 'CASE-1', tenantAdminUserId: null, ipAddress: null } as const;
+      await expect(app.get(PlatformTransactionRunner).run((tx) => app.get(PlatformUserRepository).resetMfa(tx, command))).rejects.toBeInstanceOf(ValidationFailedError);
     });
 
     it('refuses an invalid body (400)', async () => {

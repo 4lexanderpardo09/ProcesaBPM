@@ -64,6 +64,21 @@ export function extractSqlState(error: unknown): string | undefined {
 }
 
 /**
+ * Whether `sqlState` appears anywhere in the error and its `cause` chain, mapped or not. For codes a single caller gives a
+ * meaning to (e.g. 22023 from one function's argument checks) without mapping them for everybody.
+ */
+export function hasSqlState(error: unknown, sqlState: string): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (typeof current !== 'object' || current === null) return false;
+    const node = current as ErrorShape;
+    if (candidateCodes(node).includes(sqlState)) return true;
+    current = node.cause;
+  }
+  return false;
+}
+
+/**
  * Prisma's `P2028` covers more than timeouts ("transaction already closed", "not found"…); only the two timeouts mean the
  * request wrote nothing and can be repeated: the transaction could not start in time (pool exhausted) or expired.
  */

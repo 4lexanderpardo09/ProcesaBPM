@@ -62,6 +62,16 @@ describe('mfaResetRequestSchema', () => {
     expect(mfaResetRequestSchema.parse(valid)).toEqual({ reason: 'Lost the phone and the backup codes', verification: { method: 'VIDEO_CALL', reference: 'CASE-1234' } });
   });
 
+  it('counts code points like the database: emoji are one character each', () => {
+    const emoji = '😀';
+    expect(mfaResetRequestSchema.safeParse({ ...valid, reason: emoji.repeat(10) }).success).toBe(true);
+    expect(mfaResetRequestSchema.safeParse({ ...valid, reason: emoji.repeat(500) }).success).toBe(true);
+    expect(mfaResetRequestSchema.safeParse({ ...valid, reason: emoji.repeat(501) }).success).toBe(false);
+    expect(mfaResetRequestSchema.safeParse({ ...valid, reason: emoji.repeat(9) }).success).toBe(false);
+    expect(mfaResetRequestSchema.safeParse({ ...valid, verification: { method: 'IN_PERSON', reference: emoji.repeat(200) } }).success).toBe(true);
+    expect(mfaResetRequestSchema.safeParse({ ...valid, verification: { method: 'IN_PERSON', reference: emoji.repeat(201) } }).success).toBe(false);
+  });
+
   it('accepts a tenant administrator request with the requester', () => {
     const request = { ...valid, verification: { method: 'TENANT_ADMIN_REQUEST', reference: 'CASE-1', tenantAdminUserId: ADMIN_ID } };
     expect(mfaResetRequestSchema.safeParse(request).success).toBe(true);

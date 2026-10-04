@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { MfaResetVerificationMethod, PlatformUserResponse } from '@procesabpm/shared';
+import { hasSqlState, type MfaResetVerificationMethod, type PlatformUserResponse, ValidationFailedError } from '@procesabpm/shared';
 import type { PlatformTransaction } from '../../../infrastructure/database/platform-transaction-runner.js';
 
 export interface MfaResetCommand {
@@ -16,6 +16,9 @@ export interface MfaResetResult {
   readonly resetAt: Date;
   readonly revokedSessions: number;
 }
+
+/** `platform_reset_user_mfa` checks its arguments with 22023 (the request schema checks the same, so it should not happen). */
+const INVALID_PARAMETER_VALUE = '22023';
 
 /** Explicit columns only: never the credentials or the second factor of the account. */
 const LOOKUP_SELECT = {
@@ -50,9 +53,18 @@ export class PlatformUserRepository {
 
   /**
    * `platform_reset_user_mfa` (docs/base-de-datos.md §8.29) does the whole reset and both trails. `undefined` when the
-   * user does not exist or has no second factor.
+   * user does not exist or has no second factor. Its argument checks (22023) answer 400, like the request schema.
    */
   async resetMfa(tx: PlatformTransaction, command: MfaResetCommand): Promise<MfaResetResult | undefined> {
+    try {
+      return await this.callReset(tx, command);
+    } catch (error) {
+      if (hasSqlState(error, INVALID_PARAMETER_VALUE)) throw new ValidationFailedError([{ path: '', message: 'The reason, the reference or the verification method is not valid' }]);
+      throw error;
+    }
+  }
+
+  private async callReset(tx: PlatformTransaction, command: MfaResetCommand): Promise<MfaResetResult | undefined> {
     const [row] = await tx.$queryRaw<Array<{ out_reset_at: Date; out_revoked_sessions: number }>>`
       SELECT out_reset_at, out_revoked_sessions
       FROM platform_reset_user_mfa(${command.administratorId}::uuid, ${command.userId}::uuid, ${command.reason}, ${command.method},
