@@ -235,6 +235,10 @@ describe('identity API: members', () => {
       const { rows } = await db.platform.query<{ email: string }>(`SELECT u.email FROM users u JOIN memberships m ON m.user_id = u.id WHERE m.tenant_id = $1 LIMIT 1`, [other.tenantId]);
       const invited = (await owner.post('/members/invitations', { email: rows[0]!.email, firstName: 'Sent', lastName: 'Names', roleId: staff, companyIds: [world.companyId] }).expect(201)).body;
       expect(invited).toMatchObject({ firstName: 'Sent', lastName: 'Names' });
+      // The member list must not reveal the stored name of a person who has not accepted (S4).
+      const listed = (await owner.get(`/members?search=${encodeURIComponent(rows[0]!.email)}`).expect(200)).body.items as Array<{ status: string; firstName: string; lastName: string }>;
+      const pending = listed.find((member) => member.status === 'INVITED');
+      expect(pending).toMatchObject({ firstName: '', lastName: '' });
     });
 
     it('lowering an administrator (deactivating, or taking them off the admin role) needs full access (403)', async () => {
@@ -266,6 +270,9 @@ describe('identity API: members', () => {
       const mine = (await editor.post('/roles', { name: unique('Mine') }).expect(201)).body.id;
       await editor.patch(`/roles/${mine}`, { isAdmin: true }).expect(403);
       await editor.put(`/roles/${mine}/permissions`, { permissions: [{ action: 'manage', subject: 'all' }] }).expect(403);
+      // It can delegate a permission it holds, but not one it does not (no escalation, S4).
+      await editor.put(`/roles/${mine}/permissions`, { permissions: [{ action: 'read', subject: 'Role' }] }).expect(200);
+      await editor.put(`/roles/${mine}/permissions`, { permissions: [{ action: 'delete', subject: 'Role' }] }).expect(403);
       await owner.put(`/roles/${mine}/permissions`, { permissions: [{ action: 'manage', subject: 'all' }] }).expect(200);
     });
 

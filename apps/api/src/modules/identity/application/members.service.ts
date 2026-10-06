@@ -26,11 +26,16 @@ const summaryOf = (row: MemberRow) => ({
   companyIds: row.companies.map((company) => company.companyId),
 });
 
+// A membership that has not been accepted shows no name: the stored names may belong to the same person in
+// another organization, and echoing them would reveal that the account exists and its real name (S4). The
+// invite response still echoes the names the inviter typed.
+const pendingInvitation = (row: MemberRow) => row.status === 'INVITED';
+
 export const toMemberResponse = (row: MemberRow): MemberResponse => ({
   userId: row.userId,
   email: row.user.email,
-  firstName: row.user.firstName,
-  lastName: row.user.lastName,
+  firstName: pendingInvitation(row) ? '' : row.user.firstName,
+  lastName: pendingInvitation(row) ? '' : row.user.lastName,
   status: row.status,
   isOwner: row.isOwner,
   roleId: row.roleId,
