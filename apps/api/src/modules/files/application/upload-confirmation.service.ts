@@ -38,8 +38,12 @@ export class UploadConfirmationService {
 
     const verdict = await this.inspect(pending);
     if (!verdict.ok) {
-      const removed = await this.runner.withTenantTransaction((tx) => this.reject(tx, tenantId, pending.id));
-      if (removed) await this.discard(pending.storageKey);
+      // The presigned upload URL stays valid for minutes after this, so the client could write the object again.
+      // Deleting the row here would leave an untracked object (the purge walks the rows) and free the reserved
+      // bytes while they can still be written: a way to fill storage outside the quota (S3). The PENDING row and
+      // its reservation stay; the abandoned-upload purge removes the row, the object and the reservation together
+      // once the URL can no longer be used.
+      this.logger.warn(`Rejected upload ${pending.id} (${verdict.reason}); its reservation stays until the purge`, 'UploadConfirmationService');
       throw new FileRejectedError(verdict.reason);
     }
     const row = await this.runner.withTenantTransaction((tx) => this.accept(tx, tenantId, pending.id, verdict.mimeType));
@@ -70,22 +74,4 @@ export class UploadConfirmationService {
     return { ...locked, status: 'CONFIRMED', mimeType, confirmedAt: at };
   }
 
-  /** Drops the rejected upload and gives its reserved bytes back; false when it is gone or was confirmed meanwhile. */
-  private async reject(tx: TenantTransaction, tenantId: string, id: string): Promise<boolean> {
-    const locked = await this.files.lock(tx, tenantId, id);
-    if (locked === null || locked.status !== 'PENDING') return false;
-    await this.usage.lock(tx, tenantId);
-    await this.files.remove(tx, tenantId, id);
-    await this.usage.adjust(tx, tenantId, { reservedBytes: -locked.sizeBytes });
-    return true;
-  }
-
-  /** Best effort: a leftover object has no row and no quota effect. */
-  private async discard(key: string): Promise<void> {
-    try {
-      await this.storage.delete(key);
-    } catch (error) {
-      this.logger.error(error, 'UploadConfirmationService');
-    }
-  }
 }
