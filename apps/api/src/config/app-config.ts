@@ -22,7 +22,9 @@ function parseTrustProxy(value: string): TrustProxy | undefined {
   if (value === 'false') return false;
   if (/^\d{1,2}$/.test(value)) return Number(value);
   const entries = value.split(',').map((entry) => entry.trim());
-  return entries.every((entry) => TRUSTED_PROXY_ENTRY.test(entry)) ? entries : undefined;
+  // A /0 CIDR (`0.0.0.0/0`, `::/0`) trusts every address: any client could forge X-Forwarded-For and its own IP.
+  const catchAll = (entry: string) => /\/0+$/.test(entry);
+  return entries.every((entry) => TRUSTED_PROXY_ENTRY.test(entry) && !catchAll(entry)) ? entries : undefined;
 }
 
 const trustProxySchema = z
@@ -31,7 +33,7 @@ const trustProxySchema = z
   .transform((value, context): TrustProxy => {
     const parsed = parseTrustProxy(value.trim());
     if (parsed !== undefined) return parsed;
-    context.addIssue({ code: 'custom', message: 'must be false, a number of proxies or a list of proxy addresses' });
+    context.addIssue({ code: 'custom', message: 'must be false, a number of proxies or a list of proxy addresses (not a /0 CIDR: it would trust every address)' });
     return z.NEVER;
   });
 
@@ -133,6 +135,17 @@ const apiSchema = commonSchema.extend({
   REALTIME_SIGNAL_QUEUE_MAX: boundedInteger(10_000, 100, 1_000_000),
 });
 
+const EXAMPLE_SECRET = /change-me/i;
+
+/** Rejects the placeholders shipped in `deploy/example.env`: deployed as they are, anyone could forge tokens or decrypt MFA secrets. */
+function rejectExampleSecrets(context: z.RefinementCtx, entries: readonly (readonly [string, string | undefined])[]): void {
+  for (const [name, value] of entries) {
+    if (value !== undefined && EXAMPLE_SECRET.test(value)) {
+      context.addIssue({ code: 'custom', path: [name], message: 'still holds the example value from deploy/example.env; generate a real secret' });
+    }
+  }
+}
+
 /** Rules that involve several variables. */
 function apiRules(config: z.infer<typeof apiSchema>, context: z.RefinementCtx): void {
   if (config.REALTIME_ENABLED && (config.REALTIME_ALLOWED_ORIGINS === undefined || config.REALTIME_ALLOWED_ORIGINS.length === 0)) {
@@ -145,6 +158,18 @@ function apiRules(config: z.infer<typeof apiSchema>, context: z.RefinementCtx): 
   if (config.REALTIME_ENABLED && config.DB_POOL_MAX >= 1 && config.REALTIME_DB_CONCURRENCY >= config.DB_POOL_MAX) {
     context.addIssue({ code: 'custom', path: ['REALTIME_DB_CONCURRENCY'], message: `must be lower than DB_POOL_MAX (${config.DB_POOL_MAX}) so that the HTTP requests keep connections` });
   }
+  if (config.NODE_ENV === 'production') {
+    rejectExampleSecrets(context, [
+      ['JWT_SECRET', config.JWT_SECRET],
+      ['DATABASE_URL', config.DATABASE_URL],
+      ['PLATFORM_DATABASE_URL', config.PLATFORM_DATABASE_URL],
+      ['STORAGE_ACCESS_KEY_ID', config.STORAGE_ACCESS_KEY_ID],
+      ['STORAGE_SECRET_ACCESS_KEY', config.STORAGE_SECRET_ACCESS_KEY],
+    ]);
+    if (config.MFA_ENCRYPTION_KEYS.some((key) => key.key.every((byte) => byte === 0) || EXAMPLE_SECRET.test(key.id))) {
+      context.addIssue({ code: 'custom', path: ['MFA_ENCRYPTION_KEYS'], message: 'still holds the example key from deploy/example.env; generate one with `openssl rand -base64 32`' });
+    }
+  }
 }
 
 const apiSchemaChecked = apiSchema.superRefine(apiRules);
@@ -153,6 +178,19 @@ const workerSchema = commonSchema.extend({
   /** Login of the `app_worker` role: subject to row-level security, the only one that claims outbox events. */
   WORKER_DATABASE_URL: postgresUrl,
 });
+
+/** The worker's own example-secret checks (it never reads the API-only variables). */
+function workerRules(config: z.infer<typeof workerSchema>, context: z.RefinementCtx): void {
+  if (config.NODE_ENV === 'production') {
+    rejectExampleSecrets(context, [
+      ['WORKER_DATABASE_URL', config.WORKER_DATABASE_URL],
+      ['STORAGE_ACCESS_KEY_ID', config.STORAGE_ACCESS_KEY_ID],
+      ['STORAGE_SECRET_ACCESS_KEY', config.STORAGE_SECRET_ACCESS_KEY],
+    ]);
+  }
+}
+
+const workerSchemaChecked = workerSchema.superRefine(workerRules);
 
 /**
  * What both processes inject: `DATABASE_URL` is the connection of the process's own role (`app_runtime` for the API,
@@ -220,6 +258,6 @@ export function loadApiConfig(env: Environment): ApiConfig {
 
 /** Reads and validates the worker's environment. It never reads `PORT`, `JWT_SECRET`, `DATABASE_URL` or the platform login. */
 export function loadWorkerConfig(env: Environment): AppConfig {
-  const { WORKER_DATABASE_URL, ...common } = parseOrThrow(workerSchema, env);
+  const { WORKER_DATABASE_URL, ...common } = parseOrThrow(workerSchemaChecked, env);
   return { ...common, DATABASE_URL: WORKER_DATABASE_URL };
 }

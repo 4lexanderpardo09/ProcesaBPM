@@ -187,7 +187,7 @@ Reglas:
 - **Contratos:** los esquemas zod de requests y responses están en `packages/shared/src/contracts/auth`; el API los aplica con `ZodValidationPipe` (400 `VALIDATION_FAILED` con las rutas de los campos, sin repetir valores).
 - **Trabajo en segundo plano:** `BackgroundTasks` (`common/background`) ejecuta lo que no debe retrasar la respuesta (p. ej. la solicitud de recuperación, para no revelar si la cuenta existe); el apagado espera a que termine.
 - **IP del cliente:** `TRUST_PROXY` (`configureHttpApp`, `src/http-app.ts`).
-- **Rate limit:** `@RateLimit(policy)` + `RateLimitGuard`, primero por IP y luego por correo (o por token cuando no hay correo), con la interfaz `RateLimiter`; hoy en memoria (`InMemoryRateLimiter`), luego en Redis. 429 `RATE_LIMITED` con `Retry-After`.
+- **Rate limit:** `@RateLimit(policy)` + `RateLimitGuard`, primero por IP y luego por correo (o por token cuando no hay correo), con la interfaz `RateLimiter`; hoy en memoria (`InMemoryRateLimiter`), luego en Redis. 429 `RATE_LIMITED` con `Retry-After`. La IP se agrupa por /64 para IPv6 (`normalizeClientAddress`): un host posee un /64 entero, así que contar la dirección completa sería trivial de rotar. Además de las rutas de auth, llevan límite `/files/uploads`, `/files/:id/confirm` y `/ready`; el guard y el limitador viven en `RateLimitModule` (singleton), para que un módulo compartido con el worker (files) los use sin importar `AuthModule`.
 - **Capas:** `http/` (controlador, guard, cookie) → `application/` (un servicio por caso de uso) → `domain/` (política y elegibilidad) y `data/` (repositorios; credenciales solo por funciones `auth_*`).
 
 ## 9. Autorización (`modules/authorization`, hecho)

@@ -97,9 +97,42 @@ describe('loadApiConfig / loadWorkerConfig', () => {
     expect(loadApiConfig({ ...valid, TRUST_PROXY: value }).TRUST_PROXY).toEqual(expected);
   });
 
-  it.each(['true', 'yes', '10.0.0.0/8,evil.example.com', '-1', ''])('rejects TRUST_PROXY=%j', (value) => {
+  it.each(['true', 'yes', '10.0.0.0/8,evil.example.com', '-1', '', '0.0.0.0/0', '::/0', '10.0.0.0/8,0.0.0.0/0'])('rejects TRUST_PROXY=%j', (value) => {
     const error = catchError(() => loadApiConfig({ ...valid, TRUST_PROXY: value }));
     expect(error.problems).toEqual([expect.stringContaining('TRUST_PROXY')]);
+  });
+
+  describe('example secrets in production', () => {
+    it('refuses the placeholders shipped in deploy/example.env', () => {
+      const exampleKey = `change-me:${Buffer.alloc(32, 0).toString('base64')}`;
+      expect(catchError(() => loadApiConfig({ ...valid, NODE_ENV: 'production', JWT_SECRET: 'change-me-at-least-32-bytes-long-0000000000' })).problems).toEqual([
+        expect.stringContaining('JWT_SECRET'),
+      ]);
+      expect(catchError(() => loadApiConfig({ ...valid, NODE_ENV: 'production', DATABASE_URL: 'postgresql://api:change-me@localhost:5432/x' })).problems).toEqual([
+        expect.stringContaining('DATABASE_URL'),
+      ]);
+      expect(catchError(() => loadApiConfig({ ...valid, NODE_ENV: 'production', MFA_ENCRYPTION_KEYS: exampleKey })).problems).toEqual([
+        expect.stringContaining('MFA_ENCRYPTION_KEYS'),
+      ]);
+      expect(catchError(() => loadApiConfig({ ...valid, NODE_ENV: 'production', STORAGE_SECRET_ACCESS_KEY: 'change-me' })).problems).toEqual([
+        expect.stringContaining('STORAGE_SECRET_ACCESS_KEY'),
+      ]);
+    });
+
+    it('refuses the example values in the worker too', () => {
+      expect(catchError(() => loadWorkerConfig({ ...valid, NODE_ENV: 'production', WORKER_DATABASE_URL: 'postgresql://worker:change-me@localhost:5432/x' })).problems).toEqual([
+        expect.stringContaining('WORKER_DATABASE_URL'),
+      ]);
+    });
+
+    it('accepts real secrets in production', () => {
+      expect(loadApiConfig({ ...valid, NODE_ENV: 'production', JWT_SECRET: 'a-real-production-secret-of-at-least-32-bytes' }).NODE_ENV).toBe('production');
+      expect(loadWorkerConfig({ ...valid, NODE_ENV: 'production', WORKER_DATABASE_URL: workerUrl }).NODE_ENV).toBe('production');
+    });
+
+    it('does not reject the placeholders outside production (development and tests)', () => {
+      expect(loadApiConfig({ ...valid, NODE_ENV: 'development', JWT_SECRET: 'change-me-at-least-32-bytes-long-0000000000' }).JWT_SECRET).toBe('change-me-at-least-32-bytes-long-0000000000');
+    });
   });
 
   describe('MFA_ENCRYPTION_KEYS', () => {

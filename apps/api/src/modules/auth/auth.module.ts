@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
-import { RateLimitGuard } from '../../common/auth/rate-limit.js';
 import { TenantScopeInterceptor } from '../../common/auth/tenant-scope.interceptor.js';
-import { InMemoryRateLimiter, RATE_LIMITER } from '../../infrastructure/security/rate-limiter.js';
+import { RateLimitModule } from '../../infrastructure/security/rate-limit.module.js';
 import { JwtTokenService } from '../../infrastructure/security/jwt-token-service.js';
 import { MfaSecretCipher } from '../../infrastructure/security/mfa-secret-cipher.js';
 import { PasswordHasher } from '../../infrastructure/security/password-hasher.js';
@@ -50,14 +49,12 @@ import { LoginBlocksModule } from '../announcements/login-blocks.module.js';
  * by the authorization module, which orders the two.
  */
 @Module({
-  imports: [LoginBlocksModule],
+  imports: [LoginBlocksModule, RateLimitModule],
   controllers: [AuthController, MfaController, TenantSecurityController],
   providers: [
     PasswordHasher,
     MfaSecretCipher,
     JwtTokenService,
-    { provide: RATE_LIMITER, useClass: InMemoryRateLimiter },
-    RateLimitGuard,
     CredentialsRepository,
     SessionRepository,
     LoginTokenRepository,
@@ -94,6 +91,8 @@ import { LoginBlocksModule } from '../announcements/login-blocks.module.js';
     AccessTokenGuard,
     { provide: APP_INTERCEPTOR, useClass: TenantScopeInterceptor },
   ],
-  exports: [AccessTokenGuard, AccessTokenAuthenticator, CurrentPasswordVerifier, RATE_LIMITER],
+  // RateLimitModule is re-exported so the modules that import AuthModule (the platform, data exports, the gateway)
+  // keep resolving the shared RATE_LIMITER without importing it themselves.
+  exports: [AccessTokenGuard, AccessTokenAuthenticator, CurrentPasswordVerifier, RateLimitModule],
 })
 export class AuthModule {}
