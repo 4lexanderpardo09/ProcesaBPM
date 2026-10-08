@@ -39,6 +39,7 @@ export const AUDIT_ACTIONS = [
   'support_access.revoked',
   'support.request',
   'account.password_changed',
+  'account.profile_updated',
   'account.mfa_enabled',
   'account.mfa_disabled',
   'account.mfa_backup_codes_regenerated',

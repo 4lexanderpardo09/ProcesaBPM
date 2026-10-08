@@ -110,6 +110,7 @@ describe('response schemas', () => {
         isOwner: false,
         role: { id: uuid, name: 'Admin', isAdmin: true },
         companies: [{ id: uuid, name: 'Main', isDefault: true }],
+        signatureFileId: null,
       },
       tenantMode: 'ACTIVE',
     };
