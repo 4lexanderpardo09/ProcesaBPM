@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type ConnectErrorCode, RateLimitedError, UnauthenticatedError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { clientAddressOf, markAuthenticated } from '../../../infrastructure/realtime/realtime-io-adapter.js';
+import { normalizeClientAddress } from '../../../infrastructure/security/client-address.js';
 import { RATE_LIMITER, type RateLimiter, type RateLimitRule } from '../../../infrastructure/security/rate-limiter.js';
 import { AccessTokenAuthenticator } from '../../auth/application/access-token-authenticator.js';
 import { connectErrorCodeOf } from '../domain/close-reasons.js';
@@ -67,7 +68,8 @@ export class SocketHandshake {
       throw new UnauthenticatedError();
     }
     const token = tokenOf(socket.handshake.auth);
-    await this.limit(`realtime.handshake:ip:${address}`, HANDSHAKES_PER_ADDRESS);
+    // Per /64 for IPv6 (normalizeClientAddress): one host cannot rotate its address to reset the budget.
+    await this.limit(`realtime.handshake:ip:${normalizeClientAddress(address)}`, HANDSHAKES_PER_ADDRESS);
     const access = await this.limiter.run(() => this.authenticator.authenticate(token), AUTHENTICATION_TIMEOUT_MS, 'interactive');
     await this.limit(`realtime.handshake:user:${access.principal.userId}`, HANDSHAKES_PER_USER);
     socket.data.session = new SocketSession(access.principal, access.expiresAt, monotonicNow(), address);

@@ -4,6 +4,7 @@ import { REALTIME_PATH } from '@procesabpm/shared';
 import proxyaddr from 'proxy-addr';
 import { Server, type ServerOptions } from 'socket.io';
 import type { ApiConfig } from '../../config/app-config.js';
+import { normalizeClientAddress } from '../security/client-address.js';
 import { type AdmissionLimits, type AdmissionTicket, ConnectionAdmission, DEFAULT_ADMISSION_LIMITS } from './connection-admission.js';
 import { OriginPolicy } from './origin-policy.js';
 
@@ -84,7 +85,9 @@ export class RealtimeIoAdapter extends IoAdapter {
           return;
         }
         const address = proxyaddr(request, this.trustProxy);
-        const ticket = this.admission.admit(address);
+        // The address is stored whole (logs, session), but the admission counts per /64 for IPv6: one host cannot open
+        // a fresh budget by rotating through its /64.
+        const ticket = this.admission.admit(normalizeClientAddress(address));
         if (typeof ticket === 'string') {
           callback('TOO_MANY_CONNECTIONS', false);
           return;

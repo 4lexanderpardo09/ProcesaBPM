@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { RateLimitedError } from '@procesabpm/shared';
 import type { Request } from 'express';
 import { RATE_LIMITER, type RateLimiter, type RateLimitRule } from '../../infrastructure/security/rate-limiter.js';
+import { normalizeClientAddress } from '../../infrastructure/security/client-address.js';
 import { bearerToken } from './bearer-token.js';
 import { sha256Hex } from '../../infrastructure/security/token-utils.js';
 
@@ -39,8 +40,9 @@ export class RateLimitGuard implements CanActivate {
     const policy = this.reflector.get<RateLimitPolicy | undefined>(RATE_LIMIT_KEY, context.getHandler());
     if (policy === undefined) return true;
     const request = context.switchToHttp().getRequest<Request>();
-    // The IP goes first: a client over its limit cannot spend the budget of someone else's e-mail.
-    await this.enforce(`${policy.name}:ip:${request.ip ?? 'unknown'}`, policy.perIp);
+    // The IP goes first: a client over its limit cannot spend the budget of someone else's e-mail. IPv6 is grouped
+    // by /64 (normalizeClientAddress): one host owns a whole /64, so the full address would be trivial to rotate.
+    await this.enforce(`${policy.name}:ip:${normalizeClientAddress(request.ip)}`, policy.perIp);
     const identifier = identifierOf(request);
     if (identifier !== undefined) await this.enforce(`${policy.name}:${identifier}`, policy.perIdentifier);
     return true;
