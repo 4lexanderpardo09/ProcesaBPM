@@ -130,12 +130,15 @@ describe('TenantTransactionRunner against PostgreSQL', () => {
       `INSERT INTO users (email, first_name, last_name) VALUES ($1, 'Orphan', 'User') RETURNING id`,
       [`orphan-${Date.now()}@example.com`],
     );
+    // A new membership starts INVITED (S1); activating it without a company is what the
+    // deferred rule checks at COMMIT, so the two statements go in the same transaction.
     const error = await asTenant(tenantA, () =>
-      runner.withTenantTransaction(
-        (tx) =>
-          tx.$executeRaw`INSERT INTO memberships (tenant_id, user_id, role_id, status)
-                         VALUES (${tenantA.tenantId}::uuid, ${orphanUser}::uuid, ${tenantA.roleId}::uuid, 'ACTIVE')`,
-      ),
+      runner.withTenantTransaction(async (tx) => {
+        await tx.$executeRaw`INSERT INTO memberships (tenant_id, user_id, role_id, status)
+                             VALUES (${tenantA.tenantId}::uuid, ${orphanUser}::uuid, ${tenantA.roleId}::uuid, 'INVITED')`;
+        await tx.$executeRaw`UPDATE memberships SET status = 'ACTIVE'
+                             WHERE tenant_id = ${tenantA.tenantId}::uuid AND user_id = ${orphanUser}::uuid`;
+      }),
     ).catch((caught: unknown) => caught);
     expect(mapDatabaseError(error)).toBeInstanceOf(InvalidStateError);
   });
