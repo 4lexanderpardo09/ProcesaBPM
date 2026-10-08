@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { pageQuerySchema } from '../common.js';
 import { attachmentIdsSchema } from '../files/schemas.js';
 import { uuidSchema } from '../ids.js';
+import type { TagResponse } from '../tags/schemas.js';
 
 const values = z.record(z.string(), z.unknown()).default({});
 /** An HTML fragment, sanitized by the server; the length limit applies to what is sent. */
@@ -97,6 +98,8 @@ export interface TicketSummaryResponse {
   readonly currentStepId: string | null;
   readonly createdAt: string;
   readonly closedAt: string | null;
+  /** The caller's own tags on this ticket (nobody else's). */
+  readonly tags: readonly TagResponse[];
 }
 
 export interface TicketDetailResponse extends TicketSummaryResponse {

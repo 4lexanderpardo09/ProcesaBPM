@@ -44,17 +44,20 @@ const REALTIME_SUMMARY = {
   events: { select: { seq: true }, orderBy: { seq: 'desc' }, take: 1 },
 } as const;
 
+/** The caller's own tags on a ticket (never anyone else's): part of the summary and the detail. */
+const withTags = (userId: string) => ({ tags: { where: { userId }, select: { tag: { select: { id: true, name: true, color: true } } } } }) as const;
+
 /** Reads of tickets. The caller passes the access filter (per-record authorization): it is part of every query. */
 @Injectable()
 export class TicketQueryRepository {
-  findDetail(tx: TenantTransaction, tenantId: string, ticketId: string, access: Where) {
-    return tx.ticket.findFirst({ where: { AND: [{ tenantId, id: ticketId, deletedAt: null }, access] } as never, select: DETAIL });
+  findDetail(tx: TenantTransaction, tenantId: string, ticketId: string, access: Where, userId: string) {
+    return tx.ticket.findFirst({ where: { AND: [{ tenantId, id: ticketId, deletedAt: null }, access] } as never, select: { ...DETAIL, ...withTags(userId) } });
   }
 
-  async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }) {
+  async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }, userId: string) {
     const where = { AND: [{ tenantId, deletedAt: null }, ...filters] } as never;
     // One query after another: an interactive transaction has a single connection.
-    const rows = await tx.ticket.findMany({ where, select: SUMMARY, orderBy: { number: 'desc' }, ...window });
+    const rows = await tx.ticket.findMany({ where, select: { ...SUMMARY, ...withTags(userId) }, orderBy: { number: 'desc' }, ...window });
     return { rows, total: await tx.ticket.count({ where }) };
   }
 
