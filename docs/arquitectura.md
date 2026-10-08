@@ -81,6 +81,7 @@ apps/api/
 | `data-exports` | **Hecho:** exportación de los datos de la organización durante el periodo de eliminación: solicitudes, estado y enlaces de descarga en el API (parte 1) y el worker que arma el zip y avisa por correo (parte 2, `data-exports-worker.module.ts`) (§20). |
 | `notifications` | In-app, correo, tiempo real y preferencias. |
 | `webhooks` | Suscripciones y entregas firmadas. |
+| `dashboard` | **Hecho:** el resumen del propio miembro: `GET /dashboard/stats` (asignados abiertos, vencidos, por vencer en 24 h, creados abiertos y cerrados en 7 días) y `GET /dashboard/pending` (sus tickets en curso, lo más urgente primero). Todo acotado a lo que puede leer (`read Ticket`, autorización por registro). |
 | `reports` | Indicadores y exportes. |
 | `audit` | Registro y consulta de auditoría. |
 | `retention` | **Hecho (solo el worker):** borrado nocturno de lo que pasó su ventana de retención (§17 y base-de-datos.md §8.27). |
