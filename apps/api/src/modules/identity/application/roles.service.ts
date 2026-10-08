@@ -29,8 +29,9 @@ const permissionSummary = (rows: ReadonlyArray<{ action: string; subject: string
 const toResponse = (row: RoleRow): RoleResponse => ({ ...row, createdAt: row.createdAt.toISOString() });
 
 /**
- * Creating or marking an admin role, and granting `manage all`, are guarded by the database (only an
- * administrator may): the violation arrives as a typed 403.
+ * Creating or marking an admin role is guarded by the database (only an administrator may). So is granting a
+ * permission: a role can only be given permissions the actor already holds (an administrator, who holds
+ * `manage all`, can give anything). Both violations arrive as a typed 403.
  */
 @Injectable()
 export class RolesService {
