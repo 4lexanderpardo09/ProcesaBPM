@@ -16,5 +16,6 @@ export * from './realtime/index.js';
 export * from './reports/index.js';
 export * from './support/index.js';
 export * from './tags/index.js';
+export * from './text-templates/index.js';
 export * from './tickets/index.js';
 export * from './workflows/index.js';
