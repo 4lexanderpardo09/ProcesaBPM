@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { emailSchema } from '../common.js';
+import { emailSchema, nameSchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 import { newPasswordSchema, PASSWORD_MAX_LENGTH } from './password.js';
 
@@ -183,11 +183,31 @@ export const meResponseSchema = z.object({
     isOwner: z.boolean(),
     role: z.object({ id: uuidSchema, name: z.string(), isAdmin: z.boolean() }),
     companies: z.array(z.object({ id: uuidSchema, name: z.string(), isDefault: z.boolean() })),
+    /** The member's handwritten signature for the PDFs, if they uploaded one. */
+    signatureFileId: uuidSchema.nullable(),
   }),
   /** `DELETION_PENDING`: the organization is pending deletion; the session only serves the profile and the data export. */
   tenantMode: z.enum(['ACTIVE', 'DELETION_PENDING']),
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
+
+/** The user edits their own profile: their name, language and time zone (the e-mail has its own flow). */
+export const updateProfileRequestSchema = z
+  .object({
+    firstName: nameSchema.optional(),
+    lastName: nameSchema.optional(),
+    locale: z.string().regex(/^[a-z]{2}-[A-Z]{2}$/, 'Use xx-XX').optional(),
+    timeZone: z.string().min(1).max(64).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, 'Send at least one field');
+export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;
+
+/** The signature is an image already uploaded and confirmed (the two-phase upload): the request points at it. */
+export const setSignatureRequestSchema = z.object({ fileId: uuidSchema });
+export type SetSignatureRequest = z.infer<typeof setSignatureRequestSchema>;
+
+export const signatureResponseSchema = z.object({ url: z.string(), expiresAt: z.iso.datetime() });
+export type SignatureResponse = z.infer<typeof signatureResponseSchema>;
 
 /** Claims of the access token. */
 export const accessTokenClaimsSchema = z.object({

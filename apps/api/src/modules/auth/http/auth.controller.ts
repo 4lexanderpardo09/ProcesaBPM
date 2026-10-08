@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Patch, Post, Put, Req, Res, UseGuards } from '@nestjs/common';
 import {
   type AcceptInvitationRequest,
   type AcceptInvitationResponse,
@@ -23,6 +23,11 @@ import {
   type MfaLoginResponse,
   type ChangePasswordRequest,
   selectTenantRequestSchema,
+  setSignatureRequestSchema,
+  type SetSignatureRequest,
+  type SignatureResponse,
+  type UpdateProfileRequest,
+  updateProfileRequestSchema,
   UnauthenticatedError,
 } from '@procesabpm/shared';
 import type { Request, Response } from 'express';
@@ -223,6 +228,36 @@ export class AuthController {
   @Get('me')
   me(@CurrentPrincipal() principal: Principal): Promise<MeResponse> {
     return this.profiles.me(principal);
+  }
+
+  /** Edits the caller's own name, language and time zone; the e-mail has its own confirmation flow. */
+  @AuthenticatedOnly()
+  @Patch('me')
+  @Audited('account.profile_updated')
+  updateMe(@CurrentPrincipal() principal: Principal, @Body(new ZodValidationPipe(updateProfileRequestSchema)) body: UpdateProfileRequest): Promise<MeResponse> {
+    return this.profiles.update(principal, body);
+  }
+
+  /** A short-lived signed URL to the caller's own signature image, or null when there is none. */
+  @AuthenticatedOnly()
+  @Get('me/signature')
+  signature(@CurrentPrincipal() principal: Principal): Promise<SignatureResponse | null> {
+    return this.profiles.signatureUrl(principal);
+  }
+
+  /** Links one of the caller's own confirmed images (uploaded and confirmed first) as their signature. */
+  @AuthenticatedOnly()
+  @Put('me/signature')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  setSignature(@CurrentPrincipal() principal: Principal, @Body(new ZodValidationPipe(setSignatureRequestSchema)) body: SetSignatureRequest): Promise<void> {
+    return this.profiles.setSignature(principal, body);
+  }
+
+  @AuthenticatedOnly()
+  @Delete('me/signature')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  clearSignature(@CurrentPrincipal() principal: Principal): Promise<void> {
+    return this.profiles.clearSignature(principal);
   }
 
   private challengeOf(request: Request): string {
