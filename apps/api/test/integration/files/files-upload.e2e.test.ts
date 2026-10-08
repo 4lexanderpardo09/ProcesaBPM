@@ -129,7 +129,7 @@ describe('uploads: reserve, upload, confirm, quota', () => {
       await uploader.client.post(`/files/${slot!.fileId}/confirm`).expect(200);
     });
 
-    it('rejects HTML disguised as an image: the row, the reservation and the object are all gone', async () => {
+    it('rejects HTML disguised as an image, keeping the row and its reservation while the URL is still valid', async () => {
       const before = await usage();
       const file = { name: 'photo.png', content: Buffer.from('<html><script>alert(1)</script></html>') };
       const [slot] = await reserve(uploader, [file]);
@@ -137,19 +137,20 @@ describe('uploads: reserve, upload, confirm, quota', () => {
       const key = (await keyOf(slot!.fileId))!;
       const response = await uploader.client.post(`/files/${slot!.fileId}/confirm`).expect(422);
       expect(response.body.error).toMatchObject({ code: 'FILE_REJECTED', details: { reason: 'TYPE_MISMATCH' } });
-      expect(await row(slot!.fileId)).toBeUndefined();
-      expect(await storage.head(key)).toBeNull();
-      expect(await usage()).toEqual(before);
+      expect((await row(slot!.fileId))!.status).toBe('PENDING');
+      expect(await storage.head(key)).not.toBeNull();
+      expect(BigInt((await usage()).bytes_reserved) - BigInt(before.bytes_reserved)).toBe(BigInt(file.content.length));
     });
 
-    it('rejects content whose hash is not the declared one', async () => {
+    it('rejects content whose hash is not the declared one, keeping the reservation', async () => {
       const before = await usage();
       const file = { name: 'liar.pdf', content: pdf('real'), declaredSha256: sha256Of(pdf('claimed')) };
       const [slot] = await reserve(uploader, [file]);
       await putToStorage(slot!, file.content);
       const response = await uploader.client.post(`/files/${slot!.fileId}/confirm`).expect(422);
       expect(response.body.error.details).toEqual({ reason: 'HASH_MISMATCH' });
-      expect(await usage()).toEqual(before);
+      expect((await row(slot!.fileId))!.status).toBe('PENDING');
+      expect(BigInt((await usage()).bytes_reserved) - BigInt(before.bytes_reserved)).toBe(BigInt(file.content.length));
     });
 
     it('rejects a PDF declared as .xlsx and binary content declared as .csv', async () => {
@@ -227,7 +228,7 @@ describe('uploads: reserve, upload, confirm, quota', () => {
       expect((await usage(raceWorld.tenant.tenantId)).bytes_reserved).toBe(String(accepted * 300));
     });
 
-    it('a rejected upload gives its reservation back, so the space can be used again', async () => {
+    it('keeps the reservation of a rejected upload, so its space cannot be reused to bypass the quota (S3)', async () => {
       const refundWorld = await TicketWorld.create(db, app);
       const refunded = await refundWorld.member([grant('create')]);
       await withPlan(refundWorld.tenant.tenantId, 100, 0, 0);
@@ -235,7 +236,11 @@ describe('uploads: reserve, upload, confirm, quota', () => {
       const [slot] = await reserve(refunded, [bad]);
       await putToStorage(slot!, bad.content);
       await refunded.client.post(`/files/${slot!.fileId}/confirm`).expect(422);
-      await refunded.client.post('/files/uploads', { files: [{ name: 'again.pdf', sizeBytes: 100, sha256: 'a'.repeat(64) }] }).expect(201);
+      // The bytes stay reserved (the presigned URL is still valid): the space cannot be used again.
+      expect((await usage(refundWorld.tenant.tenantId)).bytes_reserved).toBe('100');
+      const refused = await refunded.client.post('/files/uploads', { files: [{ name: 'again.pdf', sizeBytes: 100, sha256: 'a'.repeat(64) }] });
+      expectStatus(refused, 422);
+      expect(refused.body.error.code).toBe('STORAGE_QUOTA_EXCEEDED');
     });
 
     it('GET /storage/usage reports used, reserved, the limits, the active users and the state', async () => {
