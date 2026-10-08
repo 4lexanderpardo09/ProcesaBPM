@@ -84,8 +84,8 @@ export class TicketsController {
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
   @Get(':id')
-  get(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketDetailResponse> {
-    return this.queries.get(ability, id);
+  get(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketDetailResponse> {
+    return this.queries.get(ability, id, principal.userId);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)

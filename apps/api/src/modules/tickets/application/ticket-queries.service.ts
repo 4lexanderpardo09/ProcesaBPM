@@ -24,6 +24,7 @@ const toSummary = (row: SummaryRow): TicketSummaryResponse => ({
   currentStepId: row.currentStepId,
   createdAt: row.createdAt.toISOString(),
   closedAt: row.closedAt?.toISOString() ?? null,
+  tags: row.tags.map((entry) => entry.tag),
 });
 
 /** The column totals of the TABLE fields that ask for them, by field code. */
@@ -68,9 +69,9 @@ export class TicketQueriesService {
     @Inject(TicketQueryRepository) private readonly tickets: TicketQueryRepository,
   ) {}
 
-  get(ability: AppAbility, ticketId: string): Promise<TicketDetailResponse> {
+  get(ability: AppAbility, ticketId: string, userId: string): Promise<TicketDetailResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      const row = await this.tickets.findDetail(tx, this.context.require().tenantId, ticketId, readableTickets(ability));
+      const row = await this.tickets.findDetail(tx, this.context.require().tenantId, ticketId, readableTickets(ability), userId);
       if (row === null) throw new NotFoundError();
       return toDetail(row);
     });
@@ -83,7 +84,7 @@ export class TicketQueriesService {
 
   list(principal: Principal, ability: AppAbility, query: ListTicketsQuery): Promise<Page<TicketSummaryResponse>> {
     return this.runner.withTenantTransaction(async (tx) => {
-      const { rows, total } = await this.tickets.list(tx, this.context.require().tenantId, [this.viewFilter(principal, query), readableTickets(ability)], pageWindow(query));
+      const { rows, total } = await this.tickets.list(tx, this.context.require().tenantId, [this.viewFilter(principal, query), readableTickets(ability)], pageWindow(query), principal.userId);
       return { items: rows.map(toSummary), page: query.page, pageSize: query.pageSize, total };
     });
   }
