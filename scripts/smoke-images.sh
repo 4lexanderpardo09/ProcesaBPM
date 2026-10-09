@@ -80,7 +80,7 @@ step "api"
 docker run -d --name "$RUN-api" --network "$NETWORK" "${HARDENING[@]}" "${COMMON_ENV[@]}" \
   -e "DATABASE_URL=$(url procesabpm_api api)" -e "PLATFORM_DATABASE_URL=$(url procesabpm_platform platform)" \
   -e JWT_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef \
-  -e "MFA_ENCRYPTION_KEYS=smoke:$(head -c 32 /dev/zero | base64)" -e REALTIME_ALLOWED_ORIGINS=https://app.example.com "$API_IMAGE" >/dev/null
+  -e "MFA_ENCRYPTION_KEYS=smoke:$(head -c 32 /dev/urandom | base64)" -e REALTIME_ALLOWED_ORIGINS=https://app.example.com "$API_IMAGE" >/dev/null
 probe() { docker exec "$RUN-api" node -e "fetch('http://127.0.0.1:3000/$1').then(async (r) => { console.log(r.status, await r.text()); process.exit(r.ok ? 0 : 1); }, (e) => { console.error(e.message); process.exit(1); })"; }
 for _ in $(seq 1 60); do probe ready >/dev/null 2>&1 && break; sleep 1; done
 [[ "$(probe health)" == *'"ok"'* ]] || fail "/health did not answer ok"
