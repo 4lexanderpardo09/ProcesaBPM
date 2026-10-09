@@ -1,0 +1,28 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--slate);
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.ok { color: var(--ok); background: var(--ok-50); border-color: var(--ok-line); }
+.warn { color: var(--warn); background: var(--warn-50); border-color: var(--warn-line); }
+.danger { color: var(--danger); background: var(--danger-50); border-color: var(--danger-line); }
+.accent { color: var(--accent); background: var(--accent-50); border-color: var(--accent-line); }
+.violet { color: var(--violet); background: var(--violet-50); border-color: var(--violet-line); }
