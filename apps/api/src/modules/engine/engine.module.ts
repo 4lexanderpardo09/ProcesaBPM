@@ -61,6 +61,6 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     ParallelTaskService,
     ResumeWaitService,
   ],
-  exports: [CreateTicketService, CreationFormService, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository],
+  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository],
 })
 export class EngineModule {}

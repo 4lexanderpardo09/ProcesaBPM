@@ -30,6 +30,20 @@ export class PublishedVersionReader {
     return version === null ? null : { workflowId: version.workflowId, versionId: version.id, document: await this.documentOf(tx, tenantId, version.id) };
   }
 
+  /** `findForSubcategory` for many at once: one query, the documents from the cache. Subcategories without one are left out. */
+  async findForSubcategories(tx: TenantTransaction, tenantId: string, subcategoryIds: readonly string[]): Promise<Map<string, PublishedWorkflow>> {
+    if (subcategoryIds.length === 0) return new Map();
+    const versions = await tx.workflowVersion.findMany({
+      where: { tenantId, status: 'PUBLISHED', workflow: { subcategoryId: { in: [...subcategoryIds] }, isActive: true } },
+      select: { id: true, workflowId: true, workflow: { select: { subcategoryId: true } } },
+    });
+    const found = new Map<string, PublishedWorkflow>();
+    for (const version of versions) {
+      found.set(version.workflow.subcategoryId, { workflowId: version.workflowId, versionId: version.id, document: await this.documentOf(tx, tenantId, version.id) });
+    }
+    return found;
+  }
+
   /** The content of a published or archived version (the one a ticket was created with). */
   async documentOf(tx: TenantTransaction, tenantId: string, versionId: string): Promise<WorkflowVersionDocument> {
     const key = `${tenantId}:${versionId}`;

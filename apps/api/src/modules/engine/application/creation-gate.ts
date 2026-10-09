@@ -25,10 +25,27 @@ export class CreationGate {
   /** The START blocks whose initiators admit the requester (a block without initiators admits everyone). */
   async allowedStarts(tx: TenantTransaction, tenantId: string, starts: readonly StepDocument[], requester: MemberRow, company: CompanyRow): Promise<StepDocument[]> {
     if (starts.every((start) => start.initiators.length === 0)) return [...starts];
+    return (await this.startFilterFor(tx, tenantId, requester))(starts, company.id);
+  }
+
+  /**
+   * A filter of START blocks for one requester and any of their companies, reading their groups and sites once: the
+   * catalog asks it for every subcategory it lists.
+   */
+  async startFilterFor(tx: TenantTransaction, tenantId: string, requester: MemberRow): Promise<(starts: readonly StepDocument[], companyId: string) => StepDocument[]> {
     const groupIds = await this.people.activeGroupIdsOf(tx, tenantId, requester.userId);
     const siteAncestry = new Set(requester.siteId === null ? [] : await this.people.siteAncestry(tx, tenantId, requester.siteId));
-    const candidate = { userId: requester.userId, positionId: requester.positionId, departmentId: requester.departmentId, siteId: requester.siteId, companyId: company.id, groupIds, siteAncestry };
-    return starts.filter((start) => start.initiators.length === 0 || isAllowedInitiator(start.initiators, candidate));
+    return (starts, companyId) =>
+      starts.filter(
+        (start) =>
+          start.initiators.length === 0 ||
+          isAllowedInitiator(start.initiators, { userId: requester.userId, positionId: requester.positionId, departmentId: requester.departmentId, siteId: requester.siteId, companyId, groupIds, siteAncestry }),
+      );
+  }
+
+  /** The requester as the engine sees them, or `null` when they are not an active member. */
+  requesterOf(tx: TenantTransaction, tenantId: string, userId: string): Promise<MemberRow | null> {
+    return this.people.findActiveMember(tx, tenantId, userId);
   }
 }
 

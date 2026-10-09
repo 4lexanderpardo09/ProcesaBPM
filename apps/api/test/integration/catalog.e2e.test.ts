@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminOf, ApiClient, clientOf, clientWith, connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
+import { publishVersion, simpleFlow, type StepSpec } from '../support/ticket-world.js';
 
 useTestEnvironment();
 
@@ -135,16 +136,24 @@ describe('catalog API', () => {
     let deptY: string;
     const names: Record<string, string> = {};
 
-    const category = async (key: string, visibility: { companyIds?: string[]; departmentIds?: string[] } = {}, options: { active?: boolean; subcategories?: Array<{ name: string; active?: boolean }> } = {}) => {
+    const category = async (key: string, visibility: { companyIds?: string[]; departmentIds?: string[] } = {}, options: { active?: boolean; subcategories?: Array<{ name: string; active?: boolean; workflow?: false; initiators?: StepSpec['initiators'] }> } = {}) => {
       const created = (await owner.post('/categories', { name: unique(key) }).expect(201)).body;
       names[created.id] = key;
       await owner.put(`/categories/${created.id}/visibility`, { companyIds: visibility.companyIds ?? [], departmentIds: visibility.departmentIds ?? [] }).expect(200);
       for (const sub of options.subcategories ?? [{ name: 'only' }]) {
         const subcategory = (await owner.post('/subcategories', { categoryId: created.id, name: sub.name }).expect(201)).body;
+        // The catalog only offers what can be started: every subcategory gets a published workflow unless told otherwise.
+        if (sub.workflow !== false) await publishFor(subcategory.id as string, sub.initiators);
         if (sub.active === false) await owner.post(`/subcategories/${subcategory.id}/deactivate`).expect(200);
       }
       if (options.active === false) await owner.post(`/categories/${created.id}/deactivate`).expect(200);
       return created.id as string;
+    };
+    const publishFor = async (subcategoryId: string, initiators: StepSpec['initiators']) => {
+      const workflow = (await owner.post('/workflows', { subcategoryId, name: unique('Flow') }).expect(201)).body;
+      const spec = simpleFlow();
+      const steps = initiators === undefined ? spec.steps : spec.steps.map((step) => (step.type === 'START' ? { ...step, initiators } : step));
+      await publishVersion(owner, workflow.id as string, workflow.versions[0].id as string, { ...spec, steps });
     };
     const keysSeenBy = async (client: ApiClient, query = '') => {
       const { categories } = (await client.get(`/catalog/available${query}`).expect(200)).body as { categories: Array<{ id: string }> };
@@ -178,27 +187,31 @@ describe('catalog API', () => {
       await category('AandX', { companyIds: [companyA], departmentIds: [deptX] });
       await category('inactive', {}, { active: false });
       await category('filtered', {}, { subcategories: [{ name: 'kept' }, { name: 'off', active: false }] });
+      await category('noFlow', {}, { subcategories: [{ name: 'idle', workflow: false }] });
+      await category('partly', {}, { subcategories: [{ name: 'startable' }, { name: 'idle', workflow: false }] });
+      await category('onlyB-initiators', {}, { subcategories: [{ name: 'gated', initiators: [{ participantType: 'COMPANY', companyId: companyB }] }] });
     });
 
     it('a user of company A and department X sees the open categories and those that include A and/or X', async () => {
       const client = await member([companyA], deptX);
-      expect(await keysSeenBy(client)).toEqual(['AandX', 'filtered', 'onlyA', 'onlyX', 'open']);
+      expect(await keysSeenBy(client)).toEqual(['AandX', 'filtered', 'onlyA', 'onlyX', 'open', 'partly']);
     });
 
     it('a user of company B and department Y only sees what is open or for B', async () => {
       const client = await member([companyB], deptY);
-      expect(await keysSeenBy(client)).toEqual(['filtered', 'onlyB', 'open']);
+      expect(await keysSeenBy(client)).toEqual(['filtered', 'onlyB', 'onlyB-initiators', 'open', 'partly']);
     });
 
     it('a user without department does not see the categories restricted by department', async () => {
       const client = await member([companyA]);
-      expect(await keysSeenBy(client)).toEqual(['filtered', 'onlyA', 'open']);
+      expect(await keysSeenBy(client)).toEqual(['filtered', 'onlyA', 'open', 'partly']);
     });
 
     it('a user of both companies sees both, or one when choosing the company', async () => {
       const client = await member([companyA, companyB], deptY);
-      expect(await keysSeenBy(client)).toEqual(['filtered', 'onlyA', 'onlyB', 'open']);
-      expect(await keysSeenBy(client, `?companyId=${companyB}`)).toEqual(['filtered', 'onlyB', 'open']);
+      expect(await keysSeenBy(client)).toEqual(['filtered', 'onlyA', 'onlyB', 'onlyB-initiators', 'open', 'partly']);
+      expect(await keysSeenBy(client, `?companyId=${companyB}`)).toEqual(['filtered', 'onlyB', 'onlyB-initiators', 'open', 'partly']);
+      expect(await keysSeenBy(client, `?companyId=${companyA}`)).toEqual(['filtered', 'onlyA', 'open', 'partly']);
     });
 
     it('refuses a company that is not one of the user\'s (422), also one of another tenant', async () => {
@@ -213,6 +226,13 @@ describe('catalog API', () => {
       const { categories } = (await client.get('/catalog/available').expect(200)).body as { categories: Array<{ id: string; subcategories: Array<{ name: string }> }> };
       const filtered = categories.find((entry) => names[entry.id] === 'filtered')!;
       expect(filtered.subcategories.map((sub) => sub.name)).toEqual(['kept']);
+    });
+
+    it('leaves out what cannot be started: no published workflow, or START blocks that do not admit the person', async () => {
+      const client = await member([companyA], deptX);
+      const { categories } = (await client.get('/catalog/available').expect(200)).body as { categories: Array<{ id: string; subcategories: Array<{ name: string }> }> };
+      expect(categories.find((entry) => names[entry.id] === 'partly')!.subcategories.map((sub) => sub.name)).toEqual(['startable']);
+      expect(categories.some((entry) => names[entry.id] === 'noFlow' || names[entry.id] === 'onlyB-initiators')).toBe(false);
     });
   });
 

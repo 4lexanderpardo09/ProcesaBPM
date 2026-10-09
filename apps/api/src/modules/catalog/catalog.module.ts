@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { EngineModule } from '../engine/engine.module.js';
+import { WorkflowsModule } from '../workflows/workflows.module.js';
 import { AvailableCatalogService } from './application/available-catalog.service.js';
 import { ErrorTypesService } from './application/error-types.service.js';
 import { CategoriesService } from './application/categories.service.js';
@@ -17,6 +19,7 @@ import { SubcategoriesController } from './http/subcategories.controller.js';
 
 /** Priorities, categories (with their visibility), subcategories, error types and subtypes, plus what a ticket creator can pick. */
 @Module({
+  imports: [EngineModule, WorkflowsModule],
   controllers: [PrioritiesController, CategoriesController, SubcategoriesController, AvailableCatalogController, ErrorTypesController],
   providers: [
     PriorityRepository,
