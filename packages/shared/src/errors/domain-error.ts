@@ -74,6 +74,8 @@ export const ERROR_CODES = {
   pdfTemplateInvalid: 'PDF_TEMPLATE_INVALID',
   pdfRenderFailed: 'PDF_RENDER_FAILED',
   documentSourceInUse: 'DOCUMENT_SOURCE_IN_USE',
+  datasetFileInvalid: 'DATASET_FILE_INVALID',
+  datasetInUse: 'DATASET_IN_USE',
   reportTooLarge: 'REPORT_TOO_LARGE',
   reportTimeout: 'REPORT_TIMEOUT',
   lastReopeningType: 'LAST_REOPENING_TYPE',
@@ -639,6 +641,40 @@ export class PdfRenderFailedError extends DomainError {
 export class DocumentSourceInUseError extends DomainError {
   constructor() {
     super(ERROR_CODES.documentSourceInUse, 'A workflow document still uses it: deactivate it instead');
+  }
+}
+
+/** Why a spreadsheet cannot become a dataset; `detail` names the column, the row or the limit when there is one. */
+export type DatasetFileProblem =
+  | 'NOT_XLSX'
+  | 'UNREADABLE'
+  | 'TOO_LARGE_UNZIPPED'
+  | 'NO_HEADERS'
+  | 'EMPTY_HEADER'
+  | 'DUPLICATE_HEADER'
+  | 'HEADER_TOO_LONG'
+  | 'TOO_MANY_COLUMNS'
+  | 'TOO_MANY_ROWS'
+  | 'CELL_TOO_LONG'
+  | 'NO_ROWS'
+  | 'KEY_COLUMN_UNKNOWN'
+  | 'KEY_VALUE_MISSING'
+  | 'KEY_VALUE_REPEATED';
+
+/** The spreadsheet was read and refused: nothing was loaded. */
+export class DatasetFileInvalidError extends DomainError {
+  constructor(problem: DatasetFileProblem, detail?: string | number) {
+    super(ERROR_CODES.datasetFileInvalid, 'The spreadsheet cannot be loaded as a dataset', { details: { problem, ...(detail === undefined ? {} : { detail }) } });
+  }
+}
+
+/**
+ * A workflow field uses the dataset: it cannot be deleted (deactivate it instead), and a reload cannot drop the columns
+ * or the key the fields read. `columns` lists what the fields still need.
+ */
+export class DatasetInUseError extends DomainError {
+  constructor(columns: readonly string[] = []) {
+    super(ERROR_CODES.datasetInUse, 'A workflow field uses this dataset', { details: { columns } });
   }
 }
 
