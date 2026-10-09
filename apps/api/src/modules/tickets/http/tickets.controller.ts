@@ -27,6 +27,7 @@ import {
   takeTicketRequestSchema,
   type TicketDetailResponse,
   type TicketEventResponse,
+  type TicketFormResponse,
   type TicketMutationResponse,
   type TicketSummaryResponse,
   type TransitionTicketRequest,
@@ -49,6 +50,7 @@ import { TakeTicketService } from '../../engine/application/take-ticket.service.
 import { TransitionTicketService } from '../../engine/application/transition-ticket.service.js';
 import { CommentTicketService } from '../../engine/application/comment-ticket.service.js';
 import { TicketDocumentsService } from '../application/ticket-documents.service.js';
+import { TicketFormService } from '../application/ticket-form.service.js';
 import { ticketCreatorOf } from '../application/ticket-access.js';
 import { TicketQueriesService } from '../application/ticket-queries.service.js';
 import { TICKET_READ_ACTIONS, TICKET_SUBJECT } from '../domain/ticket-subject.js';
@@ -58,6 +60,7 @@ export class TicketsController {
   constructor(
     @Inject(TicketQueriesService) private readonly queries: TicketQueriesService,
     @Inject(CreateTicketService) private readonly creation: CreateTicketService,
+    @Inject(TicketFormService) private readonly forms: TicketFormService,
     @Inject(TransitionTicketService) private readonly transitions: TransitionTicketService,
     @Inject(ReassignTicketService) private readonly reassignment: ReassignTicketService,
     @Inject(TakeTicketService) private readonly taking: TakeTicketService,
@@ -86,6 +89,13 @@ export class TicketsController {
   @Get(':id')
   get(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketDetailResponse> {
     return this.queries.get(ability, id, principal.userId);
+  }
+
+  /** The current step's form: the version's fields, which are filled on this step, and the decisions. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Get(':id/form')
+  form(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketFormResponse> {
+    return this.forms.form(ability, id, principal.userId);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)

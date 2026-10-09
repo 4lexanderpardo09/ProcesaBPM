@@ -1,12 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  CompanyRequiredError,
   type CreateTicketRequest,
-  findEngineSupportProblems,
   InitiatorNotAllowedError,
   InvalidReferenceError,
   NotFoundError,
-  NotImplementedError,
   PermissionDeniedError,
   type StepDocument,
   type TicketMutationResponse,
@@ -15,13 +12,13 @@ import {
 import { sanitizeRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
-import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { PublishedVersionReader, type PublishedWorkflow } from '../../workflows/application/published-version-reader.js';
-import { type CompanyRow, type MemberRow, TicketContextRepository } from '../data/ticket-context.repository.js';
+import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
-import { isAllowedInitiator } from '../domain/initiator-match.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { type Arrival, ArrivalPlanner, arrivalEvents } from './arrival-planner.js';
+import { assertRunnable, CreationGate } from './creation-gate.js';
 import { attachmentsPlanOf } from './submission-files.js';
 import { diversionEdge, formulaFailureEvents, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
@@ -59,6 +56,7 @@ export class CreateTicketService {
     @Inject(ArrivalPlanner) private readonly planner: ArrivalPlanner,
     @Inject(TicketWriteRepository) private readonly writes: TicketWriteRepository,
     @Inject(TicketMutationApplier) private readonly applier: TicketMutationApplier,
+    @Inject(CreationGate) private readonly gate: CreationGate,
   ) {}
 
   create(actor: TicketCreator, request: CreateTicketRequest): Promise<TicketMutationResponse> {
@@ -68,16 +66,16 @@ export class CreateTicketService {
       const requesterId = request.requesterId ?? actor.userId;
       const requester = await this.people.findActiveMember(tx, tenantId, requesterId);
       if (requester === null) throw new InvalidReferenceError('The requester is not an active member');
-      const company = await this.companyOf(tx, tenantId, requester, request.companyId);
+      const company = await this.gate.companyOf(tx, tenantId, requester, request.companyId);
       const subcategory = await this.people.findAvailableSubcategory(tx, tenantId, request.subcategoryId, company.id, requester.departmentId);
       if (subcategory === null) throw new NotFoundError();
       const published = await this.versions.findForSubcategory(tx, tenantId, request.subcategoryId);
       if (published === null) throw new WorkflowNotAvailableError();
-      this.assertRunnable(published);
+      assertRunnable(published.document);
       const priorityId = request.priorityId ?? subcategory.defaultPriorityId;
       this.assertMayCreateFor(actor, requesterId, { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId: request.subcategoryId, workflowId: published.workflowId, priorityId, creatorId: requester.userId });
       const start = this.startStep(published, request.startStepId);
-      await this.assertInitiator(tx, tenantId, start, requester, company);
+      if ((await this.gate.allowedStarts(tx, tenantId, [start], requester, company)).length === 0) throw new InitiatorNotAllowedError();
 
       const submission = await this.submissions.validate(tx, {
         tenantId,
@@ -163,42 +161,10 @@ export class CreateTicketService {
     if (!actor.mayCreate(requesterId === actor.userId ? 'create' : 'create_for_others', record)) throw new PermissionDeniedError('Not allowed to create tickets for this person');
   }
 
-  /** One of the requester's companies: the chosen one, or their only one. */
-  private async companyOf(tx: TenantTransaction, tenantId: string, requester: MemberRow, chosenId: string | undefined): Promise<CompanyRow> {
-    if (chosenId === undefined && requester.companyIds.length > 1) throw new CompanyRequiredError();
-    const companyId = chosenId ?? requester.companyIds[0];
-    if (companyId === undefined || !requester.companyIds.includes(companyId)) throw new InvalidReferenceError('The company is not one of the requester\'s companies');
-    const company = await this.people.findCompany(tx, tenantId, companyId);
-    if (company === null) throw new InvalidReferenceError('The company is not active');
-    return company;
-  }
-
-  /** A version with blocks the engine cannot run yet (published before it learned to refuse them) is not started. */
-  private assertRunnable(published: PublishedWorkflow): void {
-    const problem = findEngineSupportProblems(published.document).find((candidate) => candidate.severity === 'error');
-    if (problem !== undefined) throw new NotImplementedError(problem.code);
-  }
-
   private startStep(published: PublishedWorkflow, startStepId: string | undefined): StepDocument {
     const starts = published.document.steps.filter((step) => step.type === 'START');
     const chosen = startStepId === undefined ? (starts.length === 1 ? starts[0] : undefined) : starts.find((step) => step.id === startStepId);
     if (chosen === undefined) throw new InvalidReferenceError('Choose a valid START block of the workflow');
     return chosen;
-  }
-
-  private async assertInitiator(tx: TenantTransaction, tenantId: string, start: StepDocument, requester: MemberRow, company: CompanyRow): Promise<void> {
-    if (start.initiators.length === 0) return;
-    const groupIds = await this.people.activeGroupIdsOf(tx, tenantId, requester.userId);
-    const siteAncestry = requester.siteId === null ? [] : await this.people.siteAncestry(tx, tenantId, requester.siteId);
-    const allowed = isAllowedInitiator(start.initiators, {
-      userId: requester.userId,
-      positionId: requester.positionId,
-      departmentId: requester.departmentId,
-      siteId: requester.siteId,
-      companyId: company.id,
-      groupIds,
-      siteAncestry: new Set(siteAncestry),
-    });
-    if (!allowed) throw new InitiatorNotAllowedError();
   }
 }
