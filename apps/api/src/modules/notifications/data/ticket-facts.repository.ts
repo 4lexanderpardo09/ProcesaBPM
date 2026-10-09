@@ -97,8 +97,8 @@ export class TicketFactsRepository {
     return (await tx.ticketIncident.findFirst({ where: { tenantId, id: incidentId }, select: { createdById: true, assignedToId: true } })) ?? undefined;
   }
 
-  async clock(tx: TenantTransaction, tenantId: string, clockId: string): Promise<{ completedAt: Date | null; responsibleId: string | null; ticketStatus: string } | undefined> {
-    const clock = await tx.ticketSlaClock.findFirst({ where: { tenantId, id: clockId }, select: { completedAt: true, responsibleId: true, ticket: { select: { status: true } } } });
-    return clock === null ? undefined : { completedAt: clock.completedAt, responsibleId: clock.responsibleId, ticketStatus: clock.ticket.status };
+  async clock(tx: TenantTransaction, tenantId: string, clockId: string): Promise<{ completedAt: Date | null; alertedAt: Date | null; responsibleId: string | null; ticketStatus: string } | undefined> {
+    const clock = await tx.ticketSlaClock.findFirst({ where: { tenantId, id: clockId }, select: { completedAt: true, alertedAt: true, responsibleId: true, ticket: { select: { status: true } } } });
+    return clock === null ? undefined : { completedAt: clock.completedAt, alertedAt: clock.alertedAt, responsibleId: clock.responsibleId, ticketStatus: clock.ticket.status };
   }
 }

@@ -1989,6 +1989,8 @@ model TicketSlaClock {
   /// Why it ended; set together with `completedAt`.
   completionReason ClockCompletionReason? @map("completion_reason")
   alertedAt       DateTime?  @map("alerted_at") @db.Timestamptz(3)
+  /// When the person responsible was told that 80 % of the time had gone (SLA_WARNING); each clock warns once.
+  warnedAt        DateTime?  @map("warned_at") @db.Timestamptz(3)
 
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ticket      Ticket          @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)

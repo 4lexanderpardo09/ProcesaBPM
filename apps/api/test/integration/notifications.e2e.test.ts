@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SlaOverdueJob } from '../../src/modules/sla/application/sla-overdue.job.js';
+import { SlaWarningJob } from '../../src/modules/sla/application/sla-warning.job.js';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
@@ -126,6 +127,28 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
       await fanOut();
       expect((await typesOf(worker, ticket.id)).includes('SLA_OVERDUE')).toBe(true);
       expect((await typesOf(observer, ticket.id)).filter((type) => type === 'OBSERVER_UPDATE').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('an SLA clock at 80 % of its time: only the responsible person, once (observers hear if it goes overdue)', async () => {
+      const ticket = await create();
+      await fanOut();
+      await db.owner.query(`UPDATE ticket_sla_clocks SET started_at = now() - interval '9 hours', due_at = now() + interval '1 hour' WHERE ticket_id = $1 AND completed_at IS NULL`, [ticket.id]);
+      const observerBefore = (await typesOf(observer, ticket.id)).length;
+      await mail.module.get(SlaWarningJob).runOnce();
+      await mail.module.get(SlaWarningJob).runOnce();
+      await fanOut();
+      expect((await typesOf(worker, ticket.id)).filter((type) => type === 'SLA_WARNING')).toHaveLength(1);
+      expect((await typesOf(observer, ticket.id)).length).toBe(observerBefore);
+    });
+
+    it('a warning for a clock that went overdue meanwhile tells nobody', async () => {
+      const ticket = await create();
+      await fanOut();
+      await db.owner.query(`UPDATE ticket_sla_clocks SET started_at = now() - interval '9 hours', due_at = now() + interval '1 hour' WHERE ticket_id = $1 AND completed_at IS NULL`, [ticket.id]);
+      await mail.module.get(SlaWarningJob).runOnce();
+      await db.owner.query(`UPDATE ticket_sla_clocks SET alerted_at = now() WHERE ticket_id = $1 AND completed_at IS NULL`, [ticket.id]);
+      await fanOut();
+      expect((await typesOf(worker, ticket.id)).includes('SLA_WARNING')).toBe(false);
     });
 
     it('an SLA alert for a clock that finished meanwhile tells nobody', async () => {
