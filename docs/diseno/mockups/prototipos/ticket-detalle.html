@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProcesaBPM · Ticket #1042</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     ProcesaBPM — sistema propio (Data-Dense / Swiss)
+     navy + azul · Plus Jakarta Sans + IBM Plex Mono
+     ============================================================ */
+  :root{
+    --ink:#0B1220; --navy:#16233A;
+    --slate:#475569; --muted:#64748B; --faint:#94A3B8;
+    --bg:#F5F6F8; --surface:#FFF; --surface-2:#F8FAFC; --surface-3:#F1F3F6;
+    --line:#E4E7EC; --line-2:#EEF1F5;
+    --accent:#0369A1; --accent-600:#075985; --accent-50:#EFF8FF; --accent-line:#BAE6FD;
+    --ok:#047857; --ok-50:#ECFDF5; --ok-line:#A7F3D0;
+    --warn:#B45309; --warn-50:#FFFBEB; --warn-line:#FDE68A;
+    --danger:#BE123C; --danger-50:#FFF1F2; --danger-line:#FECDD3;
+    --violet:#6D28D9; --violet-50:#F5F3FF; --violet-line:#DDD6FE;
+    --font:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --r:10px; --dur:180ms;
+    --sh-xs:0 1px 2px rgba(11,18,32,.05);
+    --sh-sm:0 1px 3px rgba(11,18,32,.07),0 1px 2px rgba(11,18,32,.04);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:var(--font);font-size:13.5px;line-height:1.5;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;overflow:hidden}
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+  button{cursor:pointer} svg{display:block}
+  ::selection{background:var(--accent-line)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .app{display:flex;height:100vh}
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{width:238px;flex:none;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .brand{display:flex;align-items:center;gap:10px;padding:16px 16px 13px}
+  .brand .logo{width:29px;height:29px;border-radius:8px;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px}
+  .brand b{font-size:14px;font-weight:700;letter-spacing:-.015em}
+  .brand span{display:block;font-size:10px;color:var(--faint);font-weight:500}
+  .nav{padding:5px 10px;flex:1;overflow-y:auto}
+  .nav .sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin:15px 10px 6px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--slate);text-decoration:none;font-size:13px;font-weight:500;margin-bottom:1px;transition:background var(--dur),color var(--dur)}
+  .nav a:hover{background:var(--surface-2);color:var(--ink)}
+  .nav a.active{background:var(--accent-50);color:var(--accent-600);font-weight:600}
+  .nav a svg{width:17px;height:17px;flex:none}
+  .nav .n{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--navy);color:#fff;padding:1px 7px;border-radius:99px}
+  .nav a:not(.active) .n{background:var(--line-2);color:var(--muted)}
+  .side-foot{border-top:1px solid var(--line);padding:11px 12px;display:flex;align-items:center;gap:9px}
+  .side-foot .who{flex:1;min-width:0}
+  .side-foot b{display:block;font-size:12.5px}
+  .side-foot span{font-size:10.5px;color:var(--faint)}
+  .side-foot button{border:none;background:transparent;color:var(--faint);padding:6px;border-radius:7px}
+  .side-foot button:hover{background:var(--surface-2);color:var(--ink)}
+  .ava{border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;flex:none;width:26px;height:26px;font-size:10.5px}
+
+  /* ---------- Main ---------- */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:54px;flex:none;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .crumb{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+  .crumb a{color:var(--muted);text-decoration:none}.crumb a:hover{color:var(--ink)}
+  .crumb svg{width:14px;height:14px;color:var(--faint)} .crumb b{color:var(--ink);font-weight:600}
+  .topbar .sp{flex:1}
+  .viewas{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--faint)}
+  .segg{display:inline-flex;background:var(--surface-3);border:1px solid var(--line);border-radius:8px;padding:2px}
+  .segg button{border:none;background:transparent;color:var(--muted);font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:6px}
+  .segg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--sh-xs)}
+  .icon-btn{width:34px;height:34px;border:1px solid var(--line);background:var(--surface);border-radius:8px;display:grid;place-items:center;color:var(--muted);position:relative}
+  .icon-btn:hover{background:var(--surface-2);color:var(--ink)} .icon-btn svg{width:17px;height:17px}
+  .icon-btn .pip{position:absolute;top:7px;right:8px;width:6px;height:6px;border-radius:50%;background:var(--danger);border:1.5px solid var(--surface)}
+
+  .scroll{flex:1;overflow-y:auto;min-height:0}
+  .wrap{max-width:1300px;margin:0 auto;padding:20px 24px 70px}
+
+  /* ---------- Header ---------- */
+  .thead{display:flex;align-items:flex-start;gap:16px;margin-bottom:14px}
+  .thead .num{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:5px 9px;margin-top:2px;box-shadow:var(--sh-xs);white-space:nowrap}
+  .thead .h{min-width:0;flex:1}
+  .thead h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em;line-height:1.25}
+  .thead .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .thead .actions{display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:7px;border:1px solid transparent;white-space:nowrap}
+  .badge .d{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+  .badge.state{color:var(--accent-600);background:var(--accent-50);border-color:var(--accent-line)}
+  .badge.sla{color:var(--warn);background:var(--warn-50);border-color:var(--warn-line)}
+  .badge.sla.ok{color:var(--ok);background:var(--ok-50);border-color:var(--ok-line)}
+  .badge.sla.due{color:var(--danger);background:var(--danger-50);border-color:var(--danger-line)}
+  .badge.prio-alta{color:var(--danger);background:var(--danger-50);border-color:var(--danger-line)}
+  .badge.prio-media{color:var(--warn);background:var(--warn-50);border-color:var(--warn-line)}
+  .badge.soft{color:var(--slate);background:var(--surface-2);border-color:var(--line)}
+  .badge.violet{color:var(--violet);background:var(--violet-50);border-color:var(--violet-line)}
+
+  .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;color:var(--ink);box-shadow:var(--sh-xs);transition:background var(--dur),border-color var(--dur)}
+  .btn:hover{background:var(--surface-2);border-color:#D6DAE1}
+  .btn svg{width:15px;height:15px}
+  .btn.navy{background:var(--navy);border-color:var(--navy);color:#fff}.btn.navy:hover{background:#0E1930}
+  .btn.accent{background:var(--accent);border-color:var(--accent);color:#fff}.btn.accent:hover{background:var(--accent-600)}
+  .btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}.btn.ok:hover{filter:brightness(.93)}
+  .btn.danger{color:var(--danger);border-color:var(--danger-line);background:var(--danger-50)}.btn.danger:hover{background:#FFE4E6}
+  .btn.sm{padding:6px 10px;font-size:12px}
+
+  /* meta strip */
+  .meta{display:flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-xs);margin-bottom:16px;overflow:hidden}
+  .meta .m{flex:1 1 150px;min-width:140px;padding:11px 14px;border-right:1px solid var(--line-2)}
+  .meta .m:last-child{border-right:none}
+  .meta .k{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-bottom:4px}
+  .meta .v{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;min-width:0}
+  .meta .v .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ---------- Layout ---------- */
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 336px;gap:16px;align-items:start}
+  .col{min-width:0;display:flex;flex-direction:column;gap:16px}
+  .rail{display:flex;flex-direction:column;gap:14px;position:sticky;top:0}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-xs)}
+  .card .ch{display:flex;align-items:center;gap:9px;padding:12px 15px;border-bottom:1px solid var(--line-2)}
+  .card .ch h3{margin:0;font-size:13px;font-weight:700;letter-spacing:-.01em}
+  .card .ch .sp{flex:1}
+  .card .ch .hint{font-size:11px;color:var(--faint)}
+  .card .cb{padding:15px}
+  .card .ch .ictl{border:none;background:transparent;color:var(--muted);font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:5px;padding:4px 6px;border-radius:6px}
+  .card .ch .ictl:hover{background:var(--surface-2);color:var(--accent-600)}
+  .card .ch .ictl svg{width:13px;height:13px}
+
+  /* ---------- Flow progress ---------- */
+  .flow-title{font-size:13px;font-weight:700}
+  .flow-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .flow-track{display:flex;align-items:stretch;padding:14px 15px 16px;overflow-x:auto}
+  .fstep{position:relative;flex:none;width:152px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 11px}
+  .fstep .top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .fstep .ico{width:23px;height:23px;border-radius:7px;display:grid;place-items:center;flex:none}
+  .fstep .ico svg{width:13px;height:13px}
+  .fstep .type{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+  .fstep .name{font-size:12.5px;font-weight:600;line-height:1.3;min-height:32px}
+  .fstep .foot{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden}
+  .fstep.done{background:var(--surface)} .fstep.done .ico{background:var(--ok-50);color:var(--ok)} .fstep.done .foot{color:var(--ok)}
+  .fstep.current{background:var(--surface);border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-50)}
+  .fstep.current .ico{background:var(--accent);color:#fff} .fstep.current .type{color:var(--accent)}
+  .fstep.pending{opacity:.78} .fstep.pending .ico{background:var(--line-2);color:var(--faint)}
+  .fstep .mark{position:absolute;top:-8px;right:10px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fff;background:var(--accent);padding:2px 7px;border-radius:99px}
+  .fconn{flex:none;width:30px;display:grid;place-items:center;position:relative}
+  .fconn::before{content:'';position:absolute;left:0;right:0;top:50%;height:2px;background:var(--line)}
+  .fconn.done::before{background:var(--ok-line)}
+  .fconn svg{width:14px;height:14px;position:relative;color:var(--faint);background:var(--surface)}
+  .fconn.done svg{color:var(--ok)}
+  .branch{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--accent-600);background:var(--accent-50);border:1px solid var(--accent-line);border-radius:6px;padding:3px 8px}
+  .branch svg{width:12px;height:12px}
+
+  /* ---------- Read-only captured data ---------- */
+  .dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 20px}
+  .dk{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin-bottom:3px}
+  .dv{font-size:13px;font-weight:600;color:var(--ink);word-break:break-word}
+  .dv.money{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .mini-tbl{width:100%;border:1px solid var(--line);border-radius:8px;border-collapse:separate;border-spacing:0;font-size:12px;overflow:hidden}
+  .mini-tbl th{text-align:left;background:var(--surface-2);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;padding:7px 10px;border-bottom:1px solid var(--line)}
+  .mini-tbl td{padding:7px 10px;border-bottom:1px solid var(--line-2)}
+  .mini-tbl tbody tr:last-child td{border-bottom:none}
+  .mini-tbl td.num,.mini-tbl th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .mini-tbl tfoot td{border-top:1px solid var(--line);background:var(--surface-2);font-weight:700}
+  .collapsed .cb{display:none}
+
+  /* ---------- Response panel ---------- */
+  .rp-head{display:flex;align-items:center;gap:12px;padding:14px 15px;border-bottom:1px solid var(--line-2);background:var(--accent-50);border-radius:var(--r) var(--r) 0 0}
+  .rp-head .ico{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+  .rp-head .ico svg{width:18px;height:18px}
+  .rp-head .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent-600)}
+  .rp-head .nm{font-size:14px;font-weight:700;margin-top:1px}
+  .rp-head .who{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--slate);margin-top:3px}
+  .rp-head .sp{flex:1}
+  .sla-mini{text-align:right;flex:none}
+  .sla-mini .t{font-family:var(--mono);font-size:15px;font-weight:600;color:var(--warn)}
+  .sla-mini .l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+
+  .form{padding:16px 15px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .fld{margin-bottom:15px}.fld:last-child{margin-bottom:0}
+  .fld>label{display:block;font-size:11.5px;font-weight:600;color:var(--slate);margin-bottom:6px}
+  .fld>label .req{color:var(--danger)}
+  .fld .help{font-size:11px;color:var(--faint);margin-top:5px}
+  .inp,.sel,.txa{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);transition:border-color var(--dur),box-shadow var(--dur)}
+  .inp:focus,.sel:focus,.txa:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-50)}
+  .txa{resize:vertical;min-height:80px;line-height:1.55}
+  .inp[readonly]{background:var(--surface-2);color:var(--slate)}
+  .inp.money{font-family:var(--mono);font-weight:600;text-align:right}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:12.5px;font-weight:600;color:var(--slate);cursor:pointer;background:var(--surface)}
+  .seg label:has(input:checked){border-color:var(--accent);background:var(--accent-50);color:var(--accent-600)}
+  .seg input{accent-color:var(--accent)}
+
+  .check{display:flex;align-items:flex-start;gap:9px;font-size:12.5px;color:var(--slate);cursor:pointer;padding:10px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+  .check input{width:16px;height:16px;margin-top:1px;accent-color:var(--accent);flex:none}
+
+  .editor{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .editor:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-50)}
+  .editor .tb{display:flex;align-items:center;gap:1px;padding:6px 8px;border-bottom:1px solid var(--line-2);background:var(--surface-2)}
+  .editor .tb button{border:none;background:transparent;color:var(--muted);min-width:28px;height:28px;border-radius:6px;padding:0 6px;font-size:12px;font-weight:600;display:grid;place-items:center}
+  .editor .tb button:hover{background:var(--line-2);color:var(--ink)}
+  .editor textarea{border:none;outline:none;width:100%;min-height:96px;padding:11px 12px;resize:vertical;font-family:inherit;line-height:1.55}
+  .tplbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:5px 10px;font-size:11.5px;font-weight:600;color:var(--accent-600)}
+  .tplbtn svg{width:13px;height:13px}
+
+  .dropzone{border:1px dashed var(--line);border-radius:9px;padding:12px;display:flex;align-items:center;gap:11px;background:var(--surface-2);cursor:pointer}
+  .dropzone:hover{border-color:var(--accent);background:var(--accent-50)}
+  .dropzone .di{width:34px;height:34px;border-radius:8px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent);flex:none}
+  .dropzone .di svg{width:17px;height:17px}
+  .dropzone b{font-size:12.5px}.dropzone span{font-size:11px;color:var(--faint);display:block}
+  .filed{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--surface)}
+  .filed .fi{width:30px;height:30px;border-radius:7px;background:var(--danger-50);color:var(--danger);display:grid;place-items:center;flex:none}
+  .filed .fi svg{width:16px;height:16px}
+  .filed .fn{flex:1;min-width:0}.filed .fn b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .filed .fn span{font-size:10.5px;color:var(--faint)}
+  .filed button{border:none;background:transparent;color:var(--faint);padding:5px;border-radius:6px}.filed button:hover{background:var(--danger-50);color:var(--danger)}
+
+  .sigrow{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:9px;padding:11px 12px;background:var(--surface-2)}
+  .sigrow .si{width:34px;height:34px;border-radius:8px;background:var(--violet-50);color:var(--violet);display:grid;place-items:center;flex:none}
+  .sigrow .si svg{width:17px;height:17px}
+  .sigrow .st{flex:1;min-width:0}.sigrow .st b{font-size:12.5px}.sigrow .st span{display:block;font-size:11px;color:var(--faint)}
+  .sigrow.signed{border-color:var(--ok-line);background:var(--ok-50)}
+  .sigrow.signed .si{background:var(--ok);color:#fff}
+
+  .rp-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:13px 15px;border-top:1px solid var(--line-2);background:var(--surface-2);border-radius:0 0 var(--r) var(--r)}
+  .rp-foot .sp{flex:1}
+
+  .notice{padding:26px;display:flex;flex-direction:column;align-items:center;text-align:center}
+  .notice .ni{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;margin-bottom:12px}
+  .notice .ni svg{width:22px;height:22px}
+  .notice h3{margin:0 0 4px;font-size:14px}
+  .notice p{margin:0;font-size:12.5px;color:var(--muted);max-width:420px}
+  .banner{display:flex;align-items:flex-start;gap:11px;border:1px solid;border-radius:9px;padding:12px 13px;margin:0 15px 4px}
+  .banner svg{width:18px;height:18px;flex:none;margin-top:1px}
+  .banner b{font-size:12.5px;display:block}
+  .banner p{margin:3px 0 0;font-size:12px}
+  .banner.warn{border-color:var(--warn-line);background:var(--warn-50);color:#92400E}
+  .banner.danger{border-color:var(--danger-line);background:var(--danger-50);color:#9F1239}
+
+  /* parallel signatures */
+  .plist{display:flex;flex-direction:column;gap:9px;margin-top:4px}
+  .prow{display:flex;align-items:center;gap:10px;font-size:12.5px}
+  .prow .pd{width:8px;height:8px;border-radius:50%;flex:none}
+  .prow .pn{flex:1}
+  .prow .ps{font-size:11px;font-weight:600}
+  .prow .pd.ok{background:var(--ok)} .prow .ps.ok{color:var(--ok)}
+  .prow .pd.wait{background:var(--warn)} .prow .ps.wait{color:var(--warn)}
+  .prow .pd.pending{background:var(--line)} .prow .ps.pending{color:var(--muted)}
+
+  /* ---------- Activity / tabs ---------- */
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);padding:0 8px;flex-wrap:wrap}
+  .tab{border:none;background:transparent;padding:11px 12px 10px;font-size:12.5px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:7px}
+  .tab:hover{color:var(--ink)} .tab.active{color:var(--accent-600);border-bottom-color:var(--accent)}
+  .tab .c{font-family:var(--mono);font-size:10.5px;font-weight:600;background:var(--line-2);color:var(--muted);padding:1px 6px;border-radius:99px}
+  .tab.active .c{background:var(--accent-50);color:var(--accent-600)}
+
+  .thread{padding:6px 15px 15px}
+  .cmt{display:flex;gap:11px;padding:13px 0;border-bottom:1px solid var(--line-2)}
+  .cmt:last-child{border-bottom:none}
+  .cmt .bd{flex:1;min-width:0}
+  .cmt .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+  .cmt .hd b{font-size:12.5px} .cmt .hd .time{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .cmt .hd .rol{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--accent-600);background:var(--accent-50);padding:1px 6px;border-radius:5px}
+  .cmt p{margin:0;font-size:13px;color:#334155;line-height:1.6}.cmt p+p{margin-top:7px}
+  .cmt .att{display:inline-flex;align-items:center;gap:7px;margin-top:9px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:600;background:var(--surface-2)}
+  .cmt .att svg{width:14px;height:14px;color:var(--danger)}
+  .sysline{display:flex;align-items:center;gap:9px;padding:9px 0;font-size:11.5px;color:var(--muted)}
+  .sysline .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+  .sysline b{color:var(--slate);font-weight:600}.sysline .mono{font-size:11px;color:var(--faint)}
+
+  .tl{padding:16px 15px}
+  .tli{position:relative;padding-left:28px;padding-bottom:16px}
+  .tli::before{content:'';position:absolute;left:9px;top:20px;bottom:0;width:2px;background:var(--line)}
+  .tli:last-child{padding-bottom:0}.tli:last-child::before{display:none}
+  .tli .node{position:absolute;left:0;top:1px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:1.5px solid var(--line)}
+  .tli .node svg{width:11px;height:11px}
+  .tli.ok .node{border-color:var(--ok-line);background:var(--ok-50);color:var(--ok)}
+  .tli.cur .node{border-color:var(--accent);background:var(--accent);color:#fff}
+  .tli.warn .node{border-color:var(--warn-line);background:var(--warn-50);color:var(--warn)}
+  .tli .t{font-size:12.5px;font-weight:600}
+  .tli .m{font-size:11.5px;color:var(--muted);margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .tli .m .mono{font-family:var(--mono);font-size:11px}
+  .ressla{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px}
+  .ressla.ok{color:var(--ok);background:var(--ok-50)} .ressla.late{color:var(--danger);background:var(--danger-50)}
+
+  /* document tab */
+  .docwrap{padding:15px}
+  .doclist{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .doc{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+  .doc .di{width:32px;height:32px;border-radius:8px;background:var(--danger-50);color:var(--danger);display:grid;place-items:center;flex:none}
+  .doc .di svg{width:16px;height:16px}
+  .doc .dn{flex:1;min-width:0}.doc .dn b{font-size:12.5px;display:block}.doc .dn span{font-size:11px;color:var(--faint)}
+  .pdfpage{border:1px solid var(--line);border-radius:10px;background:#fff;padding:26px 30px;box-shadow:inset 0 0 0 1px #fff, 0 1px 0 rgba(11,18,32,.03);min-height:420px}
+  .pdfpage h4{margin:0 0 4px;font-size:15px}
+  .pdfpage .sub{font-size:11px;color:var(--faint);border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:16px}
+  .pdfrow{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-bottom:1px dashed var(--line-2)}
+  .pdfrow .k{color:var(--muted)}.pdfrow .v{font-weight:600;font-family:var(--mono)}
+  .stamp{margin-top:26px;border-top:1px solid var(--line);padding-top:12px;display:flex;justify-content:space-between;font-size:11px;color:var(--faint)}
+
+  /* ---------- Rail ---------- */
+  .rail .card .ch{padding:11px 13px}.rail .card .cb{padding:13px}
+  .sla-card .big{font-family:var(--mono);font-size:24px;font-weight:600;letter-spacing:-.02em;color:var(--warn);line-height:1}
+  .sla-card .sub{font-size:11.5px;color:var(--muted);margin-top:5px}
+  .bar{height:7px;border-radius:99px;background:var(--line-2);margin:12px 0 8px;position:relative;overflow:hidden}
+  .bar .fill{height:100%;border-radius:99px;background:var(--warn)}
+  .bar .mark{position:absolute;top:-3px;width:2px;height:13px;background:var(--ink);opacity:.5}
+  .sla-legend{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+  .det{list-style:none;margin:0;padding:0}
+  .det li{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+  .det li:last-child{border-bottom:none}
+  .det .k{color:var(--faint);width:96px;flex:none}.det .v{font-weight:500;min-width:0;word-break:break-word}
+  .people{display:flex;flex-direction:column;gap:11px}
+  .person{display:flex;align-items:center;gap:10px}
+  .person .pi{flex:1;min-width:0}.person b{display:block;font-size:12.5px}.person span{font-size:11px;color:var(--faint)}
+  .tagn{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:var(--line-2);padding:2px 6px;border-radius:5px}
+  .filelist{display:flex;flex-direction:column;gap:8px}
+  .fl{display:flex;align-items:center;gap:10px;padding:8px 9px;border:1px solid var(--line);border-radius:8px}
+  .fl .fi{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;flex:none}
+  .fl .fn{flex:1;min-width:0}.fl .fn b{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fl .fn span{font-size:10.5px;color:var(--faint)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--slate);background:var(--surface-2);border:1px solid var(--line);border-radius:99px;padding:4px 10px}
+  .chip .x{border:none;background:transparent;color:var(--faint);padding:0;line-height:1}.chip .x:hover{color:var(--danger)}
+  .chip.add{border-style:dashed;color:var(--muted)}.chip.add:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ---------- Modal ---------- */
+  .modal{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;padding:20px}
+  .modal.open{display:flex}
+  .modal .backdrop{position:absolute;inset:0;background:rgba(11,18,32,.44);backdrop-filter:blur(2px)}
+  .modal .panel{position:relative;background:var(--surface);border-radius:14px;box-shadow:0 24px 60px rgba(11,18,32,.3);width:100%;max-width:480px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+  .modal .mh{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--line-2)}
+  .modal .mh h3{margin:0;font-size:15px;font-weight:700}.modal .mh .sp{flex:1}
+  .modal .mh button{border:none;background:transparent;color:var(--faint);font-size:16px;padding:4px 8px;border-radius:7px}.modal .mh button:hover{background:var(--surface-2);color:var(--ink)}
+  .modal .mb{padding:18px;overflow-y:auto}
+  .modal .mf{display:flex;gap:9px;justify-content:flex-end;padding:14px 18px;border-top:1px solid var(--line-2);background:var(--surface-2)}
+  .sigpad{width:100%;height:180px;border:1px dashed var(--line);border-radius:10px;background:var(--surface-2);touch-action:none;display:block}
+  .sigpad-hint{font-size:11px;color:var(--faint);margin-top:8px}
+  .optrow{display:flex;gap:8px;flex-wrap:wrap}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(16px);background:var(--navy);color:#fff;font-size:13px;font-weight:500;padding:10px 16px;border-radius:9px;box-shadow:0 12px 32px rgba(11,18,32,.3);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:120;display:flex;align-items:center;gap:9px;max-width:92vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast svg{width:15px;height:15px;color:#4ADE80}
+
+  @media (max-width:1080px){.layout{grid-template-columns:1fr}.rail{position:static}.dgrid{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:760px){.sidebar{display:none}.grid2,.dgrid{grid-template-columns:1fr}.thead{flex-wrap:wrap}.thead .actions{width:100%;justify-content:flex-start}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="brand"><span class="logo">P</span><div><b>ProcesaBPM</b><span>Organización demo</span></div></div>
+    <nav class="nav">
+      <div class="sec">Operación</div>
+      <a href="#" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h5l1.5 3h5L16 12h5"/><path d="M5 5h14l2 7v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></svg>Bandejas<span class="n">24</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5V15a3 3 0 0 0 3 3h6.5"/></svg>Flujos</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Reportes</a>
+      <div class="sec">Configuración</div>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>Catálogo</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3"/><path d="M21 20v-1.5a4 4 0 0 0-3-3.8"/></svg>Personas</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.5M12 19v2.5M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2.5 12H5M19 12h2.5M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>Ajustes</a>
+    </nav>
+    <div class="side-foot">
+      <span class="ava" style="background:#0369A1">LP</span>
+      <div class="who"><b>Laura Peña</b><span>Analista de cartera</span></div>
+      <button title="Cerrar sesión" onclick="toast('Cerrar sesión (simulado)')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb">
+        <a href="#" onclick="return go('tickets.html')">Tickets</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg>
+        <b class="mono">#1042</b>
+      </div>
+      <div class="sp"></div>
+      <div class="viewas">
+        <span>Ver como</span>
+        <div class="segg" id="viewAs">
+          <button data-v="assigned" class="on">Laura (asignada)</button>
+          <button data-v="observer">Andrés (observa)</button>
+          <button data-v="closed">Cerrado</button>
+        </div>
+      </div>
+      <button class="icon-btn" title="Buscar" onclick="toast('Búsqueda (simulada)')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg></button>
+      <button class="icon-btn" title="Notificaciones" onclick="toast('3 notificaciones sin leer (simulado)')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10 19a2 2 0 0 0 4 0"/></svg><span class="pip"></span></button>
+    </header>
+
+    <div class="scroll">
+      <div class="wrap">
+
+        <!-- ===== Ticket header ===== -->
+        <div class="thead">
+          <span class="num">#1042</span>
+          <div class="h">
+            <h1>Confirmación de pago de crédito</h1>
+            <div class="tags">
+              <span class="badge state"><span class="d"></span>En proceso</span>
+              <span class="badge sla"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/></svg>Vence en 2 días · 06 oct 14:00</span>
+              <span class="badge prio-alta"><span class="d"></span>Prioridad usuario: Alta</span>
+              <span class="badge violet"><span class="d"></span>Prioridad flujo: Media</span>
+              <span class="badge soft">Cartera · Confirmación de pagos</span>
+              <span class="badge soft">Empresa principal</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn" onclick="window.print()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="6" y="13" width="12" height="8" rx="1.5"/><path d="M6 17H3v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5h-3"/></svg>Imprimir</button>
+            <button class="btn" onclick="openReassign()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M21 3 13 11"/><path d="M8 21H3v-5"/><path d="m3 21 8-8"/></svg>Reasignar</button>
+            <button class="btn" onclick="openError()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Registrar error</button>
+          </div>
+        </div>
+
+        <!-- meta strip -->
+        <div class="meta">
+          <div class="m"><div class="k">Solicitante</div><div class="v"><span class="ava" style="background:#6D28D9">MG</span><span class="t">Marta Gómez</span></div></div>
+          <div class="m"><div class="k">Registrado por</div><div class="v"><span class="ava" style="background:#BE123C">CM</span><span class="t">Carlos Mina</span></div></div>
+          <div class="m"><div class="k">Asignado a</div><div class="v"><span class="ava" style="background:#0369A1">LP</span><span class="t">Laura Peña</span></div></div>
+          <div class="m"><div class="k">Paso actual</div><div class="v"><span class="t">Validación de cartera</span></div></div>
+          <div class="m"><div class="k">Creado</div><div class="v"><span class="t mono">03 oct · 08:14</span></div></div>
+        </div>
+
+        <div class="layout">
+          <!-- ================= Columna principal ================= -->
+          <div class="col">
+
+            <!-- Flujo -->
+            <section class="card">
+              <div class="ch"><h3>Progreso del flujo</h3><div class="sp"></div><span class="hint">v4 · 3 de 6 pasos</span></div>
+              <div class="flow-track" role="list">
+                <div class="fstep done" role="listitem"><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="type">Inicio</span></div><div class="name">Inicio</div><div class="foot"><span class="mono">03 oct 08:14</span></div></div>
+                <div class="fconn done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div>
+                <div class="fstep done" role="listitem"><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="type">Paso</span></div><div class="name">Registrar solicitud</div><div class="foot"><span class="mono">Marta G.</span></div></div>
+                <div class="fconn done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div>
+                <div class="fstep current" role="listitem" aria-current="step"><span class="mark">Actual</span><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/></svg></span><span class="type">Paso</span></div><div class="name">Validación de cartera</div><div class="foot"><span class="mono">Laura P.</span></div></div>
+                <div class="fconn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div>
+                <div class="fstep pending" role="listitem"><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.5 17 4 11.5"/></svg></span><span class="type">Aprobación</span></div><div class="name">Visto bueno del jefe</div><div class="foot">Jefes de área</div></div>
+                <div class="fconn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div>
+                <div class="fstep pending" role="listitem"><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg></span><span class="type">Documento</span></div><div class="name">Carta de paz y salvo</div><div class="foot">Automático</div></div>
+                <div class="fconn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></div>
+                <div class="fstep pending" role="listitem"><div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg></span><span class="type">Fin</span></div><div class="name">Fin</div><div class="foot">Cierra el ticket</div></div>
+              </div>
+            </section>
+
+            <!-- Datos registrados (solo lectura) -->
+            <section class="card" id="dataCard">
+              <div class="ch">
+                <h3>Datos registrados</h3><div class="sp"></div>
+                <span class="hint">capturados al crear</span>
+                <button class="ictl" onclick="document.getElementById('dataCard').classList.toggle('collapsed')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              </div>
+              <div class="cb">
+                <div class="dgrid">
+                  <div><div class="dk">Monto del crédito</div><div class="dv money">$ 12.500.000</div></div>
+                  <div><div class="dk">Tipo de pago</div><div class="dv">Abono a capital</div></div>
+                  <div><div class="dk">Fecha del pago</div><div class="dv mono">02/10/2026</div></div>
+                  <div><div class="dk">Nº de crédito</div><div class="dv mono">CR-458-2024</div></div>
+                  <div><div class="dk">Sede</div><div class="dv">Popayán · Centro</div></div>
+                  <div><div class="dk">Comprobante</div><div class="dv" style="font-size:12px;font-weight:600;color:var(--accent-600)">comprobante-REC-009821.pdf</div></div>
+                  <div style="grid-column:1/-1"><div class="dk">Observaciones del solicitante</div><div class="dv" style="font-weight:500;color:#334155">Adjunto el comprobante del pago de la cuota. El valor incluye los intereses hasta el 2 de octubre; el crédito queda saldado.</div></div>
+                  <div style="grid-column:1/-1">
+                    <div class="dk">Detalle de cuotas</div>
+                    <table class="mini-tbl">
+                      <thead><tr><th>Cuota</th><th class="num">Valor</th><th class="num">Interés</th><th>Fecha</th></tr></thead>
+                      <tbody>
+                        <tr><td>N.º 17</td><td class="num">10.800.000</td><td class="num">180.000</td><td class="mono">02/10/2026</td></tr>
+                        <tr><td>N.º 18</td><td class="num">1.500.000</td><td class="num">20.000</td><td class="mono">02/10/2026</td></tr>
+                      </tbody>
+                      <tfoot><tr><td>Totales</td><td class="num">12.300.000</td><td class="num">200.000</td><td></td></tr></tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Panel de respuesta (varía según "Ver como") -->
+            <section class="card" id="rp">
+              <!-- Asignada -->
+              <div id="rp-assigned">
+                <div class="rp-head">
+                  <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/></svg></span>
+                  <div><div class="lbl">Paso actual</div><div class="nm">Validación de cartera</div><div class="who"><span class="ava" style="background:#0369A1;width:18px;height:18px;font-size:8px">LP</span> Laura Peña · asignada</div></div>
+                  <div class="sp"></div>
+                  <div class="sla-mini"><div class="t">1d 06h</div><div class="l">restante</div></div>
+                </div>
+                <div class="form">
+                  <div class="grid2">
+                    <div class="fld"><label>Monto verificado <span style="color:var(--faint);font-weight:500">· calculado</span></label><input class="inp money" value="$ 12.500.000" readonly></div>
+                    <div class="fld"><label for="fe">Fecha efectiva del pago <span class="req">*</span></label><input class="inp" id="fe" type="date" value="2026-10-02"></div>
+                  </div>
+                  <div class="fld"><label for="fn">Número de comprobante <span class="req">*</span></label><input class="inp mono" id="fn" value="REC-2026-009821" style="font-weight:600"><div class="help">Debe coincidir con el movimiento bancario.</div></div>
+                  <div class="fld">
+                    <label>Comprobante de pago</label>
+                    <div class="filed"><span class="fi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg></span><span class="fn"><b>comprobante-REC-2026-009821.pdf</b><span class="mono">248 KB</span></span><button title="Quitar" onclick="this.closest('.filed').remove()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+                  </div>
+                  <div class="fld"><label>Resultado de la validación <span class="req">*</span></label>
+                    <div class="seg">
+                      <label><input type="radio" name="res" checked> Pago confirmado</label>
+                      <label><input type="radio" name="res"> Pago parcial</label>
+                      <label><input type="radio" name="res"> No coincide</label>
+                    </div>
+                  </div>
+
+                  <div class="fld">
+                    <label for="note">Nota / respuesta <span class="req">*</span></label>
+                    <div class="editor">
+                      <div class="tb">
+                        <button title="Negrita"><b>B</b></button><button title="Cursiva"><i>I</i></button>
+                        <button title="Adjuntar" onclick="toast('Adjuntar (simulado)')"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.5 12.5 21a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7-7"/></svg></button>
+                      </div>
+                      <textarea id="note" placeholder="Escribe tu respuesta o notas internas…"></textarea>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                      <button class="tplbtn" onclick="toast('Insertar plantilla de texto (simulado)')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg>Insertar plantilla</button>
+                      <span style="font-size:11px;color:var(--faint)" class="mono">Ctrl + ↵ para enviar</span>
+                    </div>
+                  </div>
+
+                  <div class="fld"><label>Adjuntos (opcional)</label>
+                    <div class="dropzone" onclick="toast('Seleccionar archivos (simulado)')"><span class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span><div><b>Arrastra archivos o haz clic</b><span>PDF, imágenes, Office. Máx. 15 archivos · 4 MB c/u</span></div></div>
+                  </div>
+
+                  <div class="fld"><label>Firma</label>
+                    <div class="sigrow" id="sigrow">
+                      <span class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-1 5-8 8-8s2 6 4 6 2-3 3-3 1 1 3 1"/><path d="M3 21h18"/></svg></span>
+                      <div class="st"><b id="sigTitle">Este paso requiere firma</b><span id="sigSub">Firma para autorizar la validación</span></div>
+                      <button class="btn sm" id="sigBtn" onclick="openSignature()">Firmar</button>
+                    </div>
+                  </div>
+
+                  <label class="check"><input type="checkbox" id="confirm"><span>Confirmo que verifiqué el pago contra el movimiento bancario y que el valor concuerda.</span></label>
+                </div>
+                <div class="rp-foot">
+                  <button class="btn danger sm" onclick="openNovelty()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg>Crear novedad</button>
+                  <button class="btn sm" onclick="openClose()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Cerrar ticket</button>
+                  <div class="sp"></div>
+                  <button class="btn accent" onclick="advance()">Validar y continuar<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+                </div>
+              </div>
+
+              <!-- Observador -->
+              <div id="rp-observer" style="display:none">
+                <div class="notice">
+                  <div class="ni" style="background:var(--surface-3);color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+                  <h3>Modo de solo lectura</h3>
+                  <p>Este paso lo debe atender <b>Laura Peña</b>. Como observador puedes ver el ticket y su historial, pero no responder ni avanzar el flujo.</p>
+                </div>
+              </div>
+
+              <!-- Cerrado -->
+              <div id="rp-closed" style="display:none">
+                <div class="notice">
+                  <div class="ni" style="background:var(--surface-3);color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/><circle cx="12" cy="12" r="9"/></svg></div>
+                  <h3>Ticket cerrado</h3>
+                  <p>Este ticket finalizó el 04 oct 2026 y no admite más acciones. Su historial y documentos quedan disponibles.</p>
+                </div>
+              </div>
+            </section>
+
+            <!-- Actividad -->
+            <section class="card">
+              <div class="tabs" role="tablist">
+                <button class="tab active" data-tab="all">Toda la actividad <span class="c">9</span></button>
+                <button class="tab" data-tab="comments">Comentarios <span class="c">4</span></button>
+                <button class="tab" data-tab="history">Historial <span class="c">5</span></button>
+                <button class="tab" data-tab="document">Documento</button>
+              </div>
+
+              <!-- Toda / comentarios -->
+              <div id="p-all" role="tabpanel">
+                <div class="thread">
+                  <div class="cmt"><span class="ava" style="background:#6D28D9">MG</span><div class="bd"><div class="hd"><b>Marta Gómez</b><span class="rol">Solicitante</span><span class="time">03 oct · 09:12</span></div><p>Buenos días. Adjunto el comprobante del pago de la cuota del crédito; se debitó el 2 de octubre por $12.500.000.</p><span class="att"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg>comprobante-REC-009821.pdf</span></div></div>
+                  <div class="sysline"><span class="dot"></span> Laura Peña <b>tomó</b> el ticket · <span class="mono">03 oct · 10:41</span></div>
+                  <div class="cmt"><span class="ava" style="background:#0369A1">LP</span><div class="bd"><div class="hd"><b>Laura Peña</b><span class="rol">Cartera</span><span class="time">03 oct · 10:52</span></div><p>Recibido. Verifico el movimiento contra el extracto. ¿El pago incluye intereses de mora?</p></div></div>
+                  <div class="cmt"><span class="ava" style="background:#6D28D9">MG</span><div class="bd"><div class="hd"><b>Marta Gómez</b><span class="rol">Solicitante</span><span class="time">03 oct · 11:20</span></div><p>Sí, incluye los intereses hasta el 2 de octubre. El crédito queda saldado.</p></div></div>
+                </div>
+              </div>
+
+              <!-- Historial -->
+              <div id="p-history" role="tabpanel" style="display:none">
+                <div class="tl">
+                  <div class="tli cur"><span class="node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/></svg></span><div class="t">Validación de cartera · en curso</div><div class="m"><span>Laura Peña</span><span class="mono">desde 03 oct 10:41</span><span class="mono">vence 06 oct 14:00</span></div></div>
+                  <div class="tli ok"><span class="node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></span><div class="t">Registrar solicitud · completado</div><div class="m"><span>Marta Gómez</span><span class="mono">03 oct 08:14 → 09:12</span><span class="ressla ok">A tiempo</span></div></div>
+                  <div class="tli ok"><span class="node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg></span><div class="t">Ticket creado</div><div class="m"><span>Carlos Mina</span><span class="mono">03 oct 08:14</span><span>Inicio del flujo</span></div></div>
+                  <div class="tli warn"><span class="node"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span><div class="t">Reasignado de <b>Andrés López</b> a <b>Laura Peña</b></div><div class="m"><span>Diego Salazar</span><span class="mono">03 oct 10:41</span><span>El reloj de SLA se reinició</span></div></div>
+                </div>
+              </div>
+
+              <!-- Documento -->
+              <div id="p-document" role="tabpanel" style="display:none">
+                <div class="docwrap">
+                  <div class="doclist">
+                    <div class="doc"><span class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg></span><div class="dn"><b>Solicitud · master</b><span>Generado al crear · 03 oct 08:14</span></div><button class="btn sm" onclick="toast('Ver PDF (simulado)')">Ver</button></div>
+                    <div class="doc"><span class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg></span><div class="dn"><b>Registrar solicitud</b><span>Generado al salir · 03 oct 09:12</span></div><button class="btn sm" onclick="toast('Ver PDF (simulado)')">Ver</button></div>
+                  </div>
+                  <div class="pdfpage">
+                    <h4>Confirmación de pago de crédito</h4>
+                    <div class="sub">Ticket #1042 · Empresa principal · Generado por ProcesaBPM</div>
+                    <div class="pdfrow"><span class="k">Solicitante</span><span class="v">Marta Gómez</span></div>
+                    <div class="pdfrow"><span class="k">Tipo de pago</span><span class="v">Abono a capital</span></div>
+                    <div class="pdfrow"><span class="k">Monto</span><span class="v">$ 12.500.000</span></div>
+                    <div class="pdfrow"><span class="k">Fecha efectiva</span><span class="v">02/10/2026</span></div>
+                    <div class="stamp"><span>Firmado por Laura Peña</span><span>Página 1 de 1</span></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </div>
+
+          <!-- ================= Rail ================= -->
+          <aside class="rail">
+            <section class="card sla-card">
+              <div class="ch"><h3>Tiempo de respuesta</h3><div class="sp"></div><span class="hint">SLA del paso</span></div>
+              <div class="cb">
+                <div class="big">1d 06h</div>
+                <div class="sub">Restante · vence 06 oct, 14:00</div>
+                <div class="bar" role="img" aria-label="62% transcurrido"><span class="fill" style="width:62%"></span><span class="mark" style="left:62%"></span></div>
+                <div class="sla-legend"><span>Transcurrido 2d 18h</span><span>Total 4d hábiles</span></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="ch"><h3>Detalles</h3></div>
+              <div class="cb"><ul class="det">
+                <li><span class="k">Categoría</span><span class="v">Confirmación de pagos</span></li>
+                <li><span class="k">Subcategoría</span><span class="v">Pago de crédito</span></li>
+                <li><span class="k">Empresa</span><span class="v">Empresa principal</span></li>
+                <li><span class="k">Sede</span><span class="v">Popayán · Centro</span></li>
+                <li><span class="k">Crédito</span><span class="v mono">CR-458-2024</span></li>
+                <li><span class="k">Creado</span><span class="v mono">03 oct 2026, 08:14</span></li>
+              </ul></div>
+            </section>
+
+            <section class="card">
+              <div class="ch"><h3>Participantes</h3></div>
+              <div class="cb"><div class="people">
+                <div class="person"><span class="ava" style="background:#6D28D9">MG</span><div class="pi"><b>Marta Gómez</b><span>Solicitante</span></div></div>
+                <div class="person"><span class="ava" style="background:#0369A1">LP</span><div class="pi"><b>Laura Peña</b><span>Responsable actual</span></div><span class="tagn">Activo</span></div>
+                <div class="person"><span class="ava" style="background:#BE123C">CM</span><div class="pi"><b>Carlos Mina</b><span>Registró el ticket</span></div></div>
+                <div class="person"><span class="ava" style="background:#047857">AL</span><div class="pi"><b>Andrés López</b><span>Observador</span></div></div>
+              </div></div>
+            </section>
+
+            <section class="card">
+              <div class="ch"><h3>Adjuntos</h3><div class="sp"></div><span class="hint">2</span></div>
+              <div class="cb"><div class="filelist">
+                <div class="fl"><span class="fi" style="background:#FFF1F2;color:#BE123C"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg></span><div class="fn"><b>comprobante-009821.pdf</b><span>248 KB · PDF</span></div></div>
+                <div class="fl"><span class="fi" style="background:#EFF8FF;color:#0369A1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></span><div class="fn"><b>extracto-bancario.jpg</b><span>512 KB · Imagen</span></div></div>
+              </div></div>
+            </section>
+
+            <section class="card">
+              <div class="ch"><h3>Mis etiquetas</h3></div>
+              <div class="cb"><div class="chips">
+                <span class="chip">urgente <button class="x" title="Quitar" onclick="this.closest('.chip').remove()">✕</button></span>
+                <span class="chip">cliente-vip <button class="x" title="Quitar" onclick="this.closest('.chip').remove()">✕</button></span>
+                <button class="chip add" onclick="toast('Agregar etiqueta (simulado)')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Agregar</button>
+              </div></div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal genérico ===== -->
+<div class="modal" id="modal">
+  <div class="backdrop" onclick="closeModal()"></div>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="mh"><h3 id="mTitle">Título</h3><div class="sp"></div><button onclick="closeModal()" aria-label="Cerrar">✕</button></div>
+    <div class="mb" id="mBody"></div>
+    <div class="mf" id="mFoot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+  let tt;
+  function toast(m){const t=$('#toast');t.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'+m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2300);}
+  function go(u){location.href=u;return false;}
+
+  /* ---- Ver como ---- */
+  $$('#viewAs button').forEach(b=>b.onclick=()=>{
+    $$('#viewAs button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    const v=b.dataset.v;
+    $('#rp-assigned').style.display = v==='assigned'?'':'none';
+    $('#rp-observer').style.display = v==='observer'?'':'none';
+    $('#rp-closed').style.display   = v==='closed'?'':'none';
+  });
+
+  /* ---- Tabs ---- */
+  $$('.tab').forEach(tb=>tb.onclick=()=>{
+    $$('.tab').forEach(x=>x.classList.remove('active')); tb.classList.add('active');
+    const t=tb.dataset.tab;
+    $('#p-all').style.display      = (t==='all'||t==='comments')?'':'none';
+    $('#p-history').style.display  = t==='history'?'':'none';
+    $('#p-document').style.display = t==='document'?'':'none';
+  });
+
+  /* ---- Modal ---- */
+  function openModal(title, body, foot){
+    $('#mTitle').textContent=title; $('#mBody').innerHTML=body; $('#mFoot').innerHTML=foot||'';
+    $('#modal').classList.add('open');
+  }
+  function closeModal(){$('#modal').classList.remove('open');}
+
+  function openSignature(){
+    openModal('Firmar documento',
+      '<p style="margin:0 0 12px;font-size:13px;color:var(--muted)">Firma en el recuadro para autorizar la validación del pago.</p>'+
+      '<canvas class="sigpad" id="sigpad"></canvas><div class="sigpad-hint">Trazo con dedo o ratón. <button class="btn sm" style="float:right" onclick="clearSig()">Limpiar</button></div>',
+      '<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn accent" onclick="saveSig()">Guardar firma</button>');
+    initSig();
+  }
+  function openNovelty(){
+    openModal('Crear novedad (pausa el ticket)',
+      '<div class="fld"><label for="nv">Destinatario <span class="req">*</span></label><select class="sel" id="nv"><option>Diego Salazar · Jefe de cartera</option><option>Laura Peña</option><option>Andrés López</option></select></div>'+
+      '<div class="fld"><label for="nvd">Descripción <span class="req">*</span></label><textarea class="txa" id="nvd" placeholder="Explica qué impide continuar…"></textarea></div>',
+      '<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn accent" onclick="toast(\'Novedad creada · el ticket quedó en pausa\');closeModal()">Crear novedad</button>');
+  }
+  function openClose(){
+    openModal('Finalizar y cerrar ticket',
+      '<div class="banner warn" style="margin:0 0 14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg><div><b>Se exige nota de cierre</b><p>Para cerrar debes registrar una nota con las conclusiones. La acción no se puede deshacer.</p></div></div>'+
+      '<div class="fld"><label for="cn">Nota de cierre <span class="req">*</span></label><textarea class="txa" id="cn" placeholder="Conclusiones del cierre…"></textarea></div>'+
+      '<div class="dropzone" onclick="toast(\'Adjuntar evidencias (simulado)\')"><span class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><div><b>Evidencias de cierre</b><span>Opcional</span></div></div>',
+      '<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn ok" onclick="toast(\'Ticket cerrado (simulado)\');closeModal()">Confirmar cierre</button>');
+  }
+  function openError(){
+    openModal('Registrar error',
+      '<div class="fld"><label for="et">Tipo de error <span class="req">*</span></label><select class="sel" id="et"><option>Reapertura · no conforme</option><option>Error de proceso · datos</option><option>Error informativo</option></select></div>'+
+      '<div class="fld"><label for="ed">Descripción <span class="req">*</span></label><textarea class="txa" id="ed" placeholder="Describe el error…"></textarea></div>',
+      '<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn accent" onclick="toast(\'Error registrado (simulado)\');closeModal()">Registrar error</button>');
+  }
+  function openReassign(){
+    openModal('Reasignar ticket',
+      '<div class="fld"><label for="ra">Nuevo responsable <span class="req">*</span></label><select class="sel" id="ra"><option>Diego Salazar · Jefe de cartera</option><option>Andrés López · Analista</option><option>Sara Nieto · Carné</option></select></div>'+
+      '<div class="fld"><label for="rc">Comentario</label><textarea class="txa" id="rc" placeholder="Opcional"></textarea></div>',
+      '<button class="btn" onclick="closeModal()">Cancelar</button><button class="btn accent" onclick="toast(\'Ticket reasignado (simulado)\');closeModal()">Reasignar</button>');
+  }
+
+  /* ---- Firma (canvas) ---- */
+  let sigCtx=null, drawing=false, hasSig=false;
+  function initSig(){
+    const c=$('#sigpad'); if(!c) return;
+    const dpr=window.devicePixelRatio||1;
+    c.width=c.offsetWidth*dpr; c.height=c.offsetHeight*dpr;
+    sigCtx=c.getContext('2d'); sigCtx.scale(dpr,dpr);
+    sigCtx.lineWidth=2; sigCtx.lineCap='round'; sigCtx.strokeStyle='#0B1220';
+    const pos=e=>{const r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
+    c.onpointerdown=e=>{drawing=true;hasSig=true;const p=pos(e);sigCtx.beginPath();sigCtx.moveTo(p.x,p.y);c.setPointerCapture(e.pointerId);};
+    c.onpointermove=e=>{if(!drawing)return;const p=pos(e);sigCtx.lineTo(p.x,p.y);sigCtx.stroke();};
+    c.onpointerup=()=>drawing=false;
+  }
+  function clearSig(){const c=$('#sigpad');if(c&&sigCtx)sigCtx.clearRect(0,0,c.width,c.height);hasSig=false;}
+  function saveSig(){
+    if(!hasSig){toast('Firma vacía: traza tu firma');return;}
+    const row=$('#sigrow'); row.classList.add('signed');
+    $('#sigTitle').textContent='Firma capturada';
+    $('#sigSub').textContent='Laura Peña · '+new Date().toLocaleString('es-CO');
+    $('#sigBtn').textContent='Cambiar';
+    closeModal(); toast('Firma guardada');
+  }
+
+  /* ---- Avanzar con validación ---- */
+  function advance(){
+    if(!$('#confirm').checked){toast('Marca la confirmación para continuar');$('#confirm').focus();return;}
+    if(!$('#fn').value.trim()){$('#fn').focus();$('#fn').style.borderColor='var(--danger)';toast('Falta el número de comprobante');return;}
+    toast('Paso validado · el ticket avanza a «Visto bueno del jefe»');
+  }
+
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal(); if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&document.activeElement===$('#note'))toast('Respuesta enviada (simulado)');});
+</script>
+</body>
+</html>
