@@ -1,0 +1,13 @@
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  background: var(--navy);
+  color: var(--on-navy);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sm { width: 26px; height: 26px; font-size: 10.5px; }
+.md { width: 34px; height: 34px; font-size: 12px; }

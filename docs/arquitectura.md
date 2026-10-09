@@ -145,6 +145,17 @@ Reglas:
 - **El HTML de usuario se sanitiza** y se aplica CSP.
 - **El token de sesión nunca va a `localStorage`.**
 
+### 4.1 Base de la web (hecha, 2026-10-09)
+- **Stack:** React 19 + Vite 8, React Router 8 (`createBrowserRouter`), TanStack Query 5, i18next + react-i18next, CSS Modules sobre `docs/diseno/tokens.css` (sin Tailwind: lo que falte se discute y se agrega a `tokens.css`), Vitest + Testing Library (jsdom), Playwright y Storybook 10 (con `addon-a11y`, sin telemetría).
+- **Alias:** `@/` → `apps/web/src`; `@design/` → `docs/diseno` (los tokens y el logo se importan de ahí: una sola copia). `src/styles/global.css` importa los tokens y fija la base (fondo, tipografía, foco).
+- **`app/`:** `App.tsx` (providers + router), `providers/AppProviders.tsx` (i18n y React Query), `router/paths.ts` y `router/routes.tsx`, `layouts/app-layout/` (barra lateral de 238px con secciones "Operación" y "Configuración" definidas en `navigation.ts`, barra superior con espacios `start`/`end` y el contenido con scroll) y `pages/` (no encontrada y la de sección en construcción, que cada funcionalidad reemplaza en su ruta).
+- **`shared/ui`:** `Button` (`primary` acento, `brand` navy, `secondary`, `ghost`), `Badge` (palabra + punto; tonos `ok`, `warn`, `danger`, `accent`, `violet`, `neutral`), `Card`, `TextField` y `Select` (sobre `field/FieldFrame`: etiqueta, ayuda y error enlazados con `aria-describedby`), `Tabs` (patrón WAI-ARIA con flechas, Inicio y Fin), `Avatar`, `Logo`, `PageHeader` e íconos de trazo (`icons/`). Cada uno con su prueba y su story.
+- **`shared/api`:** `createHttpClient({ baseUrl })` (JSON sobre fetch; `request(path, { schema })` valida el cuerpo 2xx con el contrato zod de `shared`) y errores tipados: `ApiError` (status, `code`, `requestId`, `details` del cuerpo `{error}` del API), `NetworkError` y `UnexpectedResponseError`. `createQueryClient()` no reintenta un 4xx; un 5xx o un fallo de red, hasta 2 veces.
+- **`shared/lib`:** `cx` (une clases; las de CSS Modules pueden ser `undefined` con `noUncheckedIndexedAccess`).
+- **i18n:** `src/i18n/es/<namespace>.ts` (`common`, `navigation`), tipado con `CustomTypeOptions`: una clave inexistente no compila.
+- **Desarrollo:** `pnpm --filter @procesabpm/web dev` (puerto 5173, proxy de `/api` a `API_PROXY_TARGET` o `http://localhost:3000`), `storybook` (6006), `test`, `test:e2e` (compila y prueba contra `vite preview`), `typecheck`, `build`, `build-storybook`. El CI corre el E2E y el build de Storybook en el job `web`.
+- **Pendiente:** el prefijo del API (`/api`) y la ruta de la cookie de refresh los define el backend; el login, la sesión y el usuario en la barra superior van en el PR de autenticación.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|
