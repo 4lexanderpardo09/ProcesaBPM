@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { FieldDocument } from '@procesabpm/shared';
+import { type FieldDocument, PDF_IMAGE_MIME_TYPES } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { SignerRecord, TicketFacts } from '../domain/render-facts.js';
 
@@ -21,7 +21,6 @@ export interface RawSigner extends Omit<SignerRecord, 'imageKey'> {
   readonly imageFileId: string | null;
 }
 
-const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg'];
 const PEOPLE_STEP_TYPES = ['TASK', 'APPROVAL', 'DECISION', 'SIGNATURE'] as const;
 
 /** Read-only facts about a ticket for rendering. Every query names the tenant: row-level security is the second wall. */
@@ -145,7 +144,7 @@ export class RenderFactsRepository {
   /** Storage keys of the images that can be drawn (PNG or JPEG, confirmed), by file id. */
   async imageKeys(tx: TenantTransaction, tenantId: string, fileIds: readonly string[]): Promise<Map<string, string>> {
     if (fileIds.length === 0) return new Map();
-    const rows = await tx.storedFile.findMany({ where: { tenantId, id: { in: [...fileIds] }, status: 'CONFIRMED', mimeType: { in: IMAGE_MIME_TYPES } }, select: { id: true, storageKey: true } });
+    const rows = await tx.storedFile.findMany({ where: { tenantId, id: { in: [...fileIds] }, status: 'CONFIRMED', mimeType: { in: [...PDF_IMAGE_MIME_TYPES] } }, select: { id: true, storageKey: true } });
     return new Map(rows.map((row) => [row.id, row.storageKey]));
   }
 

@@ -32,7 +32,8 @@ export class DashboardService {
       const assigned = { assignees: { some: { tenantId, userId } } };
       const running = { responsibleId: userId, completedAt: null, pausedAt: null };
       const [myOpen, myOverdue, myDueSoon, createdByMeOpen, closedByMeWeek] = await Promise.all([
-        this.repository.count(tx, tenantId, [access, { status: 'OPEN', ...assigned }]),
+        // Open or paused: the same tickets as the pending list, so the card and the list agree.
+        this.repository.count(tx, tenantId, [access, { status: { in: ['OPEN', 'PAUSED'] }, ...assigned }]),
         this.repository.count(tx, tenantId, [access, { status: 'OPEN', ...assigned, slaClocks: { some: { ...running, dueAt: { lt: now } } } }]),
         this.repository.count(tx, tenantId, [access, { status: 'OPEN', ...assigned, slaClocks: { some: { ...running, dueAt: { gte: now, lte: soon } } } }]),
         this.repository.count(tx, tenantId, [access, { status: 'OPEN', creatorId: userId }]),
@@ -48,19 +49,17 @@ export class DashboardService {
       const access = accessibleWhere(ability, TICKET_READ_ACTIONS, TICKET_SUBJECT);
       const now = this.clock.now().getTime();
       const rows = await this.repository.pending(tx, tenantId, userId, access, PENDING_LIMIT);
-      return rows
-        .map((row) => ({
-          id: row.id,
-          number: row.number.toString(),
-          title: row.title,
-          status: row.status,
-          currentStepId: row.currentStepId,
-          createdAt: row.createdAt.toISOString(),
-          dueAt: row.dueAt?.toISOString() ?? null,
-          overdue: row.dueAt !== null && row.dueAt.getTime() < now,
-        }))
-        // Most urgent first; a ticket with no SLA goes last.
-        .sort((a, b) => (a.dueAt === null ? 1 : b.dueAt === null ? -1 : a.dueAt.localeCompare(b.dueAt)));
+      // Already most urgent first (the repository orders before the limit); a ticket with no SLA goes last.
+      return rows.map((row) => ({
+        id: row.id,
+        number: row.number.toString(),
+        title: row.title,
+        status: row.status,
+        currentStepId: row.currentStepId,
+        createdAt: row.createdAt.toISOString(),
+        dueAt: row.dueAt?.toISOString() ?? null,
+        overdue: row.dueAt !== null && row.dueAt.getTime() < now,
+      }));
     });
   }
 }

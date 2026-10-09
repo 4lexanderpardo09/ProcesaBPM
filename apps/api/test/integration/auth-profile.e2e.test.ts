@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
+import { MAX_FILE_BYTES, MAX_UNLINKED_BYTES_PER_USER } from '@procesabpm/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
@@ -53,6 +54,23 @@ describe('own profile and signature', () => {
   it('refuses a file that is not an image', async () => {
     const fileId = await uploadFile(member, { name: 'doc.pdf', content: pdf() });
     await member.client.put('/auth/me/signature', { fileId }).expect(422);
+  });
+
+  it('refuses an image the PDFs cannot draw (only PNG and JPEG are stamped)', async () => {
+    const fileId = await uploadFile(member, { name: 'firma.gif', content: Buffer.concat([Buffer.from('GIF89a'), Buffer.from('fake image body')]) });
+    await member.client.put('/auth/me/signature', { fileId }).expect(422);
+  });
+
+  it('does not count the signature in the quota of uploads nobody attached', async () => {
+    const signer = await world.member([grant('create')]);
+    const fileId = await uploadFile(signer, { name: 'firma.png', content: png() });
+    await signer.client.put('/auth/me/signature', { fileId }).expect(204);
+    // Exactly the whole quota in reservations: had the signature counted too, the last batch would be over it.
+    const big = (name: string) => ({ name, sizeBytes: MAX_FILE_BYTES, sha256: 'a'.repeat(64) });
+    const batches = MAX_UNLINKED_BYTES_PER_USER / (5 * MAX_FILE_BYTES);
+    for (let batch = 0; batch < batches; batch += 1) {
+      await signer.client.post('/files/uploads', { files: Array.from({ length: 5 }, (_v, index) => big(`b${batch}-${index}.pdf`)) }).expect(201);
+    }
   });
 
   it("refuses someone else's file", async () => {
