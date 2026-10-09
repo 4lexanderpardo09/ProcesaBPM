@@ -242,6 +242,14 @@ Ya se creó la raíz del monorepo (`package.json`, `pnpm-workspace.yaml`, `tscon
 - [x] Issue de Prisma [#30374](https://github.com/prisma/orm/issues/30374): **no se reproduce en 7.10.0** (2026-10-01); se fija la versión exacta 7.10.0, la prueba de concepto queda en el CI y el runner de transacciones verifica el contexto fijado. Detalle y regla para subir de versión en [base-de-datos.md §13.3](base-de-datos.md). El 8.0 RC solo existe para el CLI (`prisma@8.0.0-rc.19`); el cliente y el adaptador no tienen versión 8.0.x en npm (solo `8.1.0-dev.*`), así que la prueba contra el 8.0 queda pendiente hasta que salga el 8.0 estable.
 - [x] Prueba de concepto de RLS con Prisma: `TenantTransactionRunner` (`set_config(..., true)` en la transacción) con pruebas de fuga entre dos tenants en paralelo, por HTTP y contra PostgreSQL real. **Pendiente:** repetirla detrás de PgBouncer en modo transacción cuando exista el despliegue.
 
+### 1.4 Sistema de diseño del frontend (2026-10-09): **definido, falta confirmar**
+Reglas, tokens, logo y mockups de referencia en [`docs/diseno/`](diseno/README.md), sacados de los prototipos HTML del usuario y de un mockup revisado con él. Hecho con Opus (documentación; no es parte crítica).
+- Estilo denso navy + azul (`--navy` #16233a, `--accent` #0369a1), Plus Jakarta Sans e IBM Plex Mono, solo tema claro.
+- Logo: una P armada como diagrama de flujo, en tres variantes; la barra lateral usa la versión a color sin fondo.
+- Estructura de pantalla: usuario arriba a la derecha, búsqueda junto a los filtros, avance del flujo del ticket como grafo a todo el ancho (React Flow).
+- **Por confirmar:** (1) tema oscuro: no se definió; (2) el borde de los campos (`--line`, 1.3:1) y `--faint` (2.6:1) quedan bajo el contraste recomendado, tal como están en los prototipos; (3) la fuente se carga desde Google Fonts (alternativa: servirla desde la propia app); (4) la marca por cliente solo cambia la familia `--accent`.
+- **Pendiente:** el constructor de flujos solo existe como prototipo HTML (`mockups/prototipos/constructor-flujo.html`), sin la revisión que tuvieron las otras pantallas.
+
 ## 2. Funciones con propuesta por defecto (confirmar sobre la marcha)
 | Tema | Propuesta |
 |---|---|

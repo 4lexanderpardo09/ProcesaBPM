@@ -121,7 +121,7 @@ apps/web/
 │   │   ├── reports/
 │   │   └── notifications/
 │   ├── shared/
-│   │   ├── ui/                  # sistema de diseño (botones, tablas, formularios, modales) + Storybook
+│   │   ├── ui/                  # sistema de diseño (botones, tablas, formularios, modales) + Storybook; reglas y tokens en docs/diseno/
 │   │   ├── api/                 # cliente HTTP (cookies httpOnly, manejo de errores)
 │   │   ├── lib/                 # formato de fechas/moneda por zona horaria, utilidades
 │   │   └── hooks/

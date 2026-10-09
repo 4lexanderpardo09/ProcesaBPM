@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProcesaBPM · Constructor de flujos (prototipo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F6F8;
+    --surface:#ffffff;
+    --surface-2:#F8FAFC;
+    --border:#E4E7EC;
+    --border-strong:#D3D7DE;
+    --text:#0B1220;
+    --muted:#64748b;
+    --muted-2:#94a3b8;
+    --primary:#0369A1;
+    --primary-600:#075985;
+    --primary-50:#EFF8FF;
+    --amber:#B45309;
+    --amber-50:#FFFBEB;
+    --danger:#BE123C;
+    --danger-50:#FFF1F2;
+    --ok:#047857;
+    --ok-50:#ECFDF5;
+    --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+    --shadow-md:0 6px 18px rgba(15,23,42,.08);
+    --shadow-lg:0 18px 48px rgba(15,23,42,.16);
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  button{font-family:inherit;cursor:pointer}
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    height:60px;display:flex;align-items:center;gap:16px;
+    padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border);
+    position:relative;z-index:30;
+  }
+  .back{
+    display:flex;align-items:center;gap:7px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text);padding:7px 12px;border-radius:9px;
+    font-size:13px;font-weight:500;box-shadow:var(--shadow-sm);
+  }
+  .back:hover{background:var(--surface-2);border-color:var(--border-strong)}
+  .title-block{display:flex;align-items:center;gap:10px;min-width:0}
+  .title-block .name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{
+    font-size:11px;font-weight:600;letter-spacing:.02em;padding:3px 9px;border-radius:999px;
+    background:var(--amber-50);color:#b45309;border:1px solid #fde68a;white-space:nowrap;
+  }
+  .chip.v{background:#f1f5f9;color:#475569;border-color:#e2e8f0}
+  .topbar .spacer{flex:1}
+  .btn{
+    border-radius:9px;font-size:13px;font-weight:600;padding:8px 15px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);transition:.15s;
+  }
+  .btn:hover{background:var(--surface-2)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 4px 12px rgba(79,70,229,.28)}
+  .btn.primary:hover{background:var(--primary-600);border-color:var(--primary-600)}
+  .btn.ghost{box-shadow:none;border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--surface-2);color:var(--text)}
+
+  /* ---------- Workspace ---------- */
+  .workspace{display:flex;height:calc(100vh - 60px)}
+
+  /* Palette */
+  .palette{
+    width:250px;flex:none;background:var(--surface);border-right:1px solid var(--border);
+    overflow-y:auto;padding:16px 14px 40px;
+  }
+  .palette h4{
+    margin:18px 6px 8px;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.06em;color:var(--muted-2);
+  }
+  .palette h4:first-child{margin-top:2px}
+  .p-item{
+    display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;
+    border:1px solid transparent;font-size:13px;font-weight:500;color:var(--text);
+    user-select:none;transition:.12s;cursor:grab;
+  }
+  .p-item:hover{background:var(--surface-2);border-color:var(--border)}
+  .p-item:active{cursor:grabbing}
+  .p-item .ico{
+    width:30px;height:30px;border-radius:8px;flex:none;display:grid;place-items:center;
+  }
+  .p-item .ico svg{width:17px;height:17px}
+  .p-hint{margin:16px 6px 0;font-size:11px;color:var(--muted-2);line-height:1.5}
+
+  /* Canvas */
+  .canvas-wrap{position:relative;flex:1;overflow:hidden;background:var(--surface-2)}
+  .canvas{
+    position:absolute;inset:0;cursor:grab;
+    background-color:#fbfcfd;
+    background-image:radial-gradient(circle,#d7dce4 1px,transparent 1.4px);
+    background-size:22px 22px;
+  }
+  .canvas.panning{cursor:grabbing}
+  .world{position:absolute;top:0;left:0;transform-origin:0 0}
+  .edges{position:absolute;top:0;left:0;overflow:visible;pointer-events:none}
+  .edge{fill:none;stroke:#9aa4b2;stroke-width:2}
+  .edge.dashed{stroke-dasharray:6 5;stroke:#c4b5fd}
+  .edge.hit{stroke-width:2.5}
+  .edge-label{
+    font-size:11px;font-weight:600;fill:#475569;pointer-events:none;
+    paint-order:stroke;stroke:#fbfcfd;stroke-width:4px;stroke-linejoin:round;
+  }
+  .nodes{position:absolute;top:0;left:0}
+
+  /* Node */
+  .node{
+    position:absolute;width:232px;background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;
+    transition:box-shadow .15s,border-color .15s,transform .05s;cursor:pointer;user-select:none;
+  }
+  .node:hover{box-shadow:var(--shadow-md);border-color:var(--border-strong)}
+  .node.selected{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-50),var(--shadow-md)}
+  .node .accent{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .node-head{display:flex;align-items:center;gap:10px;padding:11px 12px 11px 15px}
+  .node-icon{width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center}
+  .node-icon svg{width:18px;height:18px}
+  .node-titles{min-width:0;flex:1}
+  .node-type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted-2)}
+  .node-title{font-size:13px;font-weight:600;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .node-meta{
+    padding:7px 12px 8px 15px;border-top:1px dashed var(--border);
+    font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .port{
+    position:absolute;width:11px;height:11px;border-radius:50%;background:#fff;
+    border:2px solid #9aa4b2;top:50%;transform:translateY(-50%);opacity:0;transition:.15s;
+  }
+  .node:hover .port,.node.selected .port{opacity:1}
+  .port.in{left:-6px}
+  .port.out{right:-6px;border-color:var(--primary)}
+  .node.pulse{animation:pulse 1.1s ease 2}
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 3px var(--primary-50),var(--shadow-md)}
+    50%{box-shadow:0 0 0 8px rgba(79,70,229,.14),var(--shadow-md)}
+  }
+
+  /* Canvas tools */
+  .tools{
+    position:absolute;left:16px;bottom:16px;display:flex;align-items:center;gap:6px;
+    background:var(--surface);border:1px solid var(--border);border-radius:11px;
+    box-shadow:var(--shadow-md);padding:5px;z-index:10;
+  }
+  .tools button{
+    width:32px;height:32px;border:none;background:transparent;border-radius:8px;color:var(--muted);
+    display:grid;place-items:center;font-size:15px;
+  }
+  .tools button:hover{background:var(--surface-2);color:var(--text)}
+  .tools .level{font-size:12px;font-weight:600;color:var(--muted);width:44px;text-align:center}
+
+  /* Validation panel */
+  .panel{
+    position:absolute;right:16px;bottom:16px;width:380px;max-height:60%;
+    background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    box-shadow:var(--shadow-lg);z-index:20;display:none;flex-direction:column;overflow:hidden;
+  }
+  .panel.open{display:flex}
+  .panel-head{
+    display:flex;align-items:center;gap:8px;padding:13px 15px;border-bottom:1px solid var(--border);
+  }
+  .panel-head strong{font-size:13px}
+  .panel-head .spacer{flex:1}
+  .panel-head button{border:none;background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:2px 6px;border-radius:6px}
+  .panel-head button:hover{background:var(--surface-2)}
+  .panel-body{overflow-y:auto;padding:8px}
+  .issue{
+    display:flex;gap:10px;padding:10px;border-radius:10px;cursor:pointer;align-items:flex-start;
+  }
+  .issue:hover{background:var(--surface-2)}
+  .issue .dot{width:9px;height:9px;border-radius:50%;margin-top:4px;flex:none}
+  .issue.error .dot{background:var(--danger)}
+  .issue.warn .dot{background:var(--amber)}
+  .issue.info .dot{background:var(--muted-2)}
+  .issue .txt{font-size:12.5px;line-height:1.45}
+  .issue .where{display:block;margin-top:3px;font-size:11px;color:var(--muted-2)}
+  .panel-foot{padding:10px 15px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);display:flex;gap:14px}
+
+  /* Inspector */
+  .inspector{
+    width:330px;flex:none;background:var(--surface);border-left:1px solid var(--border);
+    overflow-y:auto;padding:0 0 40px;
+  }
+  .insp-empty{padding:60px 26px;text-align:center;color:var(--muted-2)}
+  .insp-empty svg{width:42px;height:42px;margin-bottom:14px;opacity:.5}
+  .insp-empty p{font-size:13px;line-height:1.6;margin:0}
+  .insp-head{padding:16px 18px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:5}
+  .insp-head .row{display:flex;align-items:center;gap:9px}
+  .insp-head .ico{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+  .insp-head .ico svg{width:17px;height:17px}
+  .insp-head .type{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .insp-head h3{margin:8px 0 0;font-size:15px;font-weight:600}
+  .insp-head .id{margin-top:3px;font-size:11px;color:var(--muted-2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .form{padding:16px 18px}
+  .fgroup{margin-bottom:15px}
+  .fgroup label{display:block;font-size:11.5px;font-weight:600;color:#475569;margin-bottom:6px}
+  .fgroup input[type=text],.fgroup select,.fgroup textarea{
+    width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:9px;font-size:13px;
+    font-family:inherit;color:var(--text);background:var(--surface);outline:none;transition:.15s;
+  }
+  .fgroup input:focus,.fgroup select:focus,.fgroup textarea:focus{
+    border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-50);
+  }
+  .fgroup textarea{resize:vertical;min-height:64px}
+  .switch{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#334155;cursor:pointer}
+  .switch input{appearance:none;width:36px;height:20px;border-radius:999px;background:#cbd5e1;position:relative;transition:.18s;flex:none;cursor:pointer}
+  .switch input:checked{background:var(--primary)}
+  .switch input::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.18s}
+  .switch input:checked::after{transform:translateX(16px)}
+  .danger-zone{padding:6px 18px 0}
+  .danger-zone button{
+    width:100%;padding:9px;border-radius:9px;border:1px solid #fecdd3;background:var(--danger-50);
+    color:#be123c;font-size:12.5px;font-weight:600;
+  }
+  .danger-zone button:hover{background:#ffe4e6}
+
+  /* Toast */
+  .toast{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+    background:#0f172a;color:#fff;font-size:13px;font-weight:500;padding:11px 18px;border-radius:11px;
+    box-shadow:var(--shadow-lg);opacity:0;pointer-events:none;transition:.25s;z-index:100;
+    display:flex;align-items:center;gap:9px;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast .ok{width:18px;height:18px;border-radius:50%;background:var(--ok);display:grid;place-items:center;flex:none}
+  .toast .ok svg{width:11px;height:11px;color:#fff}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <button class="back" onclick="toast('Volver a la lista de flujos (simulado)')">← Flujos</button>
+  <div class="title-block">
+    <span class="name">Solicitud de compra</span>
+    <span class="chip">Borrador</span>
+    <span class="chip v">v3</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="btnValidate">Validar</button>
+  <button class="btn primary" onclick="publish()">Publicar</button>
+</header>
+
+<div class="workspace">
+  <aside class="palette" id="palette"></aside>
+
+  <main class="canvas-wrap">
+    <div class="canvas" id="canvas">
+      <div class="world" id="world">
+        <svg class="edges" id="edges" width="4200" height="3200">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#9aa4b2"></path>
+            </marker>
+          </defs>
+          <g id="edgeGroup"></g>
+        </svg>
+        <div class="nodes" id="nodes"></div>
+      </div>
+    </div>
+
+    <div class="tools">
+      <button onclick="zoomAt(0.85, innerWidth/2, innerHeight/2)" title="Alejar">−</button>
+      <span class="level" id="zoomLevel">100%</span>
+      <button onclick="zoomAt(1.18, innerWidth/2, innerHeight/2)" title="Acercar">+</button>
+      <button onclick="fitView()" title="Ajustar">⤢</button>
+    </div>
+
+    <div class="panel" id="panel">
+      <div class="panel-head">
+        <strong>Validación del flujo</strong>
+        <span class="spacer"></span>
+        <button onclick="togglePanel(false)">✕</button>
+      </div>
+      <div class="panel-body" id="panelBody"></div>
+      <div class="panel-foot" id="panelFoot"></div>
+    </div>
+  </main>
+
+  <aside class="inspector" id="inspector"></aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Catálogo de bloques (colores y descripción)
+   ============================================================ */
+const ICONS = {
+  start:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M8 5.5v13l11-6.5z"/></svg>',
+  end:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
+  step:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4.5" width="16" height="15" rx="2.5"/><path d="M4 10h16"/></svg>',
+  approval:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6.5 9.5 17 4 11.5"/></svg>',
+  decision:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5 20.5 12 12 20.5 3.5 12z"/></svg>',
+  condition:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
+  calculator:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8.5 8h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg>',
+  wait:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg>',
+  document:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/></svg>',
+  notification:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>',
+  export:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 20.5h14"/></svg>',
+  webhook:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h9l-2.5-2.5M17 17H8l2.5 2.5"/><path d="M16 7v10"/><path d="M8 17V9"/></svg>'
+};
+
+const TYPES = {
+  START:        {label:'Inicio',       color:'#059669', icon:'start'},
+  END:          {label:'Fin',          color:'#e11d48', icon:'end'},
+  STEP:         {label:'Paso',         color:'#4f46e5', icon:'step'},
+  APPROVAL:     {label:'Aprobación',   color:'#2563eb', icon:'approval'},
+  DECISION:     {label:'Decisión',     color:'#7c3aed', icon:'decision'},
+  CONDITION:    {label:'Condición',    color:'#d97706', icon:'condition'},
+  CALCULATOR:   {label:'Calculadora',  color:'#b45309', icon:'calculator'},
+  WAIT:         {label:'Espera',       color:'#ea580c', icon:'wait'},
+  DOCUMENT:     {label:'Documento',    color:'#0d9488', icon:'document'},
+  NOTIFICATION: {label:'Notificación', color:'#0891b2', icon:'notification'},
+  EXPORT:       {label:'Exportar',     color:'#0f766e', icon:'export'},
+  WEBHOOK:      {label:'Webhook',      color:'#a21caf', icon:'webhook'}
+};
+
+const PALETTE_GROUPS = [
+  {title:'Entrada y salida', types:['START','END']},
+  {title:'Pasos con persona', types:['STEP','APPROVAL','DECISION']},
+  {title:'Bloques automáticos', types:['CONDITION','CALCULATOR','WAIT']},
+  {title:'Efectos', types:['DOCUMENT','NOTIFICATION','EXPORT','WEBHOOK']}
+];
+
+/* Campos por defecto del inspector según el tipo de bloque. */
+function defaultFields(type){
+  const f=(label,kind,value,options)=>({label,kind,value,options});
+  switch(type){
+    case 'START': return [
+      f('Nombre','text','Inicio'),
+      f('Iniciadores','select','Todos los miembros',['Todos los miembros','Solo el área','Cargo específico','Usuarios específicos']),
+      f('Campos de creación','text','Monto, Justificación'),
+    ];
+    case 'END': return [
+      f('Nombre','text','Fin'),
+      f('¿Cierra el ticket?','select','Sí',['Sí','No']),
+    ];
+    case 'STEP': return [
+      f('Nombre','text','Nuevo paso'),
+      f('Modo de asignación','select','Por cargo',['Por cargo','Usuarios específicos','El creador','Aprobador','Pool (el primero que actúa)','Paralelo','Reparto aleatorio']),
+      f('Responsable','text','Analista de compras'),
+      f('SLA','text','2 días hábiles'),
+      f('Cierre del ticket','select','No permitido',['No permitido','Permitido','Obligatorio']),
+      f('Campos del paso','text','Observaciones'),
+    ];
+    case 'APPROVAL': return [
+      f('Nombre','text','Aprobación'),
+      f('Nivel de aprobación','select','1',['1','2','3','4','5']),
+      f('Grupo de aprobación','text','Jefes de área'),
+      f('SLA','text','1 día hábil'),
+      f('Permitir suplente','switch',false),
+    ];
+    case 'DECISION': return [
+      f('Nombre','text','Decisión'),
+      f('Salidas','text','Sí, No'),
+      f('Descripción','textarea','El responsable elige por dónde continúa el ticket.'),
+    ];
+    case 'CONDITION': return [
+      f('Nombre','text','Condición'),
+      f('Campo','select','Monto',['Monto','Prioridad','Empresa','Sede','Categoría']),
+      f('Operador','select','mayor que',['igual a','distinto de','mayor que','menor que','contiene','en la lista']),
+      f('Valor','text','5.000.000'),
+      f('Salida por defecto','select','No',['Sí','No']),
+    ];
+    case 'CALCULATOR': return [
+      f('Nombre','text','Calcular'),
+      f('Calculadora','select','Auxilio de alimentación',['Auxilio de alimentación','Saldo de viáticos']),
+      f('Guardar en campo','text','Total'),
+    ];
+    case 'WAIT': return [
+      f('Nombre','text','Esperar'),
+      f('Duración','text','3'),
+      f('Unidad','select','días hábiles',['horas hábiles','días hábiles']),
+      f('Modo','select','Desde que entra',['Desde que entra','Fecha de un campo']),
+    ];
+    case 'DOCUMENT': return [
+      f('Nombre','text','Generar documento'),
+      f('Documento','select','Orden de compra',['Orden de compra','Solicitud','Acta de entrega']),
+      f('Momento','select','Al salir',['Al entrar','Al salir','Al cerrar']),
+      f('Requiere firmas','switch',true),
+    ];
+    case 'NOTIFICATION': return [
+      f('Nombre','text','Notificar'),
+      f('Destinatarios','text','Solicitante'),
+      f('Asunto','text','Su solicitud cambió de estado'),
+      f('Canal','select','App y correo',['App','Correo','App y correo']),
+    ];
+    case 'EXPORT': return [
+      f('Nombre','text','Exportar'),
+      f('Exportación','text','Compras del mes'),
+      f('Formato','select','XLSX',['CSV','XLSX']),
+    ];
+    case 'WEBHOOK': return [
+      f('Nombre','text','Notificar sistema externo'),
+      f('URL','text','https://api.erp.local/hooks/compras'),
+      f('Evento','select','Al cerrar',['Al crear','Al transicionar','Al cerrar']),
+      f('Firma HMAC','switch',true),
+    ];
+    default: return [f('Nombre','text', TYPES[type]?.label || type)];
+  }
+}
+
+/* ============================================================
+   Estado (flujo de ejemplo: "Solicitud de compra")
+   ============================================================ */
+let uid = 0;
+const nid = () => 'n' + (++uid);
+
+const state = {
+  scale: 1, tx: 40, ty: 30,
+  selected: null,
+  nodes: [
+    {id:'n_start', type:'START',   title:'Inicio',                 meta:'Todos los miembros',        x:40,   y:300},
+    {id:'n_reg',   type:'STEP',    title:'Registrar solicitud',    meta:'Analista de compras · 2 días hábiles', x:300, y:300},
+    {id:'n_cond',  type:'CONDITION', title:'¿Monto > $5.000.000?', meta:'Monto',                      x:570,  y:300},
+    {id:'n_appr',  type:'APPROVAL', title:'Visto bueno del jefe',  meta:'Nivel 1 · Jefes de área',     x:850,  y:170},
+    {id:'n_buy',   type:'STEP',    title:'Realizar compra',        meta:'Analista de compras · 3 días', x:1120, y:170},
+    {id:'n_dec',   type:'DECISION', title:'¿Entrega conforme?',     meta:'Sí / No',                     x:1390, y:170},
+    {id:'n_end',   type:'END',     title:'Fin',                    meta:'Cierra el ticket',            x:1660, y:170},
+    {id:'n_rej',   type:'END',     title:'Rechazada',              meta:'Cierra el ticket',            x:850,  y:440},
+    {id:'n_doc',   type:'DOCUMENT', title:'Orden de compra',       meta:'Al salir · con firmas',       x:1120, y:10},
+    {id:'n_notif', type:'NOTIFICATION', title:'Avisar al solicitante', meta:'App y correo',            x:1390, y:440}
+  ],
+  edges: [
+    {id:'e1', from:'n_start', to:'n_reg'},
+    {id:'e2', from:'n_reg',   to:'n_cond'},
+    {id:'e3', from:'n_cond',  to:'n_appr',  label:'Sí'},
+    {id:'e4', from:'n_cond',  to:'n_rej',   label:'No'},
+    {id:'e5', from:'n_appr',  to:'n_buy',   label:'Aprueba'},
+    {id:'e6', from:'n_buy',   to:'n_dec'},
+    {id:'e7', from:'n_dec',   to:'n_end',   label:'Sí'},
+    {id:'e8', from:'n_buy',   to:'n_doc',   label:'genera', dashed:true},
+    {id:'e9', from:'n_dec',   to:'n_notif', label:'No'}
+  ]
+};
+
+// Completar campos por defecto para los nodos del ejemplo.
+state.nodes.forEach(n => { n.fields = defaultFields(n.type); });
+
+/* ============================================================
+   Render
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+const elNodes = $('nodes'), elEdges = $('edgeGroup'), elWorld = $('world');
+const elInspector = $('inspector'), elPanel = $('panel'), elPanelBody = $('panelBody'), elPanelFoot = $('panelFoot');
+
+function iconTile(type, size){
+  const c = TYPES[type].color;
+  return `<span class="ico" style="background:${c}1a;color:${c}">${ICONS[TYPES[type].icon]}</span>`;
+}
+
+function renderPalette(){
+  $('palette').innerHTML = PALETTE_GROUPS.map(g => `
+    <h4>${g.title}</h4>
+    ${g.types.map(t => `
+      <div class="p-item" data-type="${t}" title="Haz clic para añadir al lienzo">
+        ${iconTile(t)}
+        <span>${TYPES[t].label}</span>
+      </div>`).join('')}
+  `).join('') + `<p class="p-hint">Haz clic en un bloque para añadirlo. Arrastra los nodos para moverlos, rueda del ratón para acercar y clic en un nodo para editar sus propiedades.</p>`;
+
+  $('palette').querySelectorAll('.p-item').forEach(item => {
+    item.addEventListener('click', () => addNode(item.dataset.type));
+  });
+}
+
+function nodeMeta(n){
+  if(n.meta !== undefined) return n.meta;
+  const m = n.fields?.find(f => /responsable|destinatario|grupo|documento/i.test(f.label));
+  return m ? String(m.value) : '';
+}
+
+function renderNodes(){
+  elNodes.innerHTML = state.nodes.map(n => {
+    const t = TYPES[n.type], meta = nodeMeta(n);
+    return `
+      <div class="node ${state.selected===n.id?'selected':''}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px">
+        <span class="accent" style="background:${t.color}"></span>
+        <div class="node-head">
+          ${iconTile(n.type)}
+          <div class="node-titles">
+            <div class="node-type" style="color:${t.color}">${t.label}</div>
+            <div class="node-title">${escapeHtml(n.title)}</div>
+          </div>
+        </div>
+        ${meta ? `<div class="node-meta">${escapeHtml(meta)}</div>` : ''}
+        ${n.type!=='START' ? '<span class="port in"></span>' : ''}
+        ${n.type!=='END' ? '<span class="port out"></span>' : ''}
+      </div>`;
+  }).join('');
+
+  elNodes.querySelectorAll('.node').forEach(el => {
+    el.addEventListener('pointerdown', (e) => onNodePointerDown(e, el.dataset.id));
+  });
+}
+
+function geom(id){
+  const n = state.nodes.find(x => x.id === id);
+  const el = elNodes.querySelector(`.node[data-id="${id}"]`);
+  const w = el ? el.offsetWidth : 232;
+  const h = el ? el.offsetHeight : 74;
+  return {x:n.x, y:n.y, w, h, cx:n.x+w, cy:n.y+h/2, lx:n.x, ly:n.y+h/2};
+}
+
+function renderEdges(){
+  elEdges.innerHTML = state.edges.map(e => {
+    const a = geom(e.from), b = geom(e.to);
+    const sx=a.cx, sy=a.cy, tx=b.lx, ty=b.ly;
+    const dx = Math.max(45, Math.abs(tx-sx)*0.45);
+    const d = `M ${sx} ${sy} C ${sx+dx} ${sy}, ${tx-dx} ${ty}, ${tx} ${ty}`;
+    const midx = (sx+tx)/2, midy = (sy+ty)/2;
+    const label = e.label ? `<text class="edge-label" x="${midx}" y="${midy-6}" text-anchor="middle">${escapeHtml(e.label)}</text>` : '';
+    return `<path class="edge ${e.dashed?'dashed':''}" d="${d}" marker-end="url(#arrow)"></path>${label}`;
+  }).join('');
+}
+
+function renderInspector(){
+  const n = state.nodes.find(x => x.id === state.selected);
+  if(!n){
+    elInspector.innerHTML = `
+      <div class="insp-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></svg>
+        <p>Selecciona un bloque del lienzo para ver y editar sus propiedades.</p>
+      </div>`;
+    return;
+  }
+  const t = TYPES[n.type];
+  elInspector.innerHTML = `
+    <div class="insp-head">
+      <div class="row">
+        <span class="ico" style="background:${t.color}1a;color:${t.color}">${ICONS[t.icon]}</span>
+        <span class="type" style="color:${t.color}">${t.label}</span>
+      </div>
+      <h3>${escapeHtml(n.title)}</h3>
+      <div class="id">${n.id}</div>
+    </div>
+    <div class="form">${n.fields.map((f,i)=>renderField(f,i)).join('')}</div>
+    <div class="danger-zone"><button onclick="removeSelected()">Eliminar bloque</button></div>
+  `;
+  elInspector.querySelectorAll('[data-fi]').forEach(inp => {
+    inp.addEventListener('input', onFieldChange);
+    inp.addEventListener('change', onFieldChange);
+  });
+}
+
+function renderField(f, i){
+  const id = `fi-${i}`;
+  if(f.kind === 'switch'){
+    return `<div class="fgroup"><label class="switch">
+      <input type="checkbox" data-fi="${i}" id="${id}" ${f.value?'checked':''}>
+      <span>${escapeHtml(f.label)}</span></label></div>`;
+  }
+  if(f.kind === 'select'){
+    return `<div class="fgroup"><label for="${id}">${escapeHtml(f.label)}</label>
+      <select data-fi="${i}" id="${id}">${f.options.map(o=>`<option ${o==f.value?'selected':''}>${escapeHtml(o)}</option>`).join('')}</select></div>`;
+  }
+  if(f.kind === 'textarea'){
+    return `<div class="fgroup"><label for="${id}">${escapeHtml(f.label)}</label>
+      <textarea data-fi="${i}" id="${id}">${escapeHtml(f.value)}</textarea></div>`;
+  }
+  return `<div class="fgroup"><label for="${id}">${escapeHtml(f.label)}</label>
+    <input type="text" data-fi="${i}" id="${id}" value="${escapeHtml(f.value)}"></div>`;
+}
+
+function onFieldChange(e){
+  const n = state.nodes.find(x => x.id === state.selected);
+  if(!n) return;
+  const i = Number(e.target.dataset.fi);
+  n.fields[i].value = (n.fields[i].kind === 'switch') ? e.target.checked : e.target.value;
+  if(n.fields[i].label === 'Nombre'){
+    n.title = n.fields[i].value || TYPES[n.type].label;
+    renderNodes(); renderEdges(); renderInspector();
+  }
+}
+
+/* ============================================================
+   Interacción: seleccionar, arrastrar, paleta, borrar
+   ============================================================ */
+function select(id){
+  state.selected = id;
+  renderNodes(); renderEdges(); renderInspector();
+}
+
+let drag = null;
+function onNodePointerDown(e, id){
+  e.stopPropagation();
+  select(id);
+  const n = state.nodes.find(x => x.id === id);
+  drag = {id, sx:e.clientX, sy:e.clientY, ox:n.x, oy:n.y, moved:false};
+  window.addEventListener('pointermove', onDragMove);
+  window.addEventListener('pointerup', onDragUp);
+}
+function onDragMove(e){
+  if(!drag) return;
+  const dx = (e.clientX - drag.sx)/state.scale;
+  const dy = (e.clientY - drag.sy)/state.scale;
+  if(Math.abs(dx)>2 || Math.abs(dy)>2) drag.moved = true;
+  const n = state.nodes.find(x => x.id === drag.id);
+  n.x = Math.round(drag.ox + dx); n.y = Math.round(drag.oy + dy);
+  const el = elNodes.querySelector(`.node[data-id="${drag.id}"]`);
+  if(el){ el.style.left = n.x+'px'; el.style.top = n.y+'px'; }
+  renderEdges();
+}
+function onDragUp(){ drag=null; window.removeEventListener('pointermove', onDragMove); window.removeEventListener('pointerup', onDragUp); }
+
+/* Pan del lienzo */
+const elCanvas = $('canvas');
+let pan = null;
+elCanvas.addEventListener('pointerdown', (e) => {
+  if(e.target.closest('.node')) return;
+  select(null);
+  pan = {sx:e.clientX, sy:e.clientY, tx:state.tx, ty:state.ty};
+  elCanvas.classList.add('panning');
+  window.addEventListener('pointermove', onPanMove);
+  window.addEventListener('pointerup', onPanUp);
+});
+function onPanMove(e){
+  if(!pan) return;
+  state.tx = pan.tx + (e.clientX - pan.sx);
+  state.ty = pan.ty + (e.clientY - pan.sy);
+  applyTransform();
+}
+function onPanUp(){ pan=null; elCanvas.classList.remove('panning'); window.removeEventListener('pointermove', onPanMove); window.removeEventListener('pointerup', onPanUp); }
+
+/* Zoom */
+function applyTransform(){
+  elWorld.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${state.scale})`;
+  $('zoomLevel').textContent = Math.round(state.scale*100) + '%';
+}
+elCanvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = elCanvas.getBoundingClientRect();
+  zoomAt(e.deltaY < 0 ? 1.1 : 0.9, e.clientX-rect.left, e.clientY-rect.top);
+}, {passive:false});
+function zoomAt(factor, px, py){
+  const ns = Math.min(2, Math.max(0.35, state.scale*factor));
+  const k = ns/state.scale;
+  state.tx = px - k*(px - state.tx);
+  state.ty = py - k*(py - state.ty);
+  state.scale = ns;
+  applyTransform();
+}
+
+/* Añadir nodo desde la paleta */
+function addNode(type){
+  const rect = elCanvas.getBoundingClientRect();
+  const wx = (rect.width/2 - state.tx)/state.scale - 116 + (Math.random()*60-30);
+  const wy = (rect.height/2 - state.ty)/state.scale - 38 + (Math.random()*60-30);
+  const id = nid();
+  const label = TYPES[type].label;
+  state.nodes.push({id, type, title: label, meta:'', x:Math.round(wx), y:Math.round(wy), fields: defaultFields(type)});
+  select(id);
+  toast(`${label} añadido al lienzo`);
+}
+
+function removeSelected(){
+  const id = state.selected; if(!id) return;
+  state.nodes = state.nodes.filter(n => n.id !== id);
+  state.edges = state.edges.filter(e => e.from !== id && e.to !== id);
+  state.selected = null;
+  renderNodes(); renderEdges(); renderInspector();
+  toast('Bloque eliminado');
+}
+
+/* ============================================================
+   Validación (simulada) y publicar
+   ============================================================ */
+const ISSUES = [
+  {level:'error', node:'n_cond', text:'La condición "¿Monto > $5.000.000?" no tiene una salida por defecto única.', where:'Condición · umbral de monto'},
+  {level:'warn',  node:'n_buy',  text:'El bucle de "Realizar compra" no tiene tope de vueltas (max_loops).', where:'Paso · Realizar compra'},
+  {level:'warn',  node:'n_start',text:'El inicio no restringe quién puede crear la solicitud.', where:'Inicio · iniciadores'},
+  {level:'info',  node:null,     text:'La versión borrador tiene cambios sin publicar.', where:'Versión v3'}
+];
+
+function togglePanel(open){
+  const isOpen = typeof open === 'boolean' ? open : !elPanel.classList.contains('open');
+  if(isOpen) renderIssues();
+  elPanel.classList.toggle('open', isOpen);
+}
+$('btnValidate').addEventListener('click', () => togglePanel());
+
+function renderIssues(){
+  elPanelBody.innerHTML = ISSUES.map((it,i) => `
+    <div class="issue ${it.level}" onclick="focusIssue(${i})">
+      <span class="dot"></span>
+      <span class="txt">${escapeHtml(it.text)}<span class="where">${escapeHtml(it.where)}</span></span>
+    </div>`).join('');
+  const errs = ISSUES.filter(i=>i.level==='error').length;
+  const warns = ISSUES.filter(i=>i.level==='warn').length;
+  elPanelFoot.innerHTML = `<span style="color:var(--danger);font-weight:600">${errs} error${errs!==1?'es':''}</span>
+    <span style="color:var(--amber);font-weight:600">${warns} advertencia${warns!==1?'s':''}</span>`;
+}
+
+function focusIssue(i){
+  const it = ISSUES[i];
+  if(!it.node) return;
+  select(it.node);
+  const el = elNodes.querySelector(`.node[data-id="${it.node}"]`);
+  if(el){ el.classList.add('pulse'); setTimeout(()=>el.classList.remove('pulse'), 2400); }
+}
+
+function publish(){
+  const errs = ISSUES.filter(i=>i.level==='error').length;
+  if(errs>0){
+    togglePanel(true);
+    toast(`No se puede publicar: ${errs} error${errs!==1?'es':''} de validación`);
+    return;
+  }
+  toast('Flujo publicado (v3) — simulado');
+}
+
+/* ============================================================
+   Utilidades
+   ============================================================ */
+function fitView(){
+  state.scale = 0.85; state.tx = 10; state.ty = 40;
+  applyTransform();
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+let toastTimer;
+function toast(msg){
+  const t = $('toast');
+  t.innerHTML = `<span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>${escapeHtml(msg)}`;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape'){ select(null); togglePanel(false); }
+  if((e.key === 'Delete' || e.key === 'Backspace') && state.selected && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){
+    e.preventDefault(); removeSelected();
+  }
+});
+
+/* ============================================================
+   Arranque
+   ============================================================ */
+function boot(){
+  renderPalette();
+  renderNodes();
+  applyTransform();
+  // medir después del primer pintado para que las aristas salgan bien
+  requestAnimationFrame(() => { renderEdges(); });
+  window.addEventListener('resize', renderEdges);
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProcesaBPM · Nuevo ticket</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B1220; --navy:#16233A; --slate:#475569; --muted:#64748B; --faint:#94A3B8;
+    --bg:#F5F6F8; --surface:#FFF; --surface-2:#F8FAFC; --surface-3:#F1F3F6;
+    --line:#E4E7EC; --line-2:#EEF1F5;
+    --accent:#0369A1; --accent-600:#075985; --accent-50:#EFF8FF; --accent-line:#BAE6FD;
+    --ok:#047857; --ok-50:#ECFDF5; --ok-line:#A7F3D0;
+    --warn:#B45309; --warn-50:#FFFBEB; --warn-line:#FDE68A;
+    --danger:#BE123C; --danger-50:#FFF1F2; --danger-line:#FECDD3;
+    --violet:#6D28D9; --violet-50:#F5F3FF; --violet-line:#DDD6FE;
+    --font:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+    --r:10px; --dur:180ms;
+    --sh-xs:0 1px 2px rgba(11,18,32,.05);
+    --sh-sm:0 1px 3px rgba(11,18,32,.07),0 1px 2px rgba(11,18,32,.04);
+  }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--font);font-size:13.5px;line-height:1.5;color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;overflow:hidden}
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+  button{cursor:pointer} svg{display:block}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .app{display:flex;height:100vh}
+
+  .sidebar{width:238px;flex:none;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column}
+  .brand{display:flex;align-items:center;gap:10px;padding:16px 16px 13px}
+  .brand .logo{width:29px;height:29px;border-radius:8px;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px}
+  .brand b{font-size:14px;font-weight:700;letter-spacing:-.015em}.brand span{display:block;font-size:10px;color:var(--faint)}
+  .nav{padding:5px 10px;flex:1}
+  .nav .sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);margin:15px 10px 6px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--slate);text-decoration:none;font-size:13px;font-weight:500;margin-bottom:1px}
+  .nav a:hover{background:var(--surface-2);color:var(--ink)}
+  .nav a.active{background:var(--accent-50);color:var(--accent-600);font-weight:600}
+  .nav a svg{width:17px;height:17px;flex:none}
+  .nav .n{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--navy);color:#fff;padding:1px 7px;border-radius:99px}
+  .side-foot{border-top:1px solid var(--line);padding:11px 12px;display:flex;align-items:center;gap:9px}
+  .side-foot b{display:block;font-size:12.5px}.side-foot span{font-size:10.5px;color:var(--faint)}
+  .ava{border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;flex:none;width:26px;height:26px;font-size:10.5px}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:54px;flex:none;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .crumb{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+  .crumb a{color:var(--muted);text-decoration:none}.crumb a:hover{color:var(--ink)}
+  .crumb svg{width:14px;height:14px;color:var(--faint)}.crumb b{color:var(--ink);font-weight:600}
+  .topbar .sp{flex:1}
+  .icon-btn{width:34px;height:34px;border:1px solid var(--line);background:var(--surface);border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+  .icon-btn:hover{background:var(--surface-2);color:var(--ink)}.icon-btn svg{width:17px;height:17px}
+
+  .scroll{flex:1;overflow-y:auto;min-height:0}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 24px 80px}
+  .pagehead{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  .pagehead h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.02em}
+  .pagehead p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+  .pagehead .sp{flex:1}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+  .col{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .rail{display:flex;flex-direction:column;gap:14px;position:sticky;top:0}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-xs)}
+  .card .ch{display:flex;align-items:center;gap:9px;padding:13px 15px;border-bottom:1px solid var(--line-2)}
+  .card .ch .num{width:22px;height:22px;border-radius:6px;background:var(--accent-50);color:var(--accent-600);display:grid;place-items:center;font-size:11px;font-weight:700;font-family:var(--mono)}
+  .card .ch h3{margin:0;font-size:13px;font-weight:700}
+  .card .ch .sp{flex:1}.card .ch .hint{font-size:11px;color:var(--faint)}
+  .card .cb{padding:16px}
+
+  .fld{margin-bottom:15px}.fld:last-child{margin-bottom:0}
+  .fld>label{display:block;font-size:11.5px;font-weight:600;color:var(--slate);margin-bottom:6px}
+  .fld>label .req{color:var(--danger)}
+  .fld .help{font-size:11px;color:var(--faint);margin-top:5px}
+  .inp,.sel,.txa{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--surface);transition:border-color var(--dur),box-shadow var(--dur)}
+  .inp:focus,.sel:focus,.txa:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-50)}
+  .txa{resize:vertical;min-height:96px;line-height:1.55}
+  .inp.money{font-family:var(--mono);font-weight:600;text-align:right}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12.5px;font-weight:600;color:var(--slate);cursor:pointer;background:var(--surface)}
+  .seg label:has(input:checked){border-color:var(--accent);background:var(--accent-50);color:var(--accent-600)}
+  .seg input{accent-color:var(--accent)}
+  .seg .dot{width:8px;height:8px;border-radius:50%}
+
+  .editor{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .editor:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-50)}
+  .editor .tb{display:flex;align-items:center;gap:1px;padding:6px 8px;border-bottom:1px solid var(--line-2);background:var(--surface-2)}
+  .editor .tb button{border:none;background:transparent;color:var(--muted);min-width:28px;height:28px;border-radius:6px;font-size:12px;font-weight:600}
+  .editor .tb button:hover{background:var(--line-2);color:var(--ink)}
+  .editor textarea{border:none;outline:none;width:100%;min-height:110px;padding:12px;resize:vertical;font-family:inherit;line-height:1.55}
+
+  .dropzone{border:1px dashed var(--line);border-radius:9px;padding:14px;display:flex;align-items:center;gap:11px;background:var(--surface-2);cursor:pointer}
+  .dropzone:hover{border-color:var(--accent);background:var(--accent-50)}
+  .dropzone .di{width:34px;height:34px;border-radius:8px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;color:var(--accent);flex:none}
+  .dropzone .di svg{width:17px;height:17px}
+  .dropzone b{font-size:12.5px}.dropzone span{font-size:11px;color:var(--faint);display:block}
+
+  .actions{display:flex;align-items:center;gap:10px;padding:14px 15px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-xs)}
+  .actions .sp{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-size:12.5px;font-weight:600;color:var(--ink);box-shadow:var(--sh-xs)}
+  .btn:hover{background:var(--surface-2);border-color:#D6DAE1}
+  .btn svg{width:15px;height:15px}
+  .btn.accent{background:var(--navy);border-color:var(--navy);color:#fff}.btn.accent:hover{background:#0E1930}
+  .btn.ghost{box-shadow:none;border-color:transparent;background:transparent;color:var(--muted)}.btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
+
+  /* rail */
+  .flowmini{display:flex;flex-direction:column;gap:0}
+  .fmstep{display:flex;align-items:center;gap:11px;padding:7px 0;position:relative}
+  .fmstep .fd{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;flex:none;background:var(--surface-3);color:var(--faint)}
+  .fmstep .fd svg{width:13px;height:13px}
+  .fmstep.first .fd{background:var(--ok-50);color:var(--ok)}
+  .fmstep.last .fd{background:var(--line-2);color:var(--slate)}
+  .fmstep .ft{font-size:12.5px;font-weight:600}
+  .fmstep .fs{font-size:10.5px;color:var(--faint)}
+  .fmstep:not(:last-child)::after{content:'';position:absolute;left:11px;top:32px;bottom:-6px;width:2px;background:var(--line)}
+  .det{list-style:none;margin:0;padding:0}
+  .det li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+  .det li:last-child{border-bottom:none}
+  .det .k{color:var(--faint)}.det .v{font-weight:600;text-align:right}
+  .tip{display:flex;gap:9px;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .tip svg{width:15px;height:15px;color:var(--accent);flex:none;margin-top:1px}
+
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(16px);background:var(--navy);color:#fff;font-size:13px;font-weight:500;padding:10px 16px;border-radius:9px;box-shadow:0 12px 32px rgba(11,18,32,.3);opacity:0;pointer-events:none;transition:.2s;z-index:120;display:flex;align-items:center;gap:9px;max-width:92vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast svg{width:15px;height:15px;color:#4ADE80}
+
+  @media (max-width:1000px){.grid{grid-template-columns:1fr}.rail{position:static}}
+  @media (max-width:760px){.sidebar{display:none}.grid2,.grid3{grid-template-columns:1fr}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="logo">P</span><div><b>ProcesaBPM</b><span>Organización demo</span></div></div>
+    <nav class="nav">
+      <div class="sec">Operación</div>
+      <a href="#" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h5l1.5 3h5L16 12h5"/><path d="M5 5h14l2 7v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></svg>Bandejas<span class="n">24</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5V15a3 3 0 0 0 3 3h6.5"/></svg>Flujos</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Reportes</a>
+      <div class="sec">Configuración</div>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>Catálogo</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3"/></svg>Personas</a>
+    </nav>
+    <div class="side-foot"><span class="ava" style="background:#6D28D9">MG</span><div><b>Marta Gómez</b><span>Solicitante</span></div></div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb"><a href="#" onclick="return go('tickets.html')">Tickets</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg><b>Nuevo ticket</b></div>
+      <div class="sp"></div>
+      <button class="icon-btn" title="Ayuda" onclick="toast('Ayuda (simulada)')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7v.3M12 17h.01"/></svg></button>
+    </header>
+
+    <div class="scroll">
+      <div class="wrap">
+        <div class="pagehead">
+          <div><h1>Nuevo ticket</h1><p>Elige el tipo de solicitud; los campos cambian según el flujo asociado.</p></div>
+          <div class="sp"></div>
+          <span class="mono" style="font-size:11px;color:var(--faint)">Borrador sin guardar</span>
+        </div>
+
+        <div class="grid">
+          <div class="col">
+
+            <!-- Tipo de solicitud -->
+            <section class="card">
+              <div class="ch"><span class="num">1</span><h3>Tipo de solicitud</h3><div class="sp"></div><span class="hint">define el flujo</span></div>
+              <div class="cb">
+                <div class="grid3">
+                  <div class="fld"><label for="empresa">Empresa <span class="req">*</span></label>
+                    <select class="sel" id="empresa"><option>Empresa principal</option><option>Empresa filial</option></select></div>
+                  <div class="fld"><label for="cat">Categoría <span class="req">*</span></label>
+                    <select class="sel" id="cat" onchange="syncCat()">
+                      <option value="cartera">Cartera</option>
+                      <option value="credito">Crédito</option>
+                      <option value="compras">Compras</option>
+                      <option value="talento">Talento humano</option>
+                    </select></div>
+                  <div class="fld"><label for="sub">Subcategoría <span class="req">*</span></label>
+                    <select class="sel" id="sub" onchange="syncFlow()"></select></div>
+                </div>
+                <div class="fld" style="margin-bottom:0"><label>Prioridad de la solicitud</label>
+                  <div class="seg">
+                    <label><input type="radio" name="prio" value="Alta" onchange="syncPrio(this)"><span class="dot" style="background:#BE123C"></span>Alta</label>
+                    <label><input type="radio" name="prio" value="Media" checked onchange="syncPrio(this)"><span class="dot" style="background:#B45309"></span>Media</label>
+                    <label><input type="radio" name="prio" value="Baja" onchange="syncPrio(this)"><span class="dot" style="background:#047857"></span>Baja</label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Datos de la solicitud -->
+            <section class="card">
+              <div class="ch"><span class="num">2</span><h3>Datos de la solicitud</h3><div class="sp"></div><span class="hint">campos del paso inicial</span></div>
+              <div class="cb">
+                <div class="fld"><label for="asunto">Asunto <span class="req">*</span></label>
+                  <input class="inp" id="asunto" placeholder="Resume la solicitud en una línea"></div>
+
+                <div class="grid2">
+                  <div class="fld"><label for="monto">Monto</label>
+                    <input class="inp money" id="monto" inputmode="numeric" placeholder="$ 0" oninput="fmtMoney(this)"></div>
+                  <div class="fld"><label for="fecha">Fecha del pago</label>
+                    <input class="inp" id="fecha" type="date"></div>
+                </div>
+
+                <div class="fld"><label for="tipoPago">Tipo de pago</label>
+                  <select class="sel" id="tipoPago">
+                    <option>Abono a capital</option><option>Cuota completa</option><option>Pago parcial</option><option>Pago de intereses</option>
+                  </select></div>
+
+                <div class="fld"><label for="desc">Descripción</label>
+                  <div class="editor">
+                    <div class="tb"><button title="Negrita"><b>B</b></button><button title="Cursiva"><i>I</i></button><button title="Lista">• Lista</button><button title="Enlace">🔗</button></div>
+                    <textarea id="desc" placeholder="Detalla la solicitud…"></textarea>
+                  </div>
+                </div>
+
+                <div class="fld" style="margin-bottom:0"><label>Adjuntos</label>
+                  <div class="dropzone" onclick="toast('Seleccionar archivos (simulado)')">
+                    <span class="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+                    <div><b>Arrastra archivos o haz clic para subir</b><span>PDF, imágenes y Office · máx. 15 archivos, 4 MB cada uno</span></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div class="actions">
+              <button class="btn ghost" onclick="go('tickets.html')">Cancelar</button>
+              <div class="sp"></div>
+              <button class="btn" onclick="toast('Borrador guardado (simulado)')">Guardar borrador</button>
+              <button class="btn accent" id="createBtn" onclick="create()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                Crear y enviar
+              </button>
+            </div>
+          </div>
+
+          <!-- Rail -->
+          <aside class="rail">
+            <section class="card">
+              <div class="ch"><h3>Flujo que se iniciará</h3></div>
+              <div class="cb"><div class="flowmini" id="flowMini"></div>
+                <div style="margin-top:10px" class="tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><span>El primer paso del flujo recibe el ticket al crearlo y arranca su reloj de SLA.</span></div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="ch"><h3>Resumen</h3></div>
+              <div class="cb"><ul class="det">
+                <li><span class="k">Empresa</span><span class="v" id="rEmp">Empresa principal</span></li>
+                <li><span class="k">Categoría</span><span class="v" id="rCat">Cartera</span></li>
+                <li><span class="k">Subcategoría</span><span class="v" id="rSub">—</span></li>
+                <li><span class="k">Prioridad</span><span class="v" id="rPrio">Media</span></li>
+                <li><span class="k">SLA primer paso</span><span class="v mono" id="rSla">2 días hábiles</span></li>
+              </ul></div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const $=s=>document.querySelector(s);
+  let tt;
+  function toast(m){const t=$('#toast');t.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'+m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2300);}
+  function go(u){location.href=u;return false;}
+
+  /* Catálogo: categoría → subcategorías (cada una es un flujo) */
+  const SUBS = {
+    cartera: [
+      {id:'pago', name:'Confirmación de pago', sla:'2 días hábiles', flow:['Inicio','Registrar solicitud','Validación de cartera','Visto bueno del jefe','Carta de paz y salvo','Fin']},
+      {id:'extracto', name:'Reclamación de extracto', sla:'3 días hábiles', flow:['Inicio','Registrar reclamación','Análisis de cartera','Respuesta al solicitante','Fin']},
+    ],
+    credito: [
+      {id:'nuevo', name:'Solicitud de crédito', sla:'5 días hábiles', flow:['Inicio','Registrar solicitud','Estudio de crédito','Comité de crédito','Desembolso','Fin']},
+      {id:'modificacion', name:'Modificación de crédito', sla:'4 días hábiles', flow:['Inicio','Registrar solicitud','Análisis','Aprobación','Fin']},
+    ],
+    compras: [
+      {id:'insumos', name:'Compra de insumos', sla:'3 días hábiles', flow:['Inicio','Registrar solicitud','Cotización','Aprobación del jefe','Orden de compra','Fin']},
+    ],
+    talento: [
+      {id:'certificado', name:'Certificado laboral', sla:'1 día hábil', flow:['Inicio','Registrar solicitud','Elaboración','Firma','Fin']},
+      {id:'permiso', name:'Permiso de salida', sla:'1 día hábil', flow:['Inicio','Registrar solicitud','Aprobación del jefe','Fin']},
+    ],
+  };
+  const ICONS={
+    'Inicio':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M8 5.5v13l11-6.5z"/></svg>',
+    'Fin':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="6" width="12" height="12" rx="2.5"/></svg>',
+    'def':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/></svg>'
+  };
+
+  function syncCat(){
+    const c=$('#cat').value, subs=SUBS[c]||[];
+    $('#sub').innerHTML = subs.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+    $('#rCat').textContent = $('#cat').selectedOptions[0].textContent;
+    syncFlow();
+  }
+  function syncFlow(){
+    const c=$('#cat').value, id=$('#sub').value;
+    const s=(SUBS[c]||[]).find(x=>x.id===id)||(SUBS[c]||[])[0];
+    if(!s) return;
+    $('#rSub').textContent = s.name;
+    $('#rSla').textContent = s.sla;
+    $('#flowMini').innerHTML = s.flow.map((name,i)=>{
+      const cls = i===0?'first':(i===s.flow.length-1?'last':'');
+      const ic = name==='Inicio'?ICONS['Inicio']:name==='Fin'?ICONS['Fin']:ICONS.def;
+      return `<div class="fmstep ${cls}"><span class="fd">${ic}</span><div><div class="ft">${name}</div><div class="fs">${i===0?'paso inicial':(i===s.flow.length-1?'cierra el ticket':'paso del flujo')}</div></div></div>`;
+    }).join('');
+  }
+  function syncPrio(el){ $('#rPrio').textContent = el.value;
+    const map={Alta:'#BE123C',Media:'#B45309',Baja:'#047857'};
+    $('#rPrio').style.color = map[el.value]; }
+  function fmtMoney(el){
+    const n = el.value.replace(/[^\d]/g,'');
+    el.value = n ? '$ '+Number(n).toLocaleString('es-CO') : '';
+  }
+  $('#empresa').addEventListener('change',e=>$('#rEmp').textContent=e.target.value);
+
+  function create(){
+    const asunto=$('#asunto').value.trim();
+    if(!asunto){$('#asunto').focus();$('#asunto').style.borderColor='var(--danger)';toast('Escribe el asunto de la solicitud');return;}
+    toast('Ticket creado · se inició el flujo y se notificó al primer responsable');
+  }
+
+  syncCat();
+</script>
+</body>
+</html>
