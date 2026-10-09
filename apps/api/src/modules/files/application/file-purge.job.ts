@@ -5,6 +5,7 @@ import { WorkerTransactionRunner } from '../../../infrastructure/database/worker
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
 import { StoredFileRepository } from '../data/stored-file.repository.js';
 import { TenantUsageRepository } from '../data/tenant-usage.repository.js';
+import { QuotaWarningService } from './quota-warning.service.js';
 
 export const STALE_UPLOAD_AGE_MS = 24 * 60 * 60 * 1000;
 export const PURGE_TENANT_BATCH = 100;
@@ -24,6 +25,7 @@ export class FilePurgeJob {
     @Inject(Clock) private readonly clock: Clock,
     @Inject(StoredFileRepository) private readonly files: StoredFileRepository,
     @Inject(TenantUsageRepository) private readonly usage: TenantUsageRepository,
+    @Inject(QuotaWarningService) private readonly warnings: QuotaWarningService,
     @Inject(ObjectStorage) private readonly storage: ObjectStorage,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
@@ -54,10 +56,12 @@ export class FilePurgeJob {
       const pending = sum('PENDING');
       const confirmed = sum('CONFIRMED');
       if (current.reservedBytes < pending || current.usedBytes < confirmed) this.logger.warn(`Usage counter of tenant ${tenantId} was lower than the purged files`, 'FilePurgeJob');
+      const freed = confirmed > current.usedBytes ? current.usedBytes : confirmed;
       await this.usage.adjust(tx, tenantId, {
         reservedBytes: -(pending > current.reservedBytes ? current.reservedBytes : pending),
-        usedBytes: -(confirmed > current.usedBytes ? current.usedBytes : confirmed),
+        usedBytes: -freed,
       });
+      await this.warnings.sync(tx, tenantId, current, current.usedBytes - freed);
       return batch;
     });
     const { failed } = await this.storage.deleteMany(stale.map((file) => file.storageKey));

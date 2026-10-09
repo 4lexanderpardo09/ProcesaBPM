@@ -31,6 +31,11 @@ export class WebLinks {
     return this.build('/data-exports', { tenant: tenantId });
   }
 
+  /** The organization's storage usage page (settings). */
+  storageUsage(tenantId: string): string {
+    return this.build('/settings/storage', { tenant: tenantId });
+  }
+
   private build(path: string, query?: Record<string, string>, token?: string): string {
     // Relative to the base so that an app served under a path (https://host/app) keeps it.
     const base = this.settings.WEB_BASE_URL.endsWith('/') ? this.settings.WEB_BASE_URL : `${this.settings.WEB_BASE_URL}/`;

@@ -38,3 +38,15 @@ export function storageState(limits: QuotaLimits, usage: QuotaUsage): StorageSta
   if (total >= limits.hardLimitBytes) return 'BLOCKED';
   return total > limits.limitBytes ? 'OVER_LIMIT' : 'OK';
 }
+
+export type QuotaWarningLevel = 0 | 80 | 95;
+
+/**
+ * The highest warning threshold the stored bytes reached, as a percentage of what the plan includes (the grace margin
+ * is beyond it). Reservations do not count: they are uploads in flight, and a failed one would warn for nothing.
+ */
+export function quotaWarningLevel(limits: QuotaLimits, usedBytes: bigint): QuotaWarningLevel {
+  if (usedBytes <= 0n) return 0;
+  for (const level of [95, 80] as const) if (usedBytes * 100n >= limits.limitBytes * BigInt(level)) return level;
+  return 0;
+}

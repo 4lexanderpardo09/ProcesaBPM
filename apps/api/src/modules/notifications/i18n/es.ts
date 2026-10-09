@@ -17,6 +17,15 @@ export const notificationsEs = {
     STORAGE_QUOTA: () => 'Tu organización se acerca al límite de almacenamiento',
     SYSTEM: () => 'Aviso de ProcesaBPM',
   } satisfies Record<NotificationTypeValue, (ticketNumber: string) => string>,
+  storageQuota: {
+    body: (level: number, used: string, limit: string) =>
+      level >= 95
+        ? `Tu organización ya usa el ${level} % del almacenamiento de su plan (${used} de ${limit}). Pasado el límite y su margen, no se podrán subir más archivos.`
+        : `Tu organización ya usa el ${level} % del almacenamiento de su plan (${used} de ${limit}).`,
+    advice: 'Puedes ampliar el almacenamiento con tu plan o liberar espacio. Los documentos que genera el sistema se siguen guardando aunque se llegue al límite.',
+    action: 'Ver el almacenamiento',
+    why: (organization: string) => `Recibes este correo porque administras «${organization}». Puedes cambiar qué avisos recibes en tus preferencias de notificaciones.`,
+  },
   email: {
     greeting: (firstName: string) => `Hola ${firstName},`,
     ticketLine: (title: string) => `Ticket: ${title}`,
