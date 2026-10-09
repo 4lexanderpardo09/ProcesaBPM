@@ -81,6 +81,15 @@ describe('text templates', () => {
     expect((await owner.client.put(`/text-templates/${tpl.id}/shares`, { userIds: [stranger, other.userId] }).expect(200)).body).toEqual([other.userId]);
   });
 
+  it('drops a share to an invitee or an inactive member, without revealing who they are', async () => {
+    const tpl = await create(owner);
+    const [invited, inactive] = [await world.member([]), await world.member([])];
+    const setStatus = (userId: string, status: string) => db.owner.query('UPDATE memberships SET status = $3 WHERE tenant_id = $1 AND user_id = $2', [world.tenant.tenantId, userId, status]);
+    await setStatus(invited.userId, 'INVITED');
+    await setStatus(inactive.userId, 'INACTIVE');
+    expect((await owner.client.put(`/text-templates/${tpl.id}/shares`, { userIds: [invited.userId, inactive.userId, other.userId] }).expect(200)).body).toEqual([other.userId]);
+  });
+
   it('deleting removes it for everyone it was shared with', async () => {
     const tpl = await create(owner);
     await owner.client.put(`/text-templates/${tpl.id}/shares`, { userIds: [other.userId] }).expect(200);

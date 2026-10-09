@@ -38,6 +38,9 @@ export const ALLOWED_FILE_TYPES: Readonly<Record<string, AllowedFileType>> = {
   zip: { format: 'ZIP', kind: 'ZIP', mime: 'application/zip' },
 };
 
+/** The images a generated PDF can draw (signatures, logos): any other image would be left out of the document. */
+export const PDF_IMAGE_MIME_TYPES: readonly string[] = ['image/png', 'image/jpeg'];
+
 export function extensionOf(fileName: string): string {
   const dot = fileName.lastIndexOf('.');
   return dot < 0 ? '' : fileName.slice(dot + 1).toLowerCase();

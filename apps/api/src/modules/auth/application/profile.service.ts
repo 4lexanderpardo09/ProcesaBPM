@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidStateError, type MeResponse, NotFoundError, type SetSignatureRequest, type SignatureResponse, UnauthenticatedError, type UpdateProfileRequest } from '@procesabpm/shared';
+import { InvalidStateError, type MeResponse, NotFoundError, PDF_IMAGE_MIME_TYPES, type SetSignatureRequest, type SignatureResponse, UnauthenticatedError, type UpdateProfileRequest } from '@procesabpm/shared';
 import type { Principal } from '../../../common/auth/principal.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -42,7 +42,8 @@ export class ProfileService {
     return this.runner.withTenantTransaction(async (tx) => {
       const file = await this.profiles.findOwnConfirmedFile(tx, principal.tenantId, principal.userId, request.fileId);
       if (file === null) throw new NotFoundError();
-      if (!file.mimeType.startsWith('image/')) throw new InvalidStateError('The signature must be a PNG or JPEG image');
+      // Only what the PDFs can draw: a WEBP or HEIC signature would be accepted here and silently missing from every document.
+      if (!PDF_IMAGE_MIME_TYPES.includes(file.mimeType)) throw new InvalidStateError('The signature must be a PNG or JPEG image');
       await this.profiles.linkSignature(tx, principal.tenantId, principal.userId, file.id);
     });
   }

@@ -122,9 +122,15 @@ export class StoredFileRepository {
     return tx.storedFile.count({ where: { tenantId, uploadedById: uploaderId, status: 'PENDING' } });
   }
 
-  /** Bytes the person uploaded (reserved or confirmed) and has not attached yet. */
+  /**
+   * Bytes the person uploaded (reserved or confirmed) and has not attached yet. Their signature is in use although it is
+   * never linked to a record, so it does not count: otherwise it would hold part of the quota for good.
+   */
   async unlinkedBytes(tx: TenantTransaction, tenantId: string, uploaderId: string): Promise<bigint> {
-    const { _sum } = await tx.storedFile.aggregate({ where: { tenantId, uploadedById: uploaderId, origin: 'USER', linkedAt: null, status: { in: ['PENDING', 'CONFIRMED'] } }, _sum: { sizeBytes: true } });
+    const { _sum } = await tx.storedFile.aggregate({
+      where: { tenantId, uploadedById: uploaderId, origin: 'USER', linkedAt: null, status: { in: ['PENDING', 'CONFIRMED'] }, membershipSignatures: { none: {} } },
+      _sum: { sizeBytes: true },
+    });
     return _sum.sizeBytes ?? 0n;
   }
 

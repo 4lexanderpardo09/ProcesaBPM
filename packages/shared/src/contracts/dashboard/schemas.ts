@@ -1,6 +1,6 @@
 /** The signed-in member's own counters. Everything is scoped to what they may read. */
 export interface DashboardStatsResponse {
-  /** Open tickets assigned to them. */
+  /** Open or paused tickets assigned to them: the same tickets as the pending list. */
   readonly myOpen: number;
   /** Of those, the ones past their SLA. */
   readonly myOverdue: number;

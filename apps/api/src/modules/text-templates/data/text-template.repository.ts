@@ -91,10 +91,13 @@ export class TextTemplateRepository {
     await tx.textTemplateShare.createMany({ data: userIds.map((userId) => ({ tenantId, templateId, userId })) });
   }
 
-  /** The members of the tenant among the given ids: a share to an outsider is dropped, never written. */
+  /**
+   * The active members of the tenant among the given ids: a share to an outsider, an invitee or an inactive member is
+   * dropped, never written (and the answer does not reveal who has a pending invitation).
+   */
   async memberIdsAmong(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<string[]> {
     if (userIds.length === 0) return [];
-    const rows = await tx.membership.findMany({ where: { tenantId, userId: { in: [...userIds] } }, select: { userId: true } });
+    const rows = await tx.membership.findMany({ where: { tenantId, userId: { in: [...userIds] }, status: 'ACTIVE' }, select: { userId: true } });
     return rows.map((row) => row.userId);
   }
 }

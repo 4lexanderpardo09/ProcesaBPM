@@ -11,6 +11,8 @@ export interface PendingTicketRow {
   readonly dueAt: Date | null;
 }
 
+const TICKET_SELECT = { id: true, number: true, title: true, status: true, currentStepId: true, createdAt: true } as const;
+
 /** Every query carries the access filter (the tickets the caller may read) on top of the tenant. */
 @Injectable()
 export class DashboardRepository {
@@ -18,29 +20,29 @@ export class DashboardRepository {
     return tx.ticket.count({ where: { AND: [{ tenantId, deletedAt: null }, ...filters] } as never });
   }
 
+  /**
+   * The tickets waiting on the member, most urgent first. The order is decided in the database, before the limit: the
+   * tickets with a running SLA clock of theirs come by due date, and only the room left goes to the rest (newest first).
+   * Sorting after a `take` by number would drop the most overdue tickets of anyone with more than `take` pending.
+   */
   async pending(tx: TenantTransaction, tenantId: string, userId: string, access: Record<string, unknown>, take: number): Promise<PendingTicketRow[]> {
-    const rows = await tx.ticket.findMany({
-      where: { AND: [{ tenantId, deletedAt: null, status: { in: ['OPEN', 'PAUSED'] }, assignees: { some: { tenantId, userId } } }, access] } as never,
-      select: {
-        id: true,
-        number: true,
-        title: true,
-        status: true,
-        currentStepId: true,
-        createdAt: true,
-        slaClocks: { where: { responsibleId: userId, completedAt: null, pausedAt: null }, select: { dueAt: true }, orderBy: { startedAt: 'desc' }, take: 1 },
-      },
-      orderBy: { number: 'desc' },
+    const waiting = { AND: [{ tenantId, deletedAt: null, status: { in: ['OPEN', 'PAUSED'] }, assignees: { some: { tenantId, userId } } }, access] };
+    const clocks = await tx.ticketSlaClock.findMany({
+      where: { tenantId, responsibleId: userId, completedAt: null, pausedAt: null, dueAt: { not: null }, ticket: waiting } as never,
+      select: { dueAt: true, ticket: { select: TICKET_SELECT } },
+      orderBy: [{ dueAt: 'asc' }, { ticketId: 'asc' }],
       take,
     });
-    return rows.map((row) => ({
-      id: row.id,
-      number: row.number,
-      title: row.title,
-      status: row.status,
-      currentStepId: row.currentStepId,
-      createdAt: row.createdAt,
-      dueAt: row.slaClocks[0]?.dueAt ?? null,
-    }));
+    // One clock per ticket and person is the rule; the earliest due wins if there were ever two.
+    const due = new Map<string, PendingTicketRow>();
+    for (const clock of clocks) if (!due.has(clock.ticket.id)) due.set(clock.ticket.id, { ...clock.ticket, dueAt: clock.dueAt });
+    if (due.size >= take) return [...due.values()];
+    const rest = await tx.ticket.findMany({
+      where: { AND: [waiting, { id: { notIn: [...due.keys()] } }] } as never,
+      select: TICKET_SELECT,
+      orderBy: { number: 'desc' },
+      take: take - due.size,
+    });
+    return [...due.values(), ...rest.map((row) => ({ ...row, dueAt: null }))];
   }
 }
