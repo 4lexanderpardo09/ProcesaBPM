@@ -779,6 +779,8 @@ model TenantUsage {
   tenantId      String   @id @map("tenant_id") @db.Uuid
   bytesUsed     BigInt   @default(0) @map("bytes_used")
   bytesReserved BigInt   @default(0) @map("bytes_reserved")
+  /// The highest storage warning already announced (0, 80 or 95 % of the plan's limit): each threshold is announced once.
+  quotaWarningLevel Int  @default(0) @map("quota_warning_level") @db.SmallInt
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)

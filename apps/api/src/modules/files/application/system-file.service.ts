@@ -6,6 +6,7 @@ import { StoredFileRepository } from '../data/stored-file.repository.js';
 import { TenantUsageRepository } from '../data/tenant-usage.repository.js';
 import { TicketDocumentRepository } from '../data/ticket-document.repository.js';
 import { quotaLimits, storageState } from '../domain/quota-policy.js';
+import { QuotaWarningService } from './quota-warning.service.js';
 
 export interface GeneratedDocument {
   readonly fileId: string;
@@ -32,6 +33,7 @@ export class SystemFileService {
     @Inject(StoredFileRepository) private readonly files: StoredFileRepository,
     @Inject(TenantUsageRepository) private readonly usage: TenantUsageRepository,
     @Inject(TicketDocumentRepository) private readonly documents: TicketDocumentRepository,
+    @Inject(QuotaWarningService) private readonly warnings: QuotaWarningService,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
 
@@ -50,6 +52,7 @@ export class SystemFileService {
     await this.usage.adjust(tx, tenantId, { usedBytes: BigInt(document.sizeBytes) });
     await this.documents.publishNewVersion(tx, tenantId, document);
     await this.warnIfOverQuota(tx, tenantId, before.usedBytes + before.reservedBytes + BigInt(document.sizeBytes));
+    await this.warnings.sync(tx, tenantId, before, before.usedBytes + BigInt(document.sizeBytes));
     return 'recorded';
   }
 

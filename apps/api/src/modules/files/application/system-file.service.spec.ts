@@ -4,6 +4,7 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 import type { StoredFileRepository } from '../data/stored-file.repository.js';
 import type { TenantUsageRepository } from '../data/tenant-usage.repository.js';
 import type { TicketDocumentRepository } from '../data/ticket-document.repository.js';
+import type { QuotaWarningService } from './quota-warning.service.js';
 import { type GeneratedDocument, SystemFileService } from './system-file.service.js';
 
 const TENANT = '0199a000-0000-7000-8000-000000000001';
@@ -39,7 +40,8 @@ function setup(options: { recorded?: boolean; used?: bigint; terms?: { base: big
     publishNewVersion: async () => void calls.push('publish'),
   } as unknown as TicketDocumentRepository;
   const logger = { warn: (message: unknown) => warnings.push(message) } as unknown as JsonLogger;
-  return { service: new SystemFileService(files, usage, documents, logger), calls, warnings };
+  const quota = { sync: async (_tx: unknown, _tenant: string, _before: unknown, used: bigint) => void calls.push(`syncQuota:${used}`) } as unknown as QuotaWarningService;
+  return { service: new SystemFileService(files, usage, documents, quota, logger), calls, warnings };
 }
 
 const tx = {} as TenantTransaction;
@@ -48,7 +50,7 @@ describe('SystemFileService.recordGeneratedDocument', () => {
   it('serializes the ticket, stores the file, counts its bytes and publishes the version, in that order', async () => {
     const { service, calls } = setup();
     expect(await service.recordGeneratedDocument(tx, TENANT, document)).toBe('recorded');
-    expect(calls).toEqual(['lockVersions', 'insertFile', 'lockUsage', 'adjust:500', 'publish']);
+    expect(calls).toEqual(['lockVersions', 'insertFile', 'lockUsage', 'adjust:500', 'publish', 'syncQuota:500']);
   });
 
   it('recording the same file again changes nothing', async () => {

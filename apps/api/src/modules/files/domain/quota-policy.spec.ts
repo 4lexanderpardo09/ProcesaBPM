@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateReservation, quotaLimits, storageState } from './quota-policy.js';
+import { evaluateReservation, quotaLimits, quotaWarningLevel, storageState } from './quota-policy.js';
 
 const GB = 1024n ** 3n;
 const trial = { baseBytes: GB, perUserBytes: 0n, gracePercent: 5, extraBytes: 0n, activeUsers: 7 };
@@ -42,5 +42,23 @@ describe('storageState', () => {
     expect(storageState(limits, { usedBytes: GB, reservedBytes: 0n })).toBe('OK');
     expect(storageState(limits, { usedBytes: GB + 1n, reservedBytes: 0n })).toBe('OVER_LIMIT');
     expect(storageState(limits, { usedBytes: limits.hardLimitBytes, reservedBytes: 0n })).toBe('BLOCKED');
+  });
+});
+
+describe('quotaWarningLevel', () => {
+  const limits = { limitBytes: 1000n, hardLimitBytes: 1100n };
+
+  it('is the highest threshold reached, of the plan limit (not of the grace margin)', () => {
+    expect(quotaWarningLevel(limits, 0n)).toBe(0);
+    expect(quotaWarningLevel(limits, 799n)).toBe(0);
+    expect(quotaWarningLevel(limits, 800n)).toBe(80);
+    expect(quotaWarningLevel(limits, 949n)).toBe(80);
+    expect(quotaWarningLevel(limits, 950n)).toBe(95);
+    expect(quotaWarningLevel(limits, 1050n)).toBe(95);
+  });
+
+  it('a plan without storage warns at the first byte, and never for an empty organization', () => {
+    expect(quotaWarningLevel({ limitBytes: 0n, hardLimitBytes: 0n }, 0n)).toBe(0);
+    expect(quotaWarningLevel({ limitBytes: 0n, hardLimitBytes: 0n }, 1n)).toBe(95);
   });
 });

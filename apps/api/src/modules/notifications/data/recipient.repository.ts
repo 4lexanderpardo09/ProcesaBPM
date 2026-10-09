@@ -37,6 +37,16 @@ export class RecipientRepository {
     }));
   }
 
+  /** The owner and the members with an active administrator role, among the active members of active accounts. */
+  async administratorIds(tx: TenantTransaction, tenantId: string): Promise<string[]> {
+    const members = await tx.membership.findMany({
+      where: { tenantId, status: 'ACTIVE', user: { status: { not: 'DISABLED' } }, OR: [{ isOwner: true }, { role: { isAdmin: true, isActive: true } }] },
+      select: { userId: true },
+      orderBy: { userId: 'asc' },
+    });
+    return members.map((member) => member.userId);
+  }
+
   async preferences(tx: TenantTransaction, tenantId: string, userIds: readonly string[], types: readonly NotificationTypeValue[]): Promise<Map<string, Channels>> {
     if (userIds.length === 0) return new Map();
     const rows = await tx.notificationPreference.findMany({ where: { tenantId, userId: { in: [...userIds] }, type: { in: [...types] } }, select: { userId: true, type: true, inApp: true, email: true } });

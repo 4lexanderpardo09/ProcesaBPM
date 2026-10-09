@@ -5,7 +5,8 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 
 export interface NewNotification {
   readonly userId: string;
-  readonly ticketId: string;
+  /** `null` for the notices about the organization itself (storage), not about a ticket. */
+  readonly ticketId: string | null;
   readonly type: NotificationTypeValue;
   readonly title: string;
   readonly body: string;

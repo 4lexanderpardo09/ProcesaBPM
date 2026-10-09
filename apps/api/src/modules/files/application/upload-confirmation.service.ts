@@ -9,6 +9,7 @@ import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js
 import { StoredFileRepository, type StoredFileRow } from '../data/stored-file.repository.js';
 import { TenantUsageRepository } from '../data/tenant-usage.repository.js';
 import { toStoredFileResponse } from './file-responses.js';
+import { QuotaWarningService } from './quota-warning.service.js';
 
 type Verdict = { readonly ok: true; readonly mimeType: string } | { readonly ok: false; readonly reason: FileRejectionReason };
 
@@ -26,6 +27,7 @@ export class UploadConfirmationService {
     @Inject(Clock) private readonly clock: Clock,
     @Inject(StoredFileRepository) private readonly files: StoredFileRepository,
     @Inject(TenantUsageRepository) private readonly usage: TenantUsageRepository,
+    @Inject(QuotaWarningService) private readonly warnings: QuotaWarningService,
     @Inject(ObjectStorage) private readonly storage: ObjectStorage,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
@@ -67,10 +69,11 @@ export class UploadConfirmationService {
     if (locked === null) throw new NotFoundError();
     if (locked.status === 'CONFIRMED') return locked;
 
-    await this.usage.lock(tx, tenantId);
+    const before = await this.usage.lock(tx, tenantId);
     const at = this.clock.now();
     await this.files.confirm(tx, tenantId, id, mimeType, at);
     await this.usage.adjust(tx, tenantId, { reservedBytes: -locked.sizeBytes, usedBytes: locked.sizeBytes });
+    await this.warnings.sync(tx, tenantId, before, before.usedBytes + locked.sizeBytes);
     return { ...locked, status: 'CONFIRMED', mimeType, confirmedAt: at };
   }
 
