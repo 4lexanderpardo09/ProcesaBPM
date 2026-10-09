@@ -5,6 +5,8 @@ export const PASSWORD_RESET_EVENT = 'email.password_reset';
 export const INVITATION_EVENT = 'email.invitation';
 export const PLATFORM_ADMIN_INVITATION_EVENT = 'email.platform_admin_invitation';
 export const TENANT_DELETION_REQUESTED_EVENT = 'email.tenant_deletion_requested';
+/** Queued only by `enqueue_due_purge_reminders` (B17), together with the level it records on the tenant. */
+export const TENANT_PURGE_REMINDER_EVENT = 'email.tenant_purge_reminder';
 /** Queued only through `enqueue_security_notice` (the database refuses it in `enqueue_platform_event`). */
 export const SECURITY_NOTICE_EVENT = 'email.security_notice';
 
@@ -37,6 +39,8 @@ export type MemberSecurityNoticeKind = (typeof MEMBER_SECURITY_NOTICE_KINDS)[num
 export const passwordResetPayloadSchema = z.object({ userId: uuidSchema }).strict();
 export const platformAdminInvitationPayloadSchema = z.object({ userId: uuidSchema }).strict();
 export const tenantDeletionRequestedPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
+export const tenantPurgeReminderPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema, daysLeft: z.union([z.literal(7), z.literal(1)]) }).strict();
+export type TenantPurgeReminderPayload = z.infer<typeof tenantPurgeReminderPayloadSchema>;
 export const invitationPayloadSchema = z.object({ tenantId: uuidSchema, userId: uuidSchema }).strict();
 export const dataExportReadyPayloadSchema = z.object({ tenantId: uuidSchema, exportId: uuidSchema, userId: uuidSchema }).strict();
 export type DataExportReadyPayload = z.infer<typeof dataExportReadyPayloadSchema>;

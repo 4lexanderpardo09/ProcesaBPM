@@ -164,6 +164,7 @@ export const EXPORT_EXCLUDED_COLUMNS: Readonly<Record<string, Readonly<Record<st
     purge_last_error: 'Purge job internals.',
     purge_lease_until: 'Purge job internals.',
     purge_retry_at: 'Purge job internals.',
+    purge_reminder_level: 'Purge job internals (which reminder went out to the owner).',
     purged_at: 'Purge job internals.',
   },
   users: {
