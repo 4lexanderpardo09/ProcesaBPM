@@ -20,6 +20,7 @@ import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { DocumentsModule } from './modules/documents/documents.module.js';
 import { ReportsModule } from './modules/reports/reports.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { DatasetsModule } from './modules/datasets/datasets.module.js';
 import { FilesModule } from './modules/files/files.module.js';
 import { TagsModule } from './modules/tags/tags.module.js';
 import { TextTemplatesModule } from './modules/text-templates/text-templates.module.js';
@@ -34,7 +35,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module.js';
 import { realtimeEnabledIn } from './config/app-config.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, TagsModule, TextTemplatesModule, DashboardModule, ReportsModule, DataExportsModule, ...(realtimeEnabledIn(process.env) ? [RealtimeModule] : [])],
+  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, TagsModule, TextTemplatesModule, DashboardModule, DatasetsModule, ReportsModule, DataExportsModule, ...(realtimeEnabledIn(process.env) ? [RealtimeModule] : [])],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

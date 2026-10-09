@@ -5,6 +5,7 @@ export * from './calculators/index.js';
 export * from './catalog/index.js';
 export * from './common.js';
 export * from './dashboard/index.js';
+export * from './datasets/index.js';
 export * from './data-exports/index.js';
 export * from './documents/index.js';
 export * from './files/index.js';

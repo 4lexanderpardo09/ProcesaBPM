@@ -79,6 +79,8 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.pdfTemplateInvalid]: { status: 422, message: 'The PDF cannot be used as a template' },
   [ERROR_CODES.pdfRenderFailed]: { status: 422, message: 'The PDF could not be generated' },
   [ERROR_CODES.documentSourceInUse]: { status: 409, message: 'A workflow document still uses it: deactivate it instead' },
+  [ERROR_CODES.datasetFileInvalid]: { status: 422, message: 'The spreadsheet cannot be loaded as a dataset' },
+  [ERROR_CODES.datasetInUse]: { status: 409, message: 'A workflow field uses this dataset' },
   [ERROR_CODES.reportTooLarge]: { status: 422, message: 'The report is too large to export: narrow the filters' },
   [ERROR_CODES.reportTimeout]: { status: 422, message: 'The report took too long: narrow the filters' },
   [ERROR_CODES.temporarilyUnavailable]: { status: 503, message: 'The service is busy: try again' },
