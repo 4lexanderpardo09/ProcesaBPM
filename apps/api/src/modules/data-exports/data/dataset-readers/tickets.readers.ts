@@ -50,7 +50,7 @@ export const TICKETS_READERS = {
     page: (tenantId, [id], limit) => Prisma.sql`
       SELECT tenant_id, id, ticket_id, visit_id, step_id, loop, company_id, responsible_id, sla_value,
              sla_unit, calendar_id, started_at, due_at, paused_at, paused_minutes, completed_at,
-             business_minutes, result, alerted_at, completion_reason
+             business_minutes, result, alerted_at, warned_at, completion_reason
       FROM ticket_sla_clocks WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
   },

@@ -10,6 +10,7 @@ export const TICKET_EVENT_KINDS = [
   'ticket.incident_opened',
   'ticket.incident_resolved',
   'sla.overdue',
+  'sla.warning',
 ] as const;
 export type TicketEventKind = (typeof TICKET_EVENT_KINDS)[number];
 
@@ -37,6 +38,8 @@ export interface EventFacts {
   readonly incidentOpenerId?: string | null | undefined;
   /** `sla.overdue`: whoever was responsible when the clock ran out, or the pool when nobody was. */
   readonly overdueResponsibleIds?: readonly string[] | undefined;
+  /** `sla.warning`: whoever is responsible for the clock, or the pool when nobody holds it yet. */
+  readonly warningResponsibleIds?: readonly string[] | undefined;
 }
 
 const direct = (type: NotificationTypeValue, ids: ReadonlyArray<string | null | undefined>): Candidate[] => ids.flatMap((userId) => (userId ? [{ userId, type, rank: 'DIRECT' as const }] : []));
@@ -65,6 +68,9 @@ export function candidatesFor(kind: TicketEventKind, facts: EventFacts): Candida
       return direct('INCIDENT_RESOLVED', [facts.incidentOpenerId]);
     case 'sla.overdue':
       return [...direct('SLA_OVERDUE', facts.overdueResponsibleIds ?? []), ...observers(facts)];
+    case 'sla.warning':
+      // Only who can still act in time: observers hear about it if it actually goes overdue.
+      return direct('SLA_WARNING', facts.warningResponsibleIds ?? []);
   }
 }
 

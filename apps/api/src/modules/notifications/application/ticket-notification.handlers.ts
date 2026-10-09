@@ -27,6 +27,7 @@ const SCHEMAS = {
   'ticket.incident_opened': base.extend({ incidentId: uuidSchema }),
   'ticket.incident_resolved': base.extend({ incidentId: uuidSchema }),
   'sla.overdue': z.object({ ticketId: uuidSchema, clockId: uuidSchema }).passthrough(),
+  'sla.warning': z.object({ ticketId: uuidSchema, clockId: uuidSchema }).passthrough(),
 } as const satisfies Record<TicketEventKind, z.ZodType>;
 
 type Payload = { ticketId: string; eventId?: string | undefined; userId?: string; incidentId?: string; clockId?: string };
@@ -115,6 +116,13 @@ export class TicketNotificationHandlers implements OnModuleInit {
         if (clock === undefined || clock.completedAt !== null || clock.ticketStatus !== 'OPEN') return undefined;
         const pool = assignees.filter((assignee) => assignee.type === 'POOL').map((assignee) => assignee.userId);
         return { ...common, overdueResponsibleIds: clock.responsibleId === null ? pool : [clock.responsibleId] };
+      }
+      case 'sla.warning': {
+        // Too late to warn once the step ended, the ticket stopped, or the clock already went overdue.
+        const clock = await this.facts.clock(tx, tenantId, payload.clockId!);
+        if (clock === undefined || clock.completedAt !== null || clock.alertedAt !== null || clock.ticketStatus !== 'OPEN') return undefined;
+        const pool = assignees.filter((assignee) => assignee.type === 'POOL').map((assignee) => assignee.userId);
+        return { ...common, warningResponsibleIds: clock.responsibleId === null ? pool : [clock.responsibleId] };
       }
       default:
         return common;
