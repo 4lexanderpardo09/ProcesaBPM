@@ -47,6 +47,16 @@ export function renderTenantDeletionEmail(input: { firstName: string; organizati
   };
 }
 
+/** B17: the same facts as the deletion e-mail, 7 days and 1 day before the purge. No link: the owner acts through support. */
+export function renderTenantPurgeReminderEmail(input: { firstName: string; organization: string; purgeAfter: Date; daysLeft: number }): RenderedMail {
+  const t = es.tenantPurgeReminder;
+  const date = input.purgeAfter.toLocaleDateString('es-CO', { dateStyle: 'long', timeZone: 'America/Bogota' });
+  return {
+    subject: t.subject(input.daysLeft),
+    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.reminder(input.organization, date), t.lastChance, t.contact], footer: es.footerAutomatic }),
+  };
+}
+
 /** The zone used when the user chose none, or the stored one is not a valid IANA zone. */
 export const DEFAULT_NOTICE_TIME_ZONE = 'America/Bogota';
 

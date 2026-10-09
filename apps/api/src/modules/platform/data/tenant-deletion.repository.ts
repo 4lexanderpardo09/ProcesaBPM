@@ -25,7 +25,7 @@ export class TenantDeletionRepository {
       UPDATE tenants
       SET status = 'PENDING_DELETION', deletion_requested_at = now(), deletion_requested_by_id = ${administratorId}::uuid,
           purge_after = now() + make_interval(days => ${DELETION_PERIOD_DAYS}::int),
-          purge_attempts = 0, purge_lease_until = NULL, purge_retry_at = NULL, purge_last_error = NULL
+          purge_attempts = 0, purge_lease_until = NULL, purge_retry_at = NULL, purge_last_error = NULL, purge_reminder_level = 0
       WHERE id = ${tenantId}::uuid
       RETURNING purge_after`;
     return row!.purge_after;
@@ -36,7 +36,7 @@ export class TenantDeletionRepository {
     await tx.$executeRaw`
       UPDATE tenants
       SET status = 'SUSPENDED', deletion_requested_at = NULL, deletion_requested_by_id = NULL, purge_after = NULL,
-          purge_attempts = 0, purge_lease_until = NULL, purge_retry_at = NULL, purge_last_error = NULL
+          purge_attempts = 0, purge_lease_until = NULL, purge_retry_at = NULL, purge_last_error = NULL, purge_reminder_level = 0
       WHERE id = ${tenantId}::uuid`;
   }
 

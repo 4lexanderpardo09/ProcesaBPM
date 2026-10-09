@@ -7,6 +7,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { ObjectStorage } from '../../src/infrastructure/storage/object-storage.js';
+import { PurgeReminderScheduler } from '../../src/modules/tenant-purge/application/purge-reminder.scheduler.js';
 import { TenantPurgeJob } from '../../src/modules/tenant-purge/application/tenant-purge.job.js';
 import { WorkerModule } from '../../src/worker.module.js';
 import { bearer, signIn } from '../support/auth-helpers.js';
@@ -170,6 +171,41 @@ describe('deleting a tenant', () => {
       await makeDue(tenant);
       expect((await asPlatform(http().delete(`/platform/tenants/${tenant.tenantId}/deletion`)).expect(422)).body.error.code).toBe('INVALID_STATE');
       expect((await tenantRow(tenant.tenantId)).status).toBe('PENDING_DELETION');
+    });
+  });
+
+  describe('the reminders before the purge (B17)', () => {
+    it('tell the owner 7 days and 1 day before, once each, and stop when the deletion is cancelled', async () => {
+      const { tenant, admin, name } = await tenantWithData(0);
+      await deletion(tenant, { confirmName: name, reason: 'Leaving' }).expect(200);
+      await mail.waitForMail(admin.user.email);
+      const sent = () => mail.mailer.to(admin.user.email).length;
+      const before = sent();
+      const reminders = await startWorker().then(() => workers.at(-1)!.get(PurgeReminderScheduler));
+      const purgeIn = (left: string) => db.owner.query('UPDATE tenants SET purge_after = now() + $2::interval WHERE id = $1', [tenant.tenantId, left]);
+
+      await reminders.runOnce();
+      await mail.deliver();
+      expect(sent()).toBe(before);
+
+      await purgeIn('6 days');
+      await reminders.runOnce();
+      await reminders.runOnce();
+      const week = await mail.waitForMail(admin.user.email);
+      expect(week.subject).toBe('Tu organización se borra en 7 días');
+      expect(week.text).toContain(name);
+      expect(week.text).not.toMatch(/https?:\/\//);
+      expect(sent()).toBe(before + 1);
+
+      await purgeIn('20 hours');
+      await reminders.runOnce();
+      await mail.deliver();
+      expect(mail.lastTo(admin.user.email)!.subject).toBe('Mañana se borra tu organización');
+      expect(sent()).toBe(before + 2);
+
+      // Cancelling resets the reminders: asking again starts over.
+      await asPlatform(http().delete(`/platform/tenants/${tenant.tenantId}/deletion`)).expect(200);
+      expect((await tenantRow(tenant.tenantId)).purge_reminder_level).toBe(0);
     });
   });
 

@@ -111,6 +111,7 @@ describe('schema conventions', () => {
       'enqueue_platform_event',
       'enqueue_security_notice',
       'enqueue_tenant_deletion_requested',
+      'enqueue_tenant_purge_reminder',
       'fail_platform_outbox_event',
       'list_failed_platform_outbox_events',
       'platform_outbox_claim_is_current',

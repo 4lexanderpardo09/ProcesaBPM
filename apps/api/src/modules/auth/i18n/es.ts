@@ -27,6 +27,14 @@ export const authMailEs = {
     deadline: (date: string) => `Si no se cancela, sus datos y archivos se borrarán de forma definitiva el ${date}.`,
     contact: 'Si necesitas una copia de tus datos o crees que fue un error, responde a este correo o escribe a soporte antes de esa fecha.',
   },
+  tenantPurgeReminder: {
+    subject: (days: number) => (days === 1 ? 'Mañana se borra tu organización' : `Tu organización se borra en ${days} días`),
+    title: 'Recordatorio: eliminación de la organización',
+    greeting: (firstName: string) => `Hola ${firstName},`,
+    reminder: (organization: string, date: string) => `La organización «${organization}» se borrará de forma definitiva el ${date}, con todos sus datos y archivos.`,
+    lastChance: 'Después de esa fecha no se podrá recuperar nada.',
+    contact: 'Si necesitas una copia de tus datos o quieres cancelar la eliminación, escribe a soporte antes de esa fecha.',
+  },
   invitation: {
     subject: 'Te invitaron a ProcesaBPM',
     title: 'Te invitaron a ProcesaBPM',

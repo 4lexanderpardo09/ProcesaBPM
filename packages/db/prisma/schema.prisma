@@ -676,6 +676,8 @@ model Tenant {
   purgeAttempts         Int       @default(0) @map("purge_attempts")
   purgeRetryAt          DateTime? @map("purge_retry_at") @db.Timestamptz(3)
   purgeLastError        String?   @map("purge_last_error")
+  /// Which reminder of the purge went out for the current deletion request: 0 none, 1 the 7-day one, 2 the 1-day one.
+  purgeReminderLevel    Int       @default(0) @map("purge_reminder_level") @db.SmallInt
   createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 

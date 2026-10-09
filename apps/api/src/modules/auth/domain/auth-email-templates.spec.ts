@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SECURITY_NOTICE_KINDS } from '../../../infrastructure/outbox/platform-event-types.js';
-import { renderInvitationEmail, renderMemberSecurityNoticeEmail, renderPasswordResetEmail, renderSecurityNoticeEmail } from './auth-email-templates.js';
+import { renderInvitationEmail, renderMemberSecurityNoticeEmail, renderPasswordResetEmail, renderSecurityNoticeEmail, renderTenantPurgeReminderEmail } from './auth-email-templates.js';
 
 const ATTACK = `Ana "><script>alert(1)</script>`;
 
@@ -107,5 +107,16 @@ describe('account e-mails', () => {
       expect(mail.html).not.toContain('href=');
       expect(mail.text).not.toMatch(/https?:|token|[A-Za-z0-9_-]{32,}/);
     });
+  });
+
+  it('the purge reminder says how long is left, the organization and the date, with no link and no markup injection', () => {
+    const purgeAfter = new Date(Date.UTC(2026, 10, 9, 15));
+    const week = renderTenantPurgeReminderEmail({ firstName: ATTACK, organization: ATTACK, purgeAfter, daysLeft: 7 });
+    expect(week.subject).toBe('Tu organización se borra en 7 días');
+    expect(renderTenantPurgeReminderEmail({ firstName: 'Ana', organization: 'Acme', purgeAfter, daysLeft: 1 }).subject).toBe('Mañana se borra tu organización');
+    expect(week.text).toContain('9 de noviembre de 2026');
+    expect(week.html).not.toContain('<script');
+    expect(week.html).not.toContain('href=');
+    expect(week.text).not.toMatch(/https?:/);
   });
 });

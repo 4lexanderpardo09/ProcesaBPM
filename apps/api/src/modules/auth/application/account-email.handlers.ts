@@ -3,14 +3,14 @@ import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-set
 import type { CrossTenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 import { type MailMessage, Mailer } from '../../../infrastructure/mail/mailer.js';
 import { WebLinks } from '../../../infrastructure/mail/links.js';
-import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema, PLATFORM_ADMIN_INVITATION_EVENT, platformAdminInvitationPayloadSchema, type MemberSecurityNoticePayload, type PersonalSecurityNoticePayload, SECURITY_NOTICE_EVENT, type SecurityNoticePayload, securityNoticePayloadSchema, TENANT_DELETION_REQUESTED_EVENT, tenantDeletionRequestedPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
+import { INVITATION_EVENT, invitationPayloadSchema, PASSWORD_RESET_EVENT, passwordResetPayloadSchema, PLATFORM_ADMIN_INVITATION_EVENT, platformAdminInvitationPayloadSchema, type MemberSecurityNoticePayload, type PersonalSecurityNoticePayload, SECURITY_NOTICE_EVENT, type SecurityNoticePayload, securityNoticePayloadSchema, TENANT_DELETION_REQUESTED_EVENT, tenantDeletionRequestedPayloadSchema, TENANT_PURGE_REMINDER_EVENT, type TenantPurgeReminderPayload, tenantPurgeReminderPayloadSchema } from '../../../infrastructure/outbox/platform-event-types.js';
 import { type ClaimedEvent, type ExternalEffectHandler, PermanentEventError } from '../../../infrastructure/outbox/outbox-handler.js';
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { SecurityNoticeRecipientRepository } from '../data/security-notice-recipient.repository.js';
 import { WorkerTokenRepository } from '../data/worker-token.repository.js';
-import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS, renderInvitationEmail, renderMemberSecurityNoticeEmail, renderPasswordResetEmail, renderPlatformAdminInvitationEmail, renderSecurityNoticeEmail, renderTenantDeletionEmail, type RenderedMail } from '../domain/auth-email-templates.js';
+import { INVITATION_VALIDITY_DAYS, PASSWORD_RESET_VALIDITY_MINUTES, PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS, renderInvitationEmail, renderMemberSecurityNoticeEmail, renderPasswordResetEmail, renderPlatformAdminInvitationEmail, renderSecurityNoticeEmail, renderTenantDeletionEmail, renderTenantPurgeReminderEmail, type RenderedMail } from '../domain/auth-email-templates.js';
 import { deriveEmailLinkToken } from '../domain/email-link-token.js';
 
 /** A reset request that waited longer than this in the queue is not mailed: the person asked again by now. */
@@ -153,6 +153,34 @@ export class TenantDeletionEmailHandler extends AccountEmailHandler<InvitationPa
     const notice = await this.tokens.tenantDeletionNotice(tx, event.payload.tenantId, event.payload.userId);
     if (notice === undefined) return null;
     return this.message(event, notice.email, renderTenantDeletionEmail(notice));
+  }
+}
+
+/** B17: reminds the owner 7 days and 1 day before the purge. The worker reads the address; nothing is sent once cancelled. */
+@Injectable()
+export class TenantPurgeReminderEmailHandler extends AccountEmailHandler<TenantPurgeReminderPayload> implements ExternalEffectHandler<TenantPurgeReminderPayload, MailMessage, void, CrossTenantTransaction>, OnModuleInit {
+  readonly type = TENANT_PURGE_REMINDER_EVENT;
+  readonly scope = 'platform' as const;
+  readonly schema = tenantPurgeReminderPayloadSchema;
+
+  constructor(
+    @Inject(WORKER_SETTINGS) settings: WorkerSettings,
+    @Inject(Mailer) mailer: Mailer,
+    @Inject(WorkerTokenRepository) private readonly tokens: WorkerTokenRepository,
+    @Inject(OutboxHandlerRegistry) private readonly registry: OutboxHandlerRegistry,
+  ) {
+    super(settings, mailer);
+  }
+
+  onModuleInit(): void {
+    this.registry.registerExternal(this);
+  }
+
+  /** `null` (nothing to send) when the deletion was cancelled or the owner changed since the reminder was queued. */
+  async prepare(tx: CrossTenantTransaction, event: ClaimedEvent<TenantPurgeReminderPayload>): Promise<MailMessage | null> {
+    const notice = await this.tokens.tenantDeletionNotice(tx, event.payload.tenantId, event.payload.userId);
+    if (notice === undefined) return null;
+    return this.message(event, notice.email, renderTenantPurgeReminderEmail({ ...notice, daysLeft: event.payload.daysLeft }));
   }
 }
 
