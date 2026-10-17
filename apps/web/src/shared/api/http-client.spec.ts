@@ -36,6 +36,18 @@ describe('createHttpClient', () => {
     expect(init?.headers).not.toHaveProperty('Content-Type');
   });
 
+  it('adds the per-request headers', async () => {
+    const { client, fetchFn } = clientAnswering(jsonResponse(200, []));
+    await client.request('/auth/me', { headers: { Authorization: 'Bearer t' } });
+    expect(fetchFn.mock.calls[0]?.[1]?.headers).toMatchObject({ Accept: 'application/json', Authorization: 'Bearer t' });
+  });
+
+  it('reads Retry-After into the ApiError', async () => {
+    const response = new Response(JSON.stringify({ error: { code: 'RATE_LIMITED', message: 'x' } }), { status: 429, headers: { 'Retry-After': '42' } });
+    const { client } = clientAnswering(response);
+    await expect(client.request('/auth/login', { method: 'POST', body: {} })).rejects.toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 42 });
+  });
+
   it('resolves to undefined on 204', async () => {
     const { client } = clientAnswering(new Response(null, { status: 204 }));
     await expect(client.request('/tags/t1', { method: 'DELETE' })).resolves.toBeUndefined();

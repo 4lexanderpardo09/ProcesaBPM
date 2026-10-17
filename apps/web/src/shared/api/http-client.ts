@@ -6,6 +6,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export interface RequestOptions {
   readonly method?: HttpMethod;
   readonly body?: unknown;
+  readonly headers?: Readonly<Record<string, string>>;
   readonly signal?: AbortSignal;
 }
 
@@ -32,10 +33,10 @@ const NO_CONTENT = 204;
 export function createHttpClient({ baseUrl, fetchFn = (...args) => globalThis.fetch(...args) }: HttpClientConfig): HttpClient {
   const root = baseUrl.replace(/\/+$/, '');
 
-  async function request(path: string, { method = 'GET', body, signal, schema }: AnyRequestOptions = {}): Promise<unknown> {
-    const response = await send(fetchFn, `${root}${path}`, requestInit(method, body, signal));
+  async function request(path: string, { method = 'GET', body, headers, signal, schema }: AnyRequestOptions = {}): Promise<unknown> {
+    const response = await send(fetchFn, `${root}${path}`, requestInit({ method, body, headers, signal }));
     const payload = await readJson(response);
-    if (!response.ok) throw apiErrorFrom(response.status, payload);
+    if (!response.ok) throw apiErrorFrom(response.status, payload, response.headers);
     if (schema === undefined) return undefined;
     const parsed = schema.safeParse(payload);
     if (!parsed.success) throw new UnexpectedResponseError(response.status, parsed.error);
@@ -45,13 +46,20 @@ export function createHttpClient({ baseUrl, fetchFn = (...args) => globalThis.fe
   return { request } as HttpClient;
 }
 
-function requestInit(method: HttpMethod, body: unknown, signal: AbortSignal | undefined): RequestInit {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+interface InitParts {
+  readonly method: HttpMethod;
+  readonly body: unknown;
+  readonly headers: Readonly<Record<string, string>> | undefined;
+  readonly signal: AbortSignal | undefined;
+}
+
+function requestInit({ method, body, headers, signal }: InitParts): RequestInit {
+  const allHeaders: Record<string, string> = { Accept: 'application/json', ...headers };
+  if (body !== undefined) allHeaders['Content-Type'] = 'application/json';
   return {
     method,
     credentials: 'same-origin',
-    headers,
+    headers: allHeaders,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     ...(signal === undefined ? {} : { signal }),
   };
