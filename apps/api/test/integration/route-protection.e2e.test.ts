@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { ModulesContainer } from '@nestjs/core';
+import { API_PREFIX } from '@procesabpm/shared';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { collectRoutes, type RouteInfo } from '../../src/common/auth/route-metadata.js';
@@ -128,11 +129,18 @@ const INTENTIONALLY_UNDECLARED = ['GET /test/undeclared'];
 const label = (route: RouteInfo) => `${route.method} ${route.path}`;
 
 /** What Express actually serves, to make sure the metadata walk did not miss anything. */
+/** What Express serves, without the API prefix (the metadata walk names routes as the controllers declare them). */
 function servedRoutes(app: INestApplication): string[] {
   const express = app.getHttpAdapter().getInstance() as { router: { stack: Array<{ route?: { path: string; methods: Record<string, boolean> } }> } };
   return express.router.stack.flatMap((layer) =>
-    layer.route ? Object.keys(layer.route.methods).map((method) => `${method.toUpperCase()} ${layer.route!.path}`) : [],
+    layer.route ? Object.keys(layer.route.methods).map((method) => `${method.toUpperCase()} ${layer.route!.path.slice(API_PREFIX.length)}`) : [],
   );
+}
+
+/** Every route Express serves, with its prefix as is. */
+function servedPaths(app: INestApplication): string[] {
+  const express = app.getHttpAdapter().getInstance() as { router: { stack: Array<{ route?: { path: string } }> } };
+  return express.router.stack.flatMap((layer) => (layer.route ? [layer.route.path] : []));
 }
 
 describe('route protection (deny by default)', () => {
@@ -155,6 +163,10 @@ describe('route protection (deny by default)', () => {
 
   it('the metadata walk finds every route Express serves', () => {
     expect(routes.map(label).sort()).toEqual(servedRoutes(app).sort());
+  });
+
+  it(`every route is served under ${API_PREFIX}`, () => {
+    expect(servedPaths(app).filter((path) => !path.startsWith(`${API_PREFIX}/`))).toEqual([]);
   });
 
   it('only the expected routes are public', () => {
