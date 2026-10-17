@@ -1,3 +1,5 @@
+import { API_PREFIX } from '@procesabpm/shared';
+
 export interface ApiResponse {
   readonly status: number;
   readonly body: Record<string, unknown>;
@@ -8,7 +10,8 @@ export class ApiClient {
   constructor(private readonly baseUrl: string) {}
 
   async call(method: string, path: string, options: { token?: string; body?: unknown } = {}): Promise<ApiResponse> {
-    const response = await fetch(new URL(path, this.baseUrl), {
+    // `path` is the route (`/auth/login`); the API serves it under the prefix.
+    const response = await fetch(new URL(`${API_PREFIX}${path}`, this.baseUrl), {
       method,
       headers: { ...(options.token ? { authorization: `Bearer ${options.token}` } : {}), ...(options.body === undefined ? {} : { 'content-type': 'application/json' }) },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),

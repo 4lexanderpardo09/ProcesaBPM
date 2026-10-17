@@ -63,10 +63,10 @@ COPY --from=deploy-api --chown=root:root /out/api/node_modules ./node_modules
 COPY --from=build --chown=root:root /repo/dist/api ./
 COPY --from=build --chown=root:root /repo/apps/api/assets ./assets
 EXPOSE 3000
-# Liveness only: /health does not touch the database, so a database outage does not restart the API.
-# Use /ready (it checks the database) as the readiness probe of the load balancer or orchestrator.
+# Liveness only: /api/health does not touch the database, so a database outage does not restart the API.
+# Use /api/ready (it checks the database) as the readiness probe of the load balancer or orchestrator.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["node", "main.js"]
 
 # --- worker --------------------------------------------------------------------------------------------------------

@@ -3,6 +3,8 @@
  * the wire protocol (engine.io v4 over a WebSocket, then a Socket.IO CONNECT packet carrying the token in `auth`) with
  * Node's own WebSocket, so the smoke test needs no extra dependency in the image.
  */
+import { REALTIME_PATH } from '@procesabpm/shared';
+
 export type ProbeResult = { readonly outcome: 'CONNECTED' } | { readonly outcome: 'REFUSED'; readonly code: string } | { readonly outcome: 'NOT_UPGRADED' };
 
 const ENGINE_OPEN = '0';
@@ -11,7 +13,7 @@ const SOCKET_CONNECT_ERROR = '44';
 const TIMEOUT_MS = 10_000;
 
 export function realtimeUrl(baseUrl: string): string {
-  const url = new URL('/realtime/', baseUrl);
+  const url = new URL(`${REALTIME_PATH}/`, baseUrl);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.search = 'EIO=4&transport=websocket';
   return url.toString();

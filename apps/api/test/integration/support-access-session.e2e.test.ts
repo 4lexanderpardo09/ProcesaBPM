@@ -260,9 +260,9 @@ describe('a platform administrator reads a tenant that granted support access', 
       const { rows } = await db.owner.query(`SELECT support_grant_id, after FROM audit_logs WHERE tenant_id = $1 AND action = 'support.request' ORDER BY created_at`, [tenant.tenantId]);
       expect(rows.map((row) => row.support_grant_id)).toEqual([grant.id, grant.id, grant.id]);
       expect(rows.map((row) => row.after)).toEqual([
-        expect.objectContaining({ method: 'POST', route: '/companies', outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' }),
-        expect.objectContaining({ method: 'DELETE', route: '/settings/support-access', outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' }),
-        expect.objectContaining({ method: 'GET', route: '/audit-logs', outcome: 'DENIED', status: 403, code: 'PERMISSION_DENIED' }),
+        expect.objectContaining({ method: 'POST', route: '/api/companies', outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' }),
+        expect.objectContaining({ method: 'DELETE', route: '/api/settings/support-access', outcome: 'DENIED', status: 403, code: 'SUPPORT_ACCESS_READ_ONLY' }),
+        expect.objectContaining({ method: 'GET', route: '/api/audit-logs', outcome: 'DENIED', status: 403, code: 'PERMISSION_DENIED' }),
       ]);
     });
 
@@ -289,9 +289,9 @@ describe('a platform administrator reads a tenant that granted support access', 
       expect(rows).toHaveLength(3);
       expect(rows.every((row) => row.actor_id === null && row.support_actor_id === platformUserId && row.support_grant_id === grant.id)).toBe(true);
       expect(rows.map((row) => row.after)).toEqual([
-        { ids: [], method: 'GET', route: '/companies', outcome: 'OK', status: 200 },
-        { ids: [tenant.companyId], method: 'GET', route: '/companies/:id', outcome: 'OK', status: 200 },
-        expect.objectContaining({ method: 'GET', route: '/companies/:id', outcome: 'ERROR', status: 404 }),
+        { ids: [], method: 'GET', route: '/api/companies', outcome: 'OK', status: 200 },
+        { ids: [tenant.companyId], method: 'GET', route: '/api/companies/:id', outcome: 'OK', status: 200 },
+        expect.objectContaining({ method: 'GET', route: '/api/companies/:id', outcome: 'ERROR', status: 404 }),
       ]);
       expect(rows[1].entity_id).toBe(tenant.companyId);
       expect(JSON.stringify(rows)).not.toContain('secret-term');

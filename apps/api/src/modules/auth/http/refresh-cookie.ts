@@ -1,10 +1,11 @@
+import { AUTH_COOKIE_PATH } from '@procesabpm/shared';
 import type { CookieOptions, Request, Response } from 'express';
 
 /** `__Secure-`: browsers only accept it from HTTPS responses with the Secure attribute. */
 export const REFRESH_COOKIE_NAME = '__Secure-refresh_token';
 
 /** Only sent to the auth endpoints, never readable from JavaScript, not sent on cross-site POSTs. */
-const OPTIONS: CookieOptions = { httpOnly: true, secure: true, sameSite: 'lax', path: '/auth' };
+const OPTIONS: CookieOptions = { httpOnly: true, secure: true, sameSite: 'lax', path: AUTH_COOKIE_PATH };
 
 export function setRefreshCookie(response: Response, token: string, expiresAt: Date): void {
   response.cookie(REFRESH_COOKIE_NAME, token, { ...OPTIONS, expires: expiresAt });

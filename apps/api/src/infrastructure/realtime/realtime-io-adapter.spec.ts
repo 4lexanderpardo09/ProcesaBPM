@@ -46,7 +46,7 @@ describe('admissionRefusal', () => {
 
 describe('SOCKET_SERVER_OPTIONS', () => {
   it('only speaks WebSocket, without compression and with small messages', () => {
-    expect(SOCKET_SERVER_OPTIONS).toMatchObject({ transports: ['websocket'], allowUpgrades: false, perMessageDeflate: false, httpCompression: false, serveClient: false, maxHttpBufferSize: 16_384, path: '/realtime' });
+    expect(SOCKET_SERVER_OPTIONS).toMatchObject({ transports: ['websocket'], allowUpgrades: false, perMessageDeflate: false, httpCompression: false, serveClient: false, maxHttpBufferSize: 16_384, path: '/api/realtime' });
   });
 });
 
