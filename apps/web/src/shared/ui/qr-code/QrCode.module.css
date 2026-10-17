@@ -1,0 +1,11 @@
+.qr {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  shape-rendering: crispEdges;
+}
+
+.modules {
+  fill: var(--ink);
+}
