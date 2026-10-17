@@ -2,7 +2,7 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { seedTenant, type SeededTenant } from '@procesabpm/db/testing/fixtures';
-import type { AuthRefreshAck } from '@procesabpm/shared';
+import { type AuthRefreshAck, REALTIME_PATH } from '@procesabpm/shared';
 import type { Socket } from 'socket.io-client';
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -116,7 +116,7 @@ describe('realtime gateway: handshake, session revalidation and limits', () => {
         const refused = await connectError(open(accessToken, { origin }));
         expect(refused.code).toBeUndefined();
       }
-      const upgrade = await http().get('/realtime/?EIO=4&transport=websocket').set('origin', 'http://evil.test').set('connection', 'Upgrade').set('upgrade', 'websocket');
+      const upgrade = await http().get(`${REALTIME_PATH}/?EIO=4&transport=websocket`).set('origin', 'http://evil.test').set('connection', 'Upgrade').set('upgrade', 'websocket');
       expect(upgrade.status).toBeGreaterThanOrEqual(400);
     });
 

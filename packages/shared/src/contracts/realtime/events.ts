@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import { API_PREFIX } from '../http-paths.js';
 import { uuidSchema } from '../ids.js';
 
-export const REALTIME_PATH = '/realtime';
+/** The WebSocket endpoint, under the API prefix like every route (one proxy rule for the API). */
+export const REALTIME_PATH = `${API_PREFIX}/realtime`;
 
 /** The kinds of ticket change the worker signals (a closed list: the signal is an id-only hint). */
 export const TICKET_CHANGE_KINDS = [

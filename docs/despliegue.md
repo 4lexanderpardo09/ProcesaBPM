@@ -77,7 +77,7 @@ Las obligatorias son las que no tienen valor por defecto. Un valor inválido o f
 | `DB_TX_TIMEOUT_MS` | no | `10000` (máx. 120000) | Duración máxima de una transacción; también `statement_timeout` de la BD |
 | `DB_TX_MAX_WAIT_MS` | no | `5000` (máx. 60000) | Espera máxima de una conexión libre del pool |
 | `DB_LOCK_TIMEOUT_MS` | no | `5000` (máx. 60000) | Espera máxima de un bloqueo de fila: pasada, la BD cancela y el API responde **503** `TEMPORARILY_UNAVAILABLE` con `Retry-After: 1` |
-| `REALTIME_ENABLED` | no | `true` | Activa el WebSocket de tiempo real (`/realtime`) |
+| `REALTIME_ENABLED` | no | `true` | Activa el WebSocket de tiempo real (`/api/realtime`) |
 | `REALTIME_ALLOWED_ORIGINS` | sí si `REALTIME_ENABLED` | | Orígenes (esquema, host y puerto, sin ruta) que pueden abrir el socket, separados por comas; `https://` en producción. El compose de ejemplo usa `WEB_BASE_URL` |
 | `REALTIME_DATABASE_URL` | no | `DATABASE_URL` | Conexión directa (no a través de un pooler en modo transacción) para `LISTEN`; el API revisa su salud con un ping propio cada 30 s |
 | `REALTIME_MAX_CONNECTIONS` / `_PER_USER` / `_MAX_TICKET_SUBSCRIPTIONS` | no | `5000` / `10` / `20` | Límites de sockets por instancia, por usuario y de tickets suscritos por socket |
@@ -127,7 +127,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 2. **`migrate`** con el login del dueño: aplica las migraciones pendientes y termina. Es un trabajo de una sola ejecución por despliegue (Compose: `service_completed_successfully`; Kubernetes: `Job` o `initContainer`/hook previo).
 3. **Logins** (`deploy/roles.sql`) con un administrador.
 4. **Catálogo global** (`node seed/seed.js`, login de `app_platform`): permisos, planes, países, festivos. Es idempotente: puede correr en cada despliegue.
-5. **`api` y `worker`**, en cualquier orden; el API responde `/ready` cuando alcanza la BD.
+5. **`api` y `worker`**, en cualquier orden; el API responde `/api/ready` cuando alcanza la BD.
 
 `docker-compose.prod.example.yml` implementa exactamente esa cadena (`postgres → migrate → roles → seed → api, worker`). Es una **guía**, no algo para correr tal cual (el CI solo valida su sintaxis con `docker compose config`; la cadena completa se probó a mano): sustituye Postgres, almacenamiento y correo por servicios administrados, pon un proxy con TLS delante del API y fija versiones reales de las imágenes.
 
@@ -196,7 +196,7 @@ Con Compose, `up -d` con imágenes nuevas corre `migrate` **antes** de recrear e
 
 ## 6. Salud y apagado ordenado
 
-- **API:** `GET /health` (vivo; no toca la BD) y `GET /ready` (listo; comprueba la BD). El `HEALTHCHECK` de la imagen usa `/health`, para que una caída de la BD no reinicie el API en bucle; usa **`/ready` como sondeo de disponibilidad** del balanceador u orquestador.
+- **API:** `GET /api/health` (vivo; no toca la BD) y `GET /api/ready` (listo; comprueba la BD). El `HEALTHCHECK` de la imagen usa `/api/health`, para que una caída de la BD no reinicie el API en bucle; usa **`/ready` como sondeo de disponibilidad** del balanceador u orquestador.
 - **Worker:** no abre puertos; el orquestador vigila el proceso (`restart: unless-stopped`) y los registros.
 - **SIGTERM:** ambos procesos cierran de forma ordenada. El worker deja de reclamar eventos y **termina el lote en curso** (o, si no alcanza, los eventos reclamados se liberan solos al vencer su arrendamiento de 5 min y otro worker los toma); el API termina las peticiones abiertas. Salen con código 143 (Nest vuelve a lanzar la señal tras cerrar; 0 también es válido): es una parada limpia, 137 (`SIGKILL`) no.
 - Usa `init: true` (o `docker run --init`) y **`stop_grace_period` ≥ 120 s para el worker** y 30 s para el API; con menos, Docker mata un lote en curso.
@@ -205,6 +205,7 @@ Con Compose, `up -d` con imágenes nuevas corre `migrate` **antes** de recrear e
 
 - **API:** sin estado; se escala en réplicas detrás de un balanceador. Las sesiones viven en la BD.
 - **Worker:** se escala añadiendo réplicas. Son seguras en paralelo: los eventos se reclaman con `SKIP LOCKED` y arrendamiento, y los trabajos programados (alertas de SLA, despertar de `WAIT`, despacho aleatorio, purga, retención) se reparten en la BD de forma que cada elemento se procesa una sola vez (la retención, una corrida por noche en total). Más réplicas o más `OUTBOX_CONCURRENCY` suben el rendimiento de correos y PDF; el dibujo del PDF corre dentro del proceso del worker (CPU y memoria).
+- **Rutas y proxy:** todo el API cuelga de `/api` (`API_PREFIX` de `@procesabpm/shared`): las rutas HTTP, los chequeos de salud y el WebSocket (`/api/realtime`, con `Upgrade`). Con el front en el mismo dominio, el proxy manda `/api/*` al API y el resto al front; la cookie de refresh lleva `Path=/api/auth`.
 - **Tiempo real:** sin sesiones pegajosas (solo WebSocket; cualquier réplica sirve). Cada réplica del API abre **una conexión más** para `LISTEN` (`REALTIME_DATABASE_URL`, directa o pool en modo sesión; un pooler en modo transacción no sirve y se nota en el registro `realtime.listener_unhealthy`). Cuenta `réplicas × (DB_POOL_MAX + pool de plataforma + 1)` contra `max_connections`. Detrás de un proxy: permite `Upgrade`/`Connection` en `/realtime` (Caddy y Traefik lo hacen solos; nginx: `proxy_http_version 1.1`, `proxy_set_header Upgrade $http_upgrade`, `Connection "upgrade"`, `proxy_read_timeout 75s`), tiempo de inactividad del proxy o balanceador **≥ 60 s** (el ping es de 25 s más 20 s de espera), Caddy `stream_close_delay 5m` para que recargar la configuración no corte todos los sockets a la vez, no registres cuerpos ni la consulta de `/realtime`, y no actives `DEBUG=socket.io*`. **`TRUST_PROXY` debe estar bien configurado:** el límite de conexiones del WebSocket es por dirección de cliente (50 sin autenticar, 1000 abiertas, 600 nuevas por minuto); si el API ve solo la dirección del proxy, esos límites se aplican a todos los clientes juntos. Monitoreo: `SELECT pg_notification_queue_usage()` (alerta > 0.1) y los eventos `realtime.listener_unhealthy`.
 - **Conexiones:** cada proceso abre un pool de `DB_POOL_MAX` (10) conexiones, y el API además un pequeño pool de plataforma. El total (réplicas × pool) debe quedar por debajo de `max_connections` de Postgres. Con muchas réplicas conviene PgBouncer (§10).
 
@@ -216,7 +217,7 @@ Sincroniza la hora (NTP) en todos los hosts. `read_only: true` con `tmpfs: /tmp`
 El trabajo `Docker images` de `.github/workflows/ci.yml` (en cada PR, sin publicar nada): construye los tres destinos con `buildx` y la caché de GitHub Actions y ejecuta `scripts/smoke-images.sh`, que
 1. comprueba que las imágenes no corren como root, no llevan `.env`, pruebas ni código fuente y que las fuentes del PDF están;
 2. levanta un PostgreSQL 18, aplica las migraciones con la imagen `migrate`, crea los logins con `deploy/roles.sql` (dos veces) y carga el catálogo (dos veces);
-3. comprueba que el API **no arranca** sin `MFA_ENCRYPTION_KEYS` (falla con «MFA_ENCRYPTION_KEYS is required»), y luego lo arranca (solo lectura, sin capacidades) y espera `/health`, `/ready` y el estado `healthy` del contenedor;
+3. comprueba que el API **no arranca** sin `MFA_ENCRYPTION_KEYS` (falla con «MFA_ENCRYPTION_KEYS is required»), y luego lo arranca (solo lectura, sin capacidades) y espera `/api/health`, `/api/ready` y el estado `healthy` del contenedor;
 4. arranca el worker **sin `PORT` ni `JWT_SECRET`**, espera el registro «Worker started», lo detiene con SIGTERM y comprueba la parada ordenada; luego detiene el API;
 5. el mismo trabajo valida la sintaxis de `docker-compose.prod.example.yml` con `docker compose config` (no lo levanta).
 
@@ -234,7 +235,7 @@ deploy/verify.sh --skip-smoke    # solo las pruebas unitarias
 
 1. **Pruebas unitarias** de `shared` y del API en un contenedor desechable (`Dockerfile.test-unit`, con su propio `Dockerfile.test-unit.dockerignore` porque necesita las pruebas y los `vitest.config.ts` que el `.dockerignore` de las imágenes de producción excluye; nunca se despliega), con 2 GB de memoria y el heap limitado. No necesitan base de datos, almacenamiento ni Docker.
 2. **Prueba de humo** (`smoke.js`, dentro de la imagen del worker, con `docker compose run --rm --no-deps worker node smoke.js`): recorre el API real como lo haría un cliente y escribe `OK` o `FAIL` por paso, con el motivo:
-   - `/health` y `/ready`;
+   - `/api/health` y `/api/ready`;
    - administrador de plataforma de prueba (el mismo camino del comando del primer administrador: enlace, inscripción obligatoria de MFA con el TOTP generado por el script y sesión de plataforma);
    - alta de una organización de prueba, invitación al dueño (el correo llega a Mailpit, `MAILPIT_URL`) y aceptación;
    - un flujo publicado, un archivo subido a S3 con URL prefirmada y confirmado, un ticket creado con ese archivo, avanzado y cerrado, el archivo descargado y comparado byte a byte, y un reporte, el WebSocket de tiempo real por el proxy (con el origen de `WEB_BASE_URL`, o `SMOKE_ORIGIN`: el token del dueño conecta; un origen ajeno no pasa el *upgrade*; un token falso recibe `UNAUTHENTICATED`) y un reporte;

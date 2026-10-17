@@ -74,7 +74,7 @@ describe('sessions', () => {
       expect(setCookie).toContain('HttpOnly');
       expect(setCookie).toContain('Secure');
       expect(setCookie).toContain('SameSite=Lax');
-      expect(setCookie).toContain('Path=/auth');
+      expect(setCookie).toContain('Path=/api/auth');
       const expires = Date.parse(/Expires=([^;]+)/.exec(setCookie)![1]!);
       expect((expires - Date.now()) / 86_400_000).toBeCloseTo(14, 0);
       first = { accessToken: response.body.accessToken, refreshCookie: refreshCookieOf(response)!, setCookie };

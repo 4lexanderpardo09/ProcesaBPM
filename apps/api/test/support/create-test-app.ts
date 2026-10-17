@@ -2,6 +2,7 @@ import type { INestApplication, Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { API_PREFIX } from '@procesabpm/shared';
 import { AppModule } from '../../src/app.module.js';
 import { Clock } from '../../src/infrastructure/clock.js';
 import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
@@ -26,11 +27,16 @@ export interface TestAppOptions {
   readonly rateLimiting?: boolean;
   /** Replaces the source of time (see `TestClock`). */
   readonly clock?: Clock;
+  /**
+   * Tests name routes without the API prefix (`/auth/login`): by default a test-only middleware adds it before routing,
+   * so they reach the real prefixed routes. `false` serves exactly what production serves (see api-prefix.e2e.test.ts).
+   */
+  readonly addPrefix?: boolean;
 }
 
 const unlimited: RateLimiter = { hit: () => Promise.resolve({ allowed: true, retryAfterSeconds: 0 }) };
 
-export async function createTestApp({ controllers = [], rateLimiting = false, clock }: TestAppOptions = {}): Promise<TestApp> {
+export async function createTestApp({ controllers = [], rateLimiting = false, clock, addPrefix = true }: TestAppOptions = {}): Promise<TestApp> {
   const logLines: string[] = [];
   let builder = Test.createTestingModule({ imports: [AppModule], controllers, providers: [{ provide: APP_INTERCEPTOR, useClass: AuditCoverageInterceptor }] })
     .overrideProvider(LOG_WRITER)
@@ -42,7 +48,14 @@ export async function createTestApp({ controllers = [], rateLimiting = false, cl
   if (!rateLimiting) builder = builder.overrideProvider(RATE_LIMITER).useValue(unlimited);
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>();
+  if (addPrefix) app.use(withApiPrefix);
   configureHttpApp(app, moduleRef.get<ApiConfig>(API_CONFIG));
   await app.init();
   return { app, moduleRef, logLines };
+}
+
+/** Test only: `/auth/login` → `/api/auth/login` (already prefixed paths are left alone). Runs before Nest's routing. */
+function withApiPrefix(request: { url: string }, _response: unknown, next: () => void): void {
+  if (request.url !== API_PREFIX && !request.url.startsWith(`${API_PREFIX}/`) && !request.url.startsWith(`${API_PREFIX}?`)) request.url = `${API_PREFIX}${request.url}`;
+  next();
 }

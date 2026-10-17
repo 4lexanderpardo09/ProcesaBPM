@@ -78,7 +78,7 @@ jobs:
           retention-days: 7
 
   # Builds the three production images (never publishes them) and starts them against a real PostgreSQL: the migrations
-  # apply, the API answers /health and /ready, and the worker stops cleanly on SIGTERM (scripts/smoke-images.sh).
+  # apply, the API answers /api/health and /api/ready, and the worker stops cleanly on SIGTERM (scripts/smoke-images.sh).
   images:
     name: Docker images
     runs-on: ubuntu-latest

@@ -162,7 +162,7 @@ export class SmokeRun {
     if (source === undefined) throw new Error('Set WEB_BASE_URL (or SMOKE_ORIGIN): the realtime check needs the origin of the web application');
     const origin = new URL(source).origin;
     const connected = await probeRealtime(this.config.BASE_URL, { origin, token: this.ownerToken });
-    if (connected.outcome !== 'CONNECTED') throw new Error(`The owner's socket was not accepted (${JSON.stringify(connected)}): does the proxy forward WebSocket upgrades on /realtime, and is REALTIME_ALLOWED_ORIGINS ${origin}?`);
+    if (connected.outcome !== 'CONNECTED') throw new Error(`The owner's socket was not accepted (${JSON.stringify(connected)}): does the proxy forward WebSocket upgrades on /api/realtime, and is REALTIME_ALLOWED_ORIGINS ${origin}?`);
     const foreign = await probeRealtime(this.config.BASE_URL, { origin: 'https://not-allowed.invalid', token: this.ownerToken });
     if (foreign.outcome !== 'NOT_UPGRADED') throw new Error(`A foreign Origin was not refused (${JSON.stringify(foreign)})`);
     const forged = await probeRealtime(this.config.BASE_URL, { origin, token: 'not-a-token' });
