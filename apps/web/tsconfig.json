@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client", "@testing-library/jest-dom/vitest"],
+    "noEmit": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@design/*": ["../../docs/diseno/*"]
+    }
+  },
+  "include": ["src", "e2e", ".storybook", "vite.config.ts", "playwright.config.ts"]
+}

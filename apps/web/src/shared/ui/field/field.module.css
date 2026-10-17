@@ -1,0 +1,48 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  color: var(--slate);
+}
+
+.required {
+  color: var(--danger);
+}
+
+.control {
+  width: 100%;
+  min-height: 36px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 18px;
+}
+
+.control:focus,
+.control:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-50);
+}
+
+.control[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.hint {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+.error {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--danger);
+}
