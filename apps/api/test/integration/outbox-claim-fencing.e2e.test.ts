@@ -52,6 +52,15 @@ describe('outbox claim fencing (e-mail retried from the platform console)', () =
   // is made due only right before this file's worker runs.
   const makeDue = (id: string) => db.owner.query(`UPDATE platform_outbox_events SET available_at = now() - interval '1 second' WHERE id = $1`, [id]);
 
+  /**
+   * Runs this worker until the event leaves PENDING/PROCESSING. A round claims the oldest due events first and at most a
+   * batch of them: under the full suite, events that other files queued while this one held the outbox can fill the
+   * first rounds, so one round is not enough to reach this event.
+   */
+  const dispatchUntilSettled = async (id: string) => {
+    for (let round = 0; round < 50 && ['PENDING', 'PROCESSING'].includes((await eventRow(id)).status); round += 1) await mail.dispatcher.runOnce();
+  };
+
   /** What a worker that claimed the event long ago still tries to do with its claim. */
   async function actAsStaleHolder(stale: ClaimedEvent<unknown>): Promise<StaleOutcome> {
     const runner = mail.module.get(WorkerTransactionRunner);
@@ -83,7 +92,7 @@ describe('outbox claim fencing (e-mail retried from the platform console)', () =
       // the workers that other test files run against the same database cannot claim the event.
       await makeDue(id);
       mail.mailer.failNextTo(user.email, Object.assign(new Error('550 mailbox unavailable'), { permanent: true }));
-      await mail.dispatcher.runOnce();
+      await dispatchUntilSettled(id);
       expect(await eventRow(id)).toMatchObject({ status: 'FAILED', attempts: 2, claim_token: null });
       expect(mail.mailer.to(user.email)).toHaveLength(0);
 
@@ -99,7 +108,7 @@ describe('outbox claim fencing (e-mail retried from the platform console)', () =
         return send(message);
       };
       try {
-        await mail.dispatcher.runOnce();
+        await dispatchUntilSettled(id);
       } finally {
         mail.mailer.send = send;
       }
