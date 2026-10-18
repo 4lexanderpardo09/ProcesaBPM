@@ -87,6 +87,34 @@ export interface DownloadUrlResponse {
   readonly expiresAt: string;
 }
 
+/** Parse schemas of the responses above (for the web client); `satisfies` keeps them in step with the interfaces. */
+export const commentTicketResponseSchema = z.object({ eventId: uuidSchema }) satisfies z.ZodType<CommentTicketResponse>;
+
+export const storedFileResponseSchema = z.object({
+  id: uuidSchema,
+  name: z.string(),
+  kind: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number(),
+  status: z.enum(['PENDING', 'CONFIRMED', 'DELETED']),
+  createdAt: z.string(),
+  confirmedAt: z.string().nullable(),
+}) satisfies z.ZodType<StoredFileResponse>;
+
+export const ticketDocumentResponseSchema = z.object({
+  id: uuidSchema,
+  role: z.string(),
+  eventId: uuidSchema.nullable(),
+  stepId: uuidSchema.nullable(),
+  fieldCode: z.string().nullable(),
+  version: z.number(),
+  isCurrent: z.boolean(),
+  createdAt: z.string(),
+  file: storedFileResponseSchema,
+}) satisfies z.ZodType<TicketDocumentResponse>;
+
+export const downloadUrlResponseSchema = z.object({ url: z.string(), expiresAt: z.string() }) satisfies z.ZodType<DownloadUrlResponse>;
+
 export type StorageState = 'OK' | 'OVER_LIMIT' | 'BLOCKED';
 
 /** Byte amounts are strings: they can exceed what a JSON number holds exactly. */
