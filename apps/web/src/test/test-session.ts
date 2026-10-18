@@ -33,6 +33,7 @@ export function createTestSession({ signedIn = true, handlers = {} }: TestSessio
     '/auth/logout': server.logout,
     '/auth/me': (options) => fakeProfile(options.headers?.Authorization),
     '/auth/select-tenant': (options) => server.issue((options.body as { tenantId: string }).tenantId),
+    '/tickets': () => ({ items: [], page: 1, pageSize: 25, total: 0 }),
     ...handlers,
   };
   const fake = createFakeTransport(routes);

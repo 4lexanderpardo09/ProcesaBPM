@@ -22,11 +22,22 @@ export interface FakeAuthApiOptions {
   readonly password?: string;
   readonly expiresIn?: number;
   readonly refusedTenants?: Readonly<Record<string, { readonly status: number; readonly code: string }>>;
+  /** The tickets each inbox view holds; a missing view is empty. */
+  readonly tickets?: Readonly<Partial<Record<'assigned' | 'created' | 'observed' | 'all', readonly FakeTicket[]>>>;
+}
+
+export interface FakeTicket {
+  readonly id: string;
+  readonly number: string;
+  readonly title: string;
+  readonly status: 'OPEN' | 'PAUSED' | 'CLOSED';
+  readonly tags?: readonly { readonly id: string; readonly name: string; readonly color: string }[];
 }
 
 export interface RecordedRequest {
   readonly method: string;
   readonly path: string;
+  readonly search: URLSearchParams;
   readonly authorization: string | undefined;
 }
 
@@ -73,7 +84,26 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
 
   const nameOf = (tenantId: string | undefined) => options.organizations.find((organization) => organization.tenantId === tenantId)?.name ?? '?';
 
-  const handlers: Record<string, (route: Route, body: Record<string, unknown>, authorization: string | undefined) => Promise<void>> = {
+  const ticketPage = (search: URLSearchParams) => {
+    const view = (search.get('view') ?? 'assigned') as keyof NonNullable<FakeAuthApiOptions['tickets']>;
+    const status = search.get('status');
+    const page = Number(search.get('page') ?? 1);
+    const pageSize = Number(search.get('pageSize') ?? 25);
+    const matching = (options.tickets?.[view] ?? []).filter((ticket) => status === null || ticket.status === status);
+    const items = matching.slice((page - 1) * pageSize, page * pageSize).map((ticket) => ({
+      companyId: '018f0000-0000-7000-8000-0000000000c1',
+      creatorId: USER_ID,
+      subcategoryId: '018f0000-0000-7000-8000-0000000000c2',
+      currentStepId: null,
+      createdAt: '2026-10-17T15:00:00.000Z',
+      closedAt: null,
+      tags: [],
+      ...ticket,
+    }));
+    return { items, page, pageSize, total: matching.length };
+  };
+
+  const handlers: Record<string, (route: Route, body: Record<string, unknown>, authorization: string | undefined, search: URLSearchParams) => Promise<void>> = {
     'POST /api/auth/login': (route, body) => {
       if (body.password !== password) return error(route, 401, 'INVALID_CREDENTIALS');
       const behaviour = options.login ?? { kind: 'select' };
@@ -125,17 +155,21 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
         tenantMode: 'ACTIVE',
       });
     },
+    'GET /api/tickets': (route, _body, authorization, search) => {
+      if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+      return json(route, 200, ticketPage(search));
+    },
   };
 
   await context.route('**/api/**', async (route) => {
     const request = route.request();
-    const path = new URL(request.url()).pathname;
+    const { pathname: path, searchParams: search } = new URL(request.url());
     const authorization = request.headers().authorization;
-    requests.push({ method: request.method(), path, authorization });
+    requests.push({ method: request.method(), path, search, authorization });
     const handler = handlers[`${request.method()} ${path}`];
     if (handler === undefined) return error(route, 404, 'NOT_FOUND');
     const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
-    return handler(route, body, authorization);
+    return handler(route, body, authorization, search);
   });
 
   return {
