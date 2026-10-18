@@ -27,6 +27,7 @@
 }
 
 .row dd {
+  margin: 0;
   font-weight: 600;
   color: var(--ink);
   text-align: right;
