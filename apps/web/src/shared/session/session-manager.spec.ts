@@ -2,29 +2,15 @@ import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import { createFakeAuthServer } from '@/test/fake-auth-server';
+import { fakeProfile } from '@/test/fake-profile';
 import { createFakeChannelHub } from '@/test/fake-session-channel';
 import { createFakeTransport, type FakeHandler } from '@/test/fake-transport';
-import { decodeIdentity } from './access-token';
 import { createInProcessLock } from './exclusive-lock';
 import { createRefreshCoordinator } from './refresh-coordinator';
 import { createSessionManager, type SessionManager } from './session-manager';
 import { createTokenStore } from './token-store';
 
-const meOf = (authorization: string | undefined, tenantMode = 'ACTIVE') => {
-  const identity = decodeIdentity(authorization?.replace('Bearer ', '') ?? '');
-  return {
-    user: { id: '018f0000-0000-7000-8000-000000000001', email: 'ana@example.com', firstName: 'Ana', lastName: 'Torres', locale: 'es-CO', timeZone: null, mfaEnabled: false, emailVerifiedAt: null },
-    membership: {
-      tenantId: '018f0000-0000-7000-8000-000000000002',
-      status: 'ACTIVE',
-      isOwner: false,
-      role: { id: '018f0000-0000-7000-8000-000000000003', name: `Rol ${identity?.tenantId ?? '?'}`, isAdmin: false },
-      companies: [],
-      signatureFileId: null,
-    },
-    tenantMode,
-  };
-};
+const meOf = (authorization: string | undefined, tenantMode: 'ACTIVE' | 'DELETION_PENDING' = 'ACTIVE') => fakeProfile(authorization, { tenantMode });
 
 const managers: SessionManager[] = [];
 afterEach(() => {

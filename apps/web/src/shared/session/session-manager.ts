@@ -26,6 +26,8 @@ export interface SessionManager {
   signOut(): Promise<void>;
   /** Authorized HTTP client: bearer token, renewal on 401 and session-level error handling. */
   readonly client: HttpClient;
+  /** Plain transport for the anonymous sign-in calls, which carry a challenge or selection token instead. */
+  readonly publicClient: HttpClient;
   dispose(): void;
 }
 
@@ -204,6 +206,7 @@ export function createSessionManager({ transport, store, coordinator, channel, q
     },
     signOut: () => endSession('userSignedOut', true),
     client,
+    publicClient: transport,
     dispose() {
       clearTimeout(retryTimer);
       scheduler?.dispose();

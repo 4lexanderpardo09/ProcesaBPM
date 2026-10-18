@@ -1,0 +1,16 @@
+.codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  list-style: none;
+}
+
+.tools {
+  display: flex;
+  gap: var(--space-2);
+}

@@ -1,4 +1,5 @@
+import { auth } from './auth';
 import { common } from './common';
 import { navigation } from './navigation';
 
-export const es = { common, navigation } as const;
+export const es = { auth, common, navigation } as const;

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { PageHeader } from '@/shared/ui';
-import { paths } from '../router/paths';
+import { paths } from '@/shared/lib/paths';
 
 export function NotFoundPage() {
   const { t } = useTranslation();
