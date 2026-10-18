@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { pageQuerySchema } from '../common.js';
+import { pageQuerySchema, pageResponseSchema } from '../common.js';
 import { attachmentIdsSchema } from '../files/schemas.js';
 import { uuidSchema } from '../ids.js';
-import type { TagResponse } from '../tags/schemas.js';
+import { type TagResponse, tagResponseSchema } from '../tags/schemas.js';
 
 const values = z.record(z.string(), z.unknown()).default({});
 /** An HTML fragment, sanitized by the server; the length limit applies to what is sent. */
@@ -101,6 +101,23 @@ export interface TicketSummaryResponse {
   /** The caller's own tags on this ticket (nobody else's). */
   readonly tags: readonly TagResponse[];
 }
+
+/** Parses `TicketSummaryResponse` (for the web client); `satisfies` keeps it in step with the interface. */
+export const ticketSummaryResponseSchema = z.object({
+  id: uuidSchema,
+  number: z.string(),
+  title: z.string(),
+  status: ticketStatusSchema,
+  companyId: uuidSchema,
+  creatorId: uuidSchema,
+  subcategoryId: uuidSchema,
+  currentStepId: uuidSchema.nullable(),
+  createdAt: z.string(),
+  closedAt: z.string().nullable(),
+  tags: z.array(tagResponseSchema),
+}) satisfies z.ZodType<TicketSummaryResponse>;
+
+export const ticketPageResponseSchema = pageResponseSchema(ticketSummaryResponseSchema);
 
 export interface TicketDetailResponse extends TicketSummaryResponse {
   readonly workflowId: string;
