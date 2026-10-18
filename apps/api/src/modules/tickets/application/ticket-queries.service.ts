@@ -1,12 +1,23 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type ListTicketsQuery, NotFoundError, type Page, tableColumnTotals, type TicketDetailResponse, type TicketEventResponse, type TicketSummaryResponse } from '@procesabpm/shared';
+import {
+  type ListTicketsQuery,
+  NotFoundError,
+  type Page,
+  tableColumnTotals,
+  type TicketCountsResponse,
+  type TicketDetailResponse,
+  type TicketEventResponse,
+  type TicketFiltersQuery,
+  type TicketSummaryResponse,
+  type TicketView,
+} from '@procesabpm/shared';
 import type { Principal } from '../../../common/auth/principal.js';
 import { pageWindow } from '../../../common/crud/pagination.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { TicketQueryRepository, type Where } from '../data/ticket-query.repository.js';
-import { createdBy, observedBy } from '../domain/ticket-subject.js';
+import { ticketFilters, viewFilter } from '../domain/ticket-list-filters.js';
 import type { TicketActor } from '../../engine/application/locked-ticket.js';
 import { readableTickets, ticketActorOf } from './ticket-access.js';
 
@@ -84,8 +95,18 @@ export class TicketQueriesService {
 
   list(principal: Principal, ability: AppAbility, query: ListTicketsQuery): Promise<Page<TicketSummaryResponse>> {
     return this.runner.withTenantTransaction(async (tx) => {
-      const { rows, total } = await this.tickets.list(tx, this.context.require().tenantId, [this.viewFilter(principal, query), readableTickets(ability)], pageWindow(query), principal.userId);
+      const { rows, total } = await this.tickets.list(tx, this.context.require().tenantId, this.filtersFor(principal, ability, query.view, query), pageWindow(query), principal.userId);
       return { items: rows.map(toSummary), page: query.page, pageSize: query.pageSize, total };
+    });
+  }
+
+  /** The total of every view under the same filters as the listing: one count per view, so the web does not fetch four pages. */
+  counts(principal: Principal, ability: AppAbility, query: TicketFiltersQuery): Promise<TicketCountsResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      const tenantId = this.context.require().tenantId;
+      const count = (view: TicketView) => this.tickets.count(tx, tenantId, this.filtersFor(principal, ability, view, query));
+      // One query after another: an interactive transaction has a single connection.
+      return { assigned: await count('assigned'), created: await count('created'), observed: await count('observed'), all: await count('all') };
     });
   }
 
@@ -97,19 +118,8 @@ export class TicketQueriesService {
     });
   }
 
-  /** What the caller asked to look at; the ability filter narrows it further, never widens it. */
-  private viewFilter(principal: Principal, query: ListTicketsQuery): Where {
-    const status = query.status === undefined ? {} : { status: query.status };
-    const context = { userId: principal.userId, membership: principal.membership };
-    switch (query.view) {
-      case 'created':
-        return { ...status, ...createdBy(principal.userId) };
-      case 'assigned':
-        return { ...status, assignees: { some: { userId: principal.userId } } };
-      case 'observed':
-        return { ...status, ...observedBy(context) };
-      case 'all':
-        return status;
-    }
+  /** The view, the inbox filters and the access filter, all in one `AND`: what was asked can only narrow what may be read. */
+  private filtersFor(principal: Principal, ability: AppAbility, view: TicketView, query: TicketFiltersQuery): Where[] {
+    return [viewFilter(view, { userId: principal.userId, membership: principal.membership }), ...ticketFilters(query), readableTickets(ability)];
   }
 }

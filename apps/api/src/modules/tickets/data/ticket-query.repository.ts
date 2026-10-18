@@ -47,6 +47,9 @@ const REALTIME_SUMMARY = {
 /** The caller's own tags on a ticket (never anyone else's): part of the summary and the detail. */
 const withTags = (userId: string) => ({ tags: { where: { userId }, select: { tag: { select: { id: true, name: true, color: true } } } } }) as const;
 
+/** The tenant's tickets that are not deleted and meet every filter. */
+const liveTickets = (tenantId: string, filters: readonly Where[]) => ({ AND: [{ tenantId, deletedAt: null }, ...filters] }) as never;
+
 /** Reads of tickets. The caller passes the access filter (per-record authorization): it is part of every query. */
 @Injectable()
 export class TicketQueryRepository {
@@ -55,10 +58,14 @@ export class TicketQueryRepository {
   }
 
   async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }, userId: string) {
-    const where = { AND: [{ tenantId, deletedAt: null }, ...filters] } as never;
     // One query after another: an interactive transaction has a single connection.
-    const rows = await tx.ticket.findMany({ where, select: { ...SUMMARY, ...withTags(userId) }, orderBy: { number: 'desc' }, ...window });
-    return { rows, total: await tx.ticket.count({ where }) };
+    const rows = await tx.ticket.findMany({ where: liveTickets(tenantId, filters), select: { ...SUMMARY, ...withTags(userId) }, orderBy: { number: 'desc' }, ...window });
+    return { rows, total: await this.count(tx, tenantId, filters) };
+  }
+
+  /** How many live tickets of the tenant meet every filter. */
+  count(tx: TenantTransaction, tenantId: string, filters: readonly Where[]): Promise<number> {
+    return tx.ticket.count({ where: liveTickets(tenantId, filters) });
   }
 
   findRealtimeSummary(tx: TenantTransaction, tenantId: string, ticketId: string, access: Where) {

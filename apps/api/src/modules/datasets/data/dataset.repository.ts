@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@procesabpm/db';
 import type { DatasetColumn, DatasetListQuery, DatasetRowData } from '@procesabpm/shared';
+import { likeContains } from '../../../common/crud/like-pattern.js';
 import { pageWindow } from '../../../common/crud/pagination.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { DatasetSheetRow } from '../domain/dataset-sheet.js';
@@ -45,9 +46,6 @@ const toRow = (row: DatasetRecord): DatasetRow => ({
 
 /** Rows go in batches: one statement per 1 000 rows keeps each insert small. */
 const INSERT_BATCH = 1_000;
-
-/** `%` and `_` typed by a person are plain characters in the search, not wildcards. */
-const likeContains = (text: string): string => `%${text.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
 
 const record = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 

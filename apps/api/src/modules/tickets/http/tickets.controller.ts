@@ -25,7 +25,10 @@ import {
   reassignTicketRequestSchema,
   type TakeTicketRequest,
   takeTicketRequestSchema,
+  type TicketCountsResponse,
   type TicketDetailResponse,
+  type TicketFiltersQuery,
+  ticketFiltersQuerySchema,
   type TicketEventResponse,
   type TicketFormResponse,
   type TicketMutationResponse,
@@ -83,6 +86,13 @@ export class TicketsController {
   @Get()
   list(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Query(new ZodValidationPipe(listTicketsQuerySchema)) query: ListTicketsQuery): Promise<Page<TicketSummaryResponse>> {
     return this.queries.list(principal, ability, query);
+  }
+
+  /** Declared before `:id` so `counts` is never taken for a ticket id. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Get('counts')
+  counts(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Query(new ZodValidationPipe(ticketFiltersQuerySchema)) query: TicketFiltersQuery): Promise<TicketCountsResponse> {
+    return this.queries.counts(principal, ability, query);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)

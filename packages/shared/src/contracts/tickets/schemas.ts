@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { pageQuerySchema, pageResponseSchema } from '../common.js';
+import { pageResponseSchema } from '../common.js';
 import { attachmentIdsSchema } from '../files/schemas.js';
 import { uuidSchema } from '../ids.js';
 import { type TagResponse, tagResponseSchema } from '../tags/schemas.js';
@@ -74,12 +74,6 @@ export type ReopenTicketRequest = z.infer<typeof reopenTicketRequestSchema>;
 /** Signing or rejecting one's own pending signature of a PARALLEL step; `assigneeId` is for a manual-selection step that follows. */
 export const parallelTaskActionRequestSchema = z.object({ visitId: uuidSchema, comment, assigneeId: uuidSchema.optional() });
 export type ParallelTaskActionRequest = z.infer<typeof parallelTaskActionRequestSchema>;
-
-export const listTicketsQuerySchema = pageQuerySchema.pick({ page: true, pageSize: true }).extend({
-  view: z.enum(TICKET_VIEWS).default('assigned'),
-  status: ticketStatusSchema.optional(),
-});
-export type ListTicketsQuery = z.infer<typeof listTicketsQuerySchema>;
 
 export interface TicketAssigneeResponse {
   readonly userId: string;
