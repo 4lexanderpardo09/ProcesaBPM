@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '@/shared/api';
+import { ApiError, NetworkError } from '@/shared/api';
 import { createFakeAuthServer } from '@/test/fake-auth-server';
 import { fakeProfile } from '@/test/fake-profile';
 import { createFakeChannelHub } from '@/test/fake-session-channel';
@@ -25,6 +25,9 @@ function setUp(extraHandlers: Record<string, FakeHandler> = {}) {
   const me = vi.fn<FakeHandler>((options) => meOf(options.headers?.Authorization));
   let ids = 0;
 
+  let wakeListeners: (() => void)[] = [];
+  const wake = () => wakeListeners.forEach((listener) => listener());
+
   function openTab() {
     const store = createTokenStore();
     const channel = hub.channel();
@@ -39,13 +42,16 @@ function setUp(extraHandlers: Record<string, FakeHandler> = {}) {
       queryClient,
       now: Date.now,
       random: () => 0,
-      onWake: () => () => undefined,
+      onWake: (listener) => {
+        wakeListeners.push(listener);
+        return () => (wakeListeners = wakeListeners.filter((other) => other !== listener));
+      },
     });
     managers.push(manager);
     return { manager, store, queryClient, fake };
   }
 
-  return { server, hub, me, openTab };
+  return { server, hub, me, openTab, wake };
 }
 
 const statusOf = (manager: SessionManager) => manager.getState().status;
@@ -235,5 +241,74 @@ describe('createSessionManager', () => {
 
     expect(manager.getState()).toEqual({ status: 'signedOut', reason: 'expired' });
     expect(hub.posted).toContainEqual({ type: 'signed-out', reason: 'expired' });
+  });
+
+  it('starts again by itself when the network comes back after a failed start', async () => {
+    const { openTab, server, wake } = setUp();
+    server.refresh.mockImplementation(() => {
+      throw new NetworkError(new TypeError('offline'));
+    });
+    const { manager } = openTab();
+    manager.start();
+    await until(() => statusOf(manager) === 'unavailable');
+
+    server.refresh.mockImplementation(() => server.issue());
+    wake();
+
+    await until(() => statusOf(manager) === 'signedIn');
+  });
+
+  it('cancels the maintenance retry when the person signs out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { openTab, server } = setUp();
+    server.refresh.mockImplementationOnce(() => {
+      throw new ApiError({ status: 503, code: 'MAINTENANCE', message: 'x', details: { title: 'x', endsAt: null }, retryAfterSeconds: 60 });
+    });
+    const { manager } = openTab();
+    manager.start();
+    await vi.waitFor(() => expect(statusOf(manager)).toBe('blocked'));
+
+    await manager.signOut();
+    const refreshesAfterSignOut = server.refresh.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(61_000);
+
+    expect(server.refresh).toHaveBeenCalledTimes(refreshesAfterSignOut);
+    expect(manager.getState()).toEqual({ status: 'signedOut', reason: 'userSignedOut' });
+  });
+
+  it('ends the session once when several answers ask for it at the same time', async () => {
+    const { openTab, server } = setUp({
+      '/tickets': () => {
+        throw new ApiError({ status: 403, code: 'MFA_REQUIRED', message: 'x' });
+      },
+    });
+    const { manager } = openTab();
+    manager.start();
+    await until(() => statusOf(manager) === 'signedIn');
+
+    await Promise.all([manager.client.request('/tickets'), manager.client.request('/tickets'), manager.client.request('/tickets')].map((request) => request.catch(() => undefined)));
+    await until(() => statusOf(manager) === 'signedOut');
+
+    expect(server.logout).toHaveBeenCalledOnce();
+  });
+
+  it('tells the other tabs why: an organization that now requires MFA keeps its notice there too', async () => {
+    const { openTab, server } = setUp({
+      '/tickets': () => {
+        throw new ApiError({ status: 403, code: 'MFA_REQUIRED', message: 'x' });
+      },
+    });
+    const first = openTab();
+    const second = openTab();
+    first.manager.start();
+    await until(() => statusOf(first.manager) === 'signedIn');
+    second.manager.start();
+    await until(() => statusOf(second.manager) === 'signedIn');
+
+    await first.manager.client.request('/tickets').catch(() => undefined);
+
+    await until(() => statusOf(second.manager) === 'signedOut');
+    expect(second.manager.getState()).toEqual({ status: 'signedOut', reason: 'mfaRequired' });
+    expect(server.logout).toHaveBeenCalledOnce();
   });
 });

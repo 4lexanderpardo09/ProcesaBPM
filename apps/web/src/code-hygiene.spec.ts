@@ -18,7 +18,7 @@ describe('code hygiene', () => {
   });
 
   it('never renders HTML from strings', () => {
-    expect(offenders(/dangerouslySetInnerHTML|\.innerHTML\s*=|insertAdjacentHTML/, () => true)).toEqual([]);
+    expect(offenders(/dangerouslySetInnerHTML|\.(inner|outer)HTML\s*=|insertAdjacentHTML|document\.write|srcdoc/, () => true)).toEqual([]);
   });
 
   it('never writes to the console from application code', () => {

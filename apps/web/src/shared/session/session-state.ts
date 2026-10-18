@@ -36,7 +36,7 @@ export function sessionReducer(state: SessionState, event: SessionEvent): Sessio
     case 'REFRESH_FAILED':
       return afterRefreshFailure(state, event.failure);
     case 'SESSION_ENDED':
-      return { status: 'signedOut', reason: event.reason };
+      return state.status === 'signedOut' ? state : { status: 'signedOut', reason: event.reason };
     case 'BLOCKED':
       return { status: 'blocked', block: event.block };
     case 'RETRY':
@@ -51,6 +51,7 @@ function isLoading(state: SessionState, identity: SessionIdentity): boolean {
 function afterRefreshFailure(state: SessionState, failure: RefreshFailure): SessionState {
   switch (failure.kind) {
     case 'unauthenticated':
+      if (state.status === 'signedOut') return state;
       return { status: 'signedOut', reason: state.status === 'bootstrapping' ? undefined : 'expired' };
     case 'mfaRequired':
       return { status: 'signedOut', reason: 'mfaRequired' };

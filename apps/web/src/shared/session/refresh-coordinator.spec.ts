@@ -217,7 +217,7 @@ describe('createRefreshCoordinator', () => {
     const { coordinator, store } = tab();
     store.set(tokenExpiringIn(600_000));
 
-    await coordinator.endSession(true);
+    await coordinator.endSession(true, 'userSignedOut');
 
     expect(server.logout).toHaveBeenCalledOnce();
     expect(store.get()).toBeUndefined();
@@ -226,8 +226,46 @@ describe('createRefreshCoordinator', () => {
   it('forgets the session without calling the API when it is not asked to revoke', async () => {
     const { server, tab } = setUp();
     const { coordinator } = tab();
-    await coordinator.endSession(false);
+    await coordinator.endSession(false, 'expired');
     expect(server.logout).not.toHaveBeenCalled();
+  });
+
+  it('signs out only after a refresh in flight finished, and tells the other tabs before releasing the lock', async () => {
+    const server = createFakeAuthServer();
+    const events: string[] = [];
+    const inner = createInProcessLock();
+    const lock: ExclusiveLock = { run: (work) => inner.run(work).finally(() => events.push('released')) };
+    const hub = createFakeChannelHub();
+    const channel = hub.channel();
+    const spied: SessionChannel = { ...channel, post: (message) => (events.push(message.type), channel.post(message)) };
+    server.refresh.mockImplementation(() => (events.push('refresh'), server.issue()));
+    server.logout.mockImplementation(() => (events.push('logout'), undefined));
+    const { coordinator } = openTab(server, lock, spied);
+
+    await Promise.all([coordinator.renew(), coordinator.endSession(true, 'userSignedOut')]);
+
+    expect(events.filter((event) => event !== 'token-request')).toEqual(['refresh', 'token', 'released', 'logout', 'signed-out', 'released']);
+    expect(hub.posted.at(-1)).toEqual({ type: 'signed-out', reason: 'userSignedOut' });
+  });
+
+  it('ignores a broadcast token that is already expired', async () => {
+    const { hub, tab } = setUp();
+    const { store } = tab();
+    const expired = toAccessToken({ accessToken: makeJwt({ sid: 'expired' }), tokenType: 'Bearer', expiresIn: 1 }, NOW - 5_000);
+    hub.channel().post({ type: 'token', token: expired.value, receivedAt: expired.receivedAt, expiresAt: expired.expiresAt });
+    await Promise.resolve();
+    expect(store.get()).toBeUndefined();
+  });
+
+  it('keeps a newer token over an older one that arrives late', async () => {
+    const { hub, tab } = setUp();
+    const { store } = tab();
+    const newer = toAccessToken({ accessToken: makeJwt({ sid: 'newer' }), tokenType: 'Bearer', expiresIn: 900 }, NOW);
+    store.set(newer);
+    const older = toAccessToken({ accessToken: makeJwt({ sid: 'older' }), tokenType: 'Bearer', expiresIn: 900 }, NOW - 60_000);
+    hub.channel().post({ type: 'token', token: older.value, receivedAt: older.receivedAt, expiresAt: older.expiresAt });
+    await Promise.resolve();
+    expect(store.get()).toBe(newer);
   });
 
   it('stops listening to the other tabs once disposed', async () => {

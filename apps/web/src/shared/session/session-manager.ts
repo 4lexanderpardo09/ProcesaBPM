@@ -48,7 +48,9 @@ export function createSessionManager({ transport, store, coordinator, channel, q
   let started = false;
   let checkingDeletion = false;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let ending: Promise<void> | undefined;
   let scheduler: { dispose(): void } | undefined;
+  let unsubscribeWake: () => void = () => undefined;
   const listeners = new Set<() => void>();
 
   const dispatch = (event: SessionEvent) => {
@@ -104,22 +106,20 @@ export function createSessionManager({ transport, store, coordinator, channel, q
   /** A token for an identity this tab is not showing yet: drop the old data and load the profile. */
   function adopt(token: AccessToken) {
     if (sameIdentity(identityOf(state), token.identity) && state.status !== 'blocked') return;
+    clearTimeout(retryTimer);
     dropServerData();
     dispatch({ type: 'TOKEN_ACQUIRED', identity: token.identity });
     loadProfile(token.identity);
   }
 
   function handleRefreshFailure(failure: RefreshFailure) {
+    if (failure.kind === 'mfaRequired') return void endSession('mfaRequired', true);
+    if (failure.kind === 'blocked') return block(failure.block);
     const hadSession = identityOf(state) !== undefined;
     dispatch({ type: 'REFRESH_FAILED', failure });
-    if (failure.kind === 'unauthenticated') {
-      forgetLocally();
-      if (hadSession) channel.post({ type: 'signed-out', reason: 'expired' });
-    } else if (failure.kind === 'mfaRequired') {
-      void endSession('mfaRequired', true);
-    } else if (failure.kind === 'blocked') {
-      block(failure.block);
-    }
+    if (failure.kind !== 'unauthenticated') return;
+    forgetLocally();
+    if (hadSession) channel.post({ type: 'signed-out', reason: 'expired' });
   }
 
   function block(sessionBlock: SessionBlock) {
@@ -133,10 +133,10 @@ export function createSessionManager({ transport, store, coordinator, channel, q
 
   function handleRequestError(error: ApiError) {
     const effect = sessionEffectOf(error);
-    if (effect === undefined || checkingDeletion) return;
+    if (effect === undefined) return;
     if (effect.kind === 'ended') void endSession(effect.reason, effect.reason === 'mfaRequired');
     else if (effect.kind === 'blocked') block(effect.block);
-    else void checkDeletionPending();
+    else if (!checkingDeletion) void checkDeletionPending();
   }
 
   /** An owner or administrator may stay in a pending-deletion organization (export only); anyone else is blocked. */
@@ -153,11 +153,18 @@ export function createSessionManager({ transport, store, coordinator, channel, q
     block({ kind: 'tenantPendingDeletion' });
   }
 
-  async function endSession(reason: SignOutReason, revoke: boolean) {
-    await coordinator.endSession(revoke);
-    dropServerData();
-    dispatch({ type: 'SESSION_ENDED', reason });
-    channel.post({ type: 'signed-out', reason });
+  /** Ends the session once, however many answers ask for it at the same time; the other tabs are told under the lock. */
+  function endSession(reason: SignOutReason, revoke: boolean): Promise<void> {
+    if (state.status === 'signedOut') return Promise.resolve();
+    ending ??= (async () => {
+      clearTimeout(retryTimer);
+      await coordinator.endSession(revoke, reason);
+      dropServerData();
+      dispatch({ type: 'SESSION_ENDED', reason });
+    })().finally(() => {
+      ending = undefined;
+    });
+    return ending;
   }
 
   function loadProfile(identity: SessionIdentity) {
@@ -174,7 +181,12 @@ export function createSessionManager({ transport, store, coordinator, channel, q
   function retry() {
     clearTimeout(retryTimer);
     dispatch({ type: 'RETRY' });
-    bootstrap();
+    if (state.status === 'bootstrapping') bootstrap();
+  }
+
+  /** Back online or visible again: try once more if the session could not start or a maintenance window may be over. */
+  function retryOnWake() {
+    if (state.status === 'unavailable' || (state.status === 'blocked' && state.block.kind === 'maintenance')) retry();
   }
 
   const unsubscribeStore = store.subscribe((token) => {
@@ -183,8 +195,9 @@ export function createSessionManager({ transport, store, coordinator, channel, q
 
   const unsubscribeChannel = channel.subscribe((message) => {
     if (message.type !== 'signed-out') return;
+    clearTimeout(retryTimer);
     forgetLocally();
-    dispatch({ type: 'SESSION_ENDED', reason: message.reason === 'expired' ? 'expired' : 'signedOutElsewhere' });
+    dispatch({ type: 'SESSION_ENDED', reason: message.reason === 'userSignedOut' ? 'signedOutElsewhere' : message.reason });
   });
 
   return {
@@ -197,6 +210,7 @@ export function createSessionManager({ transport, store, coordinator, channel, q
       if (started) return;
       started = true;
       scheduler = createRefreshScheduler({ store, renew: renewInBackground, now, random, onWake });
+      unsubscribeWake = onWake(retryOnWake);
       bootstrap();
     },
     retry,
@@ -207,11 +221,15 @@ export function createSessionManager({ transport, store, coordinator, channel, q
     signOut: () => endSession('userSignedOut', true),
     client,
     publicClient: transport,
+    /** The manager owns the coordinator and the channel it was given. */
     dispose() {
       clearTimeout(retryTimer);
       scheduler?.dispose();
+      unsubscribeWake();
       unsubscribeStore();
       unsubscribeChannel();
+      coordinator.dispose();
+      channel.close();
     },
   };
 }

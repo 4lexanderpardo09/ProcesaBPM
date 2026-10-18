@@ -11,14 +11,15 @@ export interface BackupCodesPanelProps {
   readonly onContinue: () => void;
 }
 
-/** Builds the text file in the browser and releases its URL right away: the codes never leave the page otherwise. */
+/** Builds the text file in the browser and releases its URL right after: the codes never leave the page otherwise. */
 function downloadText(fileName: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  // Released on the next task: revoking at once can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export function BackupCodesPanel({ codes, onContinue }: BackupCodesPanelProps) {

@@ -46,7 +46,7 @@ test.describe('several tabs of one browser', () => {
 
     await first.getByRole('button', { name: 'Cerrar sesión' }).click();
 
-    await expect(second).toHaveURL(/\/login\?returnTo=%2Fpeople&notice=signedOutElsewhere$/, { timeout: 2_000 });
+    await expect(second).toHaveURL(/\/login\?notice=signedOutElsewhere$/, { timeout: 2_000 });
     await expect(second.getByText('Cerraste sesión en otra pestaña.')).toBeVisible();
   });
 });

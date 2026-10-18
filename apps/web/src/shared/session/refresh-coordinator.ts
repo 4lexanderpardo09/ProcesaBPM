@@ -1,11 +1,11 @@
 import type { AccessTokenResponse } from '@procesabpm/shared';
 import { type HttpClient, NetworkError } from '@/shared/api';
-import { type AccessToken, accessTokenOf, toAccessToken } from './access-token';
+import { type AccessToken, accessTokenOf, sameIdentity, toAccessToken } from './access-token';
 import type { ExclusiveLock } from './exclusive-lock';
 import { logoutSession, refreshSession } from './session-api';
 import type { SessionChannel, SessionMessage } from './session-channel';
 import { refreshFailureOf } from './session-error-policy';
-import { RefreshFailedError } from './session-errors';
+import { RefreshFailedError, type SignOutReason } from './session-errors';
 import type { TokenStore } from './token-store';
 
 export interface RefreshCoordinator {
@@ -13,8 +13,8 @@ export interface RefreshCoordinator {
   renew(rejected?: string): Promise<AccessToken>;
   /** Opens a new session (select-tenant) under the same lock as the refresh, so two cookie writes never race. */
   establish(open: () => Promise<AccessTokenResponse>): Promise<AccessToken>;
-  /** Forgets the token and, when `revoke`, ends the session on the server (best effort). */
-  endSession(revoke: boolean): Promise<void>;
+  /** Forgets the token, ends the session on the server when `revoke` (best effort) and tells the other tabs, all under the lock. */
+  endSession(revoke: boolean, reason: SignOutReason): Promise<void>;
   dispose(): void;
 }
 
@@ -72,9 +72,13 @@ export function createRefreshCoordinator({
     if (token !== undefined) pendingPeerRequests.get(message.requestId)?.(token);
   }
 
+  /** A token from another tab, unless it is already expired or older than the one this tab holds for the same identity. */
   function adoptBroadcast(message: { token: string; receivedAt: number; expiresAt: number }) {
     const token = tokenFrom(message);
-    if (token !== undefined) store.set(token);
+    if (token === undefined || token.expiresAt <= now()) return;
+    const current = store.get();
+    if (current !== undefined && sameIdentity(current.identity, token.identity) && current.receivedAt > token.receivedAt) return;
+    store.set(token);
   }
 
   function answerPeer(requestId: string) {
@@ -143,10 +147,11 @@ export function createRefreshCoordinator({
         return token;
       });
     },
-    endSession(revoke) {
+    endSession(revoke, reason) {
       return lock.run(async () => {
         if (revoke) await logoutSession(transport).catch(() => undefined);
         store.clear();
+        channel.post({ type: 'signed-out', reason });
       });
     },
     dispose() {

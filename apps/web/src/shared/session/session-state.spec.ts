@@ -36,6 +36,8 @@ describe('sessionReducer', () => {
     ['retry from blocked starts again', blocked, { type: 'RETRY' }, bootstrapping],
     ['retry while signed in changes nothing', signedIn, { type: 'RETRY' }, signedIn],
     ['a profile while signed out is ignored', signedOut, { type: 'PROFILE_LOADED', identity: alice }, signedOut],
+    ['another tab signing out keeps the reason this tab already shows', signedOut, { type: 'SESSION_ENDED', reason: 'signedOutElsewhere' }, signedOut],
+    ['a refused refresh while already signed out keeps the reason', { status: 'signedOut', reason: 'userSignedOut' }, { type: 'REFRESH_FAILED', failure: { kind: 'unauthenticated' } }, { status: 'signedOut', reason: 'userSignedOut' }],
   ])('%s', (_label, from, event, to) => {
     expect(sessionReducer(from, event)).toEqual(to);
   });

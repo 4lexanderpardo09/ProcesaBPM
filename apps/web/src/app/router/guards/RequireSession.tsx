@@ -30,7 +30,9 @@ export function RequireSession() {
     case 'blocked':
       return <SessionBlockedPage block={state.block} />;
     case 'signedOut': {
-      const returnTo = state.reason === 'userSignedOut' ? undefined : `${location.pathname}${location.search}${location.hash}`;
+      // Only the same person comes back to the same page; after signing out (here or elsewhere) the next one starts at home.
+      const keepsPage = state.reason !== 'userSignedOut' && state.reason !== 'signedOutElsewhere';
+      const returnTo = keepsPage ? `${location.pathname}${location.search}${location.hash}` : undefined;
       return <Navigate replace to={loginPath(returnTo, state.reason === undefined ? undefined : NOTICE_BY_REASON[state.reason])} />;
     }
     case 'signedIn':
