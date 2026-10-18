@@ -25,7 +25,7 @@ export function sessionBlockOf(error: ApiError): SessionBlock | undefined {
 
 /** What an error from an authorized request means for the whole session (`undefined`: nothing, the caller handles it). */
 export function sessionEffectOf(error: ApiError): SessionEffect | undefined {
-  if (error.status === 401) return { kind: 'ended', reason: 'expired' };
+  if (error.status === 401 && error.code === ERROR_CODES.unauthenticated) return { kind: 'ended', reason: 'expired' };
   if (error.code === ERROR_CODES.mfaRequired) return { kind: 'ended', reason: 'mfaRequired' };
   if (error.code === ERROR_CODES.tenantPendingDeletion) return { kind: 'deletionPending' };
   const block = sessionBlockOf(error);

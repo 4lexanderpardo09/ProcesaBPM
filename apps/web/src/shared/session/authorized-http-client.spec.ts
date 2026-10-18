@@ -89,6 +89,42 @@ describe('createAuthorizedHttpClient', () => {
     await expect(client.request('/tags', { schema: tagsSchema })).resolves.toEqual(['same tenant']);
   });
 
+  it('does not renew nor end the session on a 401 that is an answer (a wrong current password)', async () => {
+    const wrongPassword = new ApiError({ status: 401, code: 'INVALID_CREDENTIALS', message: 'x' });
+    const { client, tokens, sink, fake } = setUp(() => {
+      throw wrongPassword;
+    });
+
+    await expect(client.request('/tags')).rejects.toBe(wrongPassword);
+    expect(tokens.renew).not.toHaveBeenCalled();
+    expect(fake.calls).toHaveLength(1);
+    expect(sink.report).toHaveBeenCalledWith(wrongPassword);
+  });
+
+  it('never replays a request under another organization after a 401', async () => {
+    const { client, tokens, fake, setCurrent } = setUp(() => {
+      throw unauthorized();
+    });
+    vi.mocked(tokens.renew).mockImplementation(async () => {
+      const other = token('s5', 'tenant-2');
+      setCurrent(other);
+      return other;
+    });
+
+    await expect(client.request('/tags')).rejects.toBeInstanceOf(SessionChangedError);
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  it('drops an error that arrives after the organization changed instead of reporting it to the new session', async () => {
+    const { client, sink, setCurrent } = setUp(() => {
+      setCurrent(token('s9', 'tenant-2'));
+      throw new ApiError({ status: 403, code: 'TENANT_SUSPENDED', message: 'x' });
+    });
+
+    await expect(client.request('/tags')).rejects.toBeInstanceOf(SessionChangedError);
+    expect(sink.report).not.toHaveBeenCalled();
+  });
+
   it('lets non-API errors through untouched', async () => {
     const boom = new TypeError('boom');
     const { client, sink } = setUp(() => {

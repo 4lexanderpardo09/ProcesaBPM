@@ -22,7 +22,7 @@ describe('sessionEffectOf', () => {
     expect(sessionEffectOf(error)).toEqual(effect);
   });
 
-  it.each([apiError(403, 'PERMISSION_DENIED'), apiError(404, 'NOT_FOUND'), apiError(422, 'INVALID_STATE'), apiError(500, 'INTERNAL_ERROR')])(
+  it.each([apiError(401, 'INVALID_CREDENTIALS'), apiError(401, 'INVALID_MFA_CODE'), apiError(403, 'PERMISSION_DENIED'), apiError(404, 'NOT_FOUND'), apiError(422, 'INVALID_STATE'), apiError(500, 'INTERNAL_ERROR')])(
     'leaves %s to the caller',
     (error) => {
       expect(sessionEffectOf(error)).toBeUndefined();
