@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { AuthCard } from './AuthCard';
+import { AuthPanel } from './AuthPanel';
 import { OrganizationPicker } from './OrganizationPicker';
 
 const organizations = [
@@ -13,9 +13,9 @@ const meta = {
   component: OrganizationPicker,
   decorators: [
     (Story) => (
-      <AuthCard>
+      <AuthPanel>
         <Story />
-      </AuthCard>
+      </AuthPanel>
     ),
   ],
   args: {

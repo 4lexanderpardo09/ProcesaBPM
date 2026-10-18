@@ -42,7 +42,7 @@ test('enrolls the second factor with a real authenticator code and saves the bac
   await page.getByRole('button', { name: 'Activar y continuar' }).click();
 
   await expect(page.getByRole('heading', { name: 'Guarda tus códigos de respaldo' })).toBeVisible();
-  await expect(page.getByRole('listitem')).toHaveCount(10);
+  await expect(page.getByRole('main').getByRole('listitem')).toHaveCount(10);
   await page.getByRole('checkbox', { name: 'Guardé los códigos en un lugar seguro' }).check();
   await page.getByRole('button', { name: 'Continuar' }).click();
 

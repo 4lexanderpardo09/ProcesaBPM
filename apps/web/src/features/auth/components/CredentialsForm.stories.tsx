@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router';
 import { ApiError } from '@/shared/api';
-import { AuthCard } from './AuthCard';
+import { AuthPanel } from './AuthPanel';
 import { CredentialsForm } from './CredentialsForm';
 
 const meta = {
@@ -10,9 +10,9 @@ const meta = {
   decorators: [
     (Story) => (
       <MemoryRouter>
-        <AuthCard>
+        <AuthPanel>
           <Story />
-        </AuthCard>
+        </AuthPanel>
       </MemoryRouter>
     ),
   ],

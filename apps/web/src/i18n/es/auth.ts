@@ -1,4 +1,22 @@
 export const auth = {
+  brand: {
+    headline: 'Tus procesos, paso a paso y a tiempo.',
+    summary: 'Diseña flujos, define quién aprueba y mide cada paso contra su SLA.',
+    highlights: {
+      workflows: 'Flujos visuales con decisiones y reintentos',
+      sla: 'SLA en horas o días hábiles, con tu calendario',
+      approvals: 'Aprobaciones con suplentes y delegaciones',
+    },
+    flow: {
+      start: { kind: 'Inicio', name: 'Solicitud creada' },
+      step: { kind: 'Paso', name: 'Revisión' },
+      approval: { kind: 'Aprobación', name: 'Jefe de área' },
+      decision: { kind: 'Decisión', name: '¿Aprobada?' },
+      end: { kind: 'Fin', name: 'Cerrada' },
+      yes: 'Sí',
+      no: 'No',
+    },
+  },
   login: {
     title: 'Inicia sesión',
     email: 'Correo',

@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { Logo } from '@/shared/ui';
-import styles from './AuthCard.module.css';
+import styles from './AuthPanel.module.css';
 
-export function AuthCard({ children }: { readonly children: ReactNode }) {
+/** The column of a sign-in page; it shows the logo only when the brand panel is hidden. */
+export function AuthPanel({ children }: { readonly children: ReactNode }) {
   return (
-    <section className={styles.card}>
+    <section className={styles.panel}>
       <div className={styles.brand}>
         <Logo />
       </div>
