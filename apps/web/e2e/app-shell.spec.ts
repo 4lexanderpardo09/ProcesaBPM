@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
+import { installFakeAuthApi } from './support/fake-auth-api';
+
+const ACME = '018f0000-0000-7000-8000-0000000000a1';
 
 test.describe('app shell', () => {
+  test.beforeEach(async ({ context }) => {
+    await installFakeAuthApi(context, { organizations: [{ tenantId: ACME, slug: 'acme', name: 'Acme' }], signedInTo: ACME });
+  });
+
   test('opens on the inboxes and moves between sections from the sidebar', async ({ page }) => {
     await page.goto('/');
 
@@ -29,6 +36,7 @@ test.describe('app shell', () => {
 
   test('loads the design tokens and the logo', async ({ page }) => {
     await page.goto('/tickets');
+    await expect(page.getByRole('heading', { level: 1, name: 'Bandejas' })).toBeVisible();
     const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     expect(background).toBe('rgb(245, 246, 248)');
     const logo = page.getByRole('complementary').locator('img');
