@@ -5,6 +5,7 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { accessibleWhere } from '../../authorization/domain/record-access.js';
+import { isOverdue } from '../../tickets/domain/ticket-sla.js';
 import { TICKET_READ_ACTIONS, TICKET_SUBJECT } from '../../tickets/domain/ticket-subject.js';
 import { DashboardRepository } from '../data/dashboard.repository.js';
 
@@ -47,7 +48,7 @@ export class DashboardService {
     return this.runner.withTenantTransaction(async (tx) => {
       const { tenantId, userId } = this.context.require();
       const access = accessibleWhere(ability, TICKET_READ_ACTIONS, TICKET_SUBJECT);
-      const now = this.clock.now().getTime();
+      const now = this.clock.now();
       const rows = await this.repository.pending(tx, tenantId, userId, access, PENDING_LIMIT);
       // Already most urgent first (the repository orders before the limit); a ticket with no SLA goes last.
       return rows.map((row) => ({
@@ -58,7 +59,8 @@ export class DashboardService {
         currentStepId: row.currentStepId,
         createdAt: row.createdAt.toISOString(),
         dueAt: row.dueAt?.toISOString() ?? null,
-        overdue: row.dueAt !== null && row.dueAt.getTime() < now,
+        // Only running clocks get here (the repository skips the paused ones).
+        overdue: isOverdue({ dueAt: row.dueAt, pausedAt: null }, now),
       }));
     });
   }
