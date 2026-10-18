@@ -139,11 +139,11 @@ describe('POST /auth/switch-tenant', () => {
         await db.platform.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [other.tenantId, user.userId]);
         return other.tenantId;
       }],
-    ])('403 PERMISSION_DENIED %s', async (_label, targetOf) => {
+    ])('403 ORGANIZATION_UNAVAILABLE %s', async (_label, targetOf) => {
       const { user, session } = await memberOfBoth();
       const target = await targetOf(user);
       const response = await switchTenant(session.refreshCookie, target).expect(403);
-      expect(response.body.error.code).toBe('PERMISSION_DENIED');
+      expect(response.body.error.code).toBe('ORGANIZATION_UNAVAILABLE');
       expect(refreshSetCookieOf(response)).toBeUndefined();
       await expectStillSignedIn(session);
     });

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PermissionDeniedError, UnauthenticatedError } from '@procesabpm/shared';
+import { UnauthenticatedError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
@@ -121,17 +121,13 @@ export class SessionService {
   }
 
   /**
-   * No ACTIVE membership in the target (none, INVITED or INACTIVE; or a disabled account) is a 403, not the 401 of `verify`: the session itself is
-   * still good, and a 401 would make the client renew it or sign the person out. Whether the organization exists is not
-   * told apart. Suspension, pending deletion, maintenance and MFA keep their own errors.
+   * No ACTIVE membership in the target (none, INVITED or INACTIVE; or a disabled account) is 403 ORGANIZATION_UNAVAILABLE,
+   * as in the tenant selection, not a 401: the session itself is still good, and a 401 would make the client renew it or
+   * sign the person out. Whether the organization exists is not told apart. Suspension, pending deletion, maintenance and
+   * MFA keep their own errors.
    */
   private async verifyTarget(userId: string, tenantId: string, mfaVerified: boolean): Promise<void> {
-    try {
-      await this.tenantAccess.verify({ userId, tenantId, mfaVerified, allowDeletionPending: true });
-    } catch (error) {
-      if (error instanceof UnauthenticatedError) throw new PermissionDeniedError('No access to the target organization');
-      throw error;
-    }
+    await this.tenantAccess.verify({ userId, tenantId, mfaVerified, allowDeletionPending: true, selectingTenant: true });
   }
 
   private async findOwner(refreshToken: string | undefined) {
