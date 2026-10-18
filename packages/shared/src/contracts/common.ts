@@ -23,6 +23,11 @@ export interface Page<T> {
   readonly total: number;
 }
 
+/** Parses a `Page<T>` answer with the schema of its items (for the web client). */
+export function pageResponseSchema<TItem extends z.ZodType>(item: TItem) {
+  return z.object({ items: z.array(item), page: z.number().int().min(1), pageSize: z.number().int().min(1), total: z.number().int().min(0) });
+}
+
 export const nameSchema = z.string().trim().min(1).max(200);
 
 export const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use #RRGGBB');

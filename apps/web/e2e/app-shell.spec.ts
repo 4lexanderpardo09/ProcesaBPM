@@ -12,7 +12,7 @@ test.describe('app shell', () => {
     await page.goto('/');
 
     await expect(page).toHaveURL(/\/tickets$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Bandejas' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Tickets' })).toBeVisible();
 
     const nav = page.getByRole('navigation', { name: 'Navegación principal' });
     await nav.getByRole('link', { name: 'Flujos' }).click();
@@ -36,7 +36,7 @@ test.describe('app shell', () => {
 
   test('loads the design tokens and the logo', async ({ page }) => {
     await page.goto('/tickets');
-    await expect(page.getByRole('heading', { level: 1, name: 'Bandejas' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Tickets' })).toBeVisible();
     const background = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     expect(background).toBe('rgb(245, 246, 248)');
     const logo = page.getByRole('complementary').locator('img');

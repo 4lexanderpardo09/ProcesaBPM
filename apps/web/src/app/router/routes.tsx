@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Navigate, type RouteObject } from 'react-router';
 import { ForgotPasswordPage, LoginPage } from '@/features/auth';
+import { TicketInboxPage } from '@/features/tickets';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
 import { type NavigationItemKey, navigationSections } from '../layouts/app-layout/navigation';
@@ -15,8 +16,21 @@ function SectionPlaceholder({ itemKey }: { readonly itemKey: NavigationItemKey }
   return <UnderConstructionPage title={t(`items.${itemKey}`)} />;
 }
 
+function TicketPlaceholder({ page }: { readonly page: 'newTicket' | 'detail' }) {
+  const { t } = useTranslation('tickets');
+  return <UnderConstructionPage title={t(`placeholders.${page}`)} />;
+}
+
+const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets']);
+
+const ticketRoutes: RouteObject[] = [
+  { path: paths.tickets, element: <TicketInboxPage /> },
+  { path: paths.newTicket, element: <TicketPlaceholder page="newTicket" /> },
+  { path: paths.ticket, element: <TicketPlaceholder page="detail" /> },
+];
+
 const sectionRoutes: RouteObject[] = navigationSections.flatMap((section) =>
-  section.items.map((item) => ({ path: item.path, element: <SectionPlaceholder itemKey={item.key} /> })),
+  section.items.filter((item) => !builtSections.has(item.key)).map((item) => ({ path: item.path, element: <SectionPlaceholder itemKey={item.key} /> })),
 );
 
 export const appRoutes: RouteObject[] = [
@@ -32,7 +46,7 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         element: <AppLayout />,
-        children: [{ index: true, element: <Navigate to={paths.tickets} replace /> }, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
+        children: [{ index: true, element: <Navigate to={paths.tickets} replace /> }, ...ticketRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
       },
     ],
   },

@@ -3,11 +3,17 @@ export const paths = {
   login: '/login',
   forgotPassword: '/forgot-password',
   tickets: '/tickets',
+  newTicket: '/tickets/new',
+  ticket: '/tickets/:ticketId',
   workflows: '/workflows',
   reports: '/reports',
   catalog: '/catalog',
   people: '/people',
 } as const;
+
+export function ticketPath(ticketId: string): string {
+  return `${paths.tickets}/${encodeURIComponent(ticketId)}`;
+}
 
 /** Notices the login page accepts from its URL: a fixed list, never free text. */
 export const loginNotices = ['expired', 'mfaRequired', 'signedOutElsewhere'] as const;

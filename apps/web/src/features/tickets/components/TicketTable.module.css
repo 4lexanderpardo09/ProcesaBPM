@@ -1,0 +1,15 @@
+.title {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.title:hover {
+  color: var(--accent-600);
+  text-decoration: underline;
+}
+
+.date {
+  color: var(--slate);
+  white-space: nowrap;
+}
