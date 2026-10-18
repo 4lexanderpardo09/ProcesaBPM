@@ -17,6 +17,7 @@ const organization = (tenantId: string, name: string, overrides: Partial<Organiz
   name,
   membershipStatus: 'ACTIVE',
   mfaRequired: false,
+  tenantStatus: 'ACTIVE',
   maintenance: null,
   ...overrides,
 });

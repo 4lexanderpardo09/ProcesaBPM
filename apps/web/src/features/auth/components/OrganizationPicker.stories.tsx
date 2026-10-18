@@ -3,9 +3,9 @@ import { AuthCard } from './AuthCard';
 import { OrganizationPicker } from './OrganizationPicker';
 
 const organizations = [
-  { tenantId: '018f0000-0000-7000-8000-0000000000a1', slug: 'acme', name: 'Acme', membershipStatus: 'ACTIVE', mfaRequired: false, maintenance: null },
-  { tenantId: '018f0000-0000-7000-8000-0000000000b2', slug: 'globex', name: 'Globex', membershipStatus: 'ACTIVE', mfaRequired: true, maintenance: { title: 'Actualización', endsAt: '2026-10-18T02:00:00Z' } },
-  { tenantId: '018f0000-0000-7000-8000-0000000000c3', slug: 'initech', name: 'Initech', membershipStatus: 'INVITED', mfaRequired: false, maintenance: null },
+  { tenantId: '018f0000-0000-7000-8000-0000000000a1', slug: 'acme', name: 'Acme', membershipStatus: 'ACTIVE', mfaRequired: false, tenantStatus: 'ACTIVE', maintenance: null },
+  { tenantId: '018f0000-0000-7000-8000-0000000000b2', slug: 'globex', name: 'Globex', membershipStatus: 'ACTIVE', mfaRequired: true, tenantStatus: 'ACTIVE', maintenance: { title: 'Actualización', endsAt: '2026-10-18T02:00:00Z' } },
+  { tenantId: '018f0000-0000-7000-8000-0000000000c3', slug: 'initech', name: 'Initech', membershipStatus: 'INVITED', mfaRequired: false, tenantStatus: 'ACTIVE', maintenance: null },
 ] as const;
 
 const meta = {
