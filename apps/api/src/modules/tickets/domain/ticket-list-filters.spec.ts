@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest';
+import { searchFilter, ticketFilters, ticketNumberOf, viewFilter } from './ticket-list-filters.js';
+import { createdBy, observedBy } from './ticket-subject.js';
+
+const ID = '0199a000-0000-7000-8000-000000000001';
+const caller = { userId: '0199a000-0000-7000-8000-000000000002', membership: { departmentId: null, siteId: null, positionId: null } };
+const like = (text: string) => ({ contains: text, mode: 'insensitive' });
+
+describe('ticketNumberOf', () => {
+  it.each([
+    ['42', 42n],
+    ['#42', 42n],
+    ['007', 7n],
+    ['999999999999999999', 999999999999999999n],
+  ])('reads %s as a ticket number', (text, number) => {
+    expect(ticketNumberOf(text)).toBe(number);
+  });
+
+  it.each(['T-42', '4 2', '42a', '#', '1234567890123456789', '-1'])('%s is not a ticket number', (text) => {
+    expect(ticketNumberOf(text)).toBeUndefined();
+  });
+});
+
+describe('searchFilter', () => {
+  it('looks for the number, the title and the requester\'s name', () => {
+    expect(searchFilter('#42')).toEqual({
+      OR: [{ number: 42n }, { title: like('#42') }, { creator: { user: { AND: [{ OR: [{ firstName: like('#42') }, { lastName: like('#42') }] }] } } }],
+    });
+  });
+
+  it('leaves the number out when the text is not one', () => {
+    expect((searchFilter('printer').OR as unknown[]).length).toBe(2);
+  });
+
+  it('asks for every word of the name in the first or the last name', () => {
+    const [, requester] = searchFilter('ana  pérez').OR as unknown[];
+    expect(requester).toEqual({
+      creator: { user: { AND: [{ OR: [{ firstName: like('ana') }, { lastName: like('ana') }] }, { OR: [{ firstName: like('pérez') }, { lastName: like('pérez') }] }] } },
+    });
+  });
+
+  it('escapes the LIKE wildcards so they match literally', () => {
+    const [title] = searchFilter('100%_\\').OR as unknown[];
+    expect(title).toEqual({ title: like('100\\%\\_\\\\') });
+  });
+});
+
+describe('ticketFilters', () => {
+  it('is empty without filters', () => {
+    expect(ticketFilters({})).toEqual([]);
+  });
+
+  it('turns every filter into its own term', () => {
+    expect(ticketFilters({ status: 'OPEN', priorityId: ID, companyId: ID, categoryId: ID, search: 'x' })).toEqual([
+      { status: 'OPEN' },
+      { priorityId: ID },
+      { companyId: ID },
+      { subcategory: { categoryId: ID } },
+      searchFilter('x'),
+    ]);
+  });
+});
+
+describe('viewFilter', () => {
+  it('created: what the caller created or registered', () => {
+    expect(viewFilter('created', caller)).toEqual(createdBy(caller.userId));
+  });
+
+  it('assigned: the current assignments only', () => {
+    expect(viewFilter('assigned', caller)).toEqual({ assignees: { some: { userId: caller.userId } } });
+  });
+
+  it('observed: the workflows the caller observes', () => {
+    expect(viewFilter('observed', caller)).toEqual(observedBy(caller));
+  });
+
+  it('all: no restriction of its own (the access filter still applies)', () => {
+    expect(viewFilter('all', caller)).toEqual({});
+  });
+});
