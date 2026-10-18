@@ -1,4 +1,10 @@
-import { MfaRequiredError, TenantPendingDeletionError, TenantSuspendedError } from '@procesabpm/shared';
+import {
+  MfaRequiredError,
+  OrganizationUnavailableError,
+  TenantPendingDeletionError,
+  TenantSuspendedError,
+  UnauthenticatedError,
+} from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
 import type { Clock } from '../../../infrastructure/clock.js';
 import type { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -53,5 +59,27 @@ describe('TenantAccessService: organizations pending deletion', () => {
   it('still applies the two-step verification policy in DELETION_PENDING mode', async () => {
     const service = serviceFor({ membership: { ...member, isOwner: true }, tenantStatus: 'PENDING_DELETION', tenantMfaRequired: true });
     await expect(service.verify({ ...request(true), mfaVerified: false })).rejects.toBeInstanceOf(MfaRequiredError);
+  });
+});
+
+describe('TenantAccessService: a person who cannot enter the tenant', () => {
+  const outsiders: [string, Partial<TenantAccess> & { membership: TenantAccess['membership'] }][] = [
+    ['no membership', { membership: undefined, membershipStatus: undefined }],
+    ['an INVITED membership', { membership: member, membershipStatus: 'INVITED' }],
+    ['an INACTIVE membership', { membership: member, membershipStatus: 'INACTIVE' }],
+    ['a DISABLED account', { membership: member, userStatus: 'DISABLED' }],
+    ['an unknown tenant', { membership: undefined, membershipStatus: undefined, tenantStatus: undefined }],
+  ];
+
+  it.each(outsiders)('with %s is UNAUTHENTICATED for a session or a refresh', async (_label, access) => {
+    await expect(serviceFor(access).verify(request(true))).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it.each(outsiders)('with %s is ORGANIZATION_UNAVAILABLE when selecting the tenant, the same for every case', async (_label, access) => {
+    await expect(serviceFor(access).verify({ ...request(true), selectingTenant: true })).rejects.toBeInstanceOf(OrganizationUnavailableError);
+  });
+
+  it('a member selecting a suspended tenant still learns it is suspended', async () => {
+    await expect(serviceFor({ membership: member, tenantStatus: 'SUSPENDED' }).verify({ ...request(true), selectingTenant: true })).rejects.toBeInstanceOf(TenantSuspendedError);
   });
 });

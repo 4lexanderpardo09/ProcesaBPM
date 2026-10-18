@@ -27,6 +27,7 @@ export const ERROR_CODES = {
   validationFailed: 'VALIDATION_FAILED',
   tenantSuspended: 'TENANT_SUSPENDED',
   tenantPendingDeletion: 'TENANT_PENDING_DELETION',
+  organizationUnavailable: 'ORGANIZATION_UNAVAILABLE',
   missingCatalogPermission: 'MISSING_CATALOG_PERMISSION',
   platformAccessDenied: 'PLATFORM_ACCESS_DENIED',
   tenantSlugTaken: 'TENANT_SLUG_TAKEN',
@@ -302,6 +303,18 @@ export class TenantPendingDeletionError extends DomainError {
 export class TenantSuspendedError extends DomainError {
   constructor() {
     super(ERROR_CODES.tenantSuspended, 'The organization is suspended');
+  }
+}
+
+/**
+ * The tenant selection was valid but the person cannot enter that organization: no membership, a membership that is not
+ * ACTIVE (invited, deactivated) or an account that stopped being ACTIVE. One answer for all of them, so a selection token
+ * cannot tell an organization the person never belonged to from one that turned them away; it differs from
+ * UNAUTHENTICATED only so the client keeps the person on the organization list instead of sending them back to login.
+ */
+export class OrganizationUnavailableError extends DomainError {
+  constructor() {
+    super(ERROR_CODES.organizationUnavailable, 'The organization is not available to this account');
   }
 }
 

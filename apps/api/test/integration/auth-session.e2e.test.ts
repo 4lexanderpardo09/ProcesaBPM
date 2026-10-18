@@ -273,15 +273,32 @@ describe('sessions', () => {
       await select('garbage', tenantA.tenantId).expect(401);
     });
 
-    it('refuses a tenant where the user has no membership', async () => {
-      const response = await select(selectionToken, tenantB.tenantId).expect(401);
-      expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    it('refuses a tenant where the user has no membership with 403 ORGANIZATION_UNAVAILABLE, not a 401 that means "log in again"', async () => {
+      const response = await select(selectionToken, tenantB.tenantId).expect(403);
+      expect(response.body.error.code).toBe('ORGANIZATION_UNAVAILABLE');
     });
 
-    it('refuses a tenant where the membership is only INVITED', async () => {
+    it('answers an INVITED or INACTIVE membership exactly like no membership (no enumeration), and keeps the token usable', async () => {
+      // Everything but the request id, which differs on every response.
+      const answerOf = ({ body }: { body: { error: Record<string, unknown> } }) => ({ ...body.error, requestId: undefined });
+      const outsider = answerOf(await select(selectionToken, tenantB.tenantId).expect(403));
       const invited = await inviteUser(db, tenantB, user.email);
       expect(invited.userId).toBe(user.userId);
-      await select(selectionToken, tenantB.tenantId).expect(401);
+      expect(answerOf(await select(selectionToken, tenantB.tenantId).expect(403))).toEqual(outsider);
+
+      const former = await seedUser(db, tenantA);
+      const formerToken = await logIn(app, former.email);
+      await db.platform.query(`UPDATE memberships SET status = 'INACTIVE' WHERE tenant_id = $1 AND user_id = $2`, [tenantA.tenantId, former.userId]);
+      expect(answerOf(await select(formerToken, tenantA.tenantId).expect(403))).toEqual(outsider);
+
+      await select(selectionToken, tenantA.tenantId).expect(200);
+    });
+
+    it('answers 401 UNAUTHENTICATED for a selection token that was already used', async () => {
+      const token = await logIn(app, user.email);
+      await select(token, tenantA.tenantId).expect(200);
+      const response = await select(token, tenantA.tenantId).expect(401);
+      expect(response.body.error.code).toBe('UNAUTHENTICATED');
     });
 
     it('refuses an access token in place of the selection token', async () => {

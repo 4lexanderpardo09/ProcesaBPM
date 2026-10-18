@@ -90,6 +90,7 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.notFound]: { status: 404, message: 'The resource does not exist' },
   [ERROR_CODES.tenantPendingDeletion]: { status: 403, message: 'The organization is pending deletion' },
   [ERROR_CODES.tenantSuspended]: { status: 403, message: 'The organization is suspended' },
+  [ERROR_CODES.organizationUnavailable]: { status: 403, message: 'The organization is not available to this account' },
   [ERROR_CODES.exportInProgress]: { status: 409, message: 'A data export of the organization is already in progress' },
   [ERROR_CODES.exportLimitReached]: { status: 422, message: 'No more data exports can be requested' },
   [ERROR_CODES.exportTooLate]: { status: 422, message: 'The organization is about to be deleted: it is too late to export its data' },
