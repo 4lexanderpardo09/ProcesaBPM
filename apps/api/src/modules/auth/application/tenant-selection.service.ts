@@ -13,11 +13,13 @@ export class TenantSelectionService {
 
   /**
    * Opens a session on a tenant where the user who logged in has an ACTIVE membership. The selection token works once. A
-   * member with full access may also open one on an organization pending deletion, to export its data.
+   * member with full access may also open one on an organization pending deletion, to export its data. Only a token that
+   * is missing, expired or already used answers UNAUTHENTICATED (back to login); a valid token for an organization the
+   * person cannot enter answers ORGANIZATION_UNAVAILABLE and is not consumed, so they can pick another one.
    */
   async select(selectionToken: string, tenantId: string, client: ClientInfo): Promise<OpenedSession> {
     const selection = await this.tokens.verifySelectionToken(selectionToken);
-    await this.tenantAccess.verify({ userId: selection.userId, tenantId, mfaVerified: selection.mfa, allowDeletionPending: true });
+    await this.tenantAccess.verify({ userId: selection.userId, tenantId, mfaVerified: selection.mfa, allowDeletionPending: true, selectingTenant: true });
     return this.sessions.openFromSelection(selection, tenantId, client);
   }
 }

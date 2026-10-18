@@ -28,6 +28,7 @@ describe('ERROR_RESPONSES', () => {
     [ERROR_CODES.mfaRequiredByPolicy, 422],
     [ERROR_CODES.mfaNotVerified, 422],
     [ERROR_CODES.platformAccessDenied, 403],
+    [ERROR_CODES.organizationUnavailable, 403],
     [ERROR_CODES.tenantSlugTaken, 409],
     [ERROR_CODES.tenantNotFound, 404],
   ])('%s is answered with %i', (code, status) => {

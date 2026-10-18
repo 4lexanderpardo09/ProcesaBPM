@@ -54,7 +54,7 @@ describe('the selection token works once and dies with a password change', () =>
     const user = await seedUser(db, tenant);
     const other = await seedTenant(db.platform);
     const token = await logIn(app, user.email);
-    await request(app.getHttpServer()).post('/auth/select-tenant').set(bearer(token)).send({ tenantId: other.tenantId }).expect(401);
+    await request(app.getHttpServer()).post('/auth/select-tenant').set(bearer(token)).send({ tenantId: other.tenantId }).expect(403);
     await select(token).expect(200);
   });
 

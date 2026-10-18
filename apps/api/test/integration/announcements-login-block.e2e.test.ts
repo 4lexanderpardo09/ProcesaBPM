@@ -236,15 +236,15 @@ describe('announcements that block sign-in', () => {
     });
 
     describe('tenant leak', () => {
-      it('tells a non-member nothing: their sign-in list has no notice, and selecting the blocked organization is 401, not 503', async () => {
+      it('tells a non-member nothing: their sign-in list has no notice, and selecting the blocked organization is ORGANIZATION_UNAVAILABLE, not 503', async () => {
         const outsider = await seedUser(db, tenantB);
         await announce({ audience: 'TENANTS', tenantIds: [tenantA.tenantId] });
 
         const listed = await login(outsider).expect(200);
         expect(listed.body.organizations.map((organization: { maintenance: unknown }) => organization.maintenance)).toEqual([null]);
         expect(JSON.stringify(listed.body)).not.toContain('Planned maintenance');
-        const refused = await http().post('/auth/select-tenant').set(bearer(listed.body.selectionToken)).send({ tenantId: tenantA.tenantId }).expect(401);
-        expect(refused.body.error.code).toBe('UNAUTHENTICATED');
+        const refused = await http().post('/auth/select-tenant').set(bearer(listed.body.selectionToken)).send({ tenantId: tenantA.tenantId }).expect(403);
+        expect(refused.body.error.code).toBe('ORGANIZATION_UNAVAILABLE');
       });
 
       it("shows a targeted announcement to its organization's members only", async () => {

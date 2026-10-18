@@ -1,5 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { MfaRequiredError, TenantPendingDeletionError, TenantSuspendedError, UnauthenticatedError } from '@procesabpm/shared';
+import {
+  type DomainError,
+  MfaRequiredError,
+  OrganizationUnavailableError,
+  TenantPendingDeletionError,
+  TenantSuspendedError,
+  UnauthenticatedError,
+} from '@procesabpm/shared';
 import type { TenantMode } from '../../../common/auth/principal.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { LoginBlockRegistry } from '../../announcements/application/login-block-registry.js';
@@ -24,6 +31,13 @@ export interface AccessRequest {
    * is refused with TENANT_PENDING_DELETION whatever this says.
    */
   readonly allowDeletionPending?: boolean;
+  /**
+   * Set by the tenant selection only. A person who cannot enter the tenant (no membership, a membership or account that is
+   * not ACTIVE, an unknown tenant) is then told ORGANIZATION_UNAVAILABLE instead of UNAUTHENTICATED: the selection token was
+   * already proven valid, so a 401 would wrongly send them back to login. Requests with a session and the refresh keep the
+   * 401, because there the session itself has ended. The answer is the same for all those cases (no enumeration).
+   */
+  readonly selectingTenant?: boolean;
 }
 
 /**
@@ -54,7 +68,7 @@ export class TenantAccessService {
         const access = await this.repository.findAccess(tx, request.tenantId, request.userId);
         const membership = access.membership;
         const allowed = access.userStatus === 'ACTIVE' && access.membershipStatus === 'ACTIVE' && access.tenantStatus !== undefined;
-        if (!allowed || membership === undefined) throw new UnauthenticatedError();
+        if (!allowed || membership === undefined) throw this.refusalFor(request);
         let mfaVerified = request.mfaVerified === true;
         if (request.sessionId !== undefined) {
           const session = await this.repository.findSession(tx, request.sessionId);
@@ -68,6 +82,10 @@ export class TenantAccessService {
         return { ...membership, tenantMode };
       }),
     );
+  }
+
+  private refusalFor(request: AccessRequest): DomainError {
+    return request.selectingTenant === true ? new OrganizationUnavailableError() : new UnauthenticatedError();
   }
 
   private tenantModeOf(access: TenantAccess, membership: NonNullable<TenantAccess['membership']>, allowDeletionPending: boolean): TenantMode {
