@@ -43,7 +43,7 @@ import { LoginService } from '../application/login.service.js';
 import { PlatformSessionService } from '../application/platform-session.service.js';
 import { PasswordResetService } from '../application/password-reset.service.js';
 import { ProfileService } from '../application/profile.service.js';
-import { type ClientInfo, type OpenedSession, SessionService } from '../application/session.service.js';
+import { type ClientInfo, type OpenedSession, SessionService, SupersededRefreshError } from '../application/session.service.js';
 import { MfaLoginService } from '../application/mfa-login.service.js';
 import { Audited } from '../../../common/audit/audited.decorator.js';
 import { ChangePasswordService } from '../application/change-password.service.js';
@@ -159,8 +159,9 @@ export class AuthController {
     try {
       return this.deliver(await this.sessions.refresh(readRefreshCookie(request), clientOf(request)), response);
     } catch (error) {
-      // A suspended tenant (403) or a maintenance block (503) keeps the session: it works again afterwards.
-      if (error instanceof UnauthenticatedError) clearRefreshCookie(response);
+      // A suspended tenant (403) or a maintenance block (503) keeps the session: it works again afterwards. A refresh that lost
+      // a race with another tab keeps the cookie that tab just set.
+      if (error instanceof UnauthenticatedError && !(error instanceof SupersededRefreshError)) clearRefreshCookie(response);
       throw error;
     }
   }

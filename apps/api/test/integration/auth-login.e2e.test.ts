@@ -45,9 +45,10 @@ describe('POST /auth/login', () => {
     expect(body).toMatchObject({
       step: 'SELECT_ORGANIZATION',
       expiresIn: 120,
-      organizations: [expect.objectContaining({ tenantId: tenant.tenantId, membershipStatus: 'ACTIVE', mfaRequired: false })],
+      organizations: [expect.objectContaining({ tenantId: tenant.tenantId, membershipStatus: 'ACTIVE', mfaRequired: false, tenantStatus: 'ACTIVE' })],
     });
     expect(response.headers['set-cookie']).toBeUndefined();
+    expect(response.headers['cache-control']).toBe('no-store');
   });
 
   it('accepts the e-mail in any case and with spaces', async () => {

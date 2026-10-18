@@ -27,6 +27,11 @@ export const organizationSchema = z.object({
   membershipStatus: membershipStatusSchema,
   /** The organization requires two-step verification from its members. */
   mfaRequired: z.boolean(),
+  /**
+   * `SUSPENDED`: choosing it answers 403 `TENANT_SUSPENDED`. `PENDING_DELETION`: only its owner and administrators enter,
+   * to export the data (`tenantMode` of `/auth/me`); anyone else gets 403 `TENANT_PENDING_DELETION`.
+   */
+  tenantStatus: z.enum(['ACTIVE', 'SUSPENDED', 'PENDING_DELETION']),
   /** A platform announcement blocks entering it right now: selecting it answers 503 `MAINTENANCE`. */
   maintenance: z.object({ title: z.string(), endsAt: z.string().nullable() }).nullable(),
 });
@@ -186,6 +191,8 @@ export const meResponseSchema = z.object({
     /** The member's handwritten signature for the PDFs, if they uploaded one. */
     signatureFileId: uuidSchema.nullable(),
   }),
+  /** The organization of this session, for the top bar. */
+  organization: z.object({ id: uuidSchema, slug: z.string(), name: z.string() }),
   /** `DELETION_PENDING`: the organization is pending deletion; the session only serves the profile and the data export. */
   tenantMode: z.enum(['ACTIVE', 'DELETION_PENDING']),
 });

@@ -36,7 +36,8 @@ export class ProfileRepository {
         signatureFileId: true,
       },
     });
-    if (user === null || membership === null || membership.status !== 'ACTIVE') return undefined;
+    const organization = await tx.tenant.findUnique({ where: { id: tenantId }, select: { id: true, slug: true, name: true } });
+    if (user === null || membership === null || organization === null || membership.status !== 'ACTIVE') return undefined;
     return {
       user: { ...user, emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null },
       membership: {
@@ -49,6 +50,7 @@ export class ProfileRepository {
           .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)),
         signatureFileId: membership.signatureFileId,
       },
+      organization,
     };
   }
 

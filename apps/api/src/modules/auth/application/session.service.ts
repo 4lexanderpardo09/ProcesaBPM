@@ -22,13 +22,24 @@ export interface OpenedSession {
   readonly refreshExpiresAt: Date;
 }
 
+/**
+ * `superseded`: a rotated token within the grace window (another tab won the race); `stale`: a rotated token presented
+ * later whose replacement was never used (the answer of that rotation was most likely lost).
+ */
 type RefreshCheck =
   | { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date; readonly mfaVerified: boolean }
-  | { readonly kind: 'invalid' | 'reused' };
+  | { readonly kind: 'invalid' | 'reused' | 'superseded' }
+  | { readonly kind: 'stale'; readonly replacementId: string };
 
 type Rotation =
   | { readonly kind: 'rotated'; readonly sessionId: string; readonly expiresAt: Date }
-  | { readonly kind: 'invalid' | 'reused' };
+  | Exclude<RefreshCheck, { readonly kind: 'valid' }>;
+
+/**
+ * The refresh lost a race with another tab of the same browser, which already set the new cookie: the answer must not
+ * clear it. Same 401 `UNAUTHENTICATED` for the client.
+ */
+export class SupersededRefreshError extends UnauthenticatedError {}
 
 @Injectable()
 export class SessionService {
@@ -64,11 +75,12 @@ export class SessionService {
    */
   async refresh(refreshToken: string | undefined, client: ClientInfo): Promise<OpenedSession> {
     const owner = await this.findOwner(refreshToken);
-    const check = await this.runner.withUserTransaction(owner.userId, async (tx) =>
-      this.classify(await this.sessions.findById(tx, owner.id)),
-    );
-    if (check.kind === 'reused') await this.revokeEverySession(owner.userId);
-    if (check.kind !== 'valid') throw new UnauthenticatedError();
+    const check = await this.runner.withUserTransaction(owner.userId, async (tx) => {
+      const session = await this.sessions.findById(tx, owner.id);
+      const replacement = session?.replacedBy ? await this.sessions.findById(tx, session.replacedBy) : undefined;
+      return this.classify(session, replacement);
+    });
+    if (check.kind !== 'valid') return this.refuse(owner.userId, check);
 
     await this.tenantAccess.verify({ userId: owner.userId, tenantId: check.tenantId, mfaVerified: check.mfaVerified, allowDeletionPending: true });
     return this.rotate(owner.id, owner.userId, check.tenantId, client);
@@ -93,17 +105,32 @@ export class SessionService {
     return owner;
   }
 
-  private classify(session: StoredSession | undefined): RefreshCheck {
+  /**
+   * A rotated token presented again after the grace window is a stolen copy, unless its replacement was never used: then
+   * the answer of that rotation most likely never reached the browser (dropped connection, closed tab), which kept the old
+   * cookie. Only that replacement is revoked (the person signs in again in that browser); a replacement that was already
+   * rotated means two holders of one session, and every session of the user is revoked.
+   */
+  private classify(session: StoredSession | undefined, replacement: StoredSession | undefined): RefreshCheck {
     if (session === undefined) return { kind: 'invalid' };
     const now = this.clock.now().getTime();
     if (session.replacedBy !== null) {
       const rotatedAgo = now - (session.revokedAt?.getTime() ?? now);
-      return { kind: rotatedAgo > REFRESH_REUSE_GRACE_MS ? 'reused' : 'invalid' };
+      if (rotatedAgo <= REFRESH_REUSE_GRACE_MS) return { kind: 'superseded' };
+      return replacement !== undefined && this.isLive(replacement) ? { kind: 'stale', replacementId: replacement.id } : { kind: 'reused' };
     }
-    if (session.revokedAt !== null || session.expiresAt.getTime() <= now || session.activeTenantId === null) {
-      return { kind: 'invalid' };
-    }
-    return { kind: 'valid', tenantId: session.activeTenantId, expiresAt: session.expiresAt, mfaVerified: session.mfaVerified };
+    if (!this.isLive(session)) return { kind: 'invalid' };
+    return { kind: 'valid', tenantId: session.activeTenantId!, expiresAt: session.expiresAt, mfaVerified: session.mfaVerified };
+  }
+
+  private isLive(session: StoredSession): boolean {
+    return session.revokedAt === null && session.expiresAt.getTime() > this.clock.now().getTime() && session.activeTenantId !== null;
+  }
+
+  private async refuse(userId: string, check: Exclude<RefreshCheck, { readonly kind: 'valid' }>): Promise<never> {
+    if (check.kind === 'reused') await this.revokeEverySession(userId);
+    if (check.kind === 'stale') await this.revokeUnusedReplacement(userId, check.replacementId);
+    throw check.kind === 'superseded' ? new SupersededRefreshError() : new UnauthenticatedError();
   }
 
   /**
@@ -113,8 +140,11 @@ export class SessionService {
   private async rotate(sessionId: string, userId: string, tenantId: string, client: ClientInfo): Promise<OpenedSession> {
     const refreshToken = generateOpaqueToken();
     const rotation = await this.runner.withUserTransaction(userId, async (tx): Promise<Rotation> => {
-      const check = this.classify(await this.sessions.findByIdForUpdate(tx, sessionId));
-      if (check.kind !== 'valid' || check.tenantId !== tenantId) return { kind: check.kind === 'reused' ? 'reused' : 'invalid' };
+      const session = await this.sessions.findByIdForUpdate(tx, sessionId);
+      const replacement = session?.replacedBy ? await this.sessions.findById(tx, session.replacedBy) : undefined;
+      const check = this.classify(session, replacement);
+      if (check.kind !== 'valid') return check;
+      if (check.tenantId !== tenantId) return { kind: 'invalid' };
       const id = await this.sessions.create(tx, {
         userId,
         activeTenantId: tenantId,
@@ -126,8 +156,7 @@ export class SessionService {
       await this.sessions.markReplaced(tx, sessionId, id, this.clock.now());
       return { kind: 'rotated', sessionId: id, expiresAt: check.expiresAt };
     });
-    if (rotation.kind === 'reused') await this.revokeEverySession(userId);
-    if (rotation.kind !== 'rotated') throw new UnauthenticatedError();
+    if (rotation.kind !== 'rotated') return this.refuse(userId, rotation);
 
     return {
       accessToken: await this.issueAccessToken(userId, tenantId, rotation.sessionId),
@@ -138,6 +167,11 @@ export class SessionService {
 
   private issueAccessToken(userId: string, tenantId: string, sessionId: string): Promise<IssuedToken> {
     return this.tokens.issueAccessToken({ sub: userId, tid: tenantId, sid: sessionId });
+  }
+
+  private async revokeUnusedReplacement(userId: string, replacementId: string): Promise<void> {
+    await this.runner.withUserTransaction(userId, (tx) => this.sessions.revoke(tx, replacementId, this.clock.now()));
+    this.logger.warn('Stale refresh token: its unused replacement was revoked', { event: 'auth.refresh_token_stale', userId });
   }
 
   private async revokeEverySession(userId: string): Promise<void> {

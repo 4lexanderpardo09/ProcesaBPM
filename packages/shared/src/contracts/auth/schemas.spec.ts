@@ -112,11 +112,13 @@ describe('response schemas', () => {
         companies: [{ id: uuid, name: 'Main', isDefault: true }],
         signatureFileId: null,
       },
+      organization: { id: uuid, slug: 'acme', name: 'Acme' },
       tenantMode: 'ACTIVE',
     };
     expect(meResponseSchema.safeParse(me).success).toBe(true);
     expect(meResponseSchema.safeParse({ ...me, tenantMode: 'DELETION_PENDING' }).success).toBe(true);
     expect(meResponseSchema.safeParse({ ...me, tenantMode: 'SUSPENDED' }).success).toBe(false);
+    expect(meResponseSchema.safeParse({ ...me, organization: undefined }).success).toBe(false);
   });
 
   it('access token claims are exactly sub, tid and sid', () => {
