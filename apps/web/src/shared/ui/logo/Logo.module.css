@@ -22,3 +22,11 @@
 .suffix {
   color: var(--accent);
 }
+
+.onDark .wordmark {
+  color: var(--on-navy);
+}
+
+.onDark .suffix {
+  color: var(--accent-line);
+}
