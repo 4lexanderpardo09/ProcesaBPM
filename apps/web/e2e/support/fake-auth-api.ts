@@ -32,6 +32,8 @@ export interface FakeTicket {
   readonly title: string;
   readonly status: 'OPEN' | 'PAUSED' | 'CLOSED';
   readonly tags?: readonly { readonly id: string; readonly name: string; readonly color: string }[];
+  /** Sanitized HTML, as the API keeps it. */
+  readonly descriptionHtml?: string;
 }
 
 export interface RecordedRequest {
@@ -45,6 +47,8 @@ const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('b
 const accessToken = (userId: string, tenantId: string, sessionId: string) => `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: userId, tid: tenantId, sid: sessionId, aud: 'procesabpm:api' })}.fake`;
 
 const USER_ID = '018f0000-0000-7000-8000-000000000001';
+const STEP_ID = '018f0000-0000-7000-8000-0000000000d1';
+const TICKET_PATH = /^\/api\/tickets\/([^/]+)(?:\/(form|timeline|documents|comments))?$/;
 export const SECRET = 'JBSWY3DPEHPK3PXP';
 export const BACKUP_CODES = Array.from({ length: 10 }, (_, index) => `K7QM-2XPA-9RTD-4F${index}Z`);
 
@@ -108,6 +112,65 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       ...ticket,
     }));
     return { items, page, pageSize, total: matching.length };
+  };
+
+  const findTicket = (ticketId: string) =>
+    Object.values(options.tickets ?? {})
+      .flat()
+      .find((ticket) => ticket.id === ticketId);
+  /** Comments added during the test, per ticket: the timeline answers with them after the creation event. */
+  const comments = new Map<string, { id: string; commentHtml: string; createdAt: string }[]>();
+
+  const ticketDetail = (ticket: FakeTicket) => ({
+    companyId: '018f0000-0000-7000-8000-0000000000c1',
+    creatorId: USER_ID,
+    subcategoryId: '018f0000-0000-7000-8000-0000000000c2',
+    currentStepId: STEP_ID,
+    createdAt: '2026-10-17T15:00:00.000Z',
+    closedAt: null,
+    tags: [],
+    ...ticket,
+    workflowId: '018f0000-0000-7000-8000-0000000000c3',
+    workflowVersionId: '018f0000-0000-7000-8000-0000000000c4',
+    registeredById: null,
+    descriptionHtml: ticket.descriptionHtml ?? '',
+    priorityId: null,
+    departmentId: null,
+    siteId: null,
+    currentLoop: 0,
+    closedById: null,
+    openVisit: { id: '018f0000-0000-7000-8000-0000000000c5', stepId: STEP_ID, loop: 0, enteredAt: '2026-10-17T15:00:00.000Z', dueAt: null },
+    assignees: [{ userId: USER_ID, type: 'PRIMARY', assignedAt: '2026-10-17T15:00:00.000Z' }],
+    awaitingDispatch: false,
+    parallelTasks: [],
+    openIncident: null,
+    waitingUntil: null,
+    values: {},
+    totals: {},
+  });
+
+  const event = (id: string, type: string, commentHtml: string | null, createdAt: string) => ({ id, type, stepId: STEP_ID, transitionId: null, loop: 0, actorId: USER_ID, assigneeId: null, commentHtml, data: {}, createdAt });
+
+  const ticketResource = (route: Route, ticket: FakeTicket, resource: string | undefined, method: string, body: Record<string, unknown>) => {
+    const key = `${method} ${resource ?? ''}`;
+    switch (key) {
+      case 'GET ':
+        return json(route, 200, ticketDetail(ticket));
+      case 'GET form':
+        return json(route, 200, { ticketId: ticket.id, versionId: '018f0000-0000-7000-8000-0000000000c4', visitId: '018f0000-0000-7000-8000-0000000000c5', step: { id: STEP_ID, name: 'Revisión', type: 'TASK', description: null, closeRule: 'NOT_ALLOWED' }, fields: [], editableFieldCodes: [], decisions: [] });
+      case 'GET timeline':
+        return json(route, 200, [event('018f0000-0000-7000-8000-0000000000e0', 'CREATED', null, '2026-10-17T15:00:00.000Z'), ...(comments.get(ticket.id) ?? []).map((comment) => event(comment.id, 'COMMENTED', comment.commentHtml, comment.createdAt))]);
+      case 'GET documents':
+        return json(route, 200, []);
+      case 'POST comments': {
+        const list = comments.get(ticket.id) ?? [];
+        const id = `018f0000-0000-7000-8000-0000000000e${list.length + 1}`;
+        comments.set(ticket.id, [...list, { id, commentHtml: String(body.comment), createdAt: new Date().toISOString() }]);
+        return json(route, 201, { eventId: id });
+      }
+      default:
+        return error(route, 404, 'NOT_FOUND');
+    }
   };
 
   const handlers: Record<string, (route: Route, body: Record<string, unknown>, authorization: string | undefined, search: URLSearchParams) => Promise<void>> = {
@@ -174,9 +237,13 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     const authorization = request.headers().authorization;
     requests.push({ method: request.method(), path, search, authorization });
     const handler = handlers[`${request.method()} ${path}`];
-    if (handler === undefined) return error(route, 404, 'NOT_FOUND');
     const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
-    return handler(route, body, authorization, search);
+    if (handler !== undefined) return handler(route, body, authorization, search);
+    const ticketMatch = TICKET_PATH.exec(path);
+    if (ticketMatch === null) return error(route, 404, 'NOT_FOUND');
+    if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+    const ticket = findTicket(decodeURIComponent(ticketMatch[1] ?? ''));
+    return ticket === undefined ? error(route, 404, 'NOT_FOUND') : ticketResource(route, ticket, ticketMatch[2], request.method(), body);
   });
 
   return {

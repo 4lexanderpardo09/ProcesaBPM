@@ -115,14 +115,17 @@ describe('TicketInboxPage', () => {
 
   it('opens the ticket from its title or its row, and the new ticket page from the button', async () => {
     const api = ticketsApi({ assigned: [ticket(1, { title: 'Pago de crédito' }), ticket(2)] });
-    const { router } = renderRoute('/tickets', { handlers: { '/tickets': api.handler } });
+    const notFound = () => {
+      throw new ApiError({ status: 404, code: 'NOT_FOUND', message: 'Not found' });
+    };
+    const { router } = renderRoute('/tickets', { handlers: { '/tickets': api.handler, [`/tickets/${ticketId(2)}`]: notFound } });
 
     expect(await screen.findByRole('link', { name: 'Nuevo ticket' })).toHaveAttribute('href', '/tickets/new');
     expect(await screen.findByRole('link', { name: 'Pago de crédito' })).toHaveAttribute('href', `/tickets/${ticketId(1)}`);
 
     await userEvent.click(screen.getByRole('cell', { name: 'T-1002' }));
     expect(router.state.location.pathname).toBe(`/tickets/${ticketId(2)}`);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Detalle del ticket' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'No encontramos este ticket' })).toBeInTheDocument();
   });
 
   it('says what an empty tab means', async () => {

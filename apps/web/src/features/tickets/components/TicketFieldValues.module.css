@@ -1,0 +1,45 @@
+.values {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.row:first-child {
+  padding-top: 0;
+}
+
+.row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.row dt {
+  color: var(--muted);
+}
+
+.row dd {
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.unnamed {
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.muted {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}

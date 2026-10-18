@@ -1,0 +1,61 @@
+import type { TicketFormResponse } from '@procesabpm/shared';
+import type { UseQueryResult } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { Card } from '@/shared/ui';
+import { type FieldValueDisplay, fieldValueDisplay } from '../lib/field-value';
+import { LoadError } from './LoadError';
+import styles from './TicketFieldValues.module.css';
+
+export interface TicketFieldValuesProps {
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly form: UseQueryResult<TicketFormResponse>;
+  readonly timeZone: string | undefined;
+}
+
+/** The values captured so far, labelled by the fields of the ticket's workflow version, in the builder's order. */
+export function TicketFieldValues({ values, form, timeZone }: TicketFieldValuesProps) {
+  const { t } = useTranslation('tickets');
+  const rows = [...(form.data?.fields ?? [])]
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .flatMap((field) => {
+      const display = fieldValueDisplay(field, values[field.code], timeZone);
+      return display === undefined ? [] : [{ field, display }];
+    });
+
+  return (
+    <Card title={t('detail.fields.title')}>
+      {form.isError ? (
+        <LoadError error={form.error} onRetry={() => void form.refetch()} />
+      ) : form.data === undefined ? (
+        <p className={styles.muted}>{t('detail.fields.loading')}</p>
+      ) : rows.length === 0 ? (
+        <p className={styles.muted}>{t('detail.fields.empty')}</p>
+      ) : (
+        <dl className={styles.values}>
+          {rows.map(({ field, display }) => (
+            <div key={field.id} className={styles.row}>
+              <dt>{field.label}</dt>
+              <dd>
+                <DisplayedValue display={display} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </Card>
+  );
+}
+
+function DisplayedValue({ display }: { readonly display: FieldValueDisplay }) {
+  const { t } = useTranslation('tickets');
+  switch (display.kind) {
+    case 'text':
+      return display.text;
+    case 'days':
+      return t('detail.fields.days', { count: display.count });
+    case 'rows':
+      return t('detail.fields.rows', { count: display.count });
+    case 'unnamed':
+      return <span className={styles.unnamed}>{t('detail.fields.unnamed')}</span>;
+  }
+}

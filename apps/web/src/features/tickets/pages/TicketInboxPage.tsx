@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
-import { genericErrorMessage } from '@/shared/api';
 import { paths } from '@/shared/lib/paths';
 import { useCurrentUser } from '@/shared/session';
-import { Alert, Button, ButtonLink, PageHeader, Pagination, PlusIcon, Tabs } from '@/shared/ui';
+import { ButtonLink, PageHeader, Pagination, PlusIcon, Tabs } from '@/shared/ui';
 import { INBOX_PAGE_SIZE } from '../api/tickets-api';
 import { InboxFilters } from '../components/InboxFilters';
+import { LoadError } from '../components/LoadError';
 import { TicketTable } from '../components/TicketTable';
 import { useTicketInbox } from '../hooks/use-ticket-inbox';
 import { INBOX_VIEWS, type InboxParams, readInboxParams, writeInboxParams } from '../lib/inbox-params';
@@ -58,18 +58,4 @@ export function TicketInboxPage() {
 
 function countProp(count: number | undefined): { count?: number } {
   return count === undefined ? {} : { count };
-}
-
-function LoadError({ error, onRetry }: { readonly error: unknown; readonly onRetry: () => void }) {
-  const { t } = useTranslation('tickets');
-  const { t: tCommon } = useTranslation();
-  const message = genericErrorMessage(error);
-  return (
-    <Alert tone="danger">
-      <div className={styles.error}>
-        <span>{'values' in message ? tCommon(message.key, message.values) : tCommon(message.key)}</span>
-        <Button onClick={onRetry}>{t('inbox.retry')}</Button>
-      </div>
-    </Alert>
-  );
 }

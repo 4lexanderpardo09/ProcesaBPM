@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Navigate, type RouteObject } from 'react-router';
 import { ForgotPasswordPage, LoginPage } from '@/features/auth';
-import { TicketInboxPage } from '@/features/tickets';
+import { TicketDetailPage, TicketInboxPage } from '@/features/tickets';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
 import { type NavigationItemKey, navigationSections } from '../layouts/app-layout/navigation';
@@ -16,17 +16,17 @@ function SectionPlaceholder({ itemKey }: { readonly itemKey: NavigationItemKey }
   return <UnderConstructionPage title={t(`items.${itemKey}`)} />;
 }
 
-function TicketPlaceholder({ page }: { readonly page: 'newTicket' | 'detail' }) {
+function NewTicketPlaceholder() {
   const { t } = useTranslation('tickets');
-  return <UnderConstructionPage title={t(`placeholders.${page}`)} />;
+  return <UnderConstructionPage title={t('placeholders.newTicket')} />;
 }
 
 const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets']);
 
 const ticketRoutes: RouteObject[] = [
   { path: paths.tickets, element: <TicketInboxPage /> },
-  { path: paths.newTicket, element: <TicketPlaceholder page="newTicket" /> },
-  { path: paths.ticket, element: <TicketPlaceholder page="detail" /> },
+  { path: paths.newTicket, element: <NewTicketPlaceholder /> },
+  { path: paths.ticket, element: <TicketDetailPage /> },
 ];
 
 const sectionRoutes: RouteObject[] = navigationSections.flatMap((section) =>
