@@ -22,12 +22,13 @@ export interface OpenedSession {
   readonly refreshExpiresAt: Date;
 }
 
+/** A session that may be rotated (or switched): not revoked, not expired, of a tenant (never a platform session). */
+type LiveSession = { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date; readonly mfaVerified: boolean };
+
 /**
  * `superseded`: a rotated token within the grace window (another tab won the race); `stale`: a rotated token presented
  * later whose replacement was never used (the answer of that rotation was most likely lost).
  */
-type LiveSession = { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date; readonly mfaVerified: boolean };
-
 type RefreshCheck =
   | LiveSession
   | { readonly kind: 'invalid' | 'reused' | 'superseded' }
@@ -120,7 +121,7 @@ export class SessionService {
   }
 
   /**
-   * No membership (or an INVITED or disabled one) in the target is a 403, not the 401 of `verify`: the session itself is
+   * No ACTIVE membership in the target (none, INVITED or INACTIVE; or a disabled account) is a 403, not the 401 of `verify`: the session itself is
    * still good, and a 401 would make the client renew it or sign the person out. Whether the organization exists is not
    * told apart. Suspension, pending deletion, maintenance and MFA keep their own errors.
    */
