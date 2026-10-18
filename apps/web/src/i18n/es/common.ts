@@ -8,6 +8,7 @@ export const common = {
   underConstruction: 'Esta sección está en construcción.',
   errors: {
     unexpected: 'Ocurrió un error inesperado. Intenta de nuevo.',
+    unexpectedWithReference: 'Ocurrió un error inesperado. Intenta de nuevo. Código de referencia: {{requestId}}',
     network: 'No hay conexión con el servidor. Revisa tu conexión e intenta de nuevo.',
   },
 } as const;

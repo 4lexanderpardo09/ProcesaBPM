@@ -12,16 +12,20 @@
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:e2e:stack": "playwright test -c playwright.stack.config.ts"
   },
   "dependencies": {
+    "@hookform/resolvers": "5.9.1",
     "@procesabpm/shared": "workspace:*",
     "@tanstack/react-query": "5.104.1",
     "i18next": "26.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "react-hook-form": "7.90.0",
     "react-i18next": "17.0.16",
     "react-router": "8.4.0",
+    "uqr": "0.1.3",
     "zod": "4.6.5"
   },
   "devDependencies": {

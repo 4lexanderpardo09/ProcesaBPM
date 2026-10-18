@@ -1,10 +1,13 @@
+export { Alert, type AlertProps, type AlertTone } from './alert/Alert';
 export { Avatar, type AvatarProps } from './avatar/Avatar';
 export { Badge, type BadgeProps, type BadgeTone } from './badge/Badge';
 export { Button, type ButtonProps, type ButtonVariant } from './button/Button';
 export { Card, type CardProps } from './card/Card';
+export { Checkbox, type CheckboxProps } from './checkbox/Checkbox';
 export * from './icons';
 export { Logo } from './logo/Logo';
 export { PageHeader, type PageHeaderProps } from './page-header/PageHeader';
+export { QrCode, type QrCodeProps } from './qr-code/QrCode';
 export { Select, type SelectOption, type SelectProps } from './select/Select';
 export { Tabs, type TabItem, type TabsProps } from './tabs/Tabs';
 export { TextField, type TextFieldProps } from './text-field/TextField';

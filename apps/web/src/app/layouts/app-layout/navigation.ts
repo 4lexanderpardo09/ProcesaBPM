@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { ChartIcon, GridIcon, type IconProps, InboxIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
-import { paths } from '../../router/paths';
+import { paths } from '@/shared/lib/paths';
 
 export type NavigationItemKey = 'tickets' | 'workflows' | 'reports' | 'catalog' | 'people';
 

@@ -8,7 +8,8 @@
     "dev:worker": "tsx watch src/worker.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "e2e:web-stack": "tsx test/web-stack/start-web-stack.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1140.0",

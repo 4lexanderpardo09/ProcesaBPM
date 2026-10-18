@@ -1,8 +1,8 @@
-import type { InputHTMLAttributes } from 'react';
+import type { ComponentPropsWithRef } from 'react';
 import { FieldFrame, type FieldMessages } from '../field/FieldFrame';
 import { cx } from '@/shared/lib/cx';
 
-export type TextFieldProps = FieldMessages & Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'required'>;
+export type TextFieldProps = FieldMessages & Omit<ComponentPropsWithRef<'input'>, 'id' | 'required'>;
 
 export function TextField({ label, hint, error, required, className, ...inputProps }: TextFieldProps) {
   return (
