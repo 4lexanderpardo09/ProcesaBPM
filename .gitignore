@@ -8,3 +8,4 @@ packages/db/src/generated/
 storybook-static/
 playwright-report/
 test-results/
+playwright-report-stack/

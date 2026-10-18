@@ -77,6 +77,42 @@ jobs:
           path: apps/web/playwright-report
           retention-days: 7
 
+  # The web against the real API and PostgreSQL 18 (Testcontainers): the httpOnly refresh cookie through the proxy,
+  # real rotation with two tabs and the 10-second reuse rule, the MFA enrollment with a real code, and a tenant switch.
+  web-stack:
+    name: Web E2E against the real API
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @procesabpm/db generate
+
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @procesabpm/web exec playwright install --with-deps chromium
+
+      - name: E2E tests against the real stack
+        run: pnpm --filter @procesabpm/web test:e2e:stack
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-stack
+          path: apps/web/playwright-report-stack
+          retention-days: 7
+
   # Builds the three production images (never publishes them) and starts them against a real PostgreSQL: the migrations
   # apply, the API answers /api/health and /api/ready, and the worker stops cleanly on SIGTERM (scripts/smoke-images.sh).
   images:

@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "test:e2e:stack": "playwright test -c playwright.stack.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "5.9.1",
