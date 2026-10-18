@@ -36,7 +36,7 @@ Los mockups son referencia de estructura y estilo, no código para copiar: los d
 
 ## Tipografía
 - `--font-sans` (Plus Jakarta Sans, Google Fonts) para toda la interfaz; `--font-mono` (IBM Plex Mono) con cifras tabulares para números de ticket, montos, contadores e identificadores.
-- Página `text-page-title`; título del ticket `text-ticket-title`; tarjetas `text-card-title`; texto `text-body`; botones y celdas secundarias `text-body-sm`; etiquetas de campo e insignias `text-label`; encabezados de tabla `text-overline`; datos `text-code`.
+- Titular de las pantallas de marca (panel del inicio de sesión) `text-display`, nunca dentro de la aplicación; página `text-page-title`; título del ticket `text-ticket-title`; tarjetas `text-card-title`; texto `text-body`; botones y celdas secundarias `text-body-sm`; etiquetas de campo e insignias `text-label`; encabezados de tabla `text-overline`; datos `text-code`.
 
 ## Forma y espacio
 - Radios: `--radius-md` (8px) en botones, campos y navegación; `--radius-lg` (10px) en tarjetas; `--radius-xl` (14px) en la tabla principal; `--radius-pill` en contadores y etiquetas.
@@ -45,6 +45,7 @@ Los mockups son referencia de estructura y estilo, no código para copiar: los d
 - Densidad: `--space-4` entre tarjetas, `--space-5`/`--space-6` en márgenes; filas de tabla con 12px de relleno vertical. Objetivos táctiles de al menos 36px en escritorio y 44px en móvil.
 
 ## Estructura de pantalla
+- Inicio de sesión y páginas sin sesión: panel de marca `--navy` a la izquierda (logo para fondo oscuro, titular, diagrama de flujo decorativo y tres frases) y el formulario a la derecha sobre `--surface`. Por debajo de 900px el panel se oculta.
 - Barra lateral fija (238px) con el logo a color sin fondo, las secciones "Operación" y "Configuración" y la navegación.
 - Barra superior: a la izquierda las migas de pan o el estado "En vivo"; **a la derecha el usuario** (avatar, nombre, rol) y cerrar sesión.
 - Contenido: título de página con su acción principal a la derecha; debajo, pestañas de bandeja con contador, y **la búsqueda junto a los filtros** (no en la barra superior).
