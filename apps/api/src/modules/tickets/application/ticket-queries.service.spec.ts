@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Principal } from '../../../common/auth/principal.js';
+import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import type { TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { buildAbility } from '../../authorization/domain/build-ability.js';
@@ -26,7 +27,7 @@ function setUp(totals: readonly number[] = [0, 0, 0, 0]) {
     count: vi.fn(() => Promise.resolve(remaining.shift() ?? 0)),
     list: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),
   } as unknown as TicketQueryRepository;
-  const service = new TicketQueriesService(runner, context, tickets);
+  const service = new TicketQueriesService(runner, context, tickets, new Clock());
   const inTenant = <T>(work: () => Promise<T>) => context.run({ tenantId: TENANT, userId: USER }, work);
   return { service, tickets, runner, tx, inTenant };
 }
