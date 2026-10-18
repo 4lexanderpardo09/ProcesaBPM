@@ -1,6 +1,6 @@
 import { ERROR_CODES } from '@procesabpm/shared';
 import type { ParseKeys } from 'i18next';
-import { ApiError, NetworkError } from '@/shared/api';
+import { ApiError, genericErrorMessage } from '@/shared/api';
 
 export type AuthMessageKey = ParseKeys<['auth', 'common']>;
 
@@ -16,9 +16,10 @@ const SHORT_WAIT_SECONDS = 60;
 
 /** The Spanish message for a failed sign-in step. The API `message` is never shown: only i18n keys and the request id. */
 export function authErrorMessage(error: unknown, context: AuthErrorContext): AuthMessage {
-  if (error instanceof NetworkError) return { key: 'common:errors.network' };
-  if (!(error instanceof ApiError)) return { key: 'common:errors.unexpected' };
-  return messageForCode(error, context) ?? unexpected(error);
+  const specific = error instanceof ApiError ? messageForCode(error, context) : undefined;
+  if (specific !== undefined) return specific;
+  const generic = genericErrorMessage(error);
+  return 'values' in generic ? { key: `common:${generic.key}`, values: generic.values } : { key: `common:${generic.key}` };
 }
 
 function messageForCode(error: ApiError, context: AuthErrorContext): AuthMessage | undefined {
@@ -49,10 +50,6 @@ function messageForCode(error: ApiError, context: AuthErrorContext): AuthMessage
 function rateLimited(retryAfterSeconds: number | undefined): AuthMessage {
   if (retryAfterSeconds === undefined || retryAfterSeconds <= SHORT_WAIT_SECONDS) return { key: 'auth:errors.rateLimitedShort' };
   return { key: 'auth:errors.rateLimited', values: { count: Math.ceil(retryAfterSeconds / 60) } };
-}
-
-function unexpected(error: ApiError): AuthMessage {
-  return error.requestId === undefined ? { key: 'common:errors.unexpected' } : { key: 'common:errors.unexpectedWithReference', values: { requestId: error.requestId } };
 }
 
 /** The selection token survives a refused organization (403/503): the person can pick another one. */

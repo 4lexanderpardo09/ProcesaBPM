@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isUrlLoginNotice, loginPath } from './paths';
+import { isUrlLoginNotice, loginPath, ticketPath } from './paths';
 
 describe('loginPath', () => {
   it.each([
@@ -19,5 +19,11 @@ describe('isUrlLoginNotice', () => {
     expect(isUrlLoginNotice('challengeExpired')).toBe(false);
     expect(isUrlLoginNotice('<script>')).toBe(false);
     expect(isUrlLoginNotice(null)).toBe(false);
+  });
+});
+
+describe('ticketPath', () => {
+  it('points to the ticket under the inbox', () => {
+    expect(ticketPath('018f0000-0000-7000-8000-000000000001')).toBe('/tickets/018f0000-0000-7000-8000-000000000001');
   });
 });
