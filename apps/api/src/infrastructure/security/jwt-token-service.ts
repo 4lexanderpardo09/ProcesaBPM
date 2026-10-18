@@ -18,6 +18,11 @@ import { Clock } from '../clock.js';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const SELECTION_TOKEN_TTL_SECONDS = 2 * 60;
+/**
+ * Only the answer to a forced MFA enrollment at login: the person must first save 10 backup codes, which often takes
+ * longer than two minutes. Still single-use and revoked by a password change; shorter than an access token.
+ */
+export const SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS = 10 * 60;
 /** Time to type the code from the authenticator app (or to scan the QR code and confirm the first one). */
 export const MFA_CHALLENGE_TTL_SECONDS = 5 * 60;
 /** A support token lives at most this long, and never past the grant it was opened under. */
@@ -91,9 +96,13 @@ export class JwtTokenService {
     return this.sign({ tid: claims.tid, sid: claims.sid, grant: claims.grant }, claims.sub, SUPPORT_AUDIENCE, ttlSeconds);
   }
 
-  /** `mfa`: the user passed the second factor in this sign-in. A session opened with it is marked as verified. */
-  issueSelectionToken(userId: string, options: { mfa: boolean }): Promise<IssuedToken> {
-    return this.sign({ mfa: options.mfa }, userId, SELECTION_AUDIENCE, SELECTION_TOKEN_TTL_SECONDS, randomUUID());
+  /**
+   * `mfa`: the user passed the second factor in this sign-in. A session opened with it is marked as verified.
+   * `ttlSeconds` defaults to two minutes; only the answer to a forced enrollment asks for more.
+   */
+  issueSelectionToken(userId: string, options: { mfa: boolean; ttlSeconds?: number }): Promise<IssuedToken> {
+    const ttlSeconds = options.ttlSeconds ?? SELECTION_TOKEN_TTL_SECONDS;
+    return this.sign({ mfa: options.mfa }, userId, SELECTION_AUDIENCE, ttlSeconds, randomUUID());
   }
 
   /** The proof that the password was right, exchanged for a selection token after the second factor. */
