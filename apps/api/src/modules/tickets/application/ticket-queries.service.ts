@@ -3,7 +3,6 @@ import {
   type ListTicketsQuery,
   NotFoundError,
   type Page,
-  tableColumnTotals,
   type TicketCountsResponse,
   type TicketDetailResponse,
   type TicketEventResponse,
@@ -13,6 +12,7 @@ import {
 } from '@procesabpm/shared';
 import type { Principal } from '../../../common/auth/principal.js';
 import { pageWindow } from '../../../common/crud/pagination.js';
+import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
@@ -20,56 +20,7 @@ import { TicketQueryRepository, type Where } from '../data/ticket-query.reposito
 import { ticketFilters, viewFilter } from '../domain/ticket-list-filters.js';
 import type { TicketActor } from '../../engine/application/locked-ticket.js';
 import { readableTickets, ticketActorOf } from './ticket-access.js';
-
-type SummaryRow = Awaited<ReturnType<TicketQueryRepository['list']>>['rows'][number];
-type DetailRow = NonNullable<Awaited<ReturnType<TicketQueryRepository['findDetail']>>>;
-
-const toSummary = (row: SummaryRow): TicketSummaryResponse => ({
-  id: row.id,
-  number: row.number.toString(),
-  title: row.title,
-  status: row.status,
-  companyId: row.companyId,
-  creatorId: row.creatorId,
-  subcategoryId: row.subcategoryId,
-  currentStepId: row.currentStepId,
-  createdAt: row.createdAt.toISOString(),
-  closedAt: row.closedAt?.toISOString() ?? null,
-  tags: row.tags.map((entry) => entry.tag),
-});
-
-/** The column totals of the TABLE fields that ask for them, by field code. */
-const totalsOf = (fieldValues: DetailRow['fieldValues']): Record<string, Record<string, string>> =>
-  Object.fromEntries(
-    fieldValues
-      .filter((entry) => entry.field.type === 'TABLE')
-      .map((entry) => [entry.field.code, tableColumnTotals(entry.field.config as Record<string, unknown>, entry.value)] as const)
-      .filter(([, totals]) => Object.keys(totals).length > 0),
-  );
-
-const toDetail = (row: DetailRow): TicketDetailResponse => {
-  const visit = row.stepVisits[0];
-  return {
-    ...toSummary(row),
-    workflowId: row.workflowId,
-    workflowVersionId: row.workflowVersionId,
-    registeredById: row.registeredById,
-    descriptionHtml: row.descriptionHtml,
-    priorityId: row.priorityId,
-    departmentId: row.departmentId,
-    siteId: row.siteId,
-    currentLoop: row.currentLoop,
-    closedById: row.closedById,
-    openVisit: visit === undefined ? null : { id: visit.id, stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt.toISOString(), dueAt: visit.dueAt?.toISOString() ?? null },
-    awaitingDispatch: row.status === 'OPEN' && row.assignees.length === 0,
-    parallelTasks: row.parallelTasks.filter((task) => task.stepId === row.currentStepId && task.loop === row.currentLoop).map((task) => ({ id: task.id, userId: task.userId, status: task.status, completedAt: task.completedAt?.toISOString() ?? null })),
-    openIncident: row.incidents[0] === undefined ? null : { id: row.incidents[0].id, assignedToId: row.incidents[0].assignedToId, createdById: row.incidents[0].createdById, openedAt: row.incidents[0].openedAt.toISOString(), descriptionHtml: row.incidents[0].description },
-    assignees: row.assignees.map((assignee) => ({ userId: assignee.userId, type: assignee.type, assignedAt: assignee.assignedAt.toISOString() })),
-    waitingUntil: visit?.resumeAt?.toISOString() ?? null,
-    values: Object.fromEntries(row.fieldValues.map((entry) => [entry.field.code, entry.value])),
-    totals: totalsOf(row.fieldValues),
-  };
-};
+import { toDetail, toSummary } from './ticket-responses.js';
 
 /** The read side of tickets. A ticket the caller may not read answers exactly like one that does not exist. */
 @Injectable()
@@ -78,13 +29,14 @@ export class TicketQueriesService {
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(TenantContext) private readonly context: TenantContext,
     @Inject(TicketQueryRepository) private readonly tickets: TicketQueryRepository,
+    @Inject(Clock) private readonly clock: Clock,
   ) {}
 
   get(ability: AppAbility, ticketId: string, userId: string): Promise<TicketDetailResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const row = await this.tickets.findDetail(tx, this.context.require().tenantId, ticketId, readableTickets(ability), userId);
       if (row === null) throw new NotFoundError();
-      return toDetail(row);
+      return toDetail(row, this.clock.now());
     });
   }
 
@@ -96,7 +48,8 @@ export class TicketQueriesService {
   list(principal: Principal, ability: AppAbility, query: ListTicketsQuery): Promise<Page<TicketSummaryResponse>> {
     return this.runner.withTenantTransaction(async (tx) => {
       const { rows, total } = await this.tickets.list(tx, this.context.require().tenantId, this.filtersFor(principal, ability, query.view, query), pageWindow(query), principal.userId);
-      return { items: rows.map(toSummary), page: query.page, pageSize: query.pageSize, total };
+      const now = this.clock.now();
+      return { items: rows.map((row) => toSummary(row, now)), page: query.page, pageSize: query.pageSize, total };
     });
   }
 

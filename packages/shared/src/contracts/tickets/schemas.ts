@@ -75,10 +75,28 @@ export type ReopenTicketRequest = z.infer<typeof reopenTicketRequestSchema>;
 export const parallelTaskActionRequestSchema = z.object({ visitId: uuidSchema, comment, assigneeId: uuidSchema.optional() });
 export type ParallelTaskActionRequest = z.infer<typeof parallelTaskActionRequestSchema>;
 
+const assigneeTypeSchema = z.enum(['PRIMARY', 'POOL', 'PARALLEL', 'INCIDENT']);
+
 export interface TicketAssigneeResponse {
   readonly userId: string;
+  readonly name: string;
   readonly type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'INCIDENT';
   readonly assignedAt: string;
+}
+
+/** A record shown by its name next to its id. */
+export interface NamedRefResponse {
+  readonly id: string;
+  readonly name: string;
+}
+
+/** The deadline of the current step (the earliest of its people's SLA clocks); `null` when nothing is due. */
+export interface TicketSlaResponse {
+  readonly dueAt: string;
+  /** Past `dueAt`; a paused clock counts as late only if it already was when it was paused. */
+  readonly overdue: boolean;
+  /** An incident stopped the clock: `dueAt` moves when it resumes. */
+  readonly paused: boolean;
 }
 
 export interface TicketSummaryResponse {
@@ -90,11 +108,21 @@ export interface TicketSummaryResponse {
   readonly creatorId: string;
   readonly subcategoryId: string;
   readonly currentStepId: string | null;
+  readonly priorityId: string | null;
   readonly createdAt: string;
   readonly closedAt: string | null;
   /** The caller's own tags on this ticket (nobody else's). */
   readonly tags: readonly TagResponse[];
+  readonly creator: NamedRefResponse;
+  readonly subcategory: NamedRefResponse & { readonly category: NamedRefResponse };
+  readonly currentStep: NamedRefResponse | null;
+  readonly priority: (NamedRefResponse & { readonly color: string | null }) | null;
+  /** Who holds the current step now (empty when closed, parked on a WAIT block or awaiting dispatch). */
+  readonly assignees: readonly TicketAssigneeResponse[];
+  readonly sla: TicketSlaResponse | null;
 }
+
+const namedRefSchema = z.object({ id: uuidSchema, name: z.string() });
 
 /** Parses `TicketSummaryResponse` (for the web client); `satisfies` keeps it in step with the interface. */
 export const ticketSummaryResponseSchema = z.object({
@@ -106,9 +134,16 @@ export const ticketSummaryResponseSchema = z.object({
   creatorId: uuidSchema,
   subcategoryId: uuidSchema,
   currentStepId: uuidSchema.nullable(),
+  priorityId: uuidSchema.nullable(),
   createdAt: z.string(),
   closedAt: z.string().nullable(),
   tags: z.array(tagResponseSchema),
+  creator: namedRefSchema,
+  subcategory: namedRefSchema.extend({ category: namedRefSchema }),
+  currentStep: namedRefSchema.nullable(),
+  priority: namedRefSchema.extend({ color: z.string().nullable() }).nullable(),
+  assignees: z.array(z.object({ userId: uuidSchema, name: z.string(), type: assigneeTypeSchema, assignedAt: z.string() })),
+  sla: z.object({ dueAt: z.string(), overdue: z.boolean(), paused: z.boolean() }).nullable(),
 }) satisfies z.ZodType<TicketSummaryResponse>;
 
 export const ticketPageResponseSchema = pageResponseSchema(ticketSummaryResponseSchema);
@@ -118,14 +153,12 @@ export interface TicketDetailResponse extends TicketSummaryResponse {
   readonly workflowVersionId: string;
   readonly registeredById: string | null;
   readonly descriptionHtml: string;
-  readonly priorityId: string | null;
   readonly departmentId: string | null;
   readonly siteId: string | null;
   readonly currentLoop: number;
   readonly closedById: string | null;
   /** The visit callers must echo back (`visitId`) when they act on the ticket; `null` once closed. */
   readonly openVisit: { readonly id: string; readonly stepId: string; readonly loop: number; readonly enteredAt: string; readonly dueAt: string | null } | null;
-  readonly assignees: readonly TicketAssigneeResponse[];
   /** The incident that pauses the ticket, if any. */
   /** Open and with nobody holding it: it waits for the dispatch worker to hand it to someone. */
   readonly awaitingDispatch: boolean;

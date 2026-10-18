@@ -34,9 +34,16 @@ function ticketsApi(byView: Partial<Record<View, readonly FakeTicket[]>>) {
       creatorId: ticketId(901),
       subcategoryId: ticketId(902),
       currentStepId: null,
+      priorityId: null,
       createdAt: '2026-10-17T15:00:00.000Z',
       closedAt: null,
       tags: [],
+      creator: { id: ticketId(901), name: 'Ana Pérez' },
+      subcategory: { id: ticketId(902), name: 'Pagos', category: { id: ticketId(903), name: 'Cartera' } },
+      currentStep: null,
+      priority: null,
+      assignees: [],
+      sla: null,
       ...item,
     }));
     return { items, page, pageSize, total: matching.length };
