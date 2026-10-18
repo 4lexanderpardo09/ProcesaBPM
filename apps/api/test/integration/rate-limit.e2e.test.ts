@@ -57,6 +57,13 @@ describe('rate limiting', () => {
     await select('second.bearer.token').expect(401);
   });
 
+  it('limits organization switches per IP (the refresh cookie changes with every switch)', async () => {
+    const switchTenant = () => request(app.getHttpServer()).post('/auth/switch-tenant').send({ tenantId: '0197e5b2-0000-7000-8000-000000000001' });
+    for (let attempt = 0; attempt < RATE_LIMITS.switchTenant.perIp.limit; attempt += 1) await switchTenant().expect(401);
+    const response = await switchTenant().expect(429);
+    expect(response.body.error.code).toBe('RATE_LIMITED');
+  });
+
   it('ignores X-Forwarded-For by default (TRUST_PROXY=false): it cannot be used to dodge the limit', async () => {
     const fresh = await createTestApp({ rateLimiting: true });
     try {

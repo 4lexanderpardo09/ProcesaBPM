@@ -30,6 +30,8 @@ export const RATE_LIMITS = {
   passwordChange: { name: 'password-change', perIp: { limit: 10, windowMs: 15 * MINUTE }, perIdentifier: { limit: 5, windowMs: 15 * MINUTE } },
   mfaLogin: { name: 'mfa-login', perIp: { limit: 30, windowMs: 15 * MINUTE }, perIdentifier: { limit: 10, windowMs: 15 * MINUTE } },
   mfaAccount: { name: 'mfa-account', perIp: { limit: 20, windowMs: 15 * MINUTE }, perIdentifier: { limit: 10, windowMs: 15 * MINUTE } },
+  /** Keyed by IP only: the cookie that authenticates it changes with every switch (a bearer, if sent, is the identifier). */
+  switchTenant: { name: 'switch-tenant', perIp: { limit: 30, windowMs: 15 * MINUTE }, perIdentifier: { limit: 10, windowMs: 15 * MINUTE } },
   platformSelect: { name: 'platform-select', perIp: { limit: 20, windowMs: 15 * MINUTE }, perIdentifier: { limit: 10, windowMs: 15 * MINUTE } },
   passwordResetConfirm: {
     name: 'password-reset-confirm',
