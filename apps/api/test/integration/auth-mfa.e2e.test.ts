@@ -60,7 +60,7 @@ describe('two-step verification at login', () => {
       expect((await lastLoginAt(user.userId))).toBeNull();
 
       const done = await verify(first.body.challengeToken, { code: codeNow(mfa) }).expect(200);
-      expect(done.body).toMatchObject({ step: 'SELECT_ORGANIZATION', selectionToken: expect.any(String), organizations: [expect.objectContaining({ tenantId: tenant.tenantId })] });
+      expect(done.body).toMatchObject({ step: 'SELECT_ORGANIZATION', selectionToken: expect.any(String), expiresIn: 120, organizations: [expect.objectContaining({ tenantId: tenant.tenantId })] });
       expect((await lastLoginAt(user.userId))).not.toBeNull();
 
       const session = await select(done.body.selectionToken).expect(200);
@@ -186,10 +186,13 @@ describe('two-step verification at login', () => {
       const confirmed = await http().post('/auth/login/mfa/enrollment/confirm').set(bearer(challenge)).send({ code: currentCode(secret, 0, clock.now().getTime()) }).expect(200);
       expect(confirmed.body.backupCodes).toHaveLength(10);
       expect(new Set(confirmed.body.backupCodes).size).toBe(10);
-      expect(confirmed.body).toMatchObject({ step: 'SELECT_ORGANIZATION', platformAdmin: true });
+      // Ten minutes, not two: the backup codes are saved before choosing.
+      expect(confirmed.body).toMatchObject({ step: 'SELECT_ORGANIZATION', platformAdmin: true, expiresIn: 600 });
       expect((await db.owner.query<{ mfa_enabled: boolean }>('SELECT mfa_enabled FROM users WHERE id = $1', [admin.userId])).rows[0]?.mfa_enabled).toBe(true);
 
+      clock.advanceMinutes(9);
       await http().post('/auth/platform/select').set(bearer(confirmed.body.selectionToken)).expect(200);
+      await http().post('/auth/platform/select').set(bearer(confirmed.body.selectionToken)).expect(401);
     });
 
     it('the secret is stored encrypted, never in clear text', async () => {

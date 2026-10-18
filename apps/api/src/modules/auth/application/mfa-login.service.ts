@@ -7,7 +7,7 @@ import {
   UnauthenticatedError,
 } from '@procesabpm/shared';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
-import { JwtTokenService, type MfaChallengeClaims } from '../../../infrastructure/security/jwt-token-service.js';
+import { JwtTokenService, type MfaChallengeClaims, SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS } from '../../../infrastructure/security/jwt-token-service.js';
 import { CredentialsRepository } from '../data/credentials.repository.js';
 import { LoginTokenRepository } from '../data/login-token.repository.js';
 import { MfaRepository } from '../data/mfa.repository.js';
@@ -69,7 +69,9 @@ export class MfaLoginService {
       await this.notifier.notify(tx, userId, 'MFA_ENABLED');
       await this.credentials.recordPasswordSuccess(tx, userId, true);
     });
-    return { ...(await this.selection.issue(userId, true)), backupCodes: backupCodes.displayed };
+    // The backup codes are saved before the organization is chosen: that takes longer than the usual two minutes.
+    const completed = await this.selection.issue(userId, true, SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS);
+    return { ...completed, backupCodes: backupCodes.displayed };
   }
 
   private async consumeChallenge(tx: Parameters<LoginTokenRepository['consume']>[0], challenge: MfaChallengeClaims): Promise<void> {

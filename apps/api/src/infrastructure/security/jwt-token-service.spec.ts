@@ -3,7 +3,13 @@ import { decodeProtectedHeader, decodeJwt, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 import type { ApiConfig } from '../../config/app-config.js';
 import type { Clock } from '../clock.js';
-import { ACCESS_TOKEN_TTL_SECONDS, JwtTokenService, MFA_CHALLENGE_TTL_SECONDS, SELECTION_TOKEN_TTL_SECONDS } from './jwt-token-service.js';
+import {
+  ACCESS_TOKEN_TTL_SECONDS,
+  JwtTokenService,
+  MFA_CHALLENGE_TTL_SECONDS,
+  SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS,
+  SELECTION_TOKEN_TTL_SECONDS,
+} from './jwt-token-service.js';
 
 const SECRET = 'unit-test-secret-with-at-least-32-bytes';
 const claims = {
@@ -46,6 +52,19 @@ describe('JwtTokenService', () => {
     expect(expiresIn).toBe(SELECTION_TOKEN_TTL_SECONDS);
     await expect(service.verifySelectionToken(token)).resolves.toMatchObject({ userId: claims.sub });
     advance(2 * 60 + 10);
+    await expect(service.verifySelectionToken(token)).rejects.toBeInstanceOf(UnauthenticatedError);
+  });
+
+  it('lets the caller give a selection token a longer life (after a forced MFA enrollment: 10 minutes)', async () => {
+    const { service, advance } = setup();
+    expect(SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS).toBe(10 * 60);
+    const { token, expiresIn } = await service.issueSelectionToken(claims.sub, { mfa: true, ttlSeconds: SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS });
+    expect(expiresIn).toBe(SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS);
+    const verified = await service.verifySelectionToken(token);
+    expect(verified.expiresAt.getTime() - verified.issuedAt.getTime()).toBe(SELECTION_TOKEN_AFTER_ENROLLMENT_TTL_SECONDS * 1000);
+    advance(10 * 60 - 10);
+    await expect(service.verifySelectionToken(token)).resolves.toMatchObject({ userId: claims.sub, mfa: true });
+    advance(20);
     await expect(service.verifySelectionToken(token)).rejects.toBeInstanceOf(UnauthenticatedError);
   });
 
