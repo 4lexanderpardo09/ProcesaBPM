@@ -3,6 +3,12 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 
 export type Where = Record<string, unknown>;
 
+const PERSON_NAME = { user: { select: { firstName: true, lastName: true } } } as const;
+
+/**
+ * The listing row: ids plus the names a list shows and the open SLA clocks of the current step. Prisma loads the
+ * relations for the whole page at once (never a query per ticket), inside the caller's transaction and so under RLS.
+ */
 const SUMMARY = {
   id: true,
   number: true,
@@ -12,8 +18,15 @@ const SUMMARY = {
   creatorId: true,
   subcategoryId: true,
   currentStepId: true,
+  priorityId: true,
   createdAt: true,
   closedAt: true,
+  creator: { select: PERSON_NAME },
+  subcategory: { select: { name: true, category: { select: { id: true, name: true } } } },
+  currentStep: { select: { id: true, name: true } },
+  priority: { select: { id: true, name: true, color: true } },
+  assignees: { select: { userId: true, type: true, assignedAt: true, membership: { select: PERSON_NAME } }, orderBy: { userId: 'asc' } },
+  slaClocks: { where: { completedAt: null }, select: { dueAt: true, pausedAt: true } },
 } as const;
 
 const DETAIL = {
@@ -22,12 +35,10 @@ const DETAIL = {
   workflowVersionId: true,
   registeredById: true,
   descriptionHtml: true,
-  priorityId: true,
   departmentId: true,
   siteId: true,
   currentLoop: true,
   closedById: true,
-  assignees: { select: { userId: true, type: true, assignedAt: true }, orderBy: { userId: 'asc' } },
   stepVisits: { where: { exitedAt: null }, select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, resumeAt: true }, take: 1 },
   parallelTasks: { select: { id: true, userId: true, status: true, completedAt: true, stepId: true, loop: true }, orderBy: { id: 'asc' } },
   incidents: { where: { status: 'OPEN' }, select: { id: true, assignedToId: true, createdById: true, openedAt: true, description: true }, take: 1 },

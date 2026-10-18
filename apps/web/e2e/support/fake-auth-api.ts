@@ -95,9 +95,16 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       creatorId: USER_ID,
       subcategoryId: '018f0000-0000-7000-8000-0000000000c2',
       currentStepId: null,
+      priorityId: null,
       createdAt: '2026-10-17T15:00:00.000Z',
       closedAt: null,
       tags: [],
+      creator: { id: USER_ID, name: 'Ana Pérez' },
+      subcategory: { id: '018f0000-0000-7000-8000-0000000000c2', name: 'Pagos', category: { id: '018f0000-0000-7000-8000-0000000000c3', name: 'Cartera' } },
+      currentStep: null,
+      priority: null,
+      assignees: [],
+      sla: null,
       ...ticket,
     }));
     return { items, page, pageSize, total: matching.length };
