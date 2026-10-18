@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = [
   'POST /auth/select-tenant',
   'POST /auth/platform/select',
   'POST /auth/refresh',
+  'POST /auth/switch-tenant',
   'POST /auth/logout',
   'POST /auth/login/mfa',
   'POST /auth/login/mfa/enrollment',

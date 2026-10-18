@@ -155,15 +155,27 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response): Promise<AccessTokenResponse> {
-    try {
-      return this.deliver(await this.sessions.refresh(readRefreshCookie(request), clientOf(request)), response);
-    } catch (error) {
-      // A suspended tenant (403) or a maintenance block (503) keeps the session: it works again afterwards. A refresh that lost
-      // a race with another tab keeps the cookie that tab just set.
-      if (error instanceof UnauthenticatedError && !(error instanceof SupersededRefreshError)) clearRefreshCookie(response);
-      throw error;
-    }
+  refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response): Promise<AccessTokenResponse> {
+    return this.renewing(() => this.sessions.refresh(readRefreshCookie(request), clientOf(request)), response);
+  }
+
+  /**
+   * Moves the session to another organization of the same person (`{ tenantId }`), authenticated by the refresh cookie
+   * like `refresh`: the cookie path only reaches `/api/auth`, and the web runs every cookie request under one lock. A
+   * refused switch (403 or 503) keeps the current session and its cookie; only a dead or reused cookie (401) clears it.
+   * CSRF: the cookie is `SameSite=Lax`, so a cross-site POST does not carry it, and the API is served from the web's origin.
+   */
+  @Public()
+  @Post('switch-tenant')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(RATE_LIMITS.switchTenant)
+  @UseGuards(RateLimitGuard)
+  async switchTenant(
+    @Body(new ZodValidationPipe(selectTenantRequestSchema)) body: SelectTenantRequest,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AccessTokenResponse> {
+    return this.renewing(() => this.sessions.switchTenant(readRefreshCookie(request), body.tenantId, clientOf(request)), response);
   }
 
   @Public()
@@ -265,6 +277,18 @@ export class AuthController {
     const token = bearerToken(request.header('authorization'));
     if (token === undefined) throw new UnauthenticatedError();
     return token;
+  }
+
+  /** A rotation of the refresh cookie (refresh or switch): sets the new cookie, or clears it when the session is gone. */
+  private async renewing(rotate: () => Promise<OpenedSession>, response: Response): Promise<AccessTokenResponse> {
+    try {
+      return this.deliver(await rotate(), response);
+    } catch (error) {
+      // A suspended tenant (403) or a maintenance block (503) keeps the session: it works again afterwards. A refresh that lost
+      // a race with another tab keeps the cookie that tab just set.
+      if (error instanceof UnauthenticatedError && !(error instanceof SupersededRefreshError)) clearRefreshCookie(response);
+      throw error;
+    }
   }
 
   private deliver(session: OpenedSession, response: Response): AccessTokenResponse {

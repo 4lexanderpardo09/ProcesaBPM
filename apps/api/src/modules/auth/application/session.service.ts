@@ -1,12 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { UnauthenticatedError } from '@procesabpm/shared';
+import { PermissionDeniedError, UnauthenticatedError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { AuthTransactionRunner } from '../../../infrastructure/database/auth-transaction-runner.js';
 import { type IssuedToken, JwtTokenService, type SelectionTokenClaims } from '../../../infrastructure/security/jwt-token-service.js';
 import { generateOpaqueToken, sha256Hex } from '../../../infrastructure/security/token-utils.js';
 import { LoginTokenRepository } from '../data/login-token.repository.js';
-import { SessionRepository, type StoredSession } from '../data/session.repository.js';
+import { type SessionLookup, SessionRepository, type StoredSession } from '../data/session.repository.js';
 import { REFRESH_REUSE_GRACE_MS, REFRESH_SESSION_TTL_MS } from '../domain/auth-policy.js';
 import { TenantAccessService } from './tenant-access.service.js';
 
@@ -26,14 +26,16 @@ export interface OpenedSession {
  * `superseded`: a rotated token within the grace window (another tab won the race); `stale`: a rotated token presented
  * later whose replacement was never used (the answer of that rotation was most likely lost).
  */
+type LiveSession = { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date; readonly mfaVerified: boolean };
+
 type RefreshCheck =
-  | { readonly kind: 'valid'; readonly tenantId: string; readonly expiresAt: Date; readonly mfaVerified: boolean }
+  | LiveSession
   | { readonly kind: 'invalid' | 'reused' | 'superseded' }
   | { readonly kind: 'stale'; readonly replacementId: string };
 
 type Rotation =
   | { readonly kind: 'rotated'; readonly sessionId: string; readonly expiresAt: Date }
-  | Exclude<RefreshCheck, { readonly kind: 'valid' }>;
+  | Exclude<RefreshCheck, LiveSession>;
 
 /**
  * The refresh lost a race with another tab of the same browser, which already set the new cookie: the answer must not
@@ -74,16 +76,25 @@ export class SessionService {
    * was copied, so every session of the user is revoked.
    */
   async refresh(refreshToken: string | undefined, client: ClientInfo): Promise<OpenedSession> {
-    const owner = await this.findOwner(refreshToken);
-    const check = await this.runner.withUserTransaction(owner.userId, async (tx) => {
-      const session = await this.sessions.findById(tx, owner.id);
-      const replacement = session?.replacedBy ? await this.sessions.findById(tx, session.replacedBy) : undefined;
-      return this.classify(session, replacement);
-    });
-    if (check.kind !== 'valid') return this.refuse(owner.userId, check);
+    const { owner, session } = await this.livePresented(refreshToken);
+    await this.tenantAccess.verify({ userId: owner.userId, tenantId: session.tenantId, mfaVerified: session.mfaVerified, allowDeletionPending: true });
+    return this.rotate(owner, { from: session.tenantId, to: session.tenantId }, client);
+  }
 
-    await this.tenantAccess.verify({ userId: owner.userId, tenantId: check.tenantId, mfaVerified: check.mfaVerified, allowDeletionPending: true });
-    return this.rotate(owner.id, owner.userId, check.tenantId, client);
+  /**
+   * Moves the session of the presented refresh token to another organization of the same person, without the password:
+   * the cookie already proves the sign-in, and the second factor passed in it carries over (an organization that requires
+   * it refuses a session that did not pass it). It is a rotation whose replacement belongs to the target tenant, so it
+   * keeps the absolute expiry and the reuse detection of `refresh`, and the old access token stops working at once.
+   * Everything about the target is checked before the session is touched: a refused switch leaves it as it was. The
+   * current tenant as target is a plain rotation.
+   */
+  async switchTenant(refreshToken: string | undefined, targetTenantId: string, client: ClientInfo): Promise<OpenedSession> {
+    const { owner, session } = await this.livePresented(refreshToken);
+    await this.verifyTarget(owner.userId, targetTenantId, session.mfaVerified);
+    const opened = await this.rotate(owner, { from: session.tenantId, to: targetTenantId }, client);
+    this.logger.info('Session moved to another organization', { event: 'auth.tenant_switched', userId: owner.userId, fromTenantId: session.tenantId, toTenantId: targetTenantId });
+    return opened;
   }
 
   /** Revokes the session of the presented refresh token; unknown tokens are ignored. */
@@ -94,6 +105,32 @@ export class SessionService {
     );
     if (owner === undefined) return;
     await this.runner.withUserTransaction(owner.userId, (tx) => this.sessions.revoke(tx, owner.id, this.clock.now()));
+  }
+
+  /** The presented token must belong to a live tenant session; otherwise it is refused like a refresh (reuse detection included). */
+  private async livePresented(refreshToken: string | undefined): Promise<{ owner: SessionLookup; session: LiveSession }> {
+    const owner = await this.findOwner(refreshToken);
+    const check = await this.runner.withUserTransaction(owner.userId, async (tx) => {
+      const session = await this.sessions.findById(tx, owner.id);
+      const replacement = session?.replacedBy ? await this.sessions.findById(tx, session.replacedBy) : undefined;
+      return this.classify(session, replacement);
+    });
+    if (check.kind !== 'valid') return this.refuse(owner.userId, check);
+    return { owner, session: check };
+  }
+
+  /**
+   * No membership (or an INVITED or disabled one) in the target is a 403, not the 401 of `verify`: the session itself is
+   * still good, and a 401 would make the client renew it or sign the person out. Whether the organization exists is not
+   * told apart. Suspension, pending deletion, maintenance and MFA keep their own errors.
+   */
+  private async verifyTarget(userId: string, tenantId: string, mfaVerified: boolean): Promise<void> {
+    try {
+      await this.tenantAccess.verify({ userId, tenantId, mfaVerified, allowDeletionPending: true });
+    } catch (error) {
+      if (error instanceof UnauthenticatedError) throw new PermissionDeniedError('No access to the target organization');
+      throw error;
+    }
   }
 
   private async findOwner(refreshToken: string | undefined) {
@@ -134,20 +171,22 @@ export class SessionService {
   }
 
   /**
-   * The row is locked and checked again, so of two concurrent refreshes with the same token only one
-   * rotates; the other one sees the replacement (or a logout) and is refused.
+   * The row is locked and checked again, so of two concurrent refreshes (or switches) with the same token only one
+   * rotates; the other one sees the replacement (or a logout) and is refused. The replacement may belong to another
+   * tenant (`switchTenant`); everything else (expiry, second factor) is inherited.
    */
-  private async rotate(sessionId: string, userId: string, tenantId: string, client: ClientInfo): Promise<OpenedSession> {
+  private async rotate(owner: SessionLookup, tenants: { readonly from: string; readonly to: string }, client: ClientInfo): Promise<OpenedSession> {
+    const { id: sessionId, userId } = owner;
     const refreshToken = generateOpaqueToken();
     const rotation = await this.runner.withUserTransaction(userId, async (tx): Promise<Rotation> => {
       const session = await this.sessions.findByIdForUpdate(tx, sessionId);
       const replacement = session?.replacedBy ? await this.sessions.findById(tx, session.replacedBy) : undefined;
       const check = this.classify(session, replacement);
       if (check.kind !== 'valid') return check;
-      if (check.tenantId !== tenantId) return { kind: 'invalid' };
+      if (check.tenantId !== tenants.from) return { kind: 'invalid' };
       const id = await this.sessions.create(tx, {
         userId,
-        activeTenantId: tenantId,
+        activeTenantId: tenants.to,
         tokenHash: sha256Hex(refreshToken),
         expiresAt: check.expiresAt,
         mfaVerified: check.mfaVerified,
@@ -159,7 +198,7 @@ export class SessionService {
     if (rotation.kind !== 'rotated') return this.refuse(userId, rotation);
 
     return {
-      accessToken: await this.issueAccessToken(userId, tenantId, rotation.sessionId),
+      accessToken: await this.issueAccessToken(userId, tenants.to, rotation.sessionId),
       refreshToken,
       refreshExpiresAt: rotation.expiresAt,
     };
