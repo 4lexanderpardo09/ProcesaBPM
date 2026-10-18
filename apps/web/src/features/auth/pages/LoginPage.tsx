@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { isUrlLoginNotice } from '@/shared/lib/paths';
 import { Alert } from '@/shared/ui';
-import { AuthCard } from '../components/AuthCard';
+import { AuthPanel } from '../components/AuthPanel';
 import { BackupCodesPanel } from '../components/BackupCodesPanel';
 import { CredentialsForm } from '../components/CredentialsForm';
 import { MfaChallengeForm } from '../components/MfaChallengeForm';
@@ -16,9 +16,9 @@ export function LoginPage() {
   const notice = searchParams.get('notice');
   const flow = useLoginFlow(isUrlLoginNotice(notice) ? notice : undefined);
   return (
-    <AuthCard>
+    <AuthPanel>
       <LoginStep flow={flow} />
-    </AuthCard>
+    </AuthPanel>
   );
 }
 

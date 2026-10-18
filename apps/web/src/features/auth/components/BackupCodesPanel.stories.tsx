@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { AuthCard } from './AuthCard';
+import { AuthPanel } from './AuthPanel';
 import { BackupCodesPanel } from './BackupCodesPanel';
 
 const meta = {
@@ -7,9 +7,9 @@ const meta = {
   component: BackupCodesPanel,
   decorators: [
     (Story) => (
-      <AuthCard>
+      <AuthPanel>
         <Story />
-      </AuthCard>
+      </AuthPanel>
     ),
   ],
   args: { codes: Array.from({ length: 10 }, (_, index) => `K7QM-2XPA-9RTD-4F${index}Z`), onContinue: () => undefined },

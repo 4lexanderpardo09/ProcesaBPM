@@ -253,7 +253,7 @@ describe('LoginPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Activar y continuar' }));
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Guarda tus códigos de respaldo' })).toBeInTheDocument();
-    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(codes);
+    expect(within(screen.getByRole('main')).getAllByRole('listitem').map((item) => item.textContent)).toEqual(codes);
     const continueButton = screen.getByRole('button', { name: 'Continuar' });
     expect(continueButton).toBeDisabled();
 

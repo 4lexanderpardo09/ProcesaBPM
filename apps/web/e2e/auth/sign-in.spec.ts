@@ -60,7 +60,7 @@ test.describe('sign-in', () => {
     await page.getByRole('button', { name: 'Activar y continuar' }).click();
 
     await expect(page.getByRole('heading', { name: 'Guarda tus códigos de respaldo' })).toBeVisible();
-    await expect(page.getByRole('listitem')).toHaveText(BACKUP_CODES);
+    await expect(page.getByRole('main').getByRole('listitem')).toHaveText(BACKUP_CODES);
     await expect(page.getByRole('button', { name: 'Continuar' })).toBeDisabled();
     await page.getByRole('checkbox', { name: 'Guardé los códigos en un lugar seguro' }).check();
     await page.getByRole('button', { name: 'Continuar' }).click();

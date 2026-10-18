@@ -1,11 +1,15 @@
 import { Outlet } from 'react-router';
 import styles from './AuthLayout.module.css';
+import { BrandPanel } from './BrandPanel';
 
-/** Centered on the app background, for the pages outside a session. */
+/** The pages outside a session: the brand panel on the left and the page on the right. */
 export function AuthLayout() {
   return (
-    <main className={styles.layout}>
-      <Outlet />
-    </main>
+    <div className={styles.layout}>
+      <BrandPanel />
+      <main className={styles.content}>
+        <Outlet />
+      </main>
+    </div>
   );
 }

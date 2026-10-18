@@ -1,0 +1,62 @@
+.illustration {
+  display: block;
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--faint);
+  stroke-width: 2;
+}
+
+.retryEdge {
+  fill: none;
+  stroke: var(--warn-line);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.arrowHead {
+  fill: var(--faint);
+}
+
+.retryArrowHead {
+  fill: var(--warn-line);
+}
+
+.node {
+  fill: var(--surface);
+}
+
+.kind {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.name {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+
+.branch {
+  fill: var(--surface);
+}
+
+.branchText {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--slate);
+}
+
+.start { fill: var(--block-start); }
+.step { fill: var(--block-step); }
+.approval { fill: var(--block-approval); }
+.decision { fill: var(--block-decision); }
+.end { fill: var(--block-end); }

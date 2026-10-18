@@ -1,8 +1,24 @@
+/* Below 900px the brand panel would squeeze the form, so it hides (same breakpoint in BrandPanel and AuthPanel). */
 .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(440px, 520px);
+  min-height: 100%;
+}
+
+.content {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100%;
-  padding: var(--space-6) var(--space-4);
-  background: var(--bg);
+  padding: var(--space-6);
+  background: var(--surface);
+}
+
+@media (max-width: 899px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .content {
+    padding: var(--space-6) var(--space-4);
+  }
 }

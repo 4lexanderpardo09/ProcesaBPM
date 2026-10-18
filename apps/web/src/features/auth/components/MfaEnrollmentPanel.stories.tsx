@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { AuthCard } from './AuthCard';
+import { AuthPanel } from './AuthPanel';
 import { MfaEnrollmentPanel } from './MfaEnrollmentPanel';
 
 const meta = {
@@ -7,9 +7,9 @@ const meta = {
   component: MfaEnrollmentPanel,
   decorators: [
     (Story) => (
-      <AuthCard>
+      <AuthPanel>
         <Story />
-      </AuthCard>
+      </AuthPanel>
     ),
   ],
   args: {

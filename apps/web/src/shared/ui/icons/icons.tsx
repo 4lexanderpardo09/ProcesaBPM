@@ -77,3 +77,5 @@ export const DownloadIcon = createIcon('DownloadIcon', (
     <path d="M12 15V3" />
   </>
 ));
+
+export const CheckIcon = createIcon('CheckIcon', <path d="M20 6 9 17l-5-5" />);
