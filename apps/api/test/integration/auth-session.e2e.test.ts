@@ -96,6 +96,9 @@ describe('sessions', () => {
       expect(profile.user).toMatchObject({ id: user.userId, email: user.email });
       expect(profile.membership).toMatchObject({ tenantId: tenantA.tenantId, status: 'ACTIVE', role: { isAdmin: true } });
       expect(profile.membership.companies).toEqual([expect.objectContaining({ id: tenantA.companyId, isDefault: true })]);
+      const { rows } = await db.platform.query<{ slug: string; name: string }>('SELECT slug, name FROM tenants WHERE id = $1', [tenantA.tenantId]);
+      expect(profile.organization).toEqual({ id: tenantA.tenantId, ...rows[0] });
+      expect(response.headers['cache-control']).toBe('no-store');
       expect(JSON.stringify(response.body)).not.toMatch(/password|mfaSecret|failedLogins|lockedUntil/i);
     });
 
@@ -122,12 +125,18 @@ describe('sessions', () => {
     });
 
     it('reusing a rotated refresh token right after the rotation is refused without revoking anything (two tabs)', async () => {
-      await refresh(first.refreshCookie).expect(401);
+      const response = await refresh(first.refreshCookie).expect(401);
+      // The tab that won the race already set the new cookie: this answer must not clear it.
+      expect(refreshSetCookieOf(response)).toBeUndefined();
+      expect(response.headers['cache-control']).toBe('no-store');
       await me(second.accessToken).expect(200);
     });
 
-    it('reusing a rotated refresh token later revokes every session of the user (theft detection)', async () => {
+    it('reusing a rotated refresh token later revokes every session of the user once the replacement was used (theft detection)', async () => {
       const elsewhere = await signIn(app, user.email, tenantA.tenantId);
+      // The replacement was rotated in turn: two holders of one session.
+      const third = await refresh(second.refreshCookie).expect(200);
+      second = { accessToken: third.body.accessToken, refreshCookie: refreshCookieOf(third)! };
       await rotatedAMinuteAgo(first.refreshCookie);
       const response = await refresh(first.refreshCookie).expect(401);
       expect(response.body.error.code).toBe('UNAUTHENTICATED');
@@ -178,6 +187,7 @@ describe('sessions', () => {
       const responses = await Promise.all([refresh(session.refreshCookie), refresh(session.refreshCookie)]);
       expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
       const winner = responses.find((response) => response.status === 200)!;
+      expect(refreshSetCookieOf(responses.find((response) => response.status === 401)!)).toBeUndefined();
       await me(winner.body.accessToken).expect(200);
       await refresh(refreshCookieOf(winner)!).expect(200);
     });
@@ -188,6 +198,22 @@ describe('sessions', () => {
       const session = await signIn(app, user.email, tenantA.tenantId);
       await Promise.all([refresh(session.refreshCookie), http().post('/auth/logout').set('cookie', session.refreshCookie)]);
       await me(other.accessToken).expect(200);
+    });
+
+    it('a lost rotation answer (the replacement was never used) revokes only that replacement, not the other sessions', async () => {
+      const user = await seedUser(db, tenantA);
+      const other = await signIn(app, user.email, tenantA.tenantId);
+      const session = await signIn(app, user.email, tenantA.tenantId);
+      const lost = await refresh(session.refreshCookie).expect(200);
+      await rotatedAMinuteAgo(session.refreshCookie);
+
+      const response = await refresh(session.refreshCookie).expect(401);
+      expect(response.body.error.code).toBe('UNAUTHENTICATED');
+      expect(refreshSetCookieOf(response)).toMatch(/^__Secure-refresh_token=;/);
+      await me(lost.body.accessToken).expect(401);
+      await refresh(refreshCookieOf(lost)!).expect(401);
+      await me(other.accessToken).expect(200);
+      await refresh(other.refreshCookie).expect(200);
     });
 
     it('a suspended tenant refuses the refresh with 403 and keeps the cookie and the session', async () => {

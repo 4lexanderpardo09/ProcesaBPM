@@ -10,6 +10,7 @@ const organization = (overrides: Partial<Organization> = {}): Organization => ({
   name: 'Acme',
   membershipStatus: 'ACTIVE',
   mfaRequired: false,
+  tenantStatus: 'ACTIVE',
   maintenance: null,
   ...overrides,
 });

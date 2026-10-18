@@ -212,9 +212,10 @@ describe('tenant deletion and purge', () => {
   describe('the login', () => {
     it('still lists an organization pending deletion (so choosing it can explain why), and never a purged one', async () => {
       const tenant = await pending(1);
-      const listed = async (userId: string) =>
-        (await withContext(db.runtime, { userId }, (c) => c.query<{ tenant_id: string }>('SELECT tenant_id FROM auth_list_memberships($1)', [userId]))).rows.map((row) => row.tenant_id);
-      expect(await listed(tenant.userId)).toContain(tenant.tenantId);
+      const rows = async (userId: string) =>
+        (await withContext(db.runtime, { userId }, (c) => c.query<{ tenant_id: string; tenant_status: string }>('SELECT tenant_id, tenant_status FROM auth_list_memberships($1)', [userId]))).rows;
+      const listed = async (userId: string) => (await rows(userId)).map((row) => row.tenant_id);
+      expect(await rows(tenant.userId)).toContainEqual({ tenant_id: tenant.tenantId, tenant_status: 'PENDING_DELETION' });
       await db.owner.query(`UPDATE tenants SET status = 'PURGED', purged_at = now(), purge_after = NULL WHERE id = $1`, [tenant.tenantId]);
       expect(await listed(tenant.userId)).not.toContain(tenant.tenantId);
     });

@@ -54,6 +54,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
   const organizationsJson = options.organizations.map((organization) => ({
     membershipStatus: 'ACTIVE',
     mfaRequired: false,
+    tenantStatus: 'ACTIVE',
     maintenance: null,
     ...organization,
   }));
@@ -120,6 +121,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       return json(route, 200, {
         user: { id: USER_ID, email: 'ana@example.com', firstName: 'Ana', lastName: 'Torres', locale: 'es-CO', timeZone: null, mfaEnabled: false, emailVerifiedAt: null },
         membership: { tenantId: sessionTenant, status: 'ACTIVE', isOwner: false, role: { id: '018f0000-0000-7000-8000-000000000003', name: `Analista de ${nameOf(sessionTenant)}`, isAdmin: false }, companies: [], signatureFileId: null },
+        organization: { id: sessionTenant, slug: nameOf(sessionTenant).toLowerCase(), name: nameOf(sessionTenant) },
         tenantMode: 'ACTIVE',
       });
     },

@@ -19,6 +19,7 @@ export function fakeProfile(authorization: string | undefined, { firstName = 'An
       companies: [],
       signatureFileId: null,
     },
+    organization: { id: '018f0000-0000-7000-8000-000000000002', slug: 'acme', name: 'Acme' },
     tenantMode,
   };
 }

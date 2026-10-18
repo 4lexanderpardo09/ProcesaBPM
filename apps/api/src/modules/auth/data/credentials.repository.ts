@@ -72,7 +72,8 @@ export class CredentialsRepository {
   listOrganizations(tx: AuthTransaction, userId: string): Promise<OrganizationMembership[]> {
     return tx.$queryRaw<OrganizationMembership[]>`
       SELECT tenant_id AS "tenantId", tenant_slug AS slug, tenant_name AS name,
-             membership_status::text AS "membershipStatus", tenant_mfa_required AS "mfaRequired"
+             membership_status::text AS "membershipStatus", tenant_mfa_required AS "mfaRequired",
+             tenant_status::text AS "tenantStatus"
       FROM auth_list_memberships(${userId}::uuid)
       ORDER BY tenant_name, tenant_id`;
   }
