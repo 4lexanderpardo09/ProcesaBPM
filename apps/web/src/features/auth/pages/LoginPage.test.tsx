@@ -179,16 +179,34 @@ describe('LoginPage', () => {
     expect(view.fake.callsTo('/auth/login/mfa')[0]?.options.headers).toEqual({ Authorization: 'Bearer challenge' });
   });
 
-  it('accepts a backup code and warns how many are left', async () => {
+  it('accepts a backup code and warns how many are left before entering, even with one organization', async () => {
     renderLogin({
       '/auth/login': () => ({ step: 'MFA_REQUIRED', challengeToken: 'challenge', expiresIn: 300, methods: ['TOTP', 'BACKUP_CODE'] }),
-      '/auth/login/mfa': () => selection([organization(ACME, 'Acme'), organization(GLOBEX, 'Globex')], { backupCodesLeft: 2 }),
+      '/auth/login/mfa': () => selection([organization(ACME, 'Acme')], { backupCodesLeft: 2 }),
     });
     await signIn();
     await userEvent.click(await screen.findByRole('button', { name: 'Usar un código de respaldo' }));
     await userEvent.type(screen.getByLabelText(/^Código de respaldo/), 'ABCD-EFGH-IJKL-MNOP');
     await userEvent.click(screen.getByRole('button', { name: 'Verificar' }));
     expect(await screen.findByText('Te quedan 2 códigos de respaldo. Genera nuevos desde tu perfil.')).toBeInTheDocument();
+  });
+
+  it('ignores a late answer after the person went back to the start', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    renderLogin({
+      '/auth/login': () => ({ step: 'MFA_REQUIRED', challengeToken: 'challenge', expiresIn: 300, methods: ['TOTP'] }),
+      '/auth/login/mfa': () => new Promise((resolve) => (answer = resolve)),
+    });
+    await signIn();
+    await screen.findByRole('heading', { level: 1, name: 'Verificación en dos pasos' });
+    await userEvent.type(codeField(), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verificar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Volver al inicio de sesión' }));
+
+    answer(selection([organization(ACME, 'Acme')]));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Inicia sesión' })).toBeInTheDocument();
   });
 
   it('starts over with a notice when the verification expired', async () => {
