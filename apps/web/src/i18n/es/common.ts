@@ -6,6 +6,12 @@ export const common = {
     backHome: 'Volver al inicio',
   },
   underConstruction: 'Esta sección está en construcción.',
+  pagination: {
+    label: 'Paginación',
+    range: 'Mostrando {{from}}–{{to}} de {{total}}',
+    previous: 'Anterior',
+    next: 'Siguiente',
+  },
   errors: {
     unexpected: 'Ocurrió un error inesperado. Intenta de nuevo.',
     unexpectedWithReference: 'Ocurrió un error inesperado. Intenta de nuevo. Código de referencia: {{requestId}}',

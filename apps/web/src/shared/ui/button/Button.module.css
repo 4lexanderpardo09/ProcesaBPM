@@ -15,6 +15,7 @@
   box-shadow: var(--shadow-xs);
   cursor: pointer;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .button:disabled {
