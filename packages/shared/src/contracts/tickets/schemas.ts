@@ -197,21 +197,17 @@ export interface TicketMutationResponse {
   readonly openVisitId: string | null;
 }
 
-const assigneeTypeSchema = z.enum(['PRIMARY', 'POOL', 'PARALLEL', 'INCIDENT']);
-
 /** Parses `TicketDetailResponse` (for the web client). */
 export const ticketDetailResponseSchema = ticketSummaryResponseSchema.extend({
   workflowId: uuidSchema,
   workflowVersionId: uuidSchema,
   registeredById: uuidSchema.nullable(),
   descriptionHtml: z.string(),
-  priorityId: uuidSchema.nullable(),
   departmentId: uuidSchema.nullable(),
   siteId: uuidSchema.nullable(),
   currentLoop: z.number(),
   closedById: uuidSchema.nullable(),
   openVisit: z.object({ id: uuidSchema, stepId: uuidSchema, loop: z.number(), enteredAt: z.string(), dueAt: z.string().nullable() }).nullable(),
-  assignees: z.array(z.object({ userId: uuidSchema, type: assigneeTypeSchema, assignedAt: z.string() })),
   awaitingDispatch: z.boolean(),
   parallelTasks: z.array(z.object({ id: uuidSchema, userId: uuidSchema, status: z.enum(['PENDING', 'SIGNED', 'REJECTED', 'CANCELLED']), completedAt: z.string().nullable() })),
   openIncident: z.object({ id: uuidSchema, assignedToId: uuidSchema, createdById: uuidSchema, openedAt: z.string(), descriptionHtml: z.string() }).nullable(),

@@ -3,7 +3,7 @@ import { assigneeSummary } from './assignee-summary';
 
 const me = '018f0000-0000-7000-8000-000000000001';
 const other = '018f0000-0000-7000-8000-000000000002';
-const assignee = (userId: string) => ({ userId, type: 'PRIMARY' as const, assignedAt: '2026-10-18T10:00:00.000Z' });
+const assignee = (userId: string) => ({ userId, name: 'Ana Pérez', type: 'PRIMARY' as const, assignedAt: '2026-10-18T10:00:00.000Z' });
 
 describe('assigneeSummary', () => {
   it('puts the person first and counts the others once each', () => {
