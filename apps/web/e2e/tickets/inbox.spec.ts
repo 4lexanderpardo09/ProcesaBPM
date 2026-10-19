@@ -49,7 +49,7 @@ test.describe('ticket inbox', () => {
     await page.getByRole('cell', { name: 'T-1001' }).click();
 
     await expect(page).toHaveURL(new RegExp(`/tickets/${ticketId(1)}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Detalle del ticket' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Solicitud 1' })).toBeVisible();
     await page.goBack();
     await expect(page.getByRole('link', { name: 'Solicitud 1' })).toBeVisible();
   });

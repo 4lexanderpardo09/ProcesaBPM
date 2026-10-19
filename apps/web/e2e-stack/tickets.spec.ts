@@ -24,3 +24,13 @@ test('the inbox reads every tab from the real API', async ({ page }) => {
   await expect(page.getByRole('cell', { name: 'Ningún ticket coincide con el filtro.' })).toBeVisible();
   expect(new Set(ticketQueries.map((url) => url.searchParams.get('view')))).toEqual(new Set(['assigned', 'created', 'observed', 'all']));
 });
+
+test('a ticket the person cannot see reads as not found from the real API', async ({ page }) => {
+  const missing = '018f0000-0000-7000-8000-00000000ffff';
+  const detail = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/tickets/${missing}`);
+  await page.goto(`/tickets/${missing}`);
+  await signIn(page, PEOPLE.singleOrganization.email);
+
+  expect((await detail).status()).toBe(404);
+  await expect(page.getByRole('heading', { level: 1, name: 'No encontramos este ticket' })).toBeVisible();
+});

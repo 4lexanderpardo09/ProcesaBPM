@@ -16,6 +16,10 @@ export const ticketQueryKeys = {
   all: ['tickets'] as const,
   list: (params: InboxParams) => [...ticketQueryKeys.all, 'list', params] as const,
   count: (view: TicketView, status: TicketStatus | undefined) => [...ticketQueryKeys.all, 'count', { view, status }] as const,
+  detail: (ticketId: string) => [...ticketQueryKeys.all, 'detail', ticketId] as const,
+  form: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'form'] as const,
+  timeline: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'timeline'] as const,
+  documents: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'documents'] as const,
 };
 
 function listTickets(client: HttpClient, { view, status, page, pageSize }: ListQuery, signal: AbortSignal) {

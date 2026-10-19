@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { CloseRule, FieldType, StepType } from '../../workflow/constants.js';
+import { CLOSE_RULES, type CloseRule, FIELD_TYPES, type FieldType, STEP_TYPES, type StepType } from '../../workflow/constants.js';
 import { uuidSchema } from '../ids.js';
 
 /**
@@ -63,3 +63,28 @@ export interface TicketFormResponse {
   readonly editableFieldCodes: readonly string[];
   readonly decisions: readonly FormDecisionResponse[];
 }
+
+/** Parses `FormFieldResponse` (for the web client); `satisfies` keeps it in step with the interface. */
+export const formFieldResponseSchema = z.object({
+  id: uuidSchema,
+  stepId: uuidSchema,
+  code: z.string(),
+  label: z.string(),
+  type: z.enum(FIELD_TYPES),
+  isRequired: z.boolean(),
+  isReadOnly: z.boolean(),
+  sortOrder: z.number(),
+  config: z.record(z.string(), z.unknown()),
+  dataSource: z.record(z.string(), z.unknown()).nullable(),
+}) satisfies z.ZodType<FormFieldResponse>;
+
+/** Parses `TicketFormResponse` (for the web client). */
+export const ticketFormResponseSchema = z.object({
+  ticketId: uuidSchema,
+  versionId: uuidSchema,
+  visitId: uuidSchema.nullable(),
+  step: z.object({ id: uuidSchema, name: z.string(), type: z.enum(STEP_TYPES), description: z.string().nullable(), closeRule: z.enum(CLOSE_RULES) }).nullable(),
+  fields: z.array(formFieldResponseSchema),
+  editableFieldCodes: z.array(z.string()),
+  decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string() })),
+}) satisfies z.ZodType<TicketFormResponse>;

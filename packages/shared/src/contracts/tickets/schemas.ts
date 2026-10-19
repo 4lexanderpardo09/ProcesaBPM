@@ -196,3 +196,38 @@ export interface TicketMutationResponse {
   readonly currentStepId: string | null;
   readonly openVisitId: string | null;
 }
+
+/** Parses `TicketDetailResponse` (for the web client). */
+export const ticketDetailResponseSchema = ticketSummaryResponseSchema.extend({
+  workflowId: uuidSchema,
+  workflowVersionId: uuidSchema,
+  registeredById: uuidSchema.nullable(),
+  descriptionHtml: z.string(),
+  departmentId: uuidSchema.nullable(),
+  siteId: uuidSchema.nullable(),
+  currentLoop: z.number(),
+  closedById: uuidSchema.nullable(),
+  openVisit: z.object({ id: uuidSchema, stepId: uuidSchema, loop: z.number(), enteredAt: z.string(), dueAt: z.string().nullable() }).nullable(),
+  awaitingDispatch: z.boolean(),
+  parallelTasks: z.array(z.object({ id: uuidSchema, userId: uuidSchema, status: z.enum(['PENDING', 'SIGNED', 'REJECTED', 'CANCELLED']), completedAt: z.string().nullable() })),
+  openIncident: z.object({ id: uuidSchema, assignedToId: uuidSchema, createdById: uuidSchema, openedAt: z.string(), descriptionHtml: z.string() }).nullable(),
+  waitingUntil: z.string().nullable(),
+  values: z.record(z.string(), z.unknown()),
+  totals: z.record(z.string(), z.record(z.string(), z.string())),
+}) satisfies z.ZodType<TicketDetailResponse>;
+
+/** Parses `TicketEventResponse` (for the web client). */
+export const ticketEventResponseSchema = z.object({
+  id: uuidSchema,
+  type: z.string(),
+  stepId: uuidSchema.nullable(),
+  transitionId: uuidSchema.nullable(),
+  loop: z.number(),
+  actorId: uuidSchema.nullable(),
+  assigneeId: uuidSchema.nullable(),
+  commentHtml: z.string().nullable(),
+  data: z.unknown(),
+  createdAt: z.string(),
+}) satisfies z.ZodType<TicketEventResponse>;
+
+export const ticketTimelineResponseSchema = z.array(ticketEventResponseSchema);
