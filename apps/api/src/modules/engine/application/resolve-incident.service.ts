@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { IncidentNotOpenError, InvalidAssigneeError, InvalidStateError, NotFoundError, PermissionDeniedError, type ResolveIncidentRequest, type TicketMutationResponse, ValidationFailedError } from '@procesabpm/shared';
+import { InvalidAssigneeError, InvalidStateError, PermissionDeniedError, type ResolveIncidentRequest, type TicketMutationResponse, ValidationFailedError } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -10,7 +10,8 @@ import { PublishedVersionReader } from '../../workflows/application/published-ve
 import { AssignmentCandidatesRepository } from '../data/assignment-candidates.repository.js';
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
-import { mayResolveIncident, restorePlan } from '../domain/incident-policy.js';
+import { restorePlan } from '../domain/incident-policy.js';
+import { isEligibleAssignee, resolveIncidentRefusal } from '../domain/ticket-action-rules.js';
 import type { EventPlan, VisitPlan } from '../domain/plan.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { TicketSlaService } from './ticket-sla.service.js';
@@ -39,21 +40,21 @@ export class ResolveIncidentService {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
       const { ticket } = await this.loader.lockForAction(tx, tenantId, ticketId, actor);
-      const incident = await this.writes.findIncident(tx, tenantId, ticket.id, incidentId);
-      if (incident === null) throw new NotFoundError();
-      if (incident.status !== 'OPEN') throw new IncidentNotOpenError();
-      const visit = await this.writes.findOpenVisit(tx, tenantId, ticket.id);
-      if (ticket.status !== 'PAUSED' || visit === null) throw new InvalidStateError('The ticket is not paused by this incident');
-
+      const found = await this.writes.findIncident(tx, tenantId, ticket.id, incidentId);
+      const openVisit = await this.writes.findOpenVisit(tx, tenantId, ticket.id);
       const canReassign = await actor.can(tx, ticket.id, 'reassign');
-      const allowed = mayResolveIncident({ actorId: actor.userId, incident, canOpenIncident: await actor.can(tx, ticket.id, 'open_incident'), canReassign });
-      if (!allowed || (request.assigneeId !== undefined && !canReassign)) throw new PermissionDeniedError('Not allowed to resolve this incident');
+      const refusal = resolveIncidentRefusal({ actorId: actor.userId, incident: found, ticketStatus: ticket.status, hasOpenVisit: openVisit !== null, mayOpenIncident: await actor.can(tx, ticket.id, 'open_incident'), mayReassign: canReassign });
+      if (refusal !== null) throw refusal;
+      // resolveIncidentRefusal refuses a missing incident and a ticket without an open visit.
+      const incident = found!;
+      const visit = openVisit!;
+      if (request.assigneeId !== undefined && !canReassign) throw new PermissionDeniedError('Not allowed to resolve this incident');
       const resolution = sanitizeRichText(request.resolution);
       if (resolution === '') throw new ValidationFailedError([{ path: 'resolution', message: 'The resolution is empty' }]);
 
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const named = request.assigneeId === undefined ? null : await this.people.findActiveMember(tx, tenantId, request.assigneeId);
-      if (request.assigneeId !== undefined && (named === null || !named.companyIds.includes(ticket.companyId))) throw new InvalidAssigneeError();
+      if (request.assigneeId !== undefined && !isEligibleAssignee(named, ticket.companyId)) throw new InvalidAssigneeError();
 
       const clocks = await this.writes.findOpenClocks(tx, tenantId, visit.id);
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);

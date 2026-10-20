@@ -5,6 +5,8 @@ import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import type { TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { buildAbility } from '../../authorization/domain/build-ability.js';
+import type { TicketActionStateReader } from '../../engine/application/ticket-action-state.reader.js';
+import type { TicketActionState } from '../../engine/domain/ticket-actions.js';
 import { SubjectRegistry } from '../../authorization/domain/subject-registry.js';
 import type { TicketQueryRepository, Where } from '../data/ticket-query.repository.js';
 import { ticketFilters, viewFilter } from '../domain/ticket-list-filters.js';
@@ -23,6 +25,12 @@ const TICKET = '0199a000-0000-7000-8000-000000000004';
 const PICKED_USER = '0199a000-0000-7000-8000-000000000005';
 const PICKED_SITE = '0199a000-0000-7000-8000-000000000006';
 
+/** A closed ticket the caller may only comment on. */
+const closedState: TicketActionState = {
+  actorId: USER, status: 'CLOSED', companyId: CATEGORY, visit: null, step: undefined, hasDecisionExit: false, assignees: [], signatures: [], openIncident: null, hasReopenTarget: true,
+  grants: { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: true },
+};
+
 function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null) {
   const context = new TenantContext();
   const tx = {} as TenantTransaction;
@@ -35,9 +43,10 @@ function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null)
     memberNames: vi.fn(() => Promise.resolve(new Map([[PICKED_USER, 'Luis Gómez']]))),
     siteNames: vi.fn(() => Promise.resolve(new Map())),
   } as unknown as TicketQueryRepository;
-  const service = new TicketQueriesService(runner, context, tickets, new Clock());
+  const actionStates = { read: vi.fn(() => Promise.resolve(closedState)) } as unknown as TicketActionStateReader;
+  const service = new TicketQueriesService(runner, context, tickets, new Clock(), actionStates);
   const inTenant = <T>(work: () => Promise<T>) => context.run({ tenantId: TENANT, userId: USER }, work);
-  return { service, tickets, runner, tx, inTenant };
+  return { service, tickets, runner, tx, inTenant, actionStates };
 }
 
 const expectedFilters = (view: 'assigned' | 'created' | 'observed' | 'all'): Where[] => [viewFilter(view, principal), ...ticketFilters(query), readableTickets(ability)];
@@ -80,9 +89,23 @@ describe('TicketQueriesService', () => {
     });
 
     it('a ticket the caller cannot read is not found, and nothing else is looked up', async () => {
-      const { service, tickets, inTenant } = setUp();
+      const { service, tickets, actionStates, inTenant } = setUp();
       await expect(inTenant(() => service.get(ability, TICKET, USER))).rejects.toBeInstanceOf(NotFoundError);
       expect(tickets.memberNames).not.toHaveBeenCalled();
+      expect(actionStates.read).not.toHaveBeenCalled();
+    });
+
+    it('adds what the caller may do, judged in the same transaction as the caller', async () => {
+      const { service, actionStates, tx, inTenant } = setUp(undefined, detailRow);
+      const detail = await inTenant(() => service.get(ability, TICKET, USER));
+      expect(actionStates.read).toHaveBeenCalledWith(tx, TENANT, TICKET, expect.objectContaining({ userId: USER }));
+      expect(detail.actions).toEqual({ advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true });
+    });
+
+    it('the body alone does not judge the actions', async () => {
+      const { service, actionStates, inTenant } = setUp(undefined, detailRow);
+      expect(await inTenant(() => service.getBody(ability, TICKET, USER))).not.toHaveProperty('actions');
+      expect(actionStates.read).not.toHaveBeenCalled();
     });
   });
 

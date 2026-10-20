@@ -15,9 +15,9 @@ export const readableTickets = (ability: AppAbility): Where => accessibleWhere(a
  * The caller as the engine sees them. Every question is about THIS ticket: a type-level `ability.can` is true
  * as soon as any rule exists, even one with a stored condition, so it never decides on a concrete record.
  */
-export function ticketActorOf(principal: Principal, ability: AppAbility, tenantId: string, queries: TicketQueryRepository): TicketActor {
+export function ticketActorOf({ userId }: Pick<Principal, 'userId'>, ability: AppAbility, tenantId: string, queries: TicketQueryRepository): TicketActor {
   return {
-    userId: principal.userId,
+    userId,
     can: (tx: TenantTransaction, ticketId: string, action) => queries.isAccessible(tx, tenantId, ticketId, accessibleWhere(ability, action, TICKET_SUBJECT)),
     canRead: (tx: TenantTransaction, ticketId: string) => queries.isAccessible(tx, tenantId, ticketId, readableTickets(ability)),
   };

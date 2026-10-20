@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ticketDocumentResponseSchema } from '../files/schemas.js';
 import { ticketFormResponseSchema } from './forms.js';
-import { ticketDetailResponseSchema, ticketTimelineResponseSchema } from './schemas.js';
+import { ticketCandidatesQuerySchema, ticketCandidatesResponseSchema, ticketDetailResponseSchema, ticketTimelineResponseSchema } from './schemas.js';
 
 const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 
@@ -45,6 +45,7 @@ const detail = {
   department: null,
   site: { id: id(14), name: 'Bogotá' },
   valueNames: { users: { [id(15)]: 'Luis Gómez' }, sites: {} },
+  actions: { advance: true, take: false, reassign: false, close: true, openIncident: true, resolveIncident: false, reopen: false, signParallelTask: false, comment: true },
 };
 
 describe('ticketDetailResponseSchema', () => {
@@ -61,6 +62,14 @@ describe('ticketDetailResponseSchema', () => {
     const { valueNames: _, ...withoutNames } = detail;
     expect(ticketDetailResponseSchema.safeParse(withoutNames).success).toBe(false);
     expect(ticketDetailResponseSchema.safeParse({ ...detail, valueNames: { users: { [id(15)]: 7 }, sites: {} } }).success).toBe(false);
+  });
+
+  it('requires every action flag, as a boolean', () => {
+    const { actions: _, ...withoutActions } = detail;
+    expect(ticketDetailResponseSchema.safeParse(withoutActions).success).toBe(false);
+    const { comment: __, ...missingOne } = detail.actions;
+    expect(ticketDetailResponseSchema.safeParse({ ...detail, actions: missingOne }).success).toBe(false);
+    expect(ticketDetailResponseSchema.safeParse({ ...detail, actions: { ...detail.actions, take: 'yes' } }).success).toBe(false);
   });
 
   it('rejects an assignee type outside the engine ones', () => {
@@ -111,5 +120,19 @@ describe('ticketDocumentResponseSchema', () => {
     const file = { id: id(12), name: 'comprobante.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 2048, status: 'CONFIRMED', createdAt: '2026-10-18T10:00:00.000Z', confirmedAt: '2026-10-18T10:00:01.000Z' };
     const document = { id: id(13), role: 'ATTACHMENT', eventId: null, stepId: null, fieldCode: null, version: 1, isCurrent: true, createdAt: '2026-10-18T10:00:00.000Z', file };
     expect(ticketDocumentResponseSchema.parse(document).file.name).toBe('comprobante.pdf');
+  });
+});
+
+describe('ticket candidates', () => {
+  it('asks for one of the two purposes', () => {
+    expect(ticketCandidatesQuerySchema.parse({ for: 'reassign' })).toEqual({ for: 'reassign' });
+    expect(ticketCandidatesQuerySchema.parse({ for: 'incident' })).toEqual({ for: 'incident' });
+    expect(ticketCandidatesQuerySchema.safeParse({ for: 'everyone' }).success).toBe(false);
+    expect(ticketCandidatesQuerySchema.safeParse({}).success).toBe(false);
+  });
+
+  it('answers people by id and name', () => {
+    expect(ticketCandidatesResponseSchema.parse([{ id: id(15), name: 'Luis Gómez' }])).toEqual([{ id: id(15), name: 'Luis Gómez' }]);
+    expect(ticketCandidatesResponseSchema.safeParse([{ id: id(15) }]).success).toBe(false);
   });
 });

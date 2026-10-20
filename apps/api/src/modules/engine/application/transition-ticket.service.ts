@@ -10,6 +10,7 @@ import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { assertMayLeaveByDecision } from '../domain/close-policy.js';
+import { decisionExits } from '../domain/ticket-action-rules.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { attachmentsPlanOf } from './submission-files.js';
 import { diversionEdge, submissionEvents, SubmissionValidator } from './submission-validator.js';
@@ -48,9 +49,9 @@ export class TransitionTicketService {
       const { ticket, visit } = current;
 
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
-      const chosen = document.transitions.find((transition) => transition.id === request.transitionId);
       const step = document.steps.find((candidate) => candidate.id === ticket.currentStepId);
-      if (chosen === undefined || step === undefined || chosen.fromStepId !== step.id || chosen.type !== 'DECISION') throw new InvalidTransitionError();
+      const chosen = step === undefined ? undefined : decisionExits(document, step.id).find((transition) => transition.id === request.transitionId);
+      if (chosen === undefined || step === undefined) throw new InvalidTransitionError();
 
       assertMayLeaveByDecision(step);
 

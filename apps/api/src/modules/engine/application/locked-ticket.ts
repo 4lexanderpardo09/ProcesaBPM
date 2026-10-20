@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidStateError, NotFoundError, PermissionDeniedError, StaleTicketError, TicketNotOpenError, TicketWaitingError, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { NotFoundError, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type LockedTicket, type OpenClockRow, type OpenVisitRow, TicketWriteRepository } from '../data/ticket-write.repository.js';
+import { actRefusal, type AssigneeType, holdsStep, openVisitRefusal, type TicketAction } from '../domain/ticket-action-rules.js';
 
-export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen' | 'comment';
+export type { TicketAction } from '../domain/ticket-action-rules.js';
 
 /** Who acts on a ticket and what they are allowed to see: the HTTP layer builds it from the CASL ability. */
 export interface TicketActor {
@@ -16,9 +17,9 @@ export interface TicketActor {
 
 export interface LockedForAction {
   readonly ticket: LockedTicket;
-  readonly assignees: ReadonlyArray<{ readonly userId: string; readonly type: string }>;
+  readonly assignees: ReadonlyArray<{ readonly userId: string; readonly type: AssigneeType }>;
   /** How the caller is assigned to the ticket, if at all. */
-  readonly ownType: string | undefined;
+  readonly ownType: AssigneeType | undefined;
 }
 
 export interface TicketInProgress extends LockedForAction {
@@ -54,20 +55,17 @@ export class LockedTicketLoader {
   /** Step 2: the ticket must be open and the caller must have seen its current visit (otherwise someone moved it first). */
   async requireOpenVisit(tx: TenantTransaction, tenantId: string, locked: LockedForAction, visitId: string): Promise<TicketInProgress> {
     const { ticket, assignees, ownType } = locked;
-    if (ticket.status !== 'OPEN') throw new TicketNotOpenError(ticket.status);
-    const visit = await this.writes.findOpenVisit(tx, tenantId, ticket.id);
-    if (visit === null) throw new InvalidStateError('The ticket has no open step');
-    if (visit.id !== visitId) throw new StaleTicketError();
-    if (visit.resumeAt !== null) throw new TicketWaitingError(visit.resumeAt);
-    // "Holds the step" means PRIMARY or POOL: signers and incident assignees have their own paths.
-    const holds = ownType === 'PRIMARY' || ownType === 'POOL';
+    const found = ticket.status === 'OPEN' ? await this.writes.findOpenVisit(tx, tenantId, ticket.id) : null;
+    const refusal = openVisitRefusal(ticket.status, found, visitId);
+    if (refusal !== null) throw refusal;
+    const visit = found!; // openVisitRefusal refuses a missing visit
     return {
       ticket,
       visit,
       clocks: await this.writes.findOpenClocks(tx, tenantId, visit.id),
       assignees,
       ownType,
-      actorIsAssignee: holds,
+      actorIsAssignee: holdsStep(ownType),
       actorIsPoolMember: ownType === 'POOL',
     };
   }
@@ -83,10 +81,10 @@ export class LockedTicketLoader {
    */
   async assertMayAct(tx: TenantTransaction, current: TicketInProgress, actor: TicketActor, action: 'transition' | 'close'): Promise<void> {
     const ticketId = current.ticket.id;
-    const allowed =
-      (await actor.can(tx, ticketId, action)) &&
-      (current.actorIsAssignee || (action === 'transition' && (await actor.can(tx, ticketId, 'reassign'))));
-    if (!allowed) throw new PermissionDeniedError('Not allowed to act on this ticket');
+    const may = await actor.can(tx, ticketId, action);
+    const mayReassign = action === 'transition' && !holdsStep(current.ownType) && (await actor.can(tx, ticketId, 'reassign'));
+    const refusal = actRefusal(action, { may, mayReassign, ownType: current.ownType });
+    if (refusal !== null) throw refusal;
   }
 
   /** A pool member who answers without taking the ticket takes it implicitly: the pool clock becomes theirs. */

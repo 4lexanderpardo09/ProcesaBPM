@@ -25,6 +25,9 @@ import {
   reassignTicketRequestSchema,
   type TakeTicketRequest,
   takeTicketRequestSchema,
+  type NamedRefResponse,
+  type TicketCandidatesQuery,
+  ticketCandidatesQuerySchema,
   type TicketCountsResponse,
   type TicketDetailResponse,
   type TicketFiltersQuery,
@@ -52,6 +55,7 @@ import { ReassignTicketService } from '../../engine/application/reassign-ticket.
 import { TakeTicketService } from '../../engine/application/take-ticket.service.js';
 import { TransitionTicketService } from '../../engine/application/transition-ticket.service.js';
 import { CommentTicketService } from '../../engine/application/comment-ticket.service.js';
+import { TicketCandidatesService } from '../../engine/application/ticket-candidates.service.js';
 import { TicketDocumentsService } from '../application/ticket-documents.service.js';
 import { TicketFormService } from '../application/ticket-form.service.js';
 import { ticketCreatorOf } from '../application/ticket-access.js';
@@ -74,6 +78,7 @@ export class TicketsController {
     @Inject(ResolveIncidentService) private readonly incidentResolution: ResolveIncidentService,
     @Inject(CommentTicketService) private readonly commenting: CommentTicketService,
     @Inject(TicketDocumentsService) private readonly documents: TicketDocumentsService,
+    @Inject(TicketCandidatesService) private readonly candidatePicker: TicketCandidatesService,
   ) {}
 
   @RequireAnyPermission(['create', 'create_for_others'], TICKET_SUBJECT)
@@ -106,6 +111,16 @@ export class TicketsController {
   @Get(':id/form')
   form(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketFormResponse> {
     return this.forms.form(ability, id, principal.userId);
+  }
+
+  /**
+   * Who the caller can hand the current step (`for=reassign`) or an incident (`for=incident`) to. The route lets in
+   * either permission; the action's own permission is then checked on this very ticket, as the action does.
+   */
+  @RequireAnyPermission(['reassign', 'open_incident'], TICKET_SUBJECT)
+  @Get(':id/candidates')
+  candidates(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Query(new ZodValidationPipe(ticketCandidatesQuerySchema)) query: TicketCandidatesQuery): Promise<NamedRefResponse[]> {
+    return this.candidatePicker.candidates(this.actor(principal, ability), id, query);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)

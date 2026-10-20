@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PermissionDeniedError, StaleTicketError, type TakeTicketRequest, type TicketMutationResponse } from '@procesabpm/shared';
+import type { TakeTicketRequest, TicketMutationResponse } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
+import { takeRefusal } from '../domain/ticket-action-rules.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 
 /**
@@ -28,10 +29,8 @@ export class TakeTicketService {
       const claimant: TicketActor = { ...actor, canRead: async (inner, id) => (await actor.canRead(inner, id)) || (await this.writes.wasAssigned(inner, tenantId, id, actor.userId)) };
       const at = this.clock.now();
       const current = await this.loader.load(tx, tenantId, ticketId, request.visitId, claimant);
-      if (!(await actor.can(tx, ticketId, 'transition'))) throw new PermissionDeniedError('Not allowed to take this ticket');
-      if (!current.actorIsPoolMember) {
-        throw current.assignees.some((assignee) => assignee.type === 'PRIMARY') ? new StaleTicketError() : new PermissionDeniedError('The ticket is not in a pool you belong to');
-      }
+      const refusal = takeRefusal(await actor.can(tx, ticketId, 'transition'), current.ownType, current.assignees);
+      if (refusal !== null) throw refusal;
       const { ticket, visit } = current;
       await this.writes.deleteAssignees(tx, tenantId, ticket.id);
       await this.writes.insertAssignees(tx, tenantId, ticket.id, at, [{ userId: actor.userId, type: 'PRIMARY' }]);

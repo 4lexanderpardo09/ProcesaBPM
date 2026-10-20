@@ -1,10 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   CommentRequiredError,
-  InvalidStateError,
-  ParallelTaskNotPendingError,
   type ParallelTaskActionRequest,
-  PermissionDeniedError,
   RejectionNotAllowedError,
   type TicketMutationResponse,
 } from '@procesabpm/shared';
@@ -16,6 +13,7 @@ import { PublishedVersionReader } from '../../workflows/application/published-ve
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import { parallelExits, parallelOutcome } from '../domain/parallel-policy.js';
+import { signatureRefusal } from '../domain/ticket-action-rules.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
@@ -59,12 +57,14 @@ export class ParallelTaskService {
       const { ticket, visit } = current;
 
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
-      const step = document.steps.find((candidate) => candidate.id === visit.stepId);
-      if (step === undefined || step.assignmentMode !== 'PARALLEL') throw new InvalidStateError('The current step is not a parallel step');
-      const tasks = await this.writes.findParallelTasks(tx, tenantId, ticket.id, step.id, visit.loop);
-      const mine = tasks.find((task) => task.userId === actor.userId);
-      if (mine === undefined) throw new PermissionDeniedError('You are not a signer of this step');
-      if (mine.status !== 'PENDING') throw new ParallelTaskNotPendingError();
+      const found = document.steps.find((candidate) => candidate.id === visit.stepId);
+      const parallel = found?.assignmentMode === 'PARALLEL';
+      const tasks = parallel ? await this.writes.findParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop) : [];
+      const refusal = signatureRefusal(parallel, tasks, actor.userId);
+      if (refusal !== null) throw refusal;
+      // signatureRefusal refuses a step that is not parallel (or missing) and a caller without a signature.
+      const step = found!;
+      const mine = tasks.find((task) => task.userId === actor.userId)!;
 
       const exits = parallelExits(document, step.id);
       const outcome = parallelOutcome(tasks, actor.userId, action);

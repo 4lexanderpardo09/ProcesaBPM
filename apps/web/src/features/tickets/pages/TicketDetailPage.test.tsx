@@ -58,6 +58,7 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
   department: null,
   site: null,
   valueNames: { users: {}, sites: {} },
+  actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true },
   ...overrides,
 });
 

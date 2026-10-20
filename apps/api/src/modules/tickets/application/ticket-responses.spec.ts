@@ -115,12 +115,13 @@ describe('toDetail', () => {
     expect(toDetail(detailRow({ registeredById: null, registeredBy: null, departmentId: null, department: null, siteId: null, site: null }), now, noValueNames)).toMatchObject({ registeredBy: null, department: null, site: null });
   });
 
-  it('carries the value names it is given and matches the contract the web parses', () => {
+  it('carries the value names it is given and, with the actions, matches the contract the web parses', () => {
     const valueNames = { users: { [id(8)]: 'Luis Gómez' }, sites: { [id(14)]: 'Bogotá' } };
     const detail = toDetail(detailRow({ closedById: id(3), closedBy: person('Ana', 'Pérez') }), now, valueNames);
     expect(detail.valueNames).toEqual(valueNames);
     expect(detail.closedBy).toEqual({ id: id(3), name: 'Ana Pérez' });
-    expect(ticketDetailResponseSchema.safeParse(detail).success).toBe(true);
+    const actions = { advance: true, take: false, reassign: false, close: true, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true };
+    expect(ticketDetailResponseSchema.safeParse({ ...detail, actions }).success).toBe(true);
   });
 });
 

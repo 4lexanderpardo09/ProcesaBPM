@@ -185,7 +185,39 @@ export interface TicketDetailResponse extends TicketSummaryResponse {
   readonly department: NamedRefResponse | null;
   readonly site: NamedRefResponse | null;
   readonly valueNames: TicketValueNamesResponse;
+  /** What the caller may do on the ticket right now, so the web offers only what the API would accept. */
+  readonly actions: TicketActionsResponse;
 }
+
+/**
+ * The ticket actions the caller may take now: permission (CASL, per record) and the ticket's state together, the same
+ * checks the action routes make. A hint for the interface; the routes still decide.
+ */
+export interface TicketActionsResponse {
+  /** `POST /tickets/:id/transition`: holds the open visit (or may act on it) and the step has decisions. */
+  readonly advance: boolean;
+  /** `POST /tickets/:id/take`: an open visit of a pool the caller belongs to (a ticket awaiting dispatch is not a pool: nobody takes it). */
+  readonly take: boolean;
+  /** `POST /tickets/:id/reassign` (on a parallel step, while a signature is still pending to be moved). */
+  readonly reassign: boolean;
+  /** `POST /tickets/:id/close`: the step's close rule allows it. */
+  readonly close: boolean;
+  /** `POST /tickets/:id/incidents`: open ticket without an open incident. */
+  readonly openIncident: boolean;
+  /** `POST /tickets/:id/incidents/:incidentId/resolve`: the open incident is the caller's to resolve. */
+  readonly resolveIncident: boolean;
+  /** `POST /tickets/:id/reopen`: closed ticket. */
+  readonly reopen: boolean;
+  /** `POST /tickets/:id/parallel-tasks/sign|reject`: the caller has a pending parallel task on the current step. */
+  readonly signParallelTask: boolean;
+  /** `POST /tickets/:id/comments`. */
+  readonly comment: boolean;
+}
+
+/** `GET /tickets/:id/candidates?for=reassign|incident`: who the current step can go to, or who can take an incident. */
+export const TICKET_CANDIDATE_PURPOSES = ['reassign', 'incident'] as const;
+export const ticketCandidatesQuerySchema = z.object({ for: z.enum(TICKET_CANDIDATE_PURPOSES) });
+export type TicketCandidatesQuery = z.infer<typeof ticketCandidatesQuerySchema>;
 
 /**
  * Names of the people and sites that `values` points to (USER and SITE fields, and SELECT/MULTI_SELECT fields whose
@@ -254,6 +286,17 @@ export const ticketDetailResponseSchema = ticketSummaryResponseSchema.extend({
   department: namedRefSchema.nullable(),
   site: namedRefSchema.nullable(),
   valueNames: z.object({ users: z.record(z.string(), z.string()), sites: z.record(z.string(), z.string()) }),
+  actions: z.object({
+    advance: z.boolean(),
+    take: z.boolean(),
+    reassign: z.boolean(),
+    close: z.boolean(),
+    openIncident: z.boolean(),
+    resolveIncident: z.boolean(),
+    reopen: z.boolean(),
+    signParallelTask: z.boolean(),
+    comment: z.boolean(),
+  }),
 }) satisfies z.ZodType<TicketDetailResponse>;
 
 /** Parses `TicketEventResponse` (for the web client). */
@@ -275,3 +318,6 @@ export const ticketEventResponseSchema = z.object({
 }) satisfies z.ZodType<TicketEventResponse>;
 
 export const ticketTimelineResponseSchema = z.array(ticketEventResponseSchema);
+
+/** Parses the `GET /tickets/:id/candidates` answer (for the web client): people by name, ordered by name. */
+export const ticketCandidatesResponseSchema = z.array(namedRefSchema) satisfies z.ZodType<readonly NamedRefResponse[]>;
