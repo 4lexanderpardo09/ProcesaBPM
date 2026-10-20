@@ -199,7 +199,11 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - Si la acción falla, el diálogo sigue abierto con el motivo (`lib/action-error-message`): sin permiso (403), el ticket cambió (409 o `INVALID_STATE`), el paso no lo permite (422) o el mensaje genérico. Nunca se muestra el texto del API.
 - **Después de una acción** se vuelve a leer todo lo de tickets (`useTicketMutation` invalida `['tickets']`): detalle, actividad, flujo, bandeja y conteos.
 - **Pruebas:** `Dialog` (unitaria y story), mensajes de error, la página con cada acción (botones según `actions`, tomar, reasignar, abrir y resolver novedad, cerrar con 403) y un E2E simulado de reasignar. En jsdom, `<dialog>` no tiene `showModal`: `src/test/setup.ts` lo abre y cierra.
-- **Siguiente:** avanzar con el formulario del paso (decisiones y campos), reabrir (pide un tipo de error del catálogo) y las firmas paralelas.
+- **Avanzar (parte 2a):** con `actions.advance`, cada decisión del paso (`GET /tickets/:id/form`) es un botón; si hay una sola es la acción principal (`primary`) y si hay varias van con el mismo peso. `components/advance/AdvanceDialog` pide los campos que se llenan en el paso (`editableFieldCodes`, sin los calculados), con lo que el ticket ya tiene, y un comentario opcional; envía `POST /tickets/:id/transition` con `visitId`, la decisión y los valores.
+  - **Valores (`lib/step-values`):** decimales como texto (acepta "1.250.000,50" y "1250000.50"), días como entero, fecha y hora con su instante (zona del navegador) y lo vacío como `null`.
+  - **Campos que todavía no se capturan:** persona, sede, tabla, archivo y listas de un preset o dataset dicen "todavía no se puede llenar desde la web"; si son obligatorios y están vacíos, no se envía.
+  - **Errores:** la web solo valida lo obligatorio y el formato; el API valida el resto, y `FIELD_VALUES_INVALID` marca cada campo con su motivo (`lib/field-issues`). `ASSIGNEE_SELECTION_REQUIRED` y `NO_ASSIGNEE_CANDIDATES` tienen su propio mensaje.
+- **Siguiente (parte 2b):** campos de persona y sede, tablas, archivos (subida en dos fases), listas de presets y datasets, elegir al responsable del paso siguiente, reabrir (pide un tipo de error del catálogo) y las firmas paralelas.
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |

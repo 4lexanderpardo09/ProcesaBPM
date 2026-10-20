@@ -35,7 +35,7 @@ export function TicketDetailPage() {
 
   return (
     <>
-      <TicketDetailHeader ticket={ticket} sla={ticket.status === 'CLOSED' ? undefined : slaBadge(ticket.sla, new Date())} actions={<TicketActions ticket={ticket} />} />
+      <TicketDetailHeader ticket={ticket} sla={ticket.status === 'CLOSED' ? undefined : slaBadge(ticket.sla, new Date())} actions={<TicketActions ticket={ticket} form={form.data} />} />
       <TicketFacts ticket={ticket} userId={user?.id} timeZone={timeZone} />
       <TicketNotices ticket={ticket} userId={user?.id} timeZone={timeZone} />
       <div className={styles.flow}>
