@@ -3,6 +3,7 @@ import {
   downloadUrlResponseSchema,
   ticketDetailResponseSchema,
   ticketDocumentResponseSchema,
+  ticketFlowResponseSchema,
   ticketFormResponseSchema,
   ticketTimelineResponseSchema,
 } from '@procesabpm/shared';
@@ -41,6 +42,14 @@ export function ticketDocumentsQueryOptions(client: HttpClient, ticketId: string
   return queryOptions({
     queryKey: ticketQueryKeys.documents(ticketId),
     queryFn: ({ signal }) => client.request(`${ticketUrl(ticketId)}/documents`, { schema: ticketDocumentsResponseSchema, signal }),
+  });
+}
+
+/** The graph of the ticket's workflow version and how far the ticket got, for the "Avance del flujo" diagram. */
+export function ticketFlowQueryOptions(client: HttpClient, ticketId: string) {
+  return queryOptions({
+    queryKey: ticketQueryKeys.flow(ticketId),
+    queryFn: ({ signal }) => client.request(`${ticketUrl(ticketId)}/flow`, { schema: ticketFlowResponseSchema, signal }),
   });
 }
 

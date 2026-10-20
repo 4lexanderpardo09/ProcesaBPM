@@ -17,7 +17,11 @@ test.describe('ticket detail', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Confirmación de pago de crédito' })).toBeVisible();
     await expect(page.getByLabel('Resumen del ticket')).toContainText('Revisión');
     await expect(page.getByText('comprobante', { exact: true })).toBeVisible();
-    await expect(page.getByText('Tú creó el ticket', { exact: false })).toBeVisible();
+    await expect(page.getByText('Ana Pérez creó el ticket', { exact: false })).toBeVisible();
+    const diagram = page.locator('.react-flow');
+    await expect(diagram.getByText('Revisión')).toBeVisible();
+    await expect(diagram.getByText('En curso')).toBeVisible();
+    await expect(diagram.getByText('Aprobar')).toBeVisible();
 
     await page.getByRole('textbox', { name: 'Agregar un comentario' }).fill('Ya lo revisé <ok>');
     await page.getByRole('button', { name: 'Comentar' }).click();

@@ -48,7 +48,7 @@ const accessToken = (userId: string, tenantId: string, sessionId: string) => `${
 
 const USER_ID = '018f0000-0000-7000-8000-000000000001';
 const STEP_ID = '018f0000-0000-7000-8000-0000000000d1';
-const TICKET_PATH = /^\/api\/tickets\/([^/]+)(?:\/(form|timeline|documents|comments))?$/;
+const TICKET_PATH = /^\/api\/tickets\/([^/]+)(?:\/(form|timeline|documents|comments|flow))?$/;
 export const SECRET = 'JBSWY3DPEHPK3PXP';
 export const BACKUP_CODES = Array.from({ length: 10 }, (_, index) => `K7QM-2XPA-9RTD-4F${index}Z`);
 
@@ -188,6 +188,22 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
         return json(route, 200, [event('018f0000-0000-7000-8000-0000000000e0', 'CREATED', null, '2026-10-17T15:00:00.000Z'), ...(comments.get(ticket.id) ?? []).map((comment) => event(comment.id, 'COMMENTED', comment.commentHtml, comment.createdAt))]);
       case 'GET documents':
         return json(route, 200, []);
+      case 'GET flow':
+        return json(route, 200, {
+          ticketId: ticket.id,
+          versionId: '018f0000-0000-7000-8000-0000000000c4',
+          status: 'OPEN',
+          currentStepId: STEP_ID,
+          steps: [
+            { id: '018f0000-0000-7000-8000-0000000000d0', type: 'START', name: 'Inicio', position: { x: 0, y: 0 }, passCount: 1 },
+            { id: STEP_ID, type: 'TASK', name: 'Revisión', position: { x: 220, y: 0 }, passCount: 1 },
+            { id: '018f0000-0000-7000-8000-0000000000d2', type: 'END', name: 'Fin', position: { x: 440, y: 0 }, passCount: 0 },
+          ],
+          transitions: [
+            { id: '018f0000-0000-7000-8000-0000000000d3', fromStepId: '018f0000-0000-7000-8000-0000000000d0', toStepId: STEP_ID, type: 'DEFAULT', label: '', points: null, takenCount: 1 },
+            { id: '018f0000-0000-7000-8000-0000000000d4', fromStepId: STEP_ID, toStepId: '018f0000-0000-7000-8000-0000000000d2', type: 'DECISION', label: 'Aprobar', points: null, takenCount: 0 },
+          ],
+        });
       case 'POST comments': {
         const list = comments.get(ticket.id) ?? [];
         const id = `018f0000-0000-7000-8000-0000000000e${list.length + 1}`;

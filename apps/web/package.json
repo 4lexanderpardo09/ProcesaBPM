@@ -19,6 +19,7 @@
     "@hookform/resolvers": "5.9.1",
     "@procesabpm/shared": "workspace:*",
     "@tanstack/react-query": "5.104.1",
+    "@xyflow/react": "12.12.0",
     "i18next": "26.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",

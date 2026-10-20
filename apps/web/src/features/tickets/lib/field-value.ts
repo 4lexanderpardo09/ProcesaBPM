@@ -1,15 +1,15 @@
-import type { FormFieldResponse } from '@procesabpm/shared';
+import type { FormFieldResponse, TicketValueNamesResponse } from '@procesabpm/shared';
 import { formatDateTime, formatShortDate } from '@/shared/lib/format-date-time';
 
 const LOCALE = 'es-CO';
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** How a field's value reads on the ticket: as text, as a count, or as a reference the API does not name yet. */
+/** How a field's value reads on the ticket: as text, as a count, or as a person or site the organization no longer has. */
 export type FieldValueDisplay =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'days'; readonly count: number }
   | { readonly kind: 'rows'; readonly count: number }
-  | { readonly kind: 'unnamed' };
+  | { readonly kind: 'unknown' };
 
 interface Option {
   readonly value: string;
@@ -17,13 +17,13 @@ interface Option {
 }
 
 /** `undefined` when there is nothing to show: no value, or a file (those are listed with the attachments). */
-export function fieldValueDisplay(field: FormFieldResponse, value: unknown, timeZone?: string): FieldValueDisplay | undefined {
+export function fieldValueDisplay(field: FormFieldResponse, value: unknown, names: TicketValueNamesResponse, timeZone?: string): FieldValueDisplay | undefined {
   if (isEmpty(value) || field.type === 'FILE') return undefined;
   switch (field.type) {
     case 'SELECT':
-      return text(optionLabel(field, String(value)));
+      return text(optionLabel(field, String(value), names));
     case 'MULTI_SELECT':
-      return text((Array.isArray(value) ? value : [value]).map((entry) => optionLabel(field, String(entry))).join(', '));
+      return text((Array.isArray(value) ? value : [value]).map((entry) => optionLabel(field, String(entry), names)).join(', '));
     case 'NUMBER':
       return numberText(value, { maximumFractionDigits: numberConfig(field, 'decimals') ?? 0 });
     case 'CURRENCY':
@@ -37,8 +37,9 @@ export function fieldValueDisplay(field: FormFieldResponse, value: unknown, time
     case 'TABLE':
       return { kind: 'rows', count: Array.isArray(value) ? value.length : 0 };
     case 'SITE':
+      return named(names.sites[String(value)]);
     case 'USER':
-      return { kind: 'unnamed' };
+      return named(names.users[String(value)]);
     case 'FORMULA':
       return formulaText(field, value, timeZone);
     default:
@@ -52,10 +53,13 @@ function isEmpty(value: unknown): boolean {
 
 const text = (value: string): FieldValueDisplay => ({ kind: 'text', text: value });
 
-function optionLabel(field: FormFieldResponse, value: string): string {
+const named = (name: string | undefined): FieldValueDisplay => (name === undefined ? { kind: 'unknown' } : text(name));
+
+/** The option's label; lists of people or sites (presets) hold ids the API names in `valueNames`. */
+function optionLabel(field: FormFieldResponse, value: string, names: TicketValueNamesResponse): string {
   const options = field.config['options'];
-  if (!Array.isArray(options)) return value;
-  return (options as readonly Option[]).find((option) => option.value === value)?.label ?? value;
+  const label = Array.isArray(options) ? (options as readonly Option[]).find((option) => option.value === value)?.label : undefined;
+  return label ?? names.users[value] ?? names.sites[value] ?? value;
 }
 
 function numberConfig(field: FormFieldResponse, key: string): number | undefined {

@@ -1,6 +1,6 @@
 .facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   margin-bottom: var(--space-4);
   background: var(--surface);
   border: 1px solid var(--line);

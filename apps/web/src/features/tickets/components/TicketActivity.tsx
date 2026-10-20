@@ -30,12 +30,11 @@ const eventTypeOf = (type: string): EventType => EVENT_TYPES.find((known) => kno
 export interface TicketActivityProps {
   readonly ticketId: string;
   readonly timeline: UseQueryResult<readonly TicketEventResponse[]>;
-  readonly userId: string | undefined;
   readonly timeZone: string | undefined;
 }
 
 /** What happened on the ticket, oldest first, and a box to add a comment. */
-export function TicketActivity({ ticketId, timeline, userId, timeZone }: TicketActivityProps) {
+export function TicketActivity({ ticketId, timeline, timeZone }: TicketActivityProps) {
   const { t } = useTranslation('tickets');
   return (
     <Card title={t('detail.activity.title')}>
@@ -48,7 +47,7 @@ export function TicketActivity({ ticketId, timeline, userId, timeZone }: TicketA
       ) : (
         <ol className={styles.events}>
           {timeline.data.map((event) => (
-            <ActivityEvent key={event.id} event={event} userId={userId} timeZone={timeZone} />
+            <ActivityEvent key={event.id} event={event} timeZone={timeZone} />
           ))}
         </ol>
       )}
@@ -61,19 +60,25 @@ export function TicketActivity({ ticketId, timeline, userId, timeZone }: TicketA
 
 interface ActivityEventProps {
   readonly event: TicketEventResponse;
-  readonly userId: string | undefined;
   readonly timeZone: string | undefined;
 }
 
-function ActivityEvent({ event, userId, timeZone }: ActivityEventProps) {
+/** Who did what, to whom, on which step and with which decision. */
+function ActivityEvent({ event, timeZone }: ActivityEventProps) {
   const { t } = useTranslation('tickets');
-  const actor = event.actorId === null ? t('detail.activity.system') : event.actorId === userId ? t('detail.activity.you') : t('detail.activity.someone');
+  const actor = event.actor?.name ?? t('detail.activity.system');
+  const type = eventTypeOf(event.type);
+  const assignee = event.assignee !== null && (type === 'ASSIGNED' || type === 'REASSIGNED') ? ` ${t('detail.activity.toAssignee', { name: event.assignee.name })}` : '';
+  const decision = event.transition !== null && event.transition.name !== '' ? ` ${t('detail.activity.decision', { name: event.transition.name })}` : '';
   return (
     <li className={styles.event}>
       <Avatar name={actor} />
       <div className={styles.eventBody}>
         <p className={styles.eventLine}>
-          <strong>{actor}</strong> {t(`detail.events.${eventTypeOf(event.type)}`)} · <time dateTime={event.createdAt}>{formatDateTime(event.createdAt, timeZone)}</time>
+          <strong>{actor}</strong> {t(`detail.events.${type}`)}
+          {assignee}
+          {decision}
+          {event.step !== null && <> · {event.step.name}</>} · <time dateTime={event.createdAt}>{formatDateTime(event.createdAt, timeZone)}</time>
         </p>
         {event.commentHtml !== null && <RichText html={event.commentHtml} />}
       </div>

@@ -20,6 +20,7 @@ export const ticketQueryKeys = {
   form: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'form'] as const,
   timeline: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'timeline'] as const,
   documents: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'documents'] as const,
+  flow: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'flow'] as const,
 };
 
 function listTickets(client: HttpClient, { view, status, page, pageSize }: ListQuery, signal: AbortSignal) {

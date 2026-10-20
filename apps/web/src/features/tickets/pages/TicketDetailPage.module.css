@@ -36,3 +36,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.flow {
+  margin-bottom: var(--space-4);
+}

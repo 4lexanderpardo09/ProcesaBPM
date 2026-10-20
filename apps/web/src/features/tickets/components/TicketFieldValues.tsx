@@ -1,4 +1,4 @@
-import type { TicketFormResponse } from '@procesabpm/shared';
+import type { TicketFormResponse, TicketValueNamesResponse } from '@procesabpm/shared';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/shared/ui';
@@ -8,17 +8,19 @@ import styles from './TicketFieldValues.module.css';
 
 export interface TicketFieldValuesProps {
   readonly values: Readonly<Record<string, unknown>>;
+  /** Names of the people and sites the values point to. */
+  readonly valueNames: TicketValueNamesResponse;
   readonly form: UseQueryResult<TicketFormResponse>;
   readonly timeZone: string | undefined;
 }
 
 /** The values captured so far, labelled by the fields of the ticket's workflow version, in the builder's order. */
-export function TicketFieldValues({ values, form, timeZone }: TicketFieldValuesProps) {
+export function TicketFieldValues({ values, valueNames, form, timeZone }: TicketFieldValuesProps) {
   const { t } = useTranslation('tickets');
   const rows = [...(form.data?.fields ?? [])]
     .sort((left, right) => left.sortOrder - right.sortOrder)
     .flatMap((field) => {
-      const display = fieldValueDisplay(field, values[field.code], timeZone);
+      const display = fieldValueDisplay(field, values[field.code], valueNames, timeZone);
       return display === undefined ? [] : [{ field, display }];
     });
 
@@ -55,7 +57,7 @@ function DisplayedValue({ display }: { readonly display: FieldValueDisplay }) {
       return t('detail.fields.days', { count: display.count });
     case 'rows':
       return t('detail.fields.rows', { count: display.count });
-    case 'unnamed':
-      return <span className={styles.unnamed}>{t('detail.fields.unnamed')}</span>;
+    case 'unknown':
+      return <span className={styles.unknown}>{t('detail.fields.unknown')}</span>;
   }
 }
