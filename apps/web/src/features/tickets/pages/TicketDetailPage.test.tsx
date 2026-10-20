@@ -52,6 +52,12 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
   waitingUntil: null,
   values: { paymentType: 'capital', amount: '1250000.00', paidOn: '2026-10-01', notes: '' },
   totals: {},
+  company: { id: id(103), name: 'Electrocréditos' },
+  registeredBy: null,
+  closedBy: null,
+  department: null,
+  site: null,
+  valueNames: { users: {}, sites: {} },
   ...overrides,
 });
 
@@ -94,6 +100,10 @@ const event = (index: number, type: string, actorId: string | null, commentHtml:
   commentHtml,
   data: {},
   createdAt: at,
+  actor: actorId === null ? null : { id: actorId, name: actorId === ME ? 'Ana Pérez' : 'Luis Gómez' },
+  assignee: null,
+  step: { id: STEP, name: 'Revisión' },
+  transition: null,
 });
 
 const timeline = [event(1, 'CREATED', ME), event(2, 'ASSIGNED', null), event(3, 'COMMENTED', OTHER, '<p>Estoy cruzando el comprobante.</p>')];
@@ -231,7 +241,15 @@ describe('TicketDetailPage', () => {
   });
 
   it('marks an overdue ticket and explains an open incident', async () => {
-    const incident = { id: id(500), assignedToId: ME, createdById: OTHER, openedAt: at, descriptionHtml: '<p>Falta el extracto.</p>' };
+    const incident = {
+      id: id(500),
+      assignedToId: ME,
+      createdById: OTHER,
+      assignedTo: { id: ME, name: 'Ana Pérez' },
+      createdBy: { id: OTHER, name: 'Luis Gómez' },
+      openedAt: at,
+      descriptionHtml: '<p>Falta el extracto.</p>',
+    };
     renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ status: 'PAUSED', openIncident: incident }) }) });
 
     expect(await screen.findByText('Pausado por una novedad')).toBeInTheDocument();
