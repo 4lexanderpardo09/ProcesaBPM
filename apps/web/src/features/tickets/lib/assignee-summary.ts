@@ -1,15 +1,19 @@
 import type { TicketDetailResponse } from '@procesabpm/shared';
 
-/** Who holds the ticket, as the API can tell it today (ids, no names): the person, how many others, or nobody yet. */
+/** How many names the summary lists before saying "and N more". */
+const SHOWN = 2;
+
+/** Who holds the ticket: the people by name (the person first), or why nobody does yet. */
 export type AssigneeSummary =
-  | { readonly kind: 'you'; readonly others: number }
-  | { readonly kind: 'others'; readonly count: number }
+  | { readonly kind: 'people'; readonly names: readonly string[]; readonly more: number }
   | { readonly kind: 'awaitingDispatch' }
   | { readonly kind: 'none' };
 
 export function assigneeSummary(ticket: Pick<TicketDetailResponse, 'assignees' | 'awaitingDispatch'>, userId: string | undefined): AssigneeSummary {
-  const people = new Set(ticket.assignees.map((assignee) => assignee.userId));
-  if (userId !== undefined && people.has(userId)) return { kind: 'you', others: people.size - 1 };
-  if (people.size > 0) return { kind: 'others', count: people.size };
+  const people = new Map(ticket.assignees.map((assignee) => [assignee.userId, assignee.name]));
+  if (people.size > 0) {
+    const names = [...people].sort(([left], [right]) => Number(right === userId) - Number(left === userId)).map(([, name]) => name);
+    return { kind: 'people', names: names.slice(0, SHOWN), more: Math.max(0, names.length - SHOWN) };
+  }
   return ticket.awaitingDispatch ? { kind: 'awaitingDispatch' } : { kind: 'none' };
 }

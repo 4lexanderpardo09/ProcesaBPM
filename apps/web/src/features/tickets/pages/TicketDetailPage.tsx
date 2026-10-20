@@ -13,16 +13,18 @@ import { TicketAttachments } from '../components/TicketAttachments';
 import { TicketDetailHeader } from '../components/TicketDetailHeader';
 import { TicketFacts } from '../components/TicketFacts';
 import { TicketFieldValues } from '../components/TicketFieldValues';
+import { TicketFlow } from '../components/flow/TicketFlow';
 import { useTicketDetail } from '../hooks/use-ticket-detail';
+import { slaBadge } from '../lib/sla-badge';
 import styles from './TicketDetailPage.module.css';
 
 const NOT_FOUND = 404;
 
-/** One ticket: its facts, description, activity with comments, captured values and attachments. */
+/** One ticket: its facts, its progress through the workflow, description, activity with comments, captured values and attachments. */
 export function TicketDetailPage() {
   const { ticketId = '' } = useParams();
   const { t } = useTranslation('tickets');
-  const { detail, form, timeline, documents } = useTicketDetail(ticketId);
+  const { detail, form, timeline, documents, flow } = useTicketDetail(ticketId);
   const user = useCurrentUser().data?.user;
   const timeZone = user?.timeZone ?? undefined;
 
@@ -30,31 +32,28 @@ export function TicketDetailPage() {
   const ticket = detail.data;
   if (ticket === undefined) return <p className={styles.muted}>{t('detail.loading')}</p>;
 
-  const stepName = form.data === undefined ? undefined : (form.data.step?.name ?? null);
   return (
     <>
-      <TicketDetailHeader ticket={ticket} overdue={isOverdue(ticket)} />
-      <TicketFacts ticket={ticket} stepName={stepName} userId={user?.id} timeZone={timeZone} />
+      <TicketDetailHeader ticket={ticket} sla={ticket.status === 'CLOSED' ? undefined : slaBadge(ticket.sla, new Date())} />
+      <TicketFacts ticket={ticket} userId={user?.id} timeZone={timeZone} />
       <TicketNotices ticket={ticket} userId={user?.id} timeZone={timeZone} />
+      <div className={styles.flow}>
+        <TicketFlow flow={flow} />
+      </div>
       <div className={styles.columns}>
         <div className={styles.main}>
           <Card title={t('detail.description.title')}>
             {ticket.descriptionHtml === '' ? <p className={styles.muted}>{t('detail.description.empty')}</p> : <RichText html={ticket.descriptionHtml} />}
           </Card>
-          <TicketActivity ticketId={ticket.id} timeline={timeline} userId={user?.id} timeZone={timeZone} />
+          <TicketActivity ticketId={ticket.id} timeline={timeline} timeZone={timeZone} />
         </div>
         <aside className={styles.side}>
-          <TicketFieldValues values={ticket.values} form={form} timeZone={timeZone} />
+          <TicketFieldValues values={ticket.values} valueNames={ticket.valueNames} form={form} timeZone={timeZone} />
           <TicketAttachments ticketId={ticket.id} documents={documents} timeZone={timeZone} />
         </aside>
       </div>
     </>
   );
-}
-
-function isOverdue(ticket: TicketDetailResponse): boolean {
-  const dueAt = ticket.openVisit?.dueAt;
-  return ticket.status === 'OPEN' && dueAt !== undefined && dueAt !== null && new Date(dueAt).getTime() < Date.now();
 }
 
 interface TicketNoticesProps {
@@ -73,7 +72,7 @@ function TicketNotices({ ticket, userId, timeZone }: TicketNoticesProps) {
       {incident !== null && (
         <Alert tone="warn" title={t('detail.incident.title')}>
           <RichText html={incident.descriptionHtml} />
-          {incident.assignedToId === userId && <p className={styles.notice}>{t('detail.incident.forYou')}</p>}
+          <p className={styles.notice}>{incident.assignedTo.id === userId ? t('detail.incident.forYou') : t('detail.incident.assignedTo', { name: incident.assignedTo.name })}</p>
         </Alert>
       )}
       {ticket.waitingUntil !== null && <Alert tone="info">{t('detail.waitingUntil', { date: formatDateTime(ticket.waitingUntil, timeZone) })}</Alert>}

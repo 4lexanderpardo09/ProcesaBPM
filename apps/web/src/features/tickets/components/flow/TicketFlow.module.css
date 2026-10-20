@@ -1,0 +1,177 @@
+.muted {
+  color: var(--muted);
+}
+
+.canvas {
+  height: 320px;
+  margin: calc(-1 * var(--space-4));
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* React Flow's own chrome on our tokens. */
+.canvas :global(.react-flow) {
+  --xy-background-color: var(--surface);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--slate);
+  --xy-controls-button-border-color: var(--line);
+  --xy-controls-box-shadow: var(--shadow-xs);
+  font-family: var(--font-sans);
+}
+
+.canvas :global(.react-flow__controls) {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* Node: white card, 4px stripe of its type's color, type in that color, name and state. */
+.node {
+  --block-color: var(--block-step);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 168px;
+  padding: 8px 12px 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--block-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+}
+
+.node[data-type='START'] { --block-color: var(--block-start); }
+.node[data-type='END'] { --block-color: var(--block-end); }
+.node[data-type='TASK'] { --block-color: var(--block-step); }
+.node[data-type='APPROVAL'] { --block-color: var(--block-approval); }
+.node[data-type='SIGNATURE'] { --block-color: var(--block-approval); }
+.node[data-type='DECISION'] { --block-color: var(--block-decision); }
+.node[data-type='CONDITION'] { --block-color: var(--block-condition); }
+.node[data-type='CALCULATOR'] { --block-color: var(--block-calculator); }
+.node[data-type='WAIT'] { --block-color: var(--block-wait); }
+.node[data-type='DOCUMENT'] { --block-color: var(--block-document); }
+.node[data-type='NOTIFICATION'] { --block-color: var(--block-notification); }
+.node[data-type='EXPORT'] { --block-color: var(--block-export); }
+.node[data-type='WEBHOOK'] { --block-color: var(--block-webhook); }
+
+.kind {
+  color: var(--block-color);
+}
+
+.name {
+  font-size: 12.5px;
+  line-height: 17px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.state {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted);
+}
+
+.done .state {
+  color: var(--ok);
+}
+
+.current {
+  border-color: var(--accent);
+  border-left-color: var(--block-color);
+  box-shadow: 0 0 0 3px var(--accent-50);
+}
+
+.current .state {
+  color: var(--accent);
+}
+
+.handle {
+  visibility: hidden;
+}
+
+/* Edges: done in ok, the way out of the current step in accent, pending in faint; retries dashed in warn. */
+.edge {
+  stroke-width: 2;
+}
+
+.edge-taken {
+  stroke: var(--ok);
+}
+
+.edge-next {
+  stroke: var(--accent);
+}
+
+.edge-pending {
+  stroke: var(--faint);
+}
+
+.retry {
+  stroke-dasharray: 6 4;
+}
+
+.retry.edge-pending {
+  stroke: var(--warn);
+}
+
+.edgeLabel {
+  position: absolute;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--slate);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+}
+
+.legend {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend li::before {
+  content: '';
+  width: 14px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+}
+
+.legendDone::before {
+  background: var(--ok);
+}
+
+.legendCurrent::before {
+  background: var(--accent);
+}
+
+.legendPending::before {
+  background: var(--faint);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

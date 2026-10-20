@@ -123,6 +123,22 @@ const documents = [
   { id: id(401), role: 'ATTACHMENT', eventId: null, stepId: null, fieldCode: null, version: 1, isCurrent: false, createdAt: at, file: { id: id(103), name: 'version-vieja.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 100, status: 'CONFIRMED', createdAt: at, confirmedAt: at } },
 ];
 
+const flow = {
+  ticketId: TICKET,
+  versionId: id(106),
+  status: 'OPEN',
+  currentStepId: STEP,
+  steps: [
+    { id: id(600), type: 'START', name: 'Inicio', position: { x: 0, y: 0 }, passCount: 1 },
+    { id: STEP, type: 'TASK', name: 'Revisión', position: { x: 220, y: 0 }, passCount: 1 },
+    { id: id(601), type: 'END', name: 'Fin', position: { x: 440, y: 0 }, passCount: 0 },
+  ],
+  transitions: [
+    { id: id(610), fromStepId: id(600), toStepId: STEP, type: 'DEFAULT', label: '', points: null, takenCount: 1 },
+    { id: id(611), fromStepId: STEP, toStepId: id(601), type: 'DECISION', label: 'Aprobar', points: null, takenCount: 0 },
+  ],
+};
+
 const base = `/tickets/${TICKET}`;
 
 /** The person works in Bogotá, so the times below read the same on any machine. */
@@ -138,6 +154,7 @@ function ticketHandlers(overrides: Record<string, FakeHandler> = {}): Record<str
     [`${base}/form`]: () => form,
     [`${base}/timeline`]: () => timeline,
     [`${base}/documents`]: () => documents,
+    [`${base}/flow`]: () => flow,
     ...overrides,
   };
 }
@@ -164,8 +181,15 @@ describe('TicketDetailPage', () => {
     const factPairs = within(facts)
       .getAllByRole('term')
       .map((term) => `${term.textContent}: ${term.nextElementSibling?.textContent}`);
-    expect(factPairs).toEqual(['Creado: 17 de octubre de 2026 a las 10:00 a. m.', expect.stringMatching(/^Paso actual: (…|Validación de cartera)$/), 'Responsables: Tú', 'Vence: 1 de enero de 2099 a las 10:00 a. m.']);
-    expect(await within(facts).findByText('Validación de cartera')).toBeInTheDocument();
+    expect(factPairs).toEqual([
+      'Solicitante: Luis Gómez',
+      'Categoría: Cartera › Pagos',
+      'Empresa: Electrocréditos',
+      'Creado: 17 de oct de 2026',
+      'Paso actual: Revisión',
+      'Responsables: Ana Pérez',
+      'Vence: 1 de enero de 2099 a las 10:00 a. m.',
+    ]);
 
     expect(screen.getByText(/Adjunto el comprobante/)).toBeInTheDocument();
     expect(screen.getByText('1 de octubre').tagName).toBe('STRONG');
@@ -174,9 +198,9 @@ describe('TicketDetailPage', () => {
     expect(within(values).getAllByRole('term').map((term) => term.textContent)).toEqual(['Tipo de pago', 'Monto', 'Fecha del pago']);
     expect(within(values).getAllByRole('definition').map((value) => value.textContent?.replace(/\s/g, ' '))).toEqual(['Abono a capital', '$ 1.250.000', '1 de oct de 2026']);
 
-    expect(await screen.findByText('creó el ticket', { exact: false })).toHaveTextContent('Tú creó el ticket');
-    expect(screen.getByText('asignó el ticket', { exact: false })).toHaveTextContent('Sistema asignó el ticket');
-    expect(screen.getByText('comentó', { exact: false })).toHaveTextContent('Otra persona comentó');
+    expect(await screen.findByText('creó el ticket', { exact: false })).toHaveTextContent(/^Ana Pérez creó el ticket · Revisión · /);
+    expect(screen.getByText('asignó el ticket', { exact: false })).toHaveTextContent(/^Sistema asignó el ticket · Revisión/);
+    expect(screen.getByText('comentó', { exact: false })).toHaveTextContent(/^Luis Gómez comentó/);
     expect(screen.getByText('Estoy cruzando el comprobante.')).toBeInTheDocument();
 
     expect(await screen.findByText('comprobante-pago.pdf')).toBeInTheDocument();
@@ -240,6 +264,22 @@ describe('TicketDetailPage', () => {
     expect(openDownload).not.toHaveBeenCalled();
   });
 
+  it('draws the progress through the workflow, with the steps and their state for screen readers', async () => {
+    renderRoute(base, { handlers: ticketHandlers() });
+
+    const steps = await screen.findByRole('list', { name: 'Pasos del flujo y su estado' });
+    expect(within(steps).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Inicio Inicio: Completado', 'Paso Revisión: En curso', 'Fin Fin: Pendiente']);
+    expect(screen.getByRole('list', { name: 'Convenciones del diagrama' })).toHaveTextContent('RecorridoPaso actualPendiente');
+  });
+
+  it('shows the SLA left and the priority', async () => {
+    const dueAt = new Date(Date.now() + (2 * 24 + 3) * 3_600_000 + 60_000).toISOString();
+    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ sla: { dueAt, overdue: false, paused: false }, priority: { id: id(700), name: 'Alta', color: null } }) }) });
+
+    expect(await screen.findByText('SLA 2 d 3 h')).toBeInTheDocument();
+    expect(screen.getByText('Prioridad Alta')).toBeInTheDocument();
+  });
+
   it('marks an overdue ticket and explains an open incident', async () => {
     const incident = {
       id: id(500),
@@ -255,20 +295,21 @@ describe('TicketDetailPage', () => {
     expect(await screen.findByText('Pausado por una novedad')).toBeInTheDocument();
     expect(screen.getByText('Falta el extracto.')).toBeInTheDocument();
     expect(screen.getByText('La novedad está a tu cargo.')).toBeInTheDocument();
-    expect(screen.queryByText('Vencido')).toBeNull();
+    expect(screen.queryByText('SLA vencido')).toBeNull();
   });
 
   it('marks an open ticket past its due date', async () => {
-    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ openVisit: { id: id(107), stepId: STEP, loop: 0, enteredAt: at, dueAt: '2026-01-01T15:00:00.000Z' } }) }) });
-    expect(await screen.findByText('Vencido')).toBeInTheDocument();
+    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ sla: { dueAt: '2026-01-01T15:00:00.000Z', overdue: true, paused: false } }) }) });
+    expect(await screen.findByText('SLA vencido')).toBeInTheDocument();
   });
 
   it('shows when a closed ticket was closed instead of its step and holders', async () => {
-    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ status: 'CLOSED', closedAt: '2026-10-18T15:00:00.000Z', openVisit: null, assignees: [] }) }) });
+    const closed = { status: 'CLOSED', closedAt: '2026-10-18T15:00:00.000Z', closedBy: { id: OTHER, name: 'Luis Gómez' }, openVisit: null, assignees: [] };
+    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail(closed) }) });
 
     const facts = await screen.findByLabelText('Resumen del ticket');
-    expect(within(facts).getAllByRole('term').map((term) => term.textContent)).toEqual(['Creado', 'Cerrado']);
-    expect(within(facts).getByText('18 de octubre de 2026 a las 10:00 a. m.')).toBeInTheDocument();
+    expect(within(facts).getAllByRole('term').map((term) => term.textContent)).toEqual(['Solicitante', 'Categoría', 'Empresa', 'Creado', 'Cerrado']);
+    expect(within(facts).getByText('18 de octubre de 2026 a las 10:00 a. m. por Luis Gómez')).toBeInTheDocument();
   });
 
   it('says the ticket is not there when the API does not show it', async () => {
