@@ -1,3 +1,4 @@
+import { NotFoundError } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { Principal } from '../../../common/auth/principal.js';
 import { Clock } from '../../../infrastructure/clock.js';
@@ -18,7 +19,11 @@ const principal: Principal = { userId: USER, tenantId: TENANT, sessionId: 's', r
 const { ability } = buildAbility([{ action: 'read_created', subject: 'Ticket', conditions: null }], { userId: USER, membership: principal.membership }, new SubjectRegistry().register('Ticket', ticketSubject));
 const query = { status: 'OPEN' as const, search: 'printer', categoryId: CATEGORY };
 
-function setUp(totals: readonly number[] = [0, 0, 0, 0]) {
+const TICKET = '0199a000-0000-7000-8000-000000000004';
+const PICKED_USER = '0199a000-0000-7000-8000-000000000005';
+const PICKED_SITE = '0199a000-0000-7000-8000-000000000006';
+
+function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null) {
   const context = new TenantContext();
   const tx = {} as TenantTransaction;
   const runner = { withTenantTransaction: vi.fn(<T>(work: (tx: TenantTransaction) => Promise<T>) => work(tx)) } as unknown as TenantTransactionRunner;
@@ -26,6 +31,9 @@ function setUp(totals: readonly number[] = [0, 0, 0, 0]) {
   const tickets = {
     count: vi.fn(() => Promise.resolve(remaining.shift() ?? 0)),
     list: vi.fn(() => Promise.resolve({ rows: [], total: 0 })),
+    findDetail: vi.fn(() => Promise.resolve(detail)),
+    memberNames: vi.fn(() => Promise.resolve(new Map([[PICKED_USER, 'Luis Gómez']]))),
+    siteNames: vi.fn(() => Promise.resolve(new Map())),
   } as unknown as TicketQueryRepository;
   const service = new TicketQueriesService(runner, context, tickets, new Clock());
   const inTenant = <T>(work: () => Promise<T>) => context.run({ tenantId: TENANT, userId: USER }, work);
@@ -46,6 +54,35 @@ describe('TicketQueriesService', () => {
         [tx, TENANT, expectedFilters('observed')],
         [tx, TENANT, expectedFilters('all')],
       ]);
+    });
+  });
+
+  describe('get', () => {
+    const person = (firstName: string) => ({ user: { firstName, lastName: 'Pérez' } });
+    const detailRow = {
+      id: TICKET, number: 1n, title: 't', status: 'OPEN', companyId: CATEGORY, creatorId: USER, subcategoryId: CATEGORY, currentStepId: null, priorityId: null,
+      createdAt: new Date(), closedAt: null, tags: [], creator: person('Ana'), subcategory: { name: 's', category: { id: CATEGORY, name: 'c' } }, currentStep: null, priority: null,
+      assignees: [], slaClocks: [], workflowId: CATEGORY, workflowVersionId: CATEGORY, registeredById: null, registeredBy: null, descriptionHtml: '', departmentId: null, department: null,
+      siteId: null, site: null, currentLoop: 1, closedById: null, closedBy: null, company: { id: CATEGORY, name: 'Co' }, stepVisits: [], parallelTasks: [], incidents: [],
+      fieldValues: [
+        { value: PICKED_USER, field: { code: 'approver', type: 'USER', config: {}, dataSource: null } },
+        { value: PICKED_SITE, field: { code: 'branch', type: 'SITE', config: {}, dataSource: null } },
+      ],
+    };
+
+    it('names the people and sites of the values in the same transaction and tenant, leaving out what it does not find', async () => {
+      const { service, tickets, runner, tx, inTenant } = setUp(undefined, detailRow);
+      const detail = await inTenant(() => service.get(ability, TICKET, USER));
+      expect(runner.withTenantTransaction).toHaveBeenCalledTimes(1);
+      expect(tickets.memberNames).toHaveBeenCalledWith(tx, TENANT, [PICKED_USER]);
+      expect(tickets.siteNames).toHaveBeenCalledWith(tx, TENANT, [PICKED_SITE]);
+      expect(detail.valueNames).toEqual({ users: { [PICKED_USER]: 'Luis Gómez' }, sites: {} });
+    });
+
+    it('a ticket the caller cannot read is not found, and nothing else is looked up', async () => {
+      const { service, tickets, inTenant } = setUp();
+      await expect(inTenant(() => service.get(ability, TICKET, USER))).rejects.toBeInstanceOf(NotFoundError);
+      expect(tickets.memberNames).not.toHaveBeenCalled();
     });
   });
 

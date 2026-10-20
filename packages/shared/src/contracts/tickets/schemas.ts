@@ -163,13 +163,38 @@ export interface TicketDetailResponse extends TicketSummaryResponse {
   /** Open and with nobody holding it: it waits for the dispatch worker to hand it to someone. */
   readonly awaitingDispatch: boolean;
   /** The signatures of the current parallel step (empty on any other step). */
-  readonly parallelTasks: ReadonlyArray<{ readonly id: string; readonly userId: string; readonly status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'CANCELLED'; readonly completedAt: string | null }>;
-  readonly openIncident: { readonly id: string; readonly assignedToId: string; readonly createdById: string; readonly openedAt: string; readonly descriptionHtml: string } | null;
+  readonly parallelTasks: ReadonlyArray<{ readonly id: string; readonly userId: string; readonly name: string; readonly status: 'PENDING' | 'SIGNED' | 'REJECTED' | 'CANCELLED'; readonly completedAt: string | null }>;
+  readonly openIncident: {
+    readonly id: string;
+    readonly assignedToId: string;
+    readonly createdById: string;
+    readonly assignedTo: NamedRefResponse;
+    readonly createdBy: NamedRefResponse;
+    readonly openedAt: string;
+    readonly descriptionHtml: string;
+  } | null;
   /** When the ticket wakes up, while it is parked on a WAIT block (nobody can act on it until then). */
   readonly waitingUntil: string | null;
   readonly values: Readonly<Record<string, unknown>>;
   /** Totals of the TABLE columns that show one, by field code and column code (decimal text). */
   readonly totals: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  readonly company: NamedRefResponse;
+  /** Who registered the ticket on behalf of its creator; `null` when the creator did it. */
+  readonly registeredBy: NamedRefResponse | null;
+  readonly closedBy: NamedRefResponse | null;
+  readonly department: NamedRefResponse | null;
+  readonly site: NamedRefResponse | null;
+  readonly valueNames: TicketValueNamesResponse;
+}
+
+/**
+ * Names of the people and sites that `values` points to (USER and SITE fields, and SELECT/MULTI_SELECT fields whose
+ * preset is USERS or SITES), by id exactly as it appears in `values`. An id missing here does not name anything the
+ * tenant has (removed member, deleted site): show it as unknown.
+ */
+export interface TicketValueNamesResponse {
+  readonly users: Readonly<Record<string, string>>;
+  readonly sites: Readonly<Record<string, string>>;
 }
 
 export interface TicketEventResponse {
@@ -183,6 +208,13 @@ export interface TicketEventResponse {
   readonly commentHtml: string | null;
   readonly data: unknown;
   readonly createdAt: string;
+  /** Who did it; `null` for the system (automatic blocks, workers). */
+  readonly actor: NamedRefResponse | null;
+  /** Whom it was handed to, when the event assigns someone. */
+  readonly assignee: NamedRefResponse | null;
+  readonly step: NamedRefResponse | null;
+  /** The transition taken, named by its label. */
+  readonly transition: NamedRefResponse | null;
 }
 
 export interface IncidentMutationResponse extends TicketMutationResponse {
@@ -209,11 +241,19 @@ export const ticketDetailResponseSchema = ticketSummaryResponseSchema.extend({
   closedById: uuidSchema.nullable(),
   openVisit: z.object({ id: uuidSchema, stepId: uuidSchema, loop: z.number(), enteredAt: z.string(), dueAt: z.string().nullable() }).nullable(),
   awaitingDispatch: z.boolean(),
-  parallelTasks: z.array(z.object({ id: uuidSchema, userId: uuidSchema, status: z.enum(['PENDING', 'SIGNED', 'REJECTED', 'CANCELLED']), completedAt: z.string().nullable() })),
-  openIncident: z.object({ id: uuidSchema, assignedToId: uuidSchema, createdById: uuidSchema, openedAt: z.string(), descriptionHtml: z.string() }).nullable(),
+  parallelTasks: z.array(z.object({ id: uuidSchema, userId: uuidSchema, name: z.string(), status: z.enum(['PENDING', 'SIGNED', 'REJECTED', 'CANCELLED']), completedAt: z.string().nullable() })),
+  openIncident: z
+    .object({ id: uuidSchema, assignedToId: uuidSchema, createdById: uuidSchema, assignedTo: namedRefSchema, createdBy: namedRefSchema, openedAt: z.string(), descriptionHtml: z.string() })
+    .nullable(),
   waitingUntil: z.string().nullable(),
   values: z.record(z.string(), z.unknown()),
   totals: z.record(z.string(), z.record(z.string(), z.string())),
+  company: namedRefSchema,
+  registeredBy: namedRefSchema.nullable(),
+  closedBy: namedRefSchema.nullable(),
+  department: namedRefSchema.nullable(),
+  site: namedRefSchema.nullable(),
+  valueNames: z.object({ users: z.record(z.string(), z.string()), sites: z.record(z.string(), z.string()) }),
 }) satisfies z.ZodType<TicketDetailResponse>;
 
 /** Parses `TicketEventResponse` (for the web client). */
@@ -228,6 +268,10 @@ export const ticketEventResponseSchema = z.object({
   commentHtml: z.string().nullable(),
   data: z.unknown(),
   createdAt: z.string(),
+  actor: namedRefSchema.nullable(),
+  assignee: namedRefSchema.nullable(),
+  step: namedRefSchema.nullable(),
+  transition: namedRefSchema.nullable(),
 }) satisfies z.ZodType<TicketEventResponse>;
 
 export const ticketTimelineResponseSchema = z.array(ticketEventResponseSchema);

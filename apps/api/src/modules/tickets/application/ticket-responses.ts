@@ -1,15 +1,23 @@
-import { tableColumnTotals, type TicketDetailResponse, type TicketSummaryResponse } from '@procesabpm/shared';
+import {
+  type NamedRefResponse,
+  tableColumnTotals,
+  type TicketDetailResponse,
+  type TicketEventResponse,
+  type TicketSummaryResponse,
+  type TicketValueNamesResponse,
+} from '@procesabpm/shared';
 import type { TicketQueryRepository } from '../data/ticket-query.repository.js';
+import { fullName, type PersonName } from '../domain/person-name.js';
 import { currentSla } from '../domain/ticket-sla.js';
 
 export type TicketSummaryRow = Awaited<ReturnType<TicketQueryRepository['list']>>['rows'][number];
 export type TicketDetailRow = NonNullable<Awaited<ReturnType<TicketQueryRepository['findDetail']>>>;
+export type TicketEventRow = NonNullable<Awaited<ReturnType<TicketQueryRepository['findTimeline']>>>[number];
 
-interface PersonName {
-  readonly user: { readonly firstName: string; readonly lastName: string };
-}
+const personRef = (id: string, person: PersonName): NamedRefResponse => ({ id, name: fullName(person) });
 
-const fullName = (person: PersonName): string => `${person.user.firstName} ${person.user.lastName}`.trim();
+/** A nullable person column and its relation: both are null together (composite foreign key). */
+const optionalPersonRef = (id: string | null, person: PersonName | null): NamedRefResponse | null => (id === null || person === null ? null : personRef(id, person));
 
 const slaOf = (row: TicketSummaryRow, now: Date): TicketSummaryResponse['sla'] => {
   const sla = currentSla(row.slaClocks, now);
@@ -30,7 +38,7 @@ export const toSummary = (row: TicketSummaryRow, now: Date): TicketSummaryRespon
   createdAt: row.createdAt.toISOString(),
   closedAt: row.closedAt?.toISOString() ?? null,
   tags: row.tags.map((entry) => entry.tag),
-  creator: { id: row.creatorId, name: fullName(row.creator) },
+  creator: personRef(row.creatorId, row.creator),
   subcategory: { id: row.subcategoryId, name: row.subcategory.name, category: row.subcategory.category },
   currentStep: row.currentStep,
   priority: row.priority,
@@ -47,7 +55,22 @@ const totalsOf = (fieldValues: TicketDetailRow['fieldValues']): Record<string, R
       .filter(([, totals]) => Object.keys(totals).length > 0),
   );
 
-export const toDetail = (row: TicketDetailRow, now: Date): TicketDetailResponse => {
+const openIncidentOf = (row: TicketDetailRow): TicketDetailResponse['openIncident'] => {
+  const incident = row.incidents[0];
+  if (incident === undefined) return null;
+  return {
+    id: incident.id,
+    assignedToId: incident.assignedToId,
+    createdById: incident.createdById,
+    assignedTo: personRef(incident.assignedToId, incident.assignedTo),
+    createdBy: personRef(incident.createdById, incident.createdBy),
+    openedAt: incident.openedAt.toISOString(),
+    descriptionHtml: incident.description,
+  };
+};
+
+/** `valueNames` names the people and sites the values point to (resolved by the caller, in the same transaction). */
+export const toDetail = (row: TicketDetailRow, now: Date, valueNames: TicketValueNamesResponse): TicketDetailResponse => {
   const visit = row.stepVisits[0];
   return {
     ...toSummary(row, now),
@@ -61,10 +84,35 @@ export const toDetail = (row: TicketDetailRow, now: Date): TicketDetailResponse 
     closedById: row.closedById,
     openVisit: visit === undefined ? null : { id: visit.id, stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt.toISOString(), dueAt: visit.dueAt?.toISOString() ?? null },
     awaitingDispatch: row.status === 'OPEN' && row.assignees.length === 0,
-    parallelTasks: row.parallelTasks.filter((task) => task.stepId === row.currentStepId && task.loop === row.currentLoop).map((task) => ({ id: task.id, userId: task.userId, status: task.status, completedAt: task.completedAt?.toISOString() ?? null })),
-    openIncident: row.incidents[0] === undefined ? null : { id: row.incidents[0].id, assignedToId: row.incidents[0].assignedToId, createdById: row.incidents[0].createdById, openedAt: row.incidents[0].openedAt.toISOString(), descriptionHtml: row.incidents[0].description },
+    parallelTasks: row.parallelTasks
+      .filter((task) => task.stepId === row.currentStepId && task.loop === row.currentLoop)
+      .map((task) => ({ id: task.id, userId: task.userId, name: fullName(task.membership), status: task.status, completedAt: task.completedAt?.toISOString() ?? null })),
+    openIncident: openIncidentOf(row),
     waitingUntil: visit?.resumeAt?.toISOString() ?? null,
     values: Object.fromEntries(row.fieldValues.map((entry) => [entry.field.code, entry.value])),
     totals: totalsOf(row.fieldValues),
+    company: row.company,
+    registeredBy: optionalPersonRef(row.registeredById, row.registeredBy),
+    closedBy: optionalPersonRef(row.closedById, row.closedBy),
+    department: row.department,
+    site: row.site,
+    valueNames,
   };
 };
+
+export const toEvent = (event: TicketEventRow): TicketEventResponse => ({
+  id: event.id,
+  type: event.type,
+  stepId: event.stepId,
+  transitionId: event.transitionId,
+  loop: event.loop,
+  actorId: event.actorId,
+  assigneeId: event.assigneeId,
+  commentHtml: event.commentHtml,
+  data: event.data,
+  createdAt: event.createdAt.toISOString(),
+  actor: optionalPersonRef(event.actorId, event.actor),
+  assignee: optionalPersonRef(event.assigneeId, event.assignee),
+  step: event.step,
+  transition: event.transition === null ? null : { id: event.transition.id, name: event.transition.label },
+});

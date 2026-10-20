@@ -152,9 +152,30 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     waitingUntil: null,
     values: {},
     totals: {},
+    company: { id: '018f0000-0000-7000-8000-0000000000c1', name: 'Electrocréditos' },
+    registeredBy: null,
+    closedBy: null,
+    department: null,
+    site: null,
+    valueNames: { users: {}, sites: {} },
   });
 
-  const event = (id: string, type: string, commentHtml: string | null, createdAt: string) => ({ id, type, stepId: STEP_ID, transitionId: null, loop: 0, actorId: USER_ID, assigneeId: null, commentHtml, data: {}, createdAt });
+  const event = (id: string, type: string, commentHtml: string | null, createdAt: string) => ({
+    id,
+    type,
+    stepId: STEP_ID,
+    transitionId: null,
+    loop: 0,
+    actorId: USER_ID,
+    assigneeId: null,
+    commentHtml,
+    data: {},
+    createdAt,
+    actor: { id: USER_ID, name: 'Ana Pérez' },
+    assignee: null,
+    step: { id: STEP_ID, name: 'Revisión' },
+    transition: null,
+  });
 
   const ticketResource = (route: Route, ticket: FakeTicket, resource: string | undefined, method: string, body: Record<string, unknown>) => {
     const key = `${method} ${resource ?? ''}`;

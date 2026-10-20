@@ -18,9 +18,10 @@ import { TenantTransactionRunner } from '../../../infrastructure/database/tenant
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { TicketQueryRepository, type Where } from '../data/ticket-query.repository.js';
 import { ticketFilters, viewFilter } from '../domain/ticket-list-filters.js';
+import { valueNamesOf, valueReferences } from '../domain/value-references.js';
 import type { TicketActor } from '../../engine/application/locked-ticket.js';
 import { readableTickets, ticketActorOf } from './ticket-access.js';
-import { toDetail, toSummary } from './ticket-responses.js';
+import { toDetail, toEvent, toSummary } from './ticket-responses.js';
 
 /** The read side of tickets. A ticket the caller may not read answers exactly like one that does not exist. */
 @Injectable()
@@ -34,9 +35,13 @@ export class TicketQueriesService {
 
   get(ability: AppAbility, ticketId: string, userId: string): Promise<TicketDetailResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      const row = await this.tickets.findDetail(tx, this.context.require().tenantId, ticketId, readableTickets(ability), userId);
+      const tenantId = this.context.require().tenantId;
+      const row = await this.tickets.findDetail(tx, tenantId, ticketId, readableTickets(ability), userId);
       if (row === null) throw new NotFoundError();
-      return toDetail(row, this.clock.now());
+      const references = valueReferences(row.fieldValues);
+      // One query after another: an interactive transaction has a single connection.
+      const names = { users: await this.tickets.memberNames(tx, tenantId, references.users), sites: await this.tickets.siteNames(tx, tenantId, references.sites) };
+      return toDetail(row, this.clock.now(), valueNamesOf(references, names));
     });
   }
 
@@ -67,7 +72,7 @@ export class TicketQueriesService {
     return this.runner.withTenantTransaction(async (tx) => {
       const events = await this.tickets.findTimeline(tx, this.context.require().tenantId, ticketId, readableTickets(ability));
       if (events === undefined) throw new NotFoundError();
-      return events.map((event) => ({ ...event, data: event.data, createdAt: event.createdAt.toISOString() }));
+      return events.map(toEvent);
     });
   }
 

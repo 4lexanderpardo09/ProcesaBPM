@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { fullName } from '../domain/person-name.js';
 
 export type Where = Record<string, unknown>;
 
 const PERSON_NAME = { user: { select: { firstName: true, lastName: true } } } as const;
+const NAMED = { id: true, name: true } as const;
 
 /**
  * The listing row: ids plus the names a list shows and the open SLA clocks of the current step. Prisma loads the
@@ -23,7 +25,7 @@ const SUMMARY = {
   closedAt: true,
   creator: { select: PERSON_NAME },
   subcategory: { select: { name: true, category: { select: { id: true, name: true } } } },
-  currentStep: { select: { id: true, name: true } },
+  currentStep: { select: NAMED },
   priority: { select: { id: true, name: true, color: true } },
   assignees: { select: { userId: true, type: true, assignedAt: true, membership: { select: PERSON_NAME } }, orderBy: { userId: 'asc' } },
   slaClocks: { where: { completedAt: null }, select: { dueAt: true, pausedAt: true } },
@@ -39,10 +41,37 @@ const DETAIL = {
   siteId: true,
   currentLoop: true,
   closedById: true,
+  company: { select: NAMED },
+  registeredBy: { select: PERSON_NAME },
+  closedBy: { select: PERSON_NAME },
+  department: { select: NAMED },
+  site: { select: NAMED },
   stepVisits: { where: { exitedAt: null }, select: { id: true, stepId: true, loop: true, enteredAt: true, dueAt: true, resumeAt: true }, take: 1 },
-  parallelTasks: { select: { id: true, userId: true, status: true, completedAt: true, stepId: true, loop: true }, orderBy: { id: 'asc' } },
-  incidents: { where: { status: 'OPEN' }, select: { id: true, assignedToId: true, createdById: true, openedAt: true, description: true }, take: 1 },
-  fieldValues: { select: { value: true, field: { select: { code: true, type: true, config: true } } } },
+  parallelTasks: { select: { id: true, userId: true, status: true, completedAt: true, stepId: true, loop: true, membership: { select: PERSON_NAME } }, orderBy: { id: 'asc' } },
+  incidents: {
+    where: { status: 'OPEN' },
+    select: { id: true, assignedToId: true, createdById: true, openedAt: true, description: true, assignedTo: { select: PERSON_NAME }, createdBy: { select: PERSON_NAME } },
+    take: 1,
+  },
+  fieldValues: { select: { value: true, field: { select: { code: true, type: true, config: true, dataSource: true } } } },
+} as const;
+
+/** An event of the timeline with the names of its people, step and transition (Prisma loads each relation for all events at once). */
+const TIMELINE_EVENT = {
+  id: true,
+  type: true,
+  stepId: true,
+  transitionId: true,
+  loop: true,
+  actorId: true,
+  assigneeId: true,
+  commentHtml: true,
+  data: true,
+  createdAt: true,
+  actor: { select: PERSON_NAME },
+  assignee: { select: PERSON_NAME },
+  step: { select: NAMED },
+  transition: { select: { id: true, label: true } },
 } as const;
 
 /** What a real-time subscriber may see of a ticket: its state and the ids of its assignees, never its content. */
@@ -98,8 +127,22 @@ export class TicketQueryRepository {
     if (!(await this.isAccessible(tx, tenantId, ticketId, access))) return undefined;
     return tx.ticketEvent.findMany({
       where: { tenantId, ticketId },
-      select: { id: true, type: true, stepId: true, transitionId: true, loop: true, actorId: true, assigneeId: true, commentHtml: true, data: true, createdAt: true },
+      select: TIMELINE_EVENT,
       orderBy: { seq: 'asc' },
     });
+  }
+
+  /** Full names of the tenant's members among the given user ids, by user id; an id without membership here is left out. */
+  async memberNames(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, string>> {
+    if (userIds.length === 0) return new Map();
+    const rows = await tx.membership.findMany({ where: { tenantId, userId: { in: [...userIds] } }, select: { userId: true, ...PERSON_NAME } });
+    return new Map(rows.map((row) => [row.userId, fullName(row)]));
+  }
+
+  /** Names of the tenant's sites among the given ids, by id; an unknown id is left out. */
+  async siteNames(tx: TenantTransaction, tenantId: string, siteIds: readonly string[]): Promise<Map<string, string>> {
+    if (siteIds.length === 0) return new Map();
+    const rows = await tx.site.findMany({ where: { tenantId, id: { in: [...siteIds] } }, select: NAMED });
+    return new Map(rows.map((row) => [row.id, row.name]));
   }
 }

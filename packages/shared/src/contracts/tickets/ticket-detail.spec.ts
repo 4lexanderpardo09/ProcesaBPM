@@ -39,11 +39,28 @@ const detail = {
   waitingUntil: null,
   values: { amount: '1250000.00' },
   totals: {},
+  company: { id: id(2), name: 'Electrocréditos' },
+  registeredBy: null,
+  closedBy: null,
+  department: null,
+  site: { id: id(14), name: 'Bogotá' },
+  valueNames: { users: { [id(15)]: 'Luis Gómez' }, sites: {} },
 };
 
 describe('ticketDetailResponseSchema', () => {
   it('accepts a ticket with its open visit, assignees and values', () => {
     expect(ticketDetailResponseSchema.parse(detail).openVisit?.id).toBe(id(8));
+  });
+
+  it('accepts an open incident with the names of both people', () => {
+    const openIncident = { id: id(16), assignedToId: id(15), createdById: id(3), assignedTo: { id: id(15), name: 'Luis Gómez' }, createdBy: { id: id(3), name: 'Ana Pérez' }, openedAt: '2026-10-18T11:00:00.000Z', descriptionHtml: '<p>Falta el soporte.</p>' };
+    expect(ticketDetailResponseSchema.parse({ ...detail, status: 'PAUSED', openIncident }).openIncident?.assignedTo.name).toBe('Luis Gómez');
+  });
+
+  it('requires the names of the values, even when there are none', () => {
+    const { valueNames: _, ...withoutNames } = detail;
+    expect(ticketDetailResponseSchema.safeParse(withoutNames).success).toBe(false);
+    expect(ticketDetailResponseSchema.safeParse({ ...detail, valueNames: { users: { [id(15)]: 7 }, sites: {} } }).success).toBe(false);
   });
 
   it('rejects an assignee type outside the engine ones', () => {
@@ -53,8 +70,28 @@ describe('ticketDetailResponseSchema', () => {
 
 describe('ticketTimelineResponseSchema', () => {
   it('accepts events with or without an actor and a comment', () => {
+    const event = {
+      id: id(9),
+      type: 'CREATED',
+      stepId: id(5),
+      transitionId: null,
+      loop: 0,
+      actorId: id(3),
+      assigneeId: null,
+      commentHtml: null,
+      data: {},
+      createdAt: '2026-10-18T10:00:00.000Z',
+      actor: { id: id(3), name: 'Ana Pérez' },
+      assignee: null,
+      step: { id: id(5), name: 'Revisión' },
+      transition: null,
+    };
+    expect(ticketTimelineResponseSchema.parse([event, { ...event, id: id(10), type: 'COMMENTED', actorId: null, actor: null, commentHtml: '<p>Hola</p>' }])).toHaveLength(2);
+  });
+
+  it('rejects an event without the names of its actor and step', () => {
     const event = { id: id(9), type: 'CREATED', stepId: null, transitionId: null, loop: 0, actorId: id(3), assigneeId: null, commentHtml: null, data: {}, createdAt: '2026-10-18T10:00:00.000Z' };
-    expect(ticketTimelineResponseSchema.parse([event, { ...event, id: id(10), type: 'COMMENTED', actorId: null, commentHtml: '<p>Hola</p>' }])).toHaveLength(2);
+    expect(ticketTimelineResponseSchema.safeParse([event]).success).toBe(false);
   });
 });
 
