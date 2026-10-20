@@ -10,6 +10,8 @@ describe('actionErrorMessage', () => {
     expect(actionErrorMessage(apiError(409, 'IMMUTABLE_DATA'))).toEqual({ namespace: 'tickets', key: 'actions.errors.changed' });
     expect(actionErrorMessage(apiError(422, 'INVALID_STATE'))).toEqual({ namespace: 'tickets', key: 'actions.errors.changed' });
     expect(actionErrorMessage(apiError(422, 'FIELD_VALUES_INVALID'))).toEqual({ namespace: 'tickets', key: 'actions.errors.rejected' });
+    expect(actionErrorMessage(apiError(422, 'ASSIGNEE_SELECTION_REQUIRED'))).toEqual({ namespace: 'tickets', key: 'actions.errors.assigneeRequired' });
+    expect(actionErrorMessage(apiError(422, 'NO_ASSIGNEE_CANDIDATES'))).toEqual({ namespace: 'tickets', key: 'actions.errors.noCandidates' });
   });
 
   it('falls back to the generic message, with its reference', () => {

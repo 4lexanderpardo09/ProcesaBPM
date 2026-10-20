@@ -1,9 +1,10 @@
-import type { TicketDetailResponse } from '@procesabpm/shared';
+import type { FormDecisionResponse, TicketDetailResponse, TicketFormResponse } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/shared/ui';
 import { takeTicket } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
+import { AdvanceDialog } from '../advance/AdvanceDialog';
 import { ActionError } from './ActionError';
 import { CloseDialog } from './CloseDialog';
 import { OpenIncidentDialog } from './OpenIncidentDialog';
@@ -11,10 +12,19 @@ import { ReassignDialog } from './ReassignDialog';
 import { ResolveIncidentDialog } from './ResolveIncidentDialog';
 import styles from './TicketActions.module.css';
 
-type OpenDialog = 'reassign' | 'close' | 'incident' | 'resolve';
+type OpenDialog = 'reassign' | 'close' | 'incident' | 'resolve' | { readonly decision: FormDecisionResponse };
 
-/** The actions the API says the person may take now (`actions`); each one that needs input opens its dialog. */
-export function TicketActions({ ticket }: { readonly ticket: TicketDetailResponse }) {
+export interface TicketActionsProps {
+  readonly ticket: TicketDetailResponse;
+  /** The current step and its decisions; `undefined` while it loads. */
+  readonly form: TicketFormResponse | undefined;
+}
+
+/**
+ * The actions the API says the person may take now (`actions`); each one that needs input opens its dialog. The step's
+ * decisions come first: the only one is the screen's main action, several stay side by side with the same weight.
+ */
+export function TicketActions({ ticket, form }: TicketActionsProps) {
   const { t } = useTranslation('tickets');
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
   const take = useTicketMutation((client, visitId: string) => takeTicket(client, ticket.id, visitId));
@@ -24,7 +34,13 @@ export function TicketActions({ ticket }: { readonly ticket: TicketDetailRespons
   const closeDialog = () => setDialog(null);
 
   const onVisit = visitId !== undefined;
+  const decisions = actions.advance && onVisit ? (form?.decisions ?? []) : [];
   const buttons = [
+    ...decisions.map((decision) => (
+      <Button key={decision.transitionId} variant={decisions.length === 1 ? 'primary' : 'secondary'} onClick={() => setDialog({ decision })}>
+        {decision.label}
+      </Button>
+    )),
     actions.resolveIncident && incidentId !== undefined && <Button key="resolve" variant="primary" onClick={() => setDialog('resolve')}>{t('actions.resolve.open')}</Button>,
     actions.take && onVisit && (
       <Button key="take" variant="primary" disabled={take.isPending} onClick={() => take.mutate(visitId)}>
@@ -46,6 +62,9 @@ export function TicketActions({ ticket }: { readonly ticket: TicketDetailRespons
       {dialog === 'reassign' && visitId !== undefined && <ReassignDialog ticketId={ticket.id} visitId={visitId} onClose={closeDialog} />}
       {dialog === 'close' && visitId !== undefined && <CloseDialog ticketId={ticket.id} visitId={visitId} onClose={closeDialog} />}
       {dialog === 'incident' && visitId !== undefined && <OpenIncidentDialog ticketId={ticket.id} visitId={visitId} onClose={closeDialog} />}
+      {typeof dialog === 'object' && dialog !== null && form !== undefined && visitId !== undefined && (
+        <AdvanceDialog ticket={ticket} form={form} visitId={visitId} decision={dialog.decision} onClose={closeDialog} />
+      )}
       {dialog === 'resolve' && incidentId !== undefined && <ResolveIncidentDialog ticketId={ticket.id} incidentId={incidentId} onClose={closeDialog} />}
     </div>
   );

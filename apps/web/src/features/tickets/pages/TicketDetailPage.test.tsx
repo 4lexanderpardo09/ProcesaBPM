@@ -418,4 +418,85 @@ describe('TicketDetailPage', () => {
       await vi.waitFor(() => expect(fake.callsTo(`${base}/incidents/${id(500)}/resolve`)[0]?.options.body).toEqual({ resolution: '<p>Llegó el extracto</p>' }));
     });
   });
+
+  describe('advance', () => {
+    const VISIT = id(107);
+    const APPROVE = id(620);
+    const RETURN = id(621);
+    const mutation = { id: TICKET, number: 'T-1042', status: 'OPEN', currentStepId: STEP, openVisitId: id(108) };
+    const stepForm = (overrides: Record<string, unknown> = {}) => ({
+      ...form,
+      fields: [
+        ...form.fields,
+        field(5, 'checked', 'Monto verificado', 'CURRENCY', { currencyCode: 'COP' }),
+        field(6, 'channel', 'Canal', 'SELECT', { options: [{ value: 'bank', label: 'Banco' }, { value: 'cash', label: 'Efectivo' }] }),
+        field(7, 'auditor', 'Auditor', 'USER'),
+      ].map((entry) => (entry.code === 'checked' ? { ...entry, isRequired: true } : entry)),
+      editableFieldCodes: ['checked', 'channel'],
+      decisions: [
+        { transitionId: RETURN, label: 'Devolver' },
+        { transitionId: APPROVE, label: 'Aprobar y avanzar' },
+      ],
+      ...overrides,
+    });
+    const handlers = (extra: Record<string, FakeHandler> = {}, formOverrides: Record<string, unknown> = {}) =>
+      ticketHandlers({ [base]: () => detail({ actions: { ...noActions, advance: true } }), [`${base}/form`]: () => stepForm(formOverrides), ...extra });
+
+    it('offers each decision of the step; a single one is the main action', async () => {
+      renderRoute(base, { handlers: handlers() });
+      const group = await screen.findByRole('group', { name: 'Acciones del ticket' });
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual(['Devolver', 'Aprobar y avanzar']);
+    });
+
+    it('asks for the required data before sending, then sends the step values with the decision', async () => {
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: () => mutation }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      expect(within(dialog).getByText('Paso: Validación de cartera')).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      expect(within(dialog).getByRole('textbox', { name: /Monto verificado/ })).toHaveAccessibleDescription(/Este dato es obligatorio\./);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /Monto verificado/ }), '1.250.000,50');
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Canal' }), 'Banco');
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Cuadra con el extracto');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toEqual({
+        transitionId: APPROVE,
+        visitId: VISIT,
+        values: { checked: '1250000.50', channel: 'bank' },
+        comment: '<p>Cuadra con el extracto</p>',
+        attachments: [],
+      });
+    });
+
+    it('marks the fields the API rejects and keeps the dialog open', async () => {
+      const invalid = () => {
+        throw new ApiError({ status: 422, code: 'FIELD_VALUES_INVALID', message: 'x', details: { issues: [{ code: 'OUT_OF_RANGE', fieldCode: 'checked' }] } });
+      };
+      renderRoute(base, { handlers: handlers({ [`${base}/transition`]: invalid }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Devolver' }));
+      const dialog = screen.getByRole('dialog', { name: 'Devolver' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /Monto verificado/ }), '5');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+
+      expect(await within(dialog).findByText('Revisa los datos marcados.')).toBeInTheDocument();
+      expect(within(dialog).getByRole('textbox', { name: /Monto verificado/ })).toHaveAccessibleDescription(/El valor está fuera del rango permitido\./);
+    });
+
+    it('says when a required field of the step cannot be filled from the web yet', async () => {
+      const { fake } = renderRoute(base, { handlers: handlers({}, { editableFieldCodes: ['auditor'], fields: [field(7, 'auditor', 'Auditor', 'USER')].map((entry) => ({ ...entry, isRequired: true })) }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Devolver' }));
+      const dialog = screen.getByRole('dialog', { name: 'Devolver' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+
+      expect(within(dialog).getByText('Este dato es obligatorio y todavía no se puede llenar desde la web.')).toBeInTheDocument();
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+    });
+  });
 });

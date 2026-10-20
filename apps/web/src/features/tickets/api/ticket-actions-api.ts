@@ -37,3 +37,8 @@ export function openIncident(client: HttpClient, ticketId: string, body: { visit
 export function resolveIncident(client: HttpClient, ticketId: string, incidentId: string, resolution: string) {
   return client.request(`${ticketUrl(ticketId)}/incidents/${encodeURIComponent(incidentId)}/resolve`, { method: 'POST', body: { resolution }, schema: incidentMutationResponseSchema });
 }
+
+/** Answers the current step with one of its decisions, the values captured on it and an optional comment. */
+export function transitionTicket(client: HttpClient, ticketId: string, body: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string }) {
+  return client.request(`${ticketUrl(ticketId)}/transition`, { method: 'POST', body: { ...body, attachments: [] }, schema: ticketMutationResponseSchema });
+}
