@@ -1,6 +1,6 @@
 import type { TicketFlowResponse } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { flowDiagram } from './flow-diagram';
+import { flowDiagram, retryLoopPath } from './flow-diagram';
 
 const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 const [START, REVIEW, FIX, END] = [id(1), id(2), id(3), id(4)];
@@ -56,5 +56,13 @@ describe('flowDiagram', () => {
     const retry = flowDiagram(flow()).transitions.find((transition) => transition.label === 'Reintentar');
     expect(retry).toMatchObject({ retry: true, points: [{ x: 300, y: 150 }] });
     expect(flowDiagram(flow()).transitions.filter((transition) => transition.retry)).toHaveLength(1);
+  });
+});
+
+describe('retryLoopPath', () => {
+  it('loops under both ends and puts the label at the bottom, halfway', () => {
+    const [path, labelX, labelY] = retryLoopPath({ x: 500, y: 120 }, { x: 260, y: 100 });
+    expect(path).toBe('M500,120 C548,120 548,184 380,184 C212,184 212,100 260,100');
+    expect([labelX, labelY]).toEqual([380, 184]);
   });
 });

@@ -57,3 +57,22 @@ function transitionState(fromStepId: string, takenCount: number, current: string
   if (fromStepId === current) return 'next';
   return takenCount > 0 ? 'taken' : 'pending';
 }
+
+/** How far below its lower end a retry loops, clear of the blocks it joins (a block is about 56px high). */
+const RETRY_DROP = 64;
+/** How far a retry leaves its block sideways before turning down, and comes in before reaching the target. */
+const RETRY_REACH = 48;
+
+/**
+ * A retry with no bend points of its own, drawn as a loop under the blocks: a curve from the source's right side
+ * straight to the target's left side would lie on top of the connection going the other way and hide its label.
+ * Answers the SVG path and where its label goes (the bottom of the loop).
+ */
+export function retryLoopPath(source: FlowPoint, target: FlowPoint): [string, number, number] {
+  const bottom = Math.max(source.y, target.y) + RETRY_DROP;
+  const middle = (source.x + target.x) / 2;
+  const out = source.x + RETRY_REACH;
+  const back = target.x - RETRY_REACH;
+  const path = `M${source.x},${source.y} C${out},${source.y} ${out},${bottom} ${middle},${bottom} C${back},${bottom} ${back},${target.y} ${target.x},${target.y}`;
+  return [path, middle, bottom];
+}

@@ -1,19 +1,21 @@
 import { BaseEdge, type Edge, EdgeLabelRenderer, type EdgeProps, getBezierPath } from '@xyflow/react';
 import type { FlowPoint } from '@procesabpm/shared';
 import { cx } from '@/shared/lib/cx';
-import type { DiagramTransition } from '../../lib/flow-diagram';
+import { type DiagramTransition, retryLoopPath } from '../../lib/flow-diagram';
 import styles from './TicketFlow.module.css';
 
 export type FlowTransitionEdgeType = Edge<{ readonly transition: DiagramTransition }, 'transition'>;
 
-/** A connection: a curve, or straight segments through the builder's bend points; its branch name in a white pill. */
+/** A connection: a curve, straight segments through the builder's bend points or a loop under the blocks for a retry; its branch name in a white pill. */
 export function FlowTransitionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps<FlowTransitionEdgeType>) {
   const transition = data?.transition;
   const points = transition?.points ?? null;
   const [path, labelX, labelY] =
-    points === null || points.length === 0
-      ? getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
-      : polylinePath([{ x: sourceX, y: sourceY }, ...points, { x: targetX, y: targetY }]);
+    points !== null && points.length > 0
+      ? polylinePath([{ x: sourceX, y: sourceY }, ...points, { x: targetX, y: targetY }])
+      : transition?.retry === true
+        ? retryLoopPath({ x: sourceX, y: sourceY }, { x: targetX, y: targetY })
+        : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   const className = cx(styles.edge, transition !== undefined && styles[`edge-${transition.state}`], transition?.retry === true && styles.retry);
   return (
     <>
