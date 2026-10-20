@@ -34,6 +34,8 @@ export interface FakeTicket {
   readonly tags?: readonly { readonly id: string; readonly name: string; readonly color: string }[];
   /** Sanitized HTML, as the API keeps it. */
   readonly descriptionHtml?: string;
+  /** What the signed-in person may do (`actions` of the detail); by default only comment. */
+  readonly actions?: Partial<Record<'advance' | 'take' | 'reassign' | 'close' | 'openIncident' | 'resolveIncident' | 'reopen' | 'signParallelTask' | 'comment', boolean>>;
 }
 
 export interface RecordedRequest {
@@ -41,6 +43,8 @@ export interface RecordedRequest {
   readonly path: string;
   readonly search: URLSearchParams;
   readonly authorization: string | undefined;
+  /** The JSON body sent, `{}` when there is none. */
+  readonly body: Record<string, unknown>;
 }
 
 const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -48,7 +52,7 @@ const accessToken = (userId: string, tenantId: string, sessionId: string) => `${
 
 const USER_ID = '018f0000-0000-7000-8000-000000000001';
 const STEP_ID = '018f0000-0000-7000-8000-0000000000d1';
-const TICKET_PATH = /^\/api\/tickets\/([^/]+)(?:\/(form|timeline|documents|comments|flow))?$/;
+const TICKET_PATH = /^\/api\/tickets\/([^/]+)(?:\/(form|timeline|documents|comments|flow|candidates|reassign))?$/;
 export const SECRET = 'JBSWY3DPEHPK3PXP';
 export const BACKUP_CODES = Array.from({ length: 10 }, (_, index) => `K7QM-2XPA-9RTD-4F${index}Z`);
 
@@ -120,6 +124,8 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       .find((ticket) => ticket.id === ticketId);
   /** Comments added during the test, per ticket: the timeline answers with them after the creation event. */
   const comments = new Map<string, { id: string; commentHtml: string; createdAt: string }[]>();
+  /** Who each ticket was reassigned to during the test: the detail answers with them as its holder. */
+  const reassigned = new Map<string, string>();
 
   const ticketDetail = (ticket: FakeTicket) => ({
     companyId: '018f0000-0000-7000-8000-0000000000c1',
@@ -145,7 +151,9 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     currentLoop: 0,
     closedById: null,
     openVisit: { id: '018f0000-0000-7000-8000-0000000000c5', stepId: STEP_ID, loop: 0, enteredAt: '2026-10-17T15:00:00.000Z', dueAt: null },
-    assignees: [{ userId: USER_ID, name: 'Ana Pérez', type: 'PRIMARY', assignedAt: '2026-10-17T15:00:00.000Z' }],
+    assignees: reassigned.has(ticket.id)
+      ? [{ userId: reassigned.get(ticket.id) ?? '', name: 'Marta Ruiz', type: 'PRIMARY', assignedAt: '2026-10-17T16:00:00.000Z' }]
+      : [{ userId: USER_ID, name: 'Ana Pérez', type: 'PRIMARY', assignedAt: '2026-10-17T15:00:00.000Z' }],
     awaitingDispatch: false,
     parallelTasks: [],
     openIncident: null,
@@ -158,7 +166,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     department: null,
     site: null,
     valueNames: { users: {}, sites: {} },
-    actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true },
+    actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, ...ticket.actions },
   });
 
   const event = (id: string, type: string, commentHtml: string | null, createdAt: string) => ({
@@ -205,6 +213,11 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
             { id: '018f0000-0000-7000-8000-0000000000d4', fromStepId: STEP_ID, toStepId: '018f0000-0000-7000-8000-0000000000d2', type: 'DECISION', label: 'Aprobar', points: null, takenCount: 0 },
           ],
         });
+      case 'GET candidates':
+        return json(route, 200, [{ id: '018f0000-0000-7000-8000-0000000000f1', name: 'Marta Ruiz' }]);
+      case 'POST reassign':
+        reassigned.set(ticket.id, String(body.toUserId));
+        return json(route, 200, { id: ticket.id, number: ticket.number, status: ticket.status, currentStepId: STEP_ID, openVisitId: '018f0000-0000-7000-8000-0000000000c5' });
       case 'POST comments': {
         const list = comments.get(ticket.id) ?? [];
         const id = `018f0000-0000-7000-8000-0000000000e${list.length + 1}`;
@@ -278,9 +291,9 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     const request = route.request();
     const { pathname: path, searchParams: search } = new URL(request.url());
     const authorization = request.headers().authorization;
-    requests.push({ method: request.method(), path, search, authorization });
-    const handler = handlers[`${request.method()} ${path}`];
     const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+    requests.push({ method: request.method(), path, search, authorization, body });
+    const handler = handlers[`${request.method()} ${path}`];
     if (handler !== undefined) return handler(route, body, authorization, search);
     const ticketMatch = TICKET_PATH.exec(path);
     if (ticketMatch === null) return error(route, 404, 'NOT_FOUND');

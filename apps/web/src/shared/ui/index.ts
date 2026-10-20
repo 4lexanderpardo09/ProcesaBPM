@@ -5,6 +5,7 @@ export { Button, type ButtonProps, type ButtonVariant } from './button/Button';
 export { ButtonLink, type ButtonLinkProps } from './button/ButtonLink';
 export { Card, type CardProps } from './card/Card';
 export { Checkbox, type CheckboxProps } from './checkbox/Checkbox';
+export { Dialog, type DialogProps } from './dialog/Dialog';
 export * from './icons';
 export { Logo } from './logo/Logo';
 export { PageHeader, type PageHeaderProps } from './page-header/PageHeader';

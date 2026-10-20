@@ -13,6 +13,7 @@ import { TicketAttachments } from '../components/TicketAttachments';
 import { TicketDetailHeader } from '../components/TicketDetailHeader';
 import { TicketFacts } from '../components/TicketFacts';
 import { TicketFieldValues } from '../components/TicketFieldValues';
+import { TicketActions } from '../components/actions/TicketActions';
 import { TicketFlow } from '../components/flow/TicketFlow';
 import { useTicketDetail } from '../hooks/use-ticket-detail';
 import { slaBadge } from '../lib/sla-badge';
@@ -34,7 +35,7 @@ export function TicketDetailPage() {
 
   return (
     <>
-      <TicketDetailHeader ticket={ticket} sla={ticket.status === 'CLOSED' ? undefined : slaBadge(ticket.sla, new Date())} />
+      <TicketDetailHeader ticket={ticket} sla={ticket.status === 'CLOSED' ? undefined : slaBadge(ticket.sla, new Date())} actions={<TicketActions ticket={ticket} />} />
       <TicketFacts ticket={ticket} userId={user?.id} timeZone={timeZone} />
       <TicketNotices ticket={ticket} userId={user?.id} timeZone={timeZone} />
       <div className={styles.flow}>
@@ -45,7 +46,7 @@ export function TicketDetailPage() {
           <Card title={t('detail.description.title')}>
             {ticket.descriptionHtml === '' ? <p className={styles.muted}>{t('detail.description.empty')}</p> : <RichText html={ticket.descriptionHtml} />}
           </Card>
-          <TicketActivity ticketId={ticket.id} timeline={timeline} timeZone={timeZone} />
+          <TicketActivity ticketId={ticket.id} timeline={timeline} canComment={ticket.actions.comment} timeZone={timeZone} />
         </div>
         <aside className={styles.side}>
           <TicketFieldValues values={ticket.values} valueNames={ticket.valueNames} form={form} timeZone={timeZone} />

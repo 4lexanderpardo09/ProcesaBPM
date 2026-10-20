@@ -1,4 +1,5 @@
 import type { TicketDetailResponse } from '@procesabpm/shared';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { cx } from '@/shared/lib/cx';
@@ -11,10 +12,12 @@ import { TicketStatusBadge } from './TicketStatusBadge';
 export interface TicketDetailHeaderProps {
   readonly ticket: TicketDetailResponse;
   readonly sla: SlaBadge | undefined;
+  /** What the person can do on the ticket, on the right of the title. */
+  readonly actions?: ReactNode;
 }
 
 /** Where the ticket sits (back to the inbox), its number and title, and its state, SLA and priority at a glance. */
-export function TicketDetailHeader({ ticket, sla }: TicketDetailHeaderProps) {
+export function TicketDetailHeader({ ticket, sla, actions }: TicketDetailHeaderProps) {
   const { t } = useTranslation('tickets');
   return (
     <header className={styles.header}>
@@ -28,14 +31,19 @@ export function TicketDetailHeader({ ticket, sla }: TicketDetailHeaderProps) {
           </li>
         </ol>
       </nav>
-      <div className={styles.titleRow}>
-        <span className={cx('text-code', styles.number)}>{ticket.number}</span>
-        <h1 className="text-ticket-title">{ticket.title}</h1>
-      </div>
-      <div className={styles.badges}>
-        <TicketStatusBadge status={ticket.status} />
-        {sla !== undefined && <Badge tone={sla.tone}>{slaText(sla)}</Badge>}
-        {ticket.priority !== null && <Badge>{t('detail.priority', { name: ticket.priority.name })}</Badge>}
+      <div className={styles.top}>
+        <div className={styles.summary}>
+          <div className={styles.titleRow}>
+            <span className={cx('text-code', styles.number)}>{ticket.number}</span>
+            <h1 className="text-ticket-title">{ticket.title}</h1>
+          </div>
+          <div className={styles.badges}>
+            <TicketStatusBadge status={ticket.status} />
+            {sla !== undefined && <Badge tone={sla.tone}>{slaText(sla)}</Badge>}
+            {ticket.priority !== null && <Badge>{t('detail.priority', { name: ticket.priority.name })}</Badge>}
+          </div>
+        </div>
+        {actions}
       </div>
     </header>
   );
