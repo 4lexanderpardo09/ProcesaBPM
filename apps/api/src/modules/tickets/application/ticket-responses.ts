@@ -69,8 +69,11 @@ const openIncidentOf = (row: TicketDetailRow): TicketDetailResponse['openInciden
   };
 };
 
+/** The detail of a ticket as it is, for anyone who reads it; what the caller may do with it comes apart (`actions`). */
+export type TicketDetailBody = Omit<TicketDetailResponse, 'actions'>;
+
 /** `valueNames` names the people and sites the values point to (resolved by the caller, in the same transaction). */
-export const toDetail = (row: TicketDetailRow, now: Date, valueNames: TicketValueNamesResponse): TicketDetailResponse => {
+export const toDetail = (row: TicketDetailRow, now: Date, valueNames: TicketValueNamesResponse): TicketDetailBody => {
   const visit = row.stepVisits[0];
   return {
     ...toSummary(row, now),

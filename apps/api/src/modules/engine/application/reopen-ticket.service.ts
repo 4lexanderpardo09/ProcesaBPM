@@ -5,9 +5,7 @@ import {
   InvalidReferenceError,
   InvalidStateError,
   PEOPLE_STEP_TYPES,
-  PermissionDeniedError,
   type ReopenTicketRequest,
-  TicketNotClosedError,
   type TicketMutationResponse,
   ValidationFailedError,
 } from '@procesabpm/shared';
@@ -20,6 +18,7 @@ import { AssignmentCandidatesRepository } from '../data/assignment-candidates.re
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import { lastHolders, reopenTarget } from '../domain/reopen-policy.js';
+import { isEligibleAssignee, reopenRefusal } from '../domain/ticket-action-rules.js';
 import type { EventPlan } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
@@ -51,8 +50,8 @@ export class ReopenTicketService {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
       const { ticket } = await this.loader.lockForAction(tx, tenantId, ticketId, actor);
-      if (!(await actor.can(tx, ticketId, 'reopen'))) throw new PermissionDeniedError('Not allowed to reopen this ticket');
-      if (ticket.status !== 'CLOSED') throw new TicketNotClosedError(ticket.status);
+      const refusal = reopenRefusal(await actor.can(tx, ticketId, 'reopen'), ticket.status);
+      if (refusal !== null) throw refusal;
 
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
       const peopleSteps = new Set(document.steps.filter((step) => PEOPLE_STEP_TYPES.has(step.type)).map((step) => step.id));
@@ -113,7 +112,7 @@ export class ReopenTicketService {
   private async holdersOf(tx: Parameters<TicketContextRepository['findActiveMember']>[0], tenantId: string, companyId: string, visits: Awaited<ReturnType<TicketWriteRepository['findVisits']>>, stepId: string, assigneeId: string | undefined): Promise<string[]> {
     if (assigneeId !== undefined) {
       const named = await this.people.findActiveMember(tx, tenantId, assigneeId);
-      if (named === null || !named.companyIds.includes(companyId)) throw new InvalidAssigneeError();
+      if (named === null || !isEligibleAssignee(named, companyId)) throw new InvalidAssigneeError();
       return [named.userId];
     }
     const last = [...visits].filter((visit) => visit.stepId === stepId).at(-1);

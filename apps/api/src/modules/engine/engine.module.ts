@@ -21,6 +21,8 @@ import { ReassignTicketService } from './application/reassign-ticket.service.js'
 import { SubmissionFilesChecker } from './application/submission-files.js';
 import { SubmissionValidator } from './application/submission-validator.js';
 import { TakeTicketService } from './application/take-ticket.service.js';
+import { TicketActionStateReader } from './application/ticket-action-state.reader.js';
+import { TicketCandidatesService } from './application/ticket-candidates.service.js';
 import { TicketMutationApplier } from './application/ticket-mutation-applier.js';
 import { TicketSlaService } from './application/ticket-sla.service.js';
 import { TransitionTicketService } from './application/transition-ticket.service.js';
@@ -60,7 +62,9 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     ReopenTicketService,
     ParallelTaskService,
     ResumeWaitService,
+    TicketActionStateReader,
+    TicketCandidatesService,
   ],
-  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository],
+  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository, TicketActionStateReader, TicketCandidatesService],
 })
 export class EngineModule {}

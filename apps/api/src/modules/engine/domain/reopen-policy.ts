@@ -11,14 +11,19 @@ export interface VisitSummary {
  * default the one of its most recent visit. A ticket that went from START to END without a person has none.
  */
 export function reopenTarget(visits: readonly VisitSummary[], peopleStepIds: ReadonlySet<string>, requested?: string): string {
-  const visited = visits.filter((visit) => peopleStepIds.has(visit.stepId));
   if (requested !== undefined) {
-    if (!visited.some((visit) => visit.stepId === requested)) throw new InvalidReopenStepError();
+    if (!visits.some((visit) => peopleStepIds.has(visit.stepId) && visit.stepId === requested)) throw new InvalidReopenStepError();
     return requested;
   }
-  const last = [...visited].sort((a, b) => b.enteredAt.getTime() - a.enteredAt.getTime() || (a.id < b.id ? 1 : -1))[0];
+  const last = lastPeopleStep(visits, peopleStepIds);
   if (last === undefined) throw new InvalidReopenStepError();
-  return last.stepId;
+  return last;
+}
+
+/** The step for people of the ticket's most recent visit (ties go to the highest visit id); none when it never had one. */
+export function lastPeopleStep(visits: readonly VisitSummary[], peopleStepIds: ReadonlySet<string>): string | undefined {
+  const visited = visits.filter((visit) => peopleStepIds.has(visit.stepId));
+  return [...visited].sort((a, b) => b.enteredAt.getTime() - a.enteredAt.getTime() || (a.id < b.id ? 1 : -1))[0]?.stepId;
 }
 
 /** Who held the step when the ticket closed: the responsibles of the clocks that ended with the visit. */

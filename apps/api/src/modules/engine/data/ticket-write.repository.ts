@@ -83,7 +83,16 @@ const json = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJso
 @Injectable()
 export class TicketWriteRepository {
   /** The ticket row, locked until the transaction ends. Everything that changes a ticket starts here. */
-  async lockTicket(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<LockedTicket | undefined> {
+  lockTicket(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<LockedTicket | undefined> {
+    return this.readTicket(tx, tenantId, ticketId, Prisma.sql`FOR UPDATE`);
+  }
+
+  /** The same row without locking it: for reads that only report what an action would do. */
+  findTicket(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<LockedTicket | undefined> {
+    return this.readTicket(tx, tenantId, ticketId, Prisma.empty);
+  }
+
+  private async readTicket(tx: TenantTransaction, tenantId: string, ticketId: string, lock: Prisma.Sql): Promise<LockedTicket | undefined> {
     const rows = await tx.$queryRaw<LockedTicket[]>`
       SELECT id::text AS "id", number, status::text AS "status", workflow_version_id::text AS "workflowVersionId",
              current_step_id::text AS "currentStepId", current_loop AS "currentLoop", company_id::text AS "companyId",
@@ -91,7 +100,7 @@ export class TicketWriteRepository {
              closed_by_id::text AS "closedById", closed_at AS "closedAt"
       FROM tickets
       WHERE tenant_id = ${tenantId}::uuid AND id = ${ticketId}::uuid AND deleted_at IS NULL
-      FOR UPDATE`;
+      ${lock}`;
     return rows[0];
   }
 
@@ -228,6 +237,11 @@ export class TicketWriteRepository {
 
   findIncident(tx: TenantTransaction, tenantId: string, ticketId: string, incidentId: string): Promise<IncidentRow | null> {
     return tx.ticketIncident.findFirst({ where: { tenantId, ticketId, id: incidentId }, select: { id: true, stepId: true, createdById: true, assignedToId: true, status: true, previousAssigneeIds: true, openedAt: true } });
+  }
+
+  /** The ticket's open incident, if it has one (the database allows one at a time). */
+  findOpenIncident(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<IncidentRow | null> {
+    return tx.ticketIncident.findFirst({ where: { tenantId, ticketId, status: 'OPEN' }, select: { id: true, stepId: true, createdById: true, assignedToId: true, status: true, previousAssigneeIds: true, openedAt: true } });
   }
 
   /** One UPDATE: the check that ties `resolved_at` to the status is immediate. */

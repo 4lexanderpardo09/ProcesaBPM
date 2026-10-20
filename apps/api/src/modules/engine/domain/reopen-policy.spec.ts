@@ -1,6 +1,6 @@
 import { InvalidReopenStepError } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { lastHolders, nextReopenLoop, reopenTarget } from './reopen-policy.js';
+import { lastHolders, lastPeopleStep, nextReopenLoop, reopenTarget } from './reopen-policy.js';
 
 const visit = (id: string, stepId: string, minute: number) => ({ id, stepId, enteredAt: new Date(2026, 8, 7, 9, minute) });
 const people = new Set(['a', 'b']);
@@ -15,6 +15,13 @@ describe('reopenTarget', () => {
   });
   it('refuses a ticket that never had a person step', () => expect(() => reopenTarget([], people)).toThrow(InvalidReopenStepError));
   it('breaks a tie by id', () => expect(reopenTarget([visit('1', 'a', 5), visit('2', 'b', 5)], people)).toBe('b'));
+});
+
+describe('lastPeopleStep', () => {
+  it('is the default target, and none for a ticket that never had a person step', () => {
+    expect(lastPeopleStep([visit('1', 'a', 0), visit('2', 'auto', 20)], people)).toBe('a');
+    expect(lastPeopleStep([visit('1', 'auto', 0)], people)).toBeUndefined();
+  });
 });
 
 describe('lastHolders', () => {

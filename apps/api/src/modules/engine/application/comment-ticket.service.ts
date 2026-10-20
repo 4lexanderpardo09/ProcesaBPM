@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { CommentRequiredError, type CommentTicketRequest, type CommentTicketResponse, PermissionDeniedError } from '@procesabpm/shared';
+import { CommentRequiredError, type CommentTicketRequest, type CommentTicketResponse } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { sanitizeRichText } from '../../../infrastructure/text/rich-text.js';
 import { FileAttachmentService } from '../../files/application/file-attachment.service.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
+import { commentRefusal } from '../domain/ticket-action-rules.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { SubmissionFilesChecker } from './submission-files.js';
 
@@ -31,7 +32,8 @@ export class CommentTicketService {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
       const { ticket } = await this.loader.lockForAction(tx, tenantId, ticketId, actor);
-      if (!(await actor.can(tx, ticket.id, 'comment'))) throw new PermissionDeniedError('Not allowed to comment on this ticket');
+      const refusal = commentRefusal(await actor.can(tx, ticket.id, 'comment'));
+      if (refusal !== null) throw refusal;
       const commentHtml = sanitizeRichText(request.comment);
       if (commentHtml === '') throw new CommentRequiredError();
 

@@ -4,6 +4,7 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { formFieldsOf } from '../../engine/domain/form-fields.js';
+import { decisionExits } from '../../engine/domain/ticket-action-rules.js';
 import { PublishedVersionReader } from '../../workflows/application/published-version-reader.js';
 import { TicketQueriesService } from './ticket-queries.service.js';
 
@@ -22,7 +23,7 @@ export class TicketFormService {
 
   async form(ability: AppAbility, ticketId: string, userId: string): Promise<TicketFormResponse> {
     // Reading the ticket decides the 404 (per-record authorization), exactly as `GET /tickets/:id`.
-    const ticket = await this.queries.get(ability, ticketId, userId);
+    const ticket = await this.queries.getBody(ability, ticketId, userId);
     const document = await this.runner.withTenantTransaction((tx) => this.versions.documentOf(tx, this.context.require().tenantId, ticket.workflowVersionId));
     const visit = ticket.status === 'CLOSED' ? null : ticket.openVisit;
     const step = visit === null ? undefined : document.steps.find((candidate) => candidate.id === visit.stepId);
@@ -36,10 +37,7 @@ export class TicketFormService {
       decisions:
         step === undefined
           ? []
-          : document.transitions
-              .filter((transition) => transition.fromStepId === step.id && transition.type === 'DECISION')
-              .sort((a, b) => a.sortOrder - b.sortOrder)
-              .map((transition) => ({ transitionId: transition.id, label: transition.label })),
+          : decisionExits(document, step.id).map((transition) => ({ transitionId: transition.id, label: transition.label })),
     };
   }
 }

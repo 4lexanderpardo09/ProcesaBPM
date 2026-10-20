@@ -1,14 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type IncidentMutationResponse, InvalidAssigneeError, type OpenIncidentRequest, PermissionDeniedError, ValidationFailedError } from '@procesabpm/shared';
+import { type IncidentMutationResponse, InvalidAssigneeError, type OpenIncidentRequest, ValidationFailedError } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { sanitizeRichText } from '../../../infrastructure/text/rich-text.js';
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
+import { holdsStepOrSignature, isEligibleAssignee, openIncidentRefusal } from '../domain/ticket-action-rules.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
-
-const HOLDS_THE_STEP = new Set(['PRIMARY', 'POOL', 'PARALLEL']);
 
 /**
  * Opens an incident (novedad): the running clocks stand still, the ticket is PAUSED and the step is handed to
@@ -34,10 +33,12 @@ export class OpenIncidentService {
       const current = await this.loader.requireOpenVisit(tx, tenantId, locked, request.visitId);
       const { ticket, visit } = current;
 
-      const holder = current.ownType !== undefined && HOLDS_THE_STEP.has(current.ownType);
-      if (!(await actor.can(tx, ticketId, 'open_incident')) || !(holder || (await actor.can(tx, ticketId, 'reassign')))) throw new PermissionDeniedError('Not allowed to open an incident on this ticket');
+      const mayOpenIncident = await actor.can(tx, ticketId, 'open_incident');
+      const mayReassign = mayOpenIncident && !holdsStepOrSignature(current.ownType) && (await actor.can(tx, ticketId, 'reassign'));
+      const refusal = openIncidentRefusal(mayOpenIncident, mayReassign, current.ownType);
+      if (refusal !== null) throw refusal;
       const target = await this.people.findActiveMember(tx, tenantId, request.assignedToId);
-      if (target === null || !target.companyIds.includes(ticket.companyId)) throw new InvalidAssigneeError();
+      if (target === null || !isEligibleAssignee(target, ticket.companyId)) throw new InvalidAssigneeError();
       const description = sanitizeRichText(request.description);
       if (description === '') throw new ValidationFailedError([{ path: 'description', message: 'The description is empty' }]);
 

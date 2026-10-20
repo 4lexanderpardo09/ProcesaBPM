@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidAssigneeError, PermissionDeniedError, type ReassignTicketRequest, type TicketMutationResponse } from '@procesabpm/shared';
+import { InvalidAssigneeError, type ReassignTicketRequest, type TicketMutationResponse } from '@procesabpm/shared';
 import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -9,6 +9,7 @@ import { type MemberRow, TicketContextRepository } from '../data/ticket-context.
 import { PublishedVersionReader } from '../../workflows/application/published-version-reader.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import type { VisitPlan } from '../domain/plan.js';
+import { isEligibleAssignee, isSigner, isSoleHolder, reassignRefusal } from '../domain/ticket-action-rules.js';
 import { LockedTicketLoader, type TicketActor, type TicketInProgress } from './locked-ticket.js';
 import { TicketSlaService } from './ticket-sla.service.js';
 
@@ -35,14 +36,14 @@ export class ReassignTicketService {
       const at = this.clock.now();
       const current = await this.loader.load(tx, tenantId, ticketId, request.visitId, actor);
       const { ticket, visit } = current;
-      if (!(await actor.can(tx, ticketId, 'reassign'))) throw new PermissionDeniedError('Not allowed to reassign tickets');
+      const refusal = reassignRefusal(await actor.can(tx, ticketId, 'reassign'));
+      if (refusal !== null) throw refusal;
 
       const target = await this.people.findActiveMember(tx, tenantId, request.toUserId);
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
       const parallel = document.steps.find((candidate) => candidate.id === visit.stepId)?.assignmentMode === 'PARALLEL';
       if (parallel) return this.reassignSignature(tx, tenantId, current, actor, request, target, at);
-      const alreadyTheOnlyOne = current.assignees.length === 1 && current.assignees[0]!.userId === request.toUserId && current.assignees[0]!.type === 'PRIMARY';
-      if (target === null || !target.companyIds.includes(ticket.companyId) || alreadyTheOnlyOne) throw new InvalidAssigneeError();
+      if (target === null || !isEligibleAssignee(target, ticket.companyId) || isSoleHolder(current.assignees, target.userId)) throw new InvalidAssigneeError();
 
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, visit.calendarId, at);
@@ -76,7 +77,7 @@ export class ReassignTicketService {
     const { ticket, visit } = current;
     const tasks = await this.writes.findParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop);
     const source = tasks.find((task) => task.userId === request.fromUserId && task.status === 'PENDING');
-    if (source === undefined || target === null || !target.companyIds.includes(ticket.companyId) || tasks.some((task) => task.userId === target.userId)) throw new InvalidAssigneeError();
+    if (source === undefined || target === null || !isEligibleAssignee(target, ticket.companyId) || isSigner(tasks, target.userId)) throw new InvalidAssigneeError();
 
     const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
     const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, visit.calendarId, at);

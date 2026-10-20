@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { BusinessCalendar } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { toBusinessCalendar } from '../../organization/domain/calendar-mapping.js';
+import { fullName, type PersonName } from '../../tickets/domain/person-name.js';
 
 export interface MemberRow {
   readonly userId: string;
@@ -29,25 +30,36 @@ export interface ResolvedCalendar {
 const HOLIDAY_WINDOW_BEFORE_MS = 86_400_000;
 const HOLIDAY_WINDOW_AFTER_MS = 2 * 366 * 86_400_000;
 
+/** Who can take part in tickets: an active membership of a user who is not disabled. */
+const activeMembers = (tenantId: string) => ({ tenantId, status: 'ACTIVE', user: { status: { not: 'DISABLED' } } }) as const;
+
+const MEMBER = { userId: true, positionId: true, departmentId: true, siteId: true, user: { select: { firstName: true, lastName: true } }, companies: { select: { companyId: true } } } as const;
+
+const toMemberRow = (membership: PersonName & { userId: string; positionId: string | null; departmentId: string | null; siteId: string | null; companies: Array<{ companyId: string }> }): MemberRow => ({
+  userId: membership.userId,
+  name: fullName(membership),
+  positionId: membership.positionId,
+  departmentId: membership.departmentId,
+  siteId: membership.siteId,
+  companyIds: membership.companies.map((row) => row.companyId),
+});
+
 /** Reads of the people, company and calendar a ticket depends on. Every query carries the tenant. */
 @Injectable()
 export class TicketContextRepository {
   /** An active member of an enabled user, with their companies; `null` when they cannot take part in tickets. */
   async findActiveMember(tx: TenantTransaction, tenantId: string, userId: string): Promise<MemberRow | null> {
-    const membership = await tx.membership.findFirst({
-      where: { tenantId, userId, status: 'ACTIVE', user: { status: { not: 'DISABLED' } } },
-      select: { userId: true, positionId: true, departmentId: true, siteId: true, user: { select: { firstName: true, lastName: true } }, companies: { select: { companyId: true } } },
+    const membership = await tx.membership.findFirst({ where: { ...activeMembers(tenantId), userId }, select: MEMBER });
+    return membership === null ? null : toMemberRow(membership);
+  }
+
+  /** The active members of enabled users who belong to the company. */
+  async findActiveMembersOfCompany(tx: TenantTransaction, tenantId: string, companyId: string): Promise<MemberRow[]> {
+    const memberships = await tx.membership.findMany({
+      where: { ...activeMembers(tenantId), companies: { some: { companyId } } },
+      select: MEMBER,
     });
-    return membership === null
-      ? null
-      : {
-          userId: membership.userId,
-          name: `${membership.user.firstName} ${membership.user.lastName}`.trim(),
-          positionId: membership.positionId,
-          departmentId: membership.departmentId,
-          siteId: membership.siteId,
-          companyIds: membership.companies.map((row) => row.companyId),
-        };
+    return memberships.map(toMemberRow);
   }
 
   /**

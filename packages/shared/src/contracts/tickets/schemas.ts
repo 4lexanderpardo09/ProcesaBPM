@@ -190,20 +190,15 @@ export interface TicketDetailResponse extends TicketSummaryResponse {
 }
 
 /**
- * Names of the people and sites that `values` points to (USER and SITE fields, and SELECT/MULTI_SELECT fields whose
- * preset is USERS or SITES), by id exactly as it appears in `values`. An id missing here does not name anything the
- * tenant has (removed member, deleted site): show it as unknown.
- */
-/**
  * The ticket actions the caller may take now: permission (CASL, per record) and the ticket's state together, the same
  * checks the action routes make. A hint for the interface; the routes still decide.
  */
 export interface TicketActionsResponse {
   /** `POST /tickets/:id/transition`: holds the open visit (or may act on it) and the step has decisions. */
   readonly advance: boolean;
-  /** `POST /tickets/:id/take`: an open visit of a pool or awaiting dispatch that the caller may take. */
+  /** `POST /tickets/:id/take`: an open visit of a pool the caller belongs to (a ticket awaiting dispatch is not a pool: nobody takes it). */
   readonly take: boolean;
-  /** `POST /tickets/:id/reassign`. */
+  /** `POST /tickets/:id/reassign` (on a parallel step, while a signature is still pending to be moved). */
   readonly reassign: boolean;
   /** `POST /tickets/:id/close`: the step's close rule allows it. */
   readonly close: boolean;
@@ -224,6 +219,11 @@ export const TICKET_CANDIDATE_PURPOSES = ['reassign', 'incident'] as const;
 export const ticketCandidatesQuerySchema = z.object({ for: z.enum(TICKET_CANDIDATE_PURPOSES) });
 export type TicketCandidatesQuery = z.infer<typeof ticketCandidatesQuerySchema>;
 
+/**
+ * Names of the people and sites that `values` points to (USER and SITE fields, and SELECT/MULTI_SELECT fields whose
+ * preset is USERS or SITES), by id exactly as it appears in `values`. An id missing here does not name anything the
+ * tenant has (removed member, deleted site): show it as unknown.
+ */
 export interface TicketValueNamesResponse {
   readonly users: Readonly<Record<string, string>>;
   readonly sites: Readonly<Record<string, string>>;
