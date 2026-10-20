@@ -18,6 +18,8 @@ const STEP = id(101);
 const FILE = id(102);
 const at = '2026-10-17T15:00:00.000Z';
 
+const noActions = { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true };
+
 const detail = (overrides: Record<string, unknown> = {}) => ({
   id: TICKET,
   number: 'T-1042',
@@ -58,7 +60,7 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
   department: null,
   site: null,
   valueNames: { users: {}, sites: {} },
-  actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true },
+  actions: noActions,
   ...overrides,
 });
 
@@ -321,5 +323,99 @@ describe('TicketDetailPage', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'No encontramos este ticket' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Volver a la bandeja' })).toHaveAttribute('href', '/tickets');
+  });
+
+  describe('actions', () => {
+    const VISIT = id(107);
+    const allowed = (...names: (keyof typeof noActions)[]) => ({ ...noActions, ...Object.fromEntries(names.map((name) => [name, true])) });
+    const withActions = (actions: typeof noActions, extra: Record<string, FakeHandler> = {}) => ticketHandlers({ [base]: () => detail({ actions }), ...extra });
+    const mutation = { id: TICKET, number: 'T-1042', status: 'OPEN', currentStepId: STEP, openVisitId: VISIT };
+    const candidates = () => [
+      { id: OTHER, name: 'Luis Gómez' },
+      { id: id(51), name: 'Marta Ruiz' },
+    ];
+
+    it('offers only what the API allows, and no comment box to someone who may not comment', async () => {
+      renderRoute(base, { handlers: withActions({ ...allowed('reassign', 'close'), comment: false }) });
+
+      const group = await screen.findByRole('group', { name: 'Acciones del ticket' });
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual(['Reasignar', 'Cerrar ticket']);
+      expect(screen.queryByRole('textbox', { name: 'Agregar un comentario' })).toBeNull();
+    });
+
+    it('shows no actions at all when there are none', async () => {
+      renderRoute(base, { handlers: ticketHandlers() });
+      await screen.findByRole('heading', { level: 1 });
+      expect(screen.queryByRole('group', { name: 'Acciones del ticket' })).toBeNull();
+    });
+
+    it('takes the ticket on its open visit and reads it again', async () => {
+      const { fake } = renderRoute(base, { handlers: withActions(allowed('take'), { [`${base}/take`]: () => mutation }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Tomar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/take`)[0]?.options.body).toEqual({ visitId: VISIT }));
+      await vi.waitFor(() => expect(fake.callsTo(base).length).toBeGreaterThan(1));
+    });
+
+    it('reassigns to someone the step allows, with an optional note', async () => {
+      const { fake } = renderRoute(base, { handlers: withActions(allowed('reassign'), { [`${base}/candidates`]: candidates, [`${base}/reassign`]: () => mutation }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Reasignar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Reasignar ticket' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reasignar' }));
+      expect(within(dialog).getByRole('combobox', { name: /Nuevo responsable/ })).toHaveAccessibleDescription('Elige a quién reasignar el ticket.');
+
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /Nuevo responsable/ }), await within(dialog).findByRole('option', { name: 'Marta Ruiz' }));
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Va para cartera');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reasignar' }));
+
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/candidates`)[0]?.path).toBe(`${base}/candidates?for=reassign`);
+      expect(fake.callsTo(`${base}/reassign`)[0]?.options.body).toEqual({ visitId: VISIT, toUserId: id(51), comment: '<p>Va para cartera</p>' });
+    });
+
+    it('opens an incident for someone, describing it', async () => {
+      const { fake } = renderRoute(base, { handlers: withActions(allowed('openIncident'), { [`${base}/candidates`]: candidates, [`${base}/incidents`]: () => ({ ...mutation, status: 'PAUSED', incidentId: id(500) }) }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Abrir novedad' }));
+      const dialog = screen.getByRole('dialog', { name: 'Abrir novedad' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Abrir novedad' }));
+      expect(within(dialog).getByRole('textbox', { name: /Qué pasa/ })).toHaveAccessibleDescription('Describe la novedad.');
+      expect(fake.callsTo(`${base}/incidents`)).toHaveLength(0);
+
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /A cargo de/ }), await within(dialog).findByRole('option', { name: 'Luis Gómez' }));
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /Qué pasa/ }), 'Falta el extracto');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Abrir novedad' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/incidents`)[0]?.options.body).toEqual({ visitId: VISIT, assignedToId: OTHER, description: '<p>Falta el extracto</p>' }));
+      expect(fake.callsTo(`${base}/candidates`)[0]?.path).toBe(`${base}/candidates?for=incident`);
+    });
+
+    it('closes the ticket and keeps the dialog open with the reason when the API refuses', async () => {
+      const { fake } = renderRoute(base, { handlers: withActions(allowed('close'), { [`${base}/close`]: forbidden }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Cerrar ticket' }));
+      const dialog = screen.getByRole('dialog', { name: 'Cerrar ticket' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Listo');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar ticket' }));
+
+      expect(await within(dialog).findByText('No tienes permiso para hacer esto en este ticket.')).toBeInTheDocument();
+      expect(fake.callsTo(`${base}/close`)[0]?.options.body).toEqual({ visitId: VISIT, comment: '<p>Listo</p>', values: {}, attachments: [] });
+    });
+
+    it('resolves the open incident', async () => {
+      const incident = { id: id(500), assignedToId: ME, createdById: OTHER, assignedTo: { id: ME, name: 'Ana Pérez' }, createdBy: { id: OTHER, name: 'Luis Gómez' }, openedAt: at, descriptionHtml: '<p>Falta el extracto.</p>' };
+      const { fake } = renderRoute(base, {
+        handlers: ticketHandlers({ [base]: () => detail({ status: 'PAUSED', openIncident: incident, actions: allowed('resolveIncident') }), [`${base}/incidents/${id(500)}/resolve`]: () => ({ ...mutation, incidentId: id(500) }) }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Resolver novedad' }));
+      const dialog = screen.getByRole('dialog', { name: 'Resolver novedad' });
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /Cómo se resolvió/ }), 'Llegó el extracto');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Resolver' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/incidents/${id(500)}/resolve`)[0]?.options.body).toEqual({ resolution: '<p>Llegó el extracto</p>' }));
+    });
   });
 });

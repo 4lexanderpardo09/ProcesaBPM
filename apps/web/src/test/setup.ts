@@ -21,6 +21,16 @@ class DOMMatrixReadOnlyStub {
 globalThis.ResizeObserver ??= ResizeObserverStub;
 globalThis.DOMMatrixReadOnly ??= DOMMatrixReadOnlyStub as unknown as typeof DOMMatrixReadOnly;
 
+/** jsdom has `<dialog>` without its modal methods: open and close it as the browser would (no inert page, no Escape). */
+if (HTMLDialogElement.prototype.showModal === undefined) {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.open = false;
+  };
+}
+
 afterEach(() => {
   cleanup();
 });

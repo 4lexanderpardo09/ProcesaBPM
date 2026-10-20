@@ -188,6 +188,19 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **`shared`:** esquemas zod con `satisfies` para el detalle, la actividad, el formulario del paso, los documentos, el enlace de descarga y la respuesta del comentario.
 - **Pruebas:** unitarias de `RichText`, `plainTextToHtml`, los valores, los responsables y la página completa (contenido, comentar, comentario vacío, 403, descarga y su error, novedad, vencido, cerrado, 404); E2E simulado (ver y comentar, 404 con regreso a la bandeja) y E2E contra el stack real (un ticket ajeno da 404 y la página lo dice).
 
+### 4.5 Acciones del detalle, parte 1 (hecha, 2026-10-20)
+- **Qué se ofrece:** solo lo que dice `actions` del detalle (el API calcula cada bandera con las mismas reglas que la ruta de la acción). Botones a la derecha del título: Resolver novedad y Tomar (`primary`), Reasignar, Abrir novedad y Cerrar ticket. Sin `actions.comment` no aparece el cuadro de comentario.
+- **Diálogos (`components/actions/`):** `ActionDialog` sobre el nuevo `shared/ui/Dialog` (el `<dialog>` nativo: el navegador atrapa el foco, deja inerte la página y cierra con Escape; confirmar en `brand`, cancelar en `secondary`).
+  - Reasignar elige entre `GET /tickets/:id/candidates?for=reassign`.
+  - Abrir novedad pide a cargo de quién (`?for=incident`) y qué pasa.
+  - Resolver novedad pide cómo se resolvió.
+  - Cerrar pide solo un comentario opcional.
+  - Los textos se envían como HTML escapado (`plainTextToHtml`), igual que los comentarios.
+  - Si la acción falla, el diálogo sigue abierto con el motivo (`lib/action-error-message`): sin permiso (403), el ticket cambió (409 o `INVALID_STATE`), el paso no lo permite (422) o el mensaje genérico. Nunca se muestra el texto del API.
+- **Después de una acción** se vuelve a leer todo lo de tickets (`useTicketMutation` invalida `['tickets']`): detalle, actividad, flujo, bandeja y conteos.
+- **Pruebas:** `Dialog` (unitaria y story), mensajes de error, la página con cada acción (botones según `actions`, tomar, reasignar, abrir y resolver novedad, cerrar con 403) y un E2E simulado de reasignar. En jsdom, `<dialog>` no tiene `showModal`: `src/test/setup.ts` lo abre y cierra.
+- **Siguiente:** avanzar con el formulario del paso (decisiones y campos), reabrir (pide un tipo de error del catálogo) y las firmas paralelas.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

@@ -30,11 +30,13 @@ const eventTypeOf = (type: string): EventType => EVENT_TYPES.find((known) => kno
 export interface TicketActivityProps {
   readonly ticketId: string;
   readonly timeline: UseQueryResult<readonly TicketEventResponse[]>;
+  /** The comment box only shows to someone who may comment. */
+  readonly canComment: boolean;
   readonly timeZone: string | undefined;
 }
 
-/** What happened on the ticket, oldest first, and a box to add a comment. */
-export function TicketActivity({ ticketId, timeline, timeZone }: TicketActivityProps) {
+/** What happened on the ticket, oldest first, and a box to add a comment for whoever may. */
+export function TicketActivity({ ticketId, timeline, canComment, timeZone }: TicketActivityProps) {
   const { t } = useTranslation('tickets');
   return (
     <Card title={t('detail.activity.title')}>
@@ -51,9 +53,11 @@ export function TicketActivity({ ticketId, timeline, timeZone }: TicketActivityP
           ))}
         </ol>
       )}
-      <div className={styles.comment}>
-        <CommentForm ticketId={ticketId} />
-      </div>
+      {canComment && (
+        <div className={styles.comment}>
+          <CommentForm ticketId={ticketId} />
+        </div>
+      )}
     </Card>
   );
 }
