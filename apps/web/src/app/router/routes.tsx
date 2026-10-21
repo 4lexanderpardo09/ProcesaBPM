@@ -7,6 +7,7 @@ import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
 import { ProfilePage } from '@/features/profile';
 import { NewTicketPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
+import { WorkflowPage, WorkflowsPage } from '@/features/workflows';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
 import { type NavigationItemKey, navigationSections } from '../layouts/app-layout/navigation';
@@ -21,12 +22,17 @@ function SectionPlaceholder({ itemKey }: { readonly itemKey: NavigationItemKey }
   return <UnderConstructionPage title={t(`items.${itemKey}`)} />;
 }
 
-const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets', 'catalog', 'organization', 'people']);
+const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets', 'workflows', 'catalog', 'organization', 'people']);
 
 const ticketRoutes: RouteObject[] = [
   { path: paths.tickets, element: <TicketInboxPage /> },
   { path: paths.newTicket, element: <NewTicketPage /> },
   { path: paths.ticket, element: <TicketDetailPage /> },
+];
+
+const workflowRoutes: RouteObject[] = [
+  { path: paths.workflows, element: <WorkflowsPage /> },
+  { path: paths.workflow, element: <WorkflowPage /> },
 ];
 
 const configurationRoutes: RouteObject[] = [
@@ -54,7 +60,7 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         element: <AppLayout />,
-        children: [{ index: true, element: <Navigate to={paths.tickets} replace /> }, ...ticketRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
+        children: [{ index: true, element: <Navigate to={paths.tickets} replace /> }, ...ticketRoutes, ...workflowRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
       },
     ],
   },

@@ -24,6 +24,18 @@ export interface VersionRow {
 }
 
 const WORKFLOW = { id: true, subcategoryId: true, name: true, isActive: true, createdAt: true } as const;
+const LISTED_STATUSES: Array<'DRAFT' | 'PUBLISHED'> = ['DRAFT', 'PUBLISHED'];
+/** A list row also names its subcategory and the live and draft versions (at most one of each: unique indexes). */
+const LIST_ROW = {
+  ...WORKFLOW,
+  subcategory: { select: { id: true, name: true, category: { select: { id: true, name: true } } } },
+  versions: { where: { status: { in: LISTED_STATUSES } }, select: { id: true, number: true, status: true } },
+} as const;
+
+export interface WorkflowListRow extends WorkflowRow {
+  readonly subcategory: { readonly id: string; readonly name: string; readonly category: { readonly id: string; readonly name: string } };
+  readonly versions: ReadonlyArray<{ readonly id: string; readonly number: number; readonly status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' }>;
+}
 const VERSION = { id: true, workflowId: true, number: true, status: true, notes: true, revision: true, publishedAt: true, publishedById: true, createdAt: true } as const;
 
 /**
@@ -32,10 +44,10 @@ const VERSION = { id: true, workflowId: true, number: true, status: true, notes:
  */
 @Injectable()
 export class WorkflowRepository {
-  async list(tx: TenantTransaction, tenantId: string, query: WorkflowsQuery): Promise<{ rows: WorkflowRow[]; total: number }> {
+  async list(tx: TenantTransaction, tenantId: string, query: WorkflowsQuery): Promise<{ rows: WorkflowListRow[]; total: number }> {
     const where = { tenantId, ...nameFilter(query), ...(query.subcategoryId === undefined ? {} : { subcategoryId: query.subcategoryId }) };
     const [rows, total] = await Promise.all([
-      tx.workflow.findMany({ where, select: WORKFLOW, orderBy: { name: 'asc' }, ...pageWindow(query) }),
+      tx.workflow.findMany({ where, select: LIST_ROW, orderBy: { name: 'asc' }, ...pageWindow(query) }),
       tx.workflow.count({ where }),
     ]);
     return { rows, total };

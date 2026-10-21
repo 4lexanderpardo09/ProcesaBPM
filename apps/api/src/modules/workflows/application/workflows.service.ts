@@ -5,6 +5,7 @@ import {
   type Page,
   type UpdateWorkflowRequest,
   type WorkflowDetailResponse,
+  type WorkflowListItem,
   type WorkflowResponse,
   type WorkflowsQuery,
   type WorkflowVersionDocument,
@@ -15,10 +16,17 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
-import { type VersionRow, type WorkflowRow, WorkflowRepository } from '../data/workflow.repository.js';
+import { type VersionRow, type WorkflowListRow, type WorkflowRow, WorkflowRepository } from '../data/workflow.repository.js';
 import { toVersionSummary } from './version-summary.js';
 
 const toResponse = (row: WorkflowRow): WorkflowResponse => ({ ...row, createdAt: row.createdAt.toISOString() });
+const toListItem = ({ versions, subcategory, ...row }: WorkflowListRow): WorkflowListItem => {
+  const ref = (status: 'DRAFT' | 'PUBLISHED') => {
+    const version = versions.find((candidate) => candidate.status === status);
+    return version === undefined ? null : { id: version.id, number: version.number };
+  };
+  return { ...toResponse(row), subcategory, publishedVersion: ref('PUBLISHED'), draftVersion: ref('DRAFT') };
+};
 const toDetail = (row: WorkflowRow, versions: readonly VersionRow[]): WorkflowDetailResponse => ({ ...toResponse(row), versions: versions.map(toVersionSummary) });
 
 /** The canvas of a new workflow opens valid: START leads to END. */
@@ -68,10 +76,10 @@ export class WorkflowsService {
     @Inject(AuditTrail) private readonly audit: AuditTrail,
   ) {}
 
-  list(query: WorkflowsQuery): Promise<Page<WorkflowResponse>> {
+  list(query: WorkflowsQuery): Promise<Page<WorkflowListItem>> {
     return this.runner.withTenantTransaction(async (tx) => {
       const { rows, total } = await this.repository.list(tx, this.tenantId, query);
-      return toPage(rows, total, query, toResponse);
+      return toPage(rows, total, query, toListItem);
     });
   }
 

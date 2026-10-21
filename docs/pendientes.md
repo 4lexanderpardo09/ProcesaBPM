@@ -3,6 +3,13 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Flujos en la web, parte 1 (2026-10-21, `feat/web-workflows`):** la lista, nuevo flujo, la ficha con versiones (nuevo borrador, eliminar) y observadores. La API de la lista ahora nombra la subcategoría y las versiones publicada y en borrador. Detalle en arquitectura.md §4.15.
+  - **Decidido (con criterio, el usuario delegó):**
+    - Los cortes por empresa no se muestran: el motor aún no los usa.
+    - Un borrador nuevo copia por defecto la versión publicada.
+  - **Sigue:**
+    - El lienzo del constructor.
+    - Los campos y participantes de cada bloque.
 - **Campana de notificaciones y etiquetas en el ticket (2026-10-21, `feat/web-notifications-tags`):** la campana con el conteo sin leer, su panel y la página `/notifications`, y la tarjeta «Mis etiquetas» en el detalle del ticket. Detalle en arquitectura.md §4.14.
   - **Decidido (con criterio, el usuario delegó):**
     - El conteo se pide cada minuto en lugar de por WebSocket: la web aún no tiene el cliente de tiempo real (§18), que queda pendiente.

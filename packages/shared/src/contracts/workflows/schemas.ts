@@ -58,6 +58,17 @@ export interface WorkflowResponse {
   readonly isActive: boolean;
   readonly createdAt: string;
 }
+/** A version a list names: which number is live and which one is being edited. */
+export interface VersionRef {
+  readonly id: string;
+  readonly number: number;
+}
+/** A row of `GET /workflows`: what it is for and where its versions stand, without reading each workflow. */
+export interface WorkflowListItem extends WorkflowResponse {
+  readonly subcategory: { readonly id: string; readonly name: string; readonly category: { readonly id: string; readonly name: string } };
+  readonly publishedVersion: VersionRef | null;
+  readonly draftVersion: VersionRef | null;
+}
 export interface WorkflowDetailResponse extends WorkflowResponse {
   readonly versions: readonly VersionSummary[];
 }
