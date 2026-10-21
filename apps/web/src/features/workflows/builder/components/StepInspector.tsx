@@ -1,11 +1,14 @@
-import type { StepDocument, WorkflowVersionDocument } from '@procesabpm/shared';
+import { isNewRef, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cx } from '@/shared/lib/cx';
 import { Alert, Button, Select, TextArea, TextField } from '@/shared/ui';
 import { BLOCK_COLOR, isPeopleStep, NOT_AVAILABLE_TYPES } from '../lib/block-catalog';
 import type { Selection } from '../lib/builder-doc';
+import type { DraftContent } from '../hooks/use-draft-content';
 import type { ElementProblems } from '../lib/problems';
+import { FieldsSection } from './fields/FieldsSection';
+import { ParticipantsSection } from './participants/ParticipantsSection';
 import { ProblemList } from './ProblemList';
 import { AssignmentSection, CalculatorSection, DocumentSection, NotificationSection, PeopleSection, Section, WaitSection } from './StepSections';
 import styles from './Builder.module.css';
@@ -20,10 +23,14 @@ export interface StepInspectorProps {
   readonly onRemove: () => void;
   readonly onConnect: (toId: string) => void;
   readonly onSelect: (selection: Selection) => void;
+  readonly content: DraftContent;
+  /** Content edits wait while the canvas is being saved (both change the revision). */
+  readonly saving: boolean;
+  readonly onSave: () => void;
 }
 
 /** Everything about one block: its name, who takes it and its deadline, what its type adds, its ways out and its problems. */
-export function StepInspector({ step, doc, workflowId, readOnly, problems, onChange, onRemove, onConnect, onSelect }: StepInspectorProps) {
+export function StepInspector({ step, doc, workflowId, readOnly, problems, onChange, onRemove, onConnect, onSelect, content, saving, onSave }: StepInspectorProps) {
   const { t } = useTranslation('workflows');
   const [name, setName] = useState(step.name);
   useEffect(() => setName(step.name), [step.id, step.name]);
@@ -73,6 +80,25 @@ export function StepInspector({ step, doc, workflowId, readOnly, problems, onCha
       {step.type === 'WAIT' && <WaitSection {...section} />}
       {step.type === 'DOCUMENT' && <DocumentSection {...section} workflowId={workflowId} />}
       {step.type === 'CALCULATOR' && <CalculatorSection {...section} />}
+
+      {(step.type === 'START' || isPeopleStep(step.type)) &&
+        (isNewRef(step.id) ? (
+          !readOnly && (
+            <Section title={t('builder.fields.title')}>
+              <p className={styles.note}>{t('builder.fields.saveFirst')}</p>
+              <div>
+                <Button disabled={saving} onClick={onSave}>
+                  {saving ? t('builder.saving') : t('builder.save')}
+                </Button>
+              </div>
+            </Section>
+          )
+        ) : (
+          <>
+            <ParticipantsSection step={step} readOnly={readOnly || saving} content={content} />
+            <FieldsSection step={step} doc={doc} readOnly={readOnly || saving} content={content} />
+          </>
+        ))}
 
       {step.type !== 'END' && (
         <Section title={t('builder.inspector.exits')}>

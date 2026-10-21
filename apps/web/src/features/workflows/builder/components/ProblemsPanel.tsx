@@ -8,11 +8,13 @@ export interface ProblemsPanelProps {
   readonly validation: WorkflowValidation;
   readonly nameOf: (problem: WorkflowProblem) => string | undefined;
   readonly onGoTo: (problem: WorkflowProblem) => void;
+  /** A problem of an amount rule opens the list of rules (it has no place on the canvas). */
+  readonly onOpenAmountRules: () => void;
   readonly onClose: () => void;
 }
 
 /** Every problem of the draft: errors block publishing, warnings do not. Each one leads to its block or connection. */
-export function ProblemsPanel({ validation, nameOf, onGoTo, onClose }: ProblemsPanelProps) {
+export function ProblemsPanel({ validation, nameOf, onGoTo, onOpenAmountRules, onClose }: ProblemsPanelProps) {
   const { t } = useTranslation(['workflowProblems', 'workflows']);
   const groups = [
     { key: 'errors', title: t('workflows:builder.panel.errors'), problems: validation.errors, className: styles.problemError },
@@ -40,7 +42,12 @@ export function ProblemsPanel({ validation, nameOf, onGoTo, onClose }: ProblemsP
                     const where = nameOf(problem);
                     return (
                       <li key={`${problem.code}-${String(index)}`} className={cx(styles.problemItem, group.className)}>
-                        {problemTarget(problem) === null ? (
+                        {problemTarget(problem) === null && problem.amountRuleId !== undefined ? (
+                          <button type="button" className={styles.problemLink} onClick={onOpenAmountRules}>
+                            <strong>{where ?? t('workflows:builder.panel.general')}: </strong>
+                            {problemText(problem, t)}
+                          </button>
+                        ) : problemTarget(problem) === null ? (
                           <span>
                             <strong>{where ?? t('workflows:builder.panel.general')}: </strong>
                             {problemText(problem, t)}

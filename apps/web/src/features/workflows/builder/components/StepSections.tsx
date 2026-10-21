@@ -10,6 +10,7 @@ import {
   type StepDocument,
 } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { approvalTypesQueryOptions, positionsQueryOptions } from '@/features/people';
 import { ApiError } from '@/shared/api';
@@ -17,6 +18,8 @@ import { useApiClient } from '@/shared/session';
 import { Checkbox, Select, TextArea, TextField } from '@/shared/ui';
 import { documentChoicesQueryOptions } from '../api/builder-api';
 import { patchConfig } from '../lib/numbers';
+import { fromRecipients } from '../lib/participants';
+import { ParticipantList } from './participants/ParticipantList';
 import { WholeNumberField } from './WholeNumberField';
 import styles from './Builder.module.css';
 
@@ -30,16 +33,19 @@ export interface SectionProps {
 const FORBIDDEN = 403;
 const POSITION_MODES: ReadonlySet<AssignmentMode> = new Set(['POSITION', 'POOL', 'RANDOM_DISPATCH']);
 const MANUAL_MODES: ReadonlySet<AssignmentMode> = new Set(['POSITION', 'USERS', 'GROUP', 'POOL']);
-const CHILDREN_MODES: ReadonlySet<AssignmentMode> = new Set(['USERS', 'GROUP', 'POOL', 'RANDOM_DISPATCH', 'PARALLEL']);
 const APPROVAL_LEVELS = [1, 2, 3, 4, 5];
 const PEOPLE_MODES = ASSIGNMENT_MODES.filter((mode) => mode !== 'NONE');
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+/** A part of the inspector, named by its title (a region a screen reader can jump to). */
 function Section({ title, children }: { readonly title: string; readonly children: React.ReactNode }) {
+  const titleId = useId();
   return (
-    <section className={styles.section}>
-      <h3 className={styles.sectionTitle}>{title}</h3>
+    <section className={styles.section} aria-labelledby={titleId}>
+      <h3 id={titleId} className={styles.sectionTitle}>
+        {title}
+      </h3>
       <div className={styles.sectionBody}>{children}</div>
     </section>
   );
@@ -115,13 +121,6 @@ export function AssignmentSection({ step, readOnly, onChange }: SectionProps) {
         />
       )}
       {MANUAL_MODES.has(mode) && <Checkbox label={t('builder.assignment.manualSelection')} disabled={readOnly} checked={step.manualSelection} onChange={(event) => onChange({ manualSelection: event.target.checked })} />}
-      {(CHILDREN_MODES.has(mode) || step.type === 'SIGNATURE') && (
-        <p className={styles.note}>
-          {CHILDREN_MODES.has(mode) && `${t('builder.assignment.participants', { count: step.candidates.length })}. `}
-          {(mode === 'PARALLEL' || step.type === 'SIGNATURE') && `${t('builder.assignment.signers', { count: step.signers.length })}. `}
-          {t('builder.assignment.childrenLater')}
-        </p>
-      )}
     </Section>
   );
 }
@@ -203,7 +202,6 @@ export function NotificationSection({ step, readOnly, onChange }: SectionProps) 
   const setConfig = (patch: Record<string, unknown>) => onChange({ config: patchConfig(config, patch) });
   const recipients = (Array.isArray(config.recipients) ? config.recipients : []) as Recipient[];
   const channels = (Array.isArray(config.channels) ? config.channels : []) as string[];
-  const specific = recipients.filter((recipient) => recipient.id !== undefined);
   const toggleKind = (kind: string, on: boolean) =>
     setConfig({ recipients: on ? [...recipients.filter((recipient) => recipient.kind !== kind), { kind }] : recipients.filter((recipient) => recipient.kind !== kind || recipient.id !== undefined) });
   const toggleChannel = (channel: string, on: boolean) => setConfig({ channels: on ? [...channels.filter((value) => value !== channel), channel] : channels.filter((value) => value !== channel) });
@@ -220,7 +218,19 @@ export function NotificationSection({ step, readOnly, onChange }: SectionProps) 
             onChange={(event) => toggleKind(kind, event.target.checked)}
           />
         ))}
-        <p className={styles.note}>{specific.length > 0 ? `${t('builder.assignment.participants', { count: specific.length })}. ` : ''}{t('builder.notification.specificLater')}</p>
+      </fieldset>
+      <fieldset className={styles.choices}>
+        <legend>{t('builder.participants.recipients')}</legend>
+        <p className={styles.note}>{t('builder.participants.recipientsHint')}</p>
+        <ParticipantList
+          label={t('builder.participants.recipients')}
+          empty={t('builder.participants.recipientsEmpty')}
+          kinds={['USER', 'POSITION', 'GROUP']}
+          items={fromRecipients(recipients)}
+          readOnly={readOnly}
+          pending={false}
+          onChange={(items) => setConfig({ recipients: [...recipients.filter((recipient) => recipient.id === undefined), ...items.map((item) => ({ kind: item.kind, id: item.id }))] })}
+        />
       </fieldset>
       <fieldset className={styles.choices}>
         <legend>{t('builder.notification.channels')}</legend>

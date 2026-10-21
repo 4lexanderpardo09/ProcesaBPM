@@ -3,6 +3,13 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Flujos en la web, parte 3: campos, participantes y topes (2026-10-21, `feat/web-workflow-content`):** campos por bloque con la configuración de cada tipo; iniciadores, candidatos, firmantes, plazo por empresa y archivos; destinatarios específicos de una notificación; topes de monto con la conexión de la aprobación extra. Detalle en arquitectura.md §4.17. Con esto el constructor de flujos queda completo en la web.
+  - **Decidido (con criterio, el usuario delegó):**
+    - Las ediciones por partes suben la revisión en uno; si alguien editó a la vez, el guardado lo detecta y se recarga.
+    - Un bloque nuevo se guarda antes de darle campos o participantes.
+    - Los campos del Inicio se capturan al crear y los demás en su paso (no se ofrece `BOTH`).
+    - Monedas COP, USD y EUR.
+  - **Pendiente:** no hay pantalla de datasets (Excel) ni de documentos PDF; el constructor los usa si existen.
 - **Flujos en la web, parte 2: el lienzo (2026-10-21, `feat/web-workflow-builder`):** paleta, lienzo, inspector de bloques y conexiones (reglas de las ramas incluidas), validación en vivo en español, guardar con revisión y publicar. Detalle en arquitectura.md §4.16.
   - **Decidido (con criterio, el usuario delegó):**
     - Webhook y Exportar no están en la paleta (el motor no los ejecuta).
@@ -10,7 +17,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - Al conectar, la salida toma su tipo y nombre del bloque de origen.
     - La espera «hasta el corte de la empresa» y el plazo por corte no se ofrecen.
     - Crear un borrador lo abre en el lienzo.
-  - **Sigue:** campos y participantes de cada bloque y topes de monto (parte 3).
+  - **Sigue:** ~~campos y participantes de cada bloque y topes de monto~~ (hecho, parte 3).
 - **Flujos en la web, parte 1 (2026-10-21, `feat/web-workflows`):** la lista, nuevo flujo, la ficha con versiones (nuevo borrador, eliminar) y observadores. La API de la lista ahora nombra la subcategoría y las versiones publicada y en borrador. Detalle en arquitectura.md §4.15.
   - **Decidido (con criterio, el usuario delegó):**
     - Los cortes por empresa no se muestran: el motor aún no los usa.

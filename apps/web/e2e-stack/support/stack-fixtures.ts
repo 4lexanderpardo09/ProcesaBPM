@@ -8,4 +8,6 @@ export const PEOPLE = {
   mustEnroll: { email: 'eva@e2e.test', name: 'Eva Ríos' },
   /** Has two unread notifications and one read. */
   notified: { email: 'bell@e2e.test', name: 'Bruno Paz' },
+  /** Designs workflows (the workflow specs sign in several times). */
+  designer: { email: 'flows@e2e.test', name: 'Fabio Ruiz' },
 } as const;
