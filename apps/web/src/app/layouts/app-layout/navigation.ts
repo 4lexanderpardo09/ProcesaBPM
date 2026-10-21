@@ -31,7 +31,7 @@ const CATALOG_SCREENS: readonly PermissionCheck[] = [
 ];
 
 /** The organization screen manages these. */
-const ORGANIZATION_SCREENS: readonly PermissionCheck[] = ['Company', 'Site', 'Department', 'Position'].flatMap((subject) => [
+const ORGANIZATION_SCREENS: readonly PermissionCheck[] = ['Company', 'Site', 'Department', 'Position', 'Calendar'].flatMap((subject) => [
   ['create', subject] as const,
   ['update', subject] as const,
 ]);
