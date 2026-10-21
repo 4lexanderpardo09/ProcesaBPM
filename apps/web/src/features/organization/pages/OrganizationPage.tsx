@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { usePermissions } from '@/shared/session';
 import { PageHeader, Tabs } from '@/shared/ui';
+import { CalendarsTab } from '../components/CalendarsTab';
 import { CompaniesTab } from '../components/CompaniesTab';
 import { NamedRecordsTab } from '../components/NamedRecordsTab';
 import { SitesTab } from '../components/SitesTab';
@@ -12,10 +13,11 @@ const TABS = [
   { value: 'sites', subject: 'Site' },
   { value: 'departments', subject: 'Department' },
   { value: 'positions', subject: 'Position' },
+  { value: 'calendars', subject: 'Calendar' },
 ] as const;
 type OrganizationTab = (typeof TABS)[number]['value'];
 
-/** How the organization is laid out: companies, the tree of sites, departments and positions; each tab only if it can be read. */
+/** How the organization is laid out: companies, the tree of sites, departments, positions and calendars; each tab only if it can be read. */
 export function OrganizationPage() {
   const { t } = useTranslation('organization');
   const { can, loaded } = usePermissions();
@@ -37,6 +39,7 @@ export function OrganizationPage() {
           {current === 'sites' && <SitesTab />}
           {current === 'departments' && <NamedRecordsTab key="departments" path="/departments" subject="Department" kind="departments" />}
           {current === 'positions' && <NamedRecordsTab key="positions" path="/positions" subject="Position" kind="positions" />}
+          {current === 'calendars' && <CalendarsTab />}
         </>
       )}
     </>

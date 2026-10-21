@@ -244,12 +244,20 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 
 ### 4.8 Organización (hecho, 2026-10-21, `feat/web-organization`)
 - **Piezas de administración compartidas (`shared/admin`):** la lista (`AdminList`), el diálogo (`AdminDialog`), los errores (`AdminError`, `admin-error`) y las llamadas (`admin-api`, `useAdminMutation`) salieron del catálogo para reutilizarlas; sus textos están en el espacio `admin`. `useAdminMutation(acción, alsoInvalidates)` vuelve a leer las listas de administración y lo que otras pantallas cachean de esos datos (el catálogo pasa lo de "Nuevo ticket"; las empresas, el perfil de la sesión).
-- **Pantalla `/organization`** (menú "Organización", para quien crea o edita empresas, sedes, departamentos o cargos), con pestañas según lo que se puede leer:
+- **Pantalla `/organization`** (menú "Organización", para quien crea o edita empresas, sedes, departamentos, cargos o calendarios), con pestañas según lo que se puede leer:
   - **Empresas:** nombre, NIT, país (de `GET /countries`, la lista de la plataforma: el API solo acepta esos), y moneda, zona horaria (con sugerencias de `Intl`) y calendario opcionales (vacíos en una empresa nueva, los pone el país). "Hacer predeterminada" en las demás.
   - **Sedes:** el árbol (`GET /sites/tree`) como tabla con sangría; agregar una sede dentro de otra, editar (nombre y sede central), mover con todo lo que tiene dentro (nunca dentro de su propia rama) y activar/desactivar. **Nombres de los niveles** ("Regional", "Punto de venta"…), que se muestran en vez de "Nivel 2"; el API exige nombrarlos en orden, así que solo se ofrece el siguiente sin nombre.
   - **Departamentos y Cargos:** un nombre único (`NamedRecordsTab`).
 - **API (`GET /countries`, `read Company`):** los países de la plataforma con su moneda y zona horaria, por nombre.
 - **Pruebas:** la página (empresa predeterminada, crear con país, moneda y zona inválidas, árbol con niveles, agregar dentro, mover sin entrar en su rama, niveles en orden, pestañas según el rol), `site-tree` e integración de `GET /countries`. Se probó en local contra el API real.
+
+### 4.9 Calendarios (hecho, 2026-10-21, `feat/web-calendars`)
+- **Pestaña "Calendarios" de `/organization`** (con `read Calendar`): la lista de calendarios (el predeterminado marcado, su país) y, debajo, el elegido (al entrar, el predeterminado; "Ver horario y festivos" cambia cuál) con tres tarjetas:
+  - **Horario laboral:** los siete días, lunes primero (el API numera 0 = domingo), con sus franjas o "No laborable" y el total de horas de la semana. Editar un día abre sus franjas (hasta 10, `PUT /calendars/:id/working-hours/:weekday`, que las reemplaza todas); la web rechaza antes de enviar una franja incompleta, una que termina antes de empezar (el turno nocturno se parte en dos días) y las que se cruzan (`lib/working-week.ts`; el API también las rechaza por la exclusión de la BD).
+  - **Festivos:** por año (el anterior, el actual y los dos siguientes), "Importar los de {país}" si el calendario tiene país (dice cuántos agregó; los que ya estaban se quedan), agregar uno (fecha repetida → "Ese día ya es festivo") y quitar. La fecha se muestra sin zona horaria (es un día del calendario).
+  - **Probar un vencimiento:** inicio (hora del navegador), plazo y unidad (horas o días hábiles) → `POST /calendars/:id/preview`; la fecha se muestra en la zona horaria que devuelve el API. No guarda nada.
+- Crear y editar (nombre y país opcional, que da los festivos y la zona por defecto) y **eliminar** (los calendarios no tienen `is_active`; el predeterminado no ofrece Eliminar y uno que usa una empresa lo rechaza el API con el mensaje de "algo lo está usando").
+- **Pruebas:** la pestaña con API falsa (semana en orden, franjas que se cruzan, importar, festivo repetido, calendario sin país, vista previa, eliminar, rol de solo lectura), `working-week` y una E2E contra el API real (`e2e-stack/calendars.spec.ts`: crear, horario del sábado, festivo, vencimiento y eliminar).
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |

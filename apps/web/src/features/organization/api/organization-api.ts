@@ -1,4 +1,17 @@
-import { calendarResponseSchema, companyResponseSchema, countryResponseSchema, pageResponseSchema, siteLevelResponseSchema, type SiteTreeNode, siteResponseSchema } from '@procesabpm/shared';
+import {
+  calendarResponseSchema,
+  companyResponseSchema,
+  countryResponseSchema,
+  holidayResponseSchema,
+  importHolidaysResponseSchema,
+  pageResponseSchema,
+  type PreviewDueDateRequest,
+  previewDueDateResponseSchema,
+  siteLevelResponseSchema,
+  type SiteTreeNode,
+  siteResponseSchema,
+  workingHoursResponseSchema,
+} from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
@@ -53,4 +66,50 @@ export function saveSiteLevel(client: HttpClient, level: number, name: string) {
 
 export function moveSite(client: HttpClient, siteId: string, parentId: string | null) {
   return client.request(`/sites/${encodeURIComponent(siteId)}/move`, { method: 'POST', body: { parentId }, schema: siteResponseSchema });
+}
+
+const calendarDetailSchema = calendarResponseSchema.extend({ workingHours: z.array(workingHoursResponseSchema) });
+
+/** A calendar with its working hours (each slot of each weekday). */
+export function calendarDetailQueryOptions(client: HttpClient, calendarId: string) {
+  return queryOptions({
+    queryKey: [...adminQueryKeys.all, 'calendars', calendarId] as const,
+    queryFn: ({ signal }) => client.request(`/calendars/${encodeURIComponent(calendarId)}`, { schema: calendarDetailSchema, signal }),
+  });
+}
+
+/** The holidays of a calendar in one year, by date. */
+export function holidaysQueryOptions(client: HttpClient, calendarId: string, year: number) {
+  return queryOptions({
+    queryKey: [...adminQueryKeys.all, 'calendars', calendarId, 'holidays', year] as const,
+    queryFn: ({ signal }) => client.request(`/calendars/${encodeURIComponent(calendarId)}/holidays?year=${String(year)}`, { schema: z.array(holidayResponseSchema), signal }),
+  });
+}
+
+/** Replaces every slot of one weekday (0 = Sunday … 6 = Saturday); no slots makes it a non-working day. */
+export function replaceWorkingDay(client: HttpClient, calendarId: string, weekday: number, slots: readonly { startTime: string; endTime: string }[]) {
+  return client.request(`/calendars/${encodeURIComponent(calendarId)}/working-hours/${String(weekday)}`, { method: 'PUT', body: { slots }, schema: calendarDetailSchema });
+}
+
+export function addHoliday(client: HttpClient, calendarId: string, holiday: { date: string; name: string }) {
+  return client.request(`/calendars/${encodeURIComponent(calendarId)}/holidays`, { method: 'POST', body: holiday, schema: holidayResponseSchema });
+}
+
+export function removeHoliday(client: HttpClient, calendarId: string, date: string) {
+  return client.request(`/calendars/${encodeURIComponent(calendarId)}/holidays/${encodeURIComponent(date)}`, { method: 'DELETE' });
+}
+
+/** Copies the holidays of the calendar's country for that year; the days it already had are kept. */
+export function importHolidays(client: HttpClient, calendarId: string, year: number) {
+  return client.request(`/calendars/${encodeURIComponent(calendarId)}/holidays/import`, { method: 'POST', body: { year }, schema: importHolidaysResponseSchema });
+}
+
+/** The default calendar and one a company uses cannot go (the API refuses them). */
+export function deleteCalendar(client: HttpClient, calendarId: string) {
+  return client.request(`/calendars/${encodeURIComponent(calendarId)}`, { method: 'DELETE' });
+}
+
+/** When a deadline counted on the calendar would fall, as an SLA counts it. */
+export function previewDueDate(client: HttpClient, calendarId: string, request: PreviewDueDateRequest) {
+  return client.request(`/calendars/${encodeURIComponent(calendarId)}/preview`, { method: 'POST', body: request, schema: previewDueDateResponseSchema });
 }
