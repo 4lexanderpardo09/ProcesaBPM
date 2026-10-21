@@ -4,7 +4,7 @@ import { useApiClient } from '@/shared/session';
 import { ticketQueryKeys } from '../api/tickets-api';
 
 /** An action on a ticket; once it succeeds, everything about tickets is read again (detail, activity, flow, inbox and counts). */
-export function useTicketMutation<TArgs>(action: (client: HttpClient, args: TArgs) => Promise<unknown>) {
+export function useTicketMutation<TArgs, TResult = unknown>(action: (client: HttpClient, args: TArgs) => Promise<TResult>) {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({

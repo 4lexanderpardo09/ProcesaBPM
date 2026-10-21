@@ -98,6 +98,17 @@ export interface AvailableCatalogResponse {
   readonly categories: readonly AvailableCategory[];
 }
 
+/** Parses `AvailableCatalogResponse` (for the web client). */
+export const availableCatalogResponseSchema = z.object({
+  categories: z.array(
+    z.object({
+      id: uuidSchema,
+      name: z.string(),
+      subcategories: z.array(z.object({ id: uuidSchema, name: z.string(), description: z.string().nullable(), defaultPriorityId: uuidSchema.nullable() })),
+    }),
+  ),
+}) satisfies z.ZodType<AvailableCatalogResponse>;
+
 // ---- Error types (what a reopening or an error report is filed under) ----
 const refineExclusive = <T extends { isReopening?: boolean | undefined; forcesClose?: boolean | undefined }>(value: T): boolean => !(value.isReopening === true && value.forcesClose === true);
 const EXCLUSIVE_MESSAGE = 'A reopening error type cannot also force the ticket to close';

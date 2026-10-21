@@ -1,6 +1,7 @@
 export { Alert, type AlertProps, type AlertTone } from './alert/Alert';
 export { Avatar, type AvatarProps } from './avatar/Avatar';
 export { Badge, type BadgeProps, type BadgeTone } from './badge/Badge';
+export { Breadcrumb, type BreadcrumbItem, type BreadcrumbProps } from './breadcrumb/Breadcrumb';
 export { Button, type ButtonProps, type ButtonVariant } from './button/Button';
 export { ButtonLink, type ButtonLinkProps } from './button/ButtonLink';
 export { Card, type CardProps } from './card/Card';

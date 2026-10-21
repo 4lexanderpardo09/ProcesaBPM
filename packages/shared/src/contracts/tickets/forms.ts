@@ -78,6 +78,16 @@ export const formFieldResponseSchema = z.object({
   dataSource: z.record(z.string(), z.unknown()).nullable(),
 }) satisfies z.ZodType<FormFieldResponse>;
 
+/** Parses `CreationFormResponse` (for the web client). */
+export const creationFormResponseSchema = z.object({
+  subcategoryId: uuidSchema,
+  workflowId: uuidSchema,
+  versionId: uuidSchema,
+  companyId: uuidSchema,
+  defaultPriorityId: uuidSchema.nullable(),
+  starts: z.array(z.object({ stepId: uuidSchema, name: z.string(), description: z.string().nullable(), fields: z.array(formFieldResponseSchema) })),
+}) satisfies z.ZodType<CreationFormResponse>;
+
 /** Parses `TicketFormResponse` (for the web client). */
 export const ticketFormResponseSchema = z.object({
   ticketId: uuidSchema,

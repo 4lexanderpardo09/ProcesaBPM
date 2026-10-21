@@ -1,4 +1,4 @@
-import { ALLOWED_FILE_TYPES, allowedTypeOf, type FileKind, type FormFieldResponse, MAX_FILE_BYTES } from '@procesabpm/shared';
+import { ALLOWED_FILE_TYPES, allowedTypeOf, type FileKind, type FormFieldResponse, MAX_FILE_BYTES, MAX_FILES_PER_SUBMISSION } from '@procesabpm/shared';
 import { useMutation } from '@tanstack/react-query';
 import { type ChangeEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,20 +22,32 @@ export interface FileInputProps {
 
 const ALL_KINDS: readonly FileKind[] = ['PDF', 'IMAGE', 'OFFICE', 'ZIP'];
 
+/** A FILE field: its label, whether it is required and its own limits (`config.accept`, `config.maxFiles`). */
+export function FileInput({ field, ...props }: FileInputProps) {
+  const maxFiles = typeof field.config['maxFiles'] === 'number' ? field.config['maxFiles'] : 1;
+  return <FilePicker label={field.label} required={field.isRequired} kinds={acceptedKinds(field)} maxFiles={maxFiles} {...props} />;
+}
+
+export interface FilePickerProps extends Omit<FileInputProps, 'field'> {
+  readonly label: string;
+  readonly required: boolean;
+  readonly kinds?: readonly FileKind[];
+  readonly maxFiles?: number;
+}
+
 type Refusal = { readonly key: 'tooMany'; readonly count: number } | { readonly key: 'notAllowed' | 'tooBig'; readonly name: string };
 
 /**
- * A FILE field: files are uploaded as soon as they are chosen (declared, sent to storage, confirmed) and the field keeps
- * their ids. What the browser can tell beforehand (type, size, how many) is checked here; the API checks the content.
+ * Files uploaded as soon as they are chosen (declared, sent to storage, confirmed) and the field keeps
+ * their ids (a FILE field, or the loose attachments of a ticket). What the browser can tell beforehand (type, size, how
+ * many) is checked here; the API checks the content.
  */
-export function FileInput({ field, value, knownNames, error, onChange, onBusyChange }: FileInputProps) {
+export function FilePicker({ label, required, kinds = ALL_KINDS, maxFiles = MAX_FILES_PER_SUBMISSION, value, knownNames, error, onChange, onBusyChange }: FilePickerProps) {
   const { t } = useTranslation('tickets');
   const client = useApiClient();
   const inputId = useId();
   const [names, setNames] = useState<Readonly<Record<string, string>>>({});
   const [refusal, setRefusal] = useState<Refusal>();
-  const kinds = acceptedKinds(field);
-  const maxFiles = typeof field.config['maxFiles'] === 'number' ? field.config['maxFiles'] : 1;
   const upload = useMutation({
     mutationFn: (files: readonly File[]) => uploadFiles(client, files),
     onMutate: () => onBusyChange(true),
@@ -60,13 +72,13 @@ export function FileInput({ field, value, knownNames, error, onChange, onBusyCha
   return (
     <fieldset className={styles.choices} aria-invalid={error !== undefined}>
       <legend className="text-label">
-        {field.label}
-        {field.isRequired && <span aria-hidden="true"> *</span>}
+        {label}
+        {required && <span aria-hidden="true"> *</span>}
       </legend>
       {value.length === 0 ? (
         <p className={styles.pendingNote}>{t('advance.files.none')}</p>
       ) : (
-        <ul className={styles.chosen} aria-label={t('advance.files.list', { field: field.label })}>
+        <ul className={styles.chosen} aria-label={t('advance.files.list', { field: label })}>
           {value.map((id) => (
             <li key={id} className={styles.chip}>
               <span>{nameOf(id)}</span>
