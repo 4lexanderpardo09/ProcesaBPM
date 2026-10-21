@@ -1,18 +1,27 @@
 import type { FormFieldResponse } from '@procesabpm/shared';
+import { useQuery } from '@tanstack/react-query';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDebouncedValue } from '@/shared/lib/use-debounced-value';
+import { useApiClient } from '@/shared/session';
 import { Checkbox, Select, TextArea, TextField } from '@/shared/ui';
-import { type InputValue, isCapturable, optionsOf } from '../../lib/step-values';
+import { fieldChoicesQueryOptions } from '../../api/field-choices-api';
+import { choiceSourceOf, type InputValue, isCapturable, optionsOf, type TableRow } from '../../lib/step-values';
 import styles from './AdvanceDialog.module.css';
+import { ChoicePicker } from './ChoicePicker';
+import { TableInput } from './TableInput';
 
 export interface StepFieldInputProps {
   readonly field: FormFieldResponse;
   readonly value: InputValue;
   readonly error: string | undefined;
+  /** Names already known for ids the ticket holds (people and sites). */
+  readonly knownLabels: Readonly<Record<string, string>>;
   readonly onChange: (value: InputValue) => void;
 }
 
 /** One field of the step, with the input its type needs; a field the web cannot capture yet says so. */
-export function StepFieldInput({ field, value, error, onChange }: StepFieldInputProps) {
+export function StepFieldInput({ field, value, error, knownLabels, onChange }: StepFieldInputProps) {
   const { t } = useTranslation('tickets');
   const common = { label: field.label, required: field.isRequired, error };
   const text = typeof value === 'string' ? value : '';
@@ -26,6 +35,13 @@ export function StepFieldInput({ field, value, error, onChange }: StepFieldInput
         {error !== undefined && <span className={styles.pendingError}>{error}</span>}
       </div>
     );
+  }
+  const source = choiceSourceOf(field);
+  if (field.type === 'TABLE') return <TableInput field={field} rows={Array.isArray(value) ? (value as readonly TableRow[]) : []} error={error} onChange={onChange} />;
+  if (source === 'DATASET' && field.type === 'TEXT') return <DatasetText field={field} value={text} error={error} onChange={onChange} />;
+  if (source !== undefined) {
+    const chosen = field.type === 'MULTI_SELECT' ? (Array.isArray(value) ? (value as readonly string[]) : []) : text;
+    return <ChoicePicker field={field} source={source} value={chosen} knownLabels={knownLabels} error={error} onChange={onChange} />;
   }
   switch (field.type) {
     case 'TEXTAREA':
@@ -42,10 +58,26 @@ export function StepFieldInput({ field, value, error, onChange }: StepFieldInput
     case 'SELECT':
       return <Select {...common} value={text} placeholder={t('advance.choose')} options={optionsOf(field)} onChange={(event) => onChange(event.target.value)} />;
     case 'MULTI_SELECT':
-      return <MultiSelect field={field} selected={Array.isArray(value) ? value : []} error={error} onChange={onChange} />;
+      return <MultiSelect field={field} selected={Array.isArray(value) ? (value as readonly string[]) : []} error={error} onChange={onChange} />;
     default:
       return <TextField {...common} value={text} maxLength={numberOf(config['maxLength']) ?? 1000} placeholder={stringOf(config['placeholder'])} onChange={(event) => onChange(event.target.value)} />;
   }
+}
+
+/** Free text with the dataset column's values as suggestions; the API checks that the text is one of them. */
+function DatasetText({ field, value, error, onChange }: { readonly field: FormFieldResponse; readonly value: string; readonly error: string | undefined; readonly onChange: (value: InputValue) => void }) {
+  const listId = useId();
+  const suggestions = useQuery(fieldChoicesQueryOptions(useApiClient(), field.id, 'DATASET', useDebouncedValue(value.trim(), 300)));
+  return (
+    <>
+      <TextField label={field.label} required={field.isRequired} error={error} value={value} list={listId} autoComplete="off" onChange={(event) => onChange(event.target.value)} />
+      <datalist id={listId}>
+        {(suggestions.data ?? []).map((option) => (
+          <option key={option.value} value={option.value} />
+        ))}
+      </datalist>
+    </>
+  );
 }
 
 function MultiSelect({ field, selected, error, onChange }: { readonly field: FormFieldResponse; readonly selected: readonly string[]; readonly error: string | undefined; readonly onChange: (value: InputValue) => void }) {

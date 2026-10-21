@@ -6,8 +6,8 @@ import { TextArea } from '@/shared/ui';
 import { transitionTicket } from '../../api/ticket-actions-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
-import { type FieldIssueKey, fieldIssuesOf } from '../../lib/field-issues';
-import { initialInput, type InputValue, isBlankInput, isCapturable, requestValue } from '../../lib/step-values';
+import { cellIssuesOf, type FieldIssueKey, fieldIssuesOf } from '../../lib/field-issues';
+import { columnsOf, initialInput, type InputValue, isBlankInput, isCapturable, requestValue, type TableRow } from '../../lib/step-values';
 import { ActionDialog } from '../actions/ActionDialog';
 import { NextAssigneeField } from '../actions/NextAssigneeField';
 import styles from './AdvanceDialog.module.css';
@@ -40,6 +40,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const [comment, setComment] = useState('');
   const [localIssues, setLocalIssues] = useState<ReadonlyMap<string, Issue>>(new Map());
   const next = useNextAssignee();
+  const knownLabels = { ...ticket.valueNames.users, ...ticket.valueNames.sites };
   const advance = useTicketMutation((client, args: AdvanceArgs) =>
     transitionTicket(client, ticket.id, {
       transitionId: decision.transitionId,
@@ -50,13 +51,27 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
     }),
   );
   const serverIssues = fieldIssuesOf(advance.error);
+  const cellIssues = cellIssuesOf(advance.error);
   const issueOf = (code: string): Issue | undefined => localIssues.get(code) ?? serverIssues?.get(code);
+  /** A rejected table cell says where it is; any other issue says what is wrong. */
+  const messageOf = (field: FormFieldResponse): string | undefined => {
+    const cell = localIssues.has(field.code) ? undefined : cellIssues.get(field.code);
+    if (cell !== undefined) {
+      const column = columnsOf(field).find((candidate) => candidate.code === cell.column)?.label ?? cell.column;
+      return t('advance.table.cellIssue', { row: cell.row + 1, column, issue: t(`advance.issues.${cell.key}`) });
+    }
+    const issue = issueOf(field.code);
+    return issue === undefined ? undefined : t(`advance.issues.${issue}`);
+  };
 
   const submit = () => {
+    // Blank table rows are not sent: dropping them here too keeps the rows the API names in step with the screen.
+    const sent = withoutBlankRows(fields, inputs);
+    setInputs(sent);
     const issues = new Map<string, Issue>();
     const values: Record<string, unknown> = {};
     for (const field of fields) {
-      const input = inputs[field.code] ?? '';
+      const input = sent[field.code] ?? '';
       if (!isCapturable(field)) {
         if (field.isRequired && isBlankValue(ticket.values[field.code])) issues.set(field.code, 'NOT_CAPTURABLE');
         continue;
@@ -83,21 +98,19 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
     >
       {form.step !== null && <p className={styles.step}>{t('advance.step', { step: form.step.name })}</p>}
       {serverIssues !== undefined && serverIssues.size > 0 && <p className={styles.summary}>{t('advance.fixFields')}</p>}
-      {fields.map((field) => {
-        const issue = issueOf(field.code);
-        return (
-          <StepFieldInput
-            key={field.id}
-            field={field}
-            value={inputs[field.code] ?? ''}
-            error={issue === undefined ? undefined : t(`advance.issues.${issue}`)}
-            onChange={(value) => {
-              setInputs((current) => ({ ...current, [field.code]: value }));
-              setLocalIssues((current) => withoutIssue(current, field.code));
-            }}
-          />
-        );
-      })}
+      {fields.map((field) => (
+        <StepFieldInput
+          key={field.id}
+          field={field}
+          value={inputs[field.code] ?? ''}
+          error={messageOf(field)}
+          knownLabels={knownLabels}
+          onChange={(value) => {
+            setInputs((current) => ({ ...current, [field.code]: value }));
+            setLocalIssues((current) => withoutIssue(current, field.code));
+          }}
+        />
+      ))}
       <TextArea label={t('actions.optionalComment')} value={comment} maxLength={5000} rows={3} onChange={(event) => setComment(event.target.value)} />
       <NextAssigneeField next={next} />
     </ActionDialog>
@@ -108,6 +121,15 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
 function editableFields(form: TicketFormResponse): readonly FormFieldResponse[] {
   const editable = new Set(form.editableFieldCodes);
   return form.fields.filter((field) => editable.has(field.code) && !field.isReadOnly && field.type !== 'FORMULA' && field.type !== 'CALCULATOR').sort((left, right) => left.sortOrder - right.sortOrder);
+}
+
+function withoutBlankRows(fields: readonly FormFieldResponse[], inputs: Readonly<Record<string, InputValue>>): Record<string, InputValue> {
+  const next: Record<string, InputValue> = { ...inputs };
+  for (const field of fields) {
+    const rows = inputs[field.code];
+    if (field.type === 'TABLE' && Array.isArray(rows)) next[field.code] = (rows as readonly TableRow[]).filter((row) => !isBlankInput([row]));
+  }
+  return next;
 }
 
 function isBlankValue(value: unknown): boolean {

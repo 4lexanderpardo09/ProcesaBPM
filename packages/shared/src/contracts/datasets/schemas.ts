@@ -78,6 +78,9 @@ export interface DatasetOptionsResponse {
   readonly values: readonly string[];
 }
 
+/** Parses `DatasetOptionsResponse` (for the web client). */
+export const datasetOptionsResponseSchema = z.object({ values: z.array(z.string()) }) satisfies z.ZodType<DatasetOptionsResponse>;
+
 /** The value of the field's column in the row whose key is the one asked for; `null` when no row has that key. */
 export interface DatasetLookupResponse {
   readonly value: string | null;
