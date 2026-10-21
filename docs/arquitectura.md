@@ -242,6 +242,15 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Diálogos (`CatalogDialog`)** con los errores en palabras (`lib/catalog-error`): nombre repetido (`DUPLICATE`), sin permiso, datos rechazados o algo que lo usa. Al guardar se vuelven a leer las listas del catálogo y lo que cachea "Nuevo ticket" (catálogo disponible y prioridades).
 - **Pruebas:** `grants`, el menú según el rol, `catalogErrorMessage` y la página (lista con acciones, búsqueda e inactivos, crear con nombre repetido, desactivar, subcategorías con prioridad, reapertura excluye cerrar, rol de solo lectura sin acciones, rol sin catálogo). Se probó en local contra el API real.
 
+### 4.8 Organización (hecho, 2026-10-21, `feat/web-organization`)
+- **Piezas de administración compartidas (`shared/admin`):** la lista (`AdminList`), el diálogo (`AdminDialog`), los errores (`AdminError`, `admin-error`) y las llamadas (`admin-api`, `useAdminMutation`) salieron del catálogo para reutilizarlas; sus textos están en el espacio `admin`. `useAdminMutation(acción, alsoInvalidates)` vuelve a leer las listas de administración y lo que otras pantallas cachean de esos datos (el catálogo pasa lo de "Nuevo ticket"; las empresas, el perfil de la sesión).
+- **Pantalla `/organization`** (menú "Organización", para quien crea o edita empresas, sedes, departamentos o cargos), con pestañas según lo que se puede leer:
+  - **Empresas:** nombre, NIT, país (de `GET /countries`, la lista de la plataforma: el API solo acepta esos), y moneda, zona horaria (con sugerencias de `Intl`) y calendario opcionales (vacíos en una empresa nueva, los pone el país). "Hacer predeterminada" en las demás.
+  - **Sedes:** el árbol (`GET /sites/tree`) como tabla con sangría; agregar una sede dentro de otra, editar (nombre y sede central), mover con todo lo que tiene dentro (nunca dentro de su propia rama) y activar/desactivar. **Nombres de los niveles** ("Regional", "Punto de venta"…), que se muestran en vez de "Nivel 2"; el API exige nombrarlos en orden, así que solo se ofrece el siguiente sin nombre.
+  - **Departamentos y Cargos:** un nombre único (`NamedRecordsTab`).
+- **API (`GET /countries`, `read Company`):** los países de la plataforma con su moneda y zona horaria, por nombre.
+- **Pruebas:** la página (empresa predeterminada, crear con país, moneda y zona inválidas, árbol con niveles, agregar dentro, mover sin entrar en su rama, niveles en orden, pestañas según el rol), `site-tree` e integración de `GET /countries`. Se probó en local contra el API real.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

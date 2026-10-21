@@ -45,6 +45,10 @@ export const companyResponseSchema = z.object({
 });
 export type CompanyResponse = z.infer<typeof companyResponseSchema>;
 
+/** `GET /countries`: the countries a company or a calendar can be of, with what a new company takes from them. */
+export const countryResponseSchema = z.object({ code: z.string(), name: z.string(), currencyCode: z.string(), timeZone: z.string() });
+export type CountryResponse = z.infer<typeof countryResponseSchema>;
+
 // ---- Departments and positions (a name, unique per tenant) ----
 export const namedRecordRequestSchema = z.object({ name: nameSchema });
 export type NamedRecordRequest = z.infer<typeof namedRecordRequestSchema>;

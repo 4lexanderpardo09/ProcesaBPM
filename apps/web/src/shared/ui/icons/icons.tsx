@@ -32,6 +32,14 @@ export const GridIcon = createIcon('GridIcon', (
   </>
 ));
 
+export const BuildingIcon = createIcon('BuildingIcon', (
+  <>
+    <rect x="4" y="3" width="16" height="18" rx="1" />
+    <path d="M9 21v-4h6v4" />
+    <path d="M8 7h2M14 7h2M8 11h2M14 11h2" />
+  </>
+));
+
 export const UserIcon = createIcon('UserIcon', (
   <>
     <circle cx="12" cy="8" r="4" />

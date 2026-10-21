@@ -2,9 +2,10 @@ import { type PriorityResponse, type SubcategoryResponse, subcategoryResponseSch
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Select, TextArea, TextField } from '@/shared/ui';
-import { saveCatalogItem } from '../../api/catalog-api';
-import { useCatalogMutation } from '../../hooks/use-catalog-mutation';
-import { CatalogDialog } from '../CatalogDialog';
+import { saveAdminItem } from '@/shared/admin/admin-api';
+import { useAdminMutation } from '@/shared/admin/use-admin-mutation';
+import { AdminDialog } from '@/shared/admin/AdminDialog';
+import { CATALOG_DEPENDENTS } from '../../lib/catalog-dependents';
 
 const NAME_MAX = 200;
 const DESCRIPTION_MAX = 2000;
@@ -21,12 +22,12 @@ export interface SubcategoryDialogProps {
  * a new ticket gets unless the person picks another. It never moves to another category (its workflow hangs from it).
  */
 export function SubcategoryDialog({ categoryId, record, priorities, onClose }: SubcategoryDialogProps) {
-  const { t } = useTranslation('catalog');
+  const { t } = useTranslation(['catalog', 'admin']);
   const [name, setName] = useState(record?.name ?? '');
   const [description, setDescription] = useState(record?.description ?? '');
   const [priorityId, setPriorityId] = useState(record?.defaultPriorityId ?? '');
   const [submitted, setSubmitted] = useState(false);
-  const save = useCatalogMutation((client, body: Record<string, unknown>) => saveCatalogItem(client, '/subcategories', subcategoryResponseSchema, record?.id, body));
+  const save = useAdminMutation((client, body: Record<string, unknown>) => saveAdminItem(client, '/subcategories', subcategoryResponseSchema, record?.id, body), CATALOG_DEPENDENTS);
 
   const submit = () => {
     setSubmitted(true);
@@ -41,9 +42,9 @@ export function SubcategoryDialog({ categoryId, record, priorities, onClose }: S
   };
 
   return (
-    <CatalogDialog title={record === undefined ? t('subcategories.new') : t('subcategories.edit')} submitLabel={t('dialog.save')} pending={save.isPending} error={save.error} onClose={onClose} onSubmit={submit}>
-      <TextField label={t('fields.name')} required value={name} maxLength={NAME_MAX} error={submitted && name.trim() === '' ? t('fields.nameRequired') : undefined} onChange={(event) => setName(event.target.value)} />
-      <TextArea label={t('fields.description')} hint={t('subcategories.descriptionHint')} value={description} maxLength={DESCRIPTION_MAX} rows={3} onChange={(event) => setDescription(event.target.value)} />
+    <AdminDialog title={record === undefined ? t('subcategories.new') : t('subcategories.edit')} submitLabel={t('admin:dialog.save')} pending={save.isPending} error={save.error} onClose={onClose} onSubmit={submit}>
+      <TextField label={t('admin:fields.name')} required value={name} maxLength={NAME_MAX} error={submitted && name.trim() === '' ? t('admin:fields.nameRequired') : undefined} onChange={(event) => setName(event.target.value)} />
+      <TextArea label={t('admin:fields.description')} hint={t('subcategories.descriptionHint')} value={description} maxLength={DESCRIPTION_MAX} rows={3} onChange={(event) => setDescription(event.target.value)} />
       <Select
         label={t('subcategories.defaultPriority')}
         hint={t('subcategories.defaultPriorityHint')}
@@ -52,6 +53,6 @@ export function SubcategoryDialog({ categoryId, record, priorities, onClose }: S
         options={priorities.map((priority) => ({ value: priority.id, label: priority.name }))}
         onChange={(event) => setPriorityId(event.target.value)}
       />
-    </CatalogDialog>
+    </AdminDialog>
   );
 }

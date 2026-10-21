@@ -30,6 +30,12 @@ describe('organization API', () => {
   });
 
   describe('companies', () => {
+    it('lists the countries a company can be of, with what a new company takes from them', async () => {
+      const countries = (await admin.get('/countries').expect(200)).body as Array<{ code: string; name: string; currencyCode: string; timeZone: string }>;
+      expect(countries).toContainEqual(expect.objectContaining({ code: 'CO', currencyCode: 'COP', timeZone: 'America/Bogota' }));
+      expect(countries.map((country) => country.name)).toEqual([...countries.map((country) => country.name)].sort((left, right) => left.localeCompare(right)));
+    });
+
     it('derives currency and time zone from the country and lists with the default first', async () => {
       const created = await admin.post('/companies', { name: unique('Acme'), taxId: '900.123.456-7', countryCode: 'CO' }).expect(201);
       expect(created.body).toMatchObject({ countryCode: 'CO', currencyCode: 'COP', timeZone: 'America/Bogota', isDefault: false, isActive: true, taxId: '900.123.456-7' });

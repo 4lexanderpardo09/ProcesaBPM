@@ -16,7 +16,7 @@ type CatalogTab = (typeof TABS)[number]['value'];
 
 /** The organization's catalog: categories and subcategories, priorities and error types; each tab only if it can be read. */
 export function CatalogPage() {
-  const { t } = useTranslation('catalog');
+  const { t } = useTranslation(['catalog', 'admin']);
   const { can, loaded } = usePermissions();
   const [params, setParams] = useSearchParams();
   const tabs = TABS.filter((tab) => can('read', tab.subject));

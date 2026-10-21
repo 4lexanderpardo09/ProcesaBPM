@@ -9,6 +9,7 @@ export const navigation = {
     workflows: 'Flujos',
     reports: 'Reportes',
     catalog: 'Catálogo',
+    organization: 'Organización',
     people: 'Personas',
   },
 } as const;

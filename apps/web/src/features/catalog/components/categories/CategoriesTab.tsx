@@ -5,26 +5,28 @@ import { useTranslation } from 'react-i18next';
 import { useApiClient, usePermissions } from '@/shared/session';
 import { Button, Card } from '@/shared/ui';
 import { activePrioritiesQueryOptions } from '../../api/priorities-api';
-import { CatalogList } from '../CatalogList';
+import { AdminList } from '@/shared/admin/AdminList';
 import { CategoryDialog } from './CategoryDialog';
 import { SubcategoryDialog } from './SubcategoryDialog';
 import styles from '../Catalog.module.css';
+import { CATALOG_DEPENDENTS } from '../../lib/catalog-dependents';
 
 type Editing<T> = { readonly mode: 'create' } | { readonly mode: 'edit'; readonly record: T } | null;
 
 /** Categories group the subcategories; a subcategory is what a ticket is opened as, and its workflow hangs from it. */
 export function CategoriesTab() {
-  const { t } = useTranslation('catalog');
+  const { t } = useTranslation(['catalog', 'admin']);
   const { can } = usePermissions();
   const [category, setCategory] = useState<Editing<CategoryResponse>>(null);
   const [selected, setSelected] = useState<CategoryResponse>();
   return (
     <div className={styles.stack}>
-      <CatalogList
+      <AdminList
+        alsoInvalidates={CATALOG_DEPENDENTS}
         label={t('categories.title')}
         path="/categories"
         item={categoryResponseSchema}
-        columns={[{ key: 'name', header: t('fields.name'), cell: (row) => row.name }]}
+        columns={[{ key: 'name', header: t('admin:fields.name'), cell: (row) => row.name }]}
         empty={t('categories.empty')}
         {...(can('create', 'Category') ? { create: { label: t('categories.new'), onClick: () => setCategory({ mode: 'create' }) } } : {})}
         {...(can('update', 'Category') ? { onEdit: (record: CategoryResponse) => setCategory({ mode: 'edit', record }) } : {})}
@@ -44,21 +46,22 @@ export function CategoriesTab() {
 }
 
 function SubcategoriesPanel({ category }: { readonly category: CategoryResponse }) {
-  const { t } = useTranslation('catalog');
+  const { t } = useTranslation(['catalog', 'admin']);
   const { can } = usePermissions();
   const [editing, setEditing] = useState<Editing<SubcategoryResponse>>(null);
   const priorities = useQuery(activePrioritiesQueryOptions(useApiClient()));
   const priorityName = (id: string | null) => (id === null ? '—' : (priorities.data?.find((priority) => priority.id === id)?.name ?? '—'));
   return (
     <Card title={t('subcategories.title', { category: category.name })}>
-      <CatalogList
+      <AdminList
+        alsoInvalidates={CATALOG_DEPENDENTS}
         label={t('subcategories.tableLabel', { category: category.name })}
         path="/subcategories"
         item={subcategoryResponseSchema}
         filter={{ categoryId: category.id }}
         columns={[
-          { key: 'name', header: t('fields.name'), cell: (row) => row.name },
-          { key: 'description', header: t('fields.description'), cell: (row) => row.description ?? '—' },
+          { key: 'name', header: t('admin:fields.name'), cell: (row) => row.name },
+          { key: 'description', header: t('admin:fields.description'), cell: (row) => row.description ?? '—' },
           { key: 'priority', header: t('subcategories.defaultPriority'), width: '160px', cell: (row) => priorityName(row.defaultPriorityId) },
         ]}
         empty={t('subcategories.empty')}

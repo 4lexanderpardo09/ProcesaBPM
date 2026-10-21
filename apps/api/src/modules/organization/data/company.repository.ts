@@ -65,6 +65,11 @@ export class CompanyRepository {
     return tx.company.findFirst({ where: { tenantId, id }, select: SELECT });
   }
 
+  /** The platform's countries (shared by every tenant), by name. */
+  listCountries(tx: TenantTransaction): Promise<Array<{ code: string; name: string; currencyCode: string; timeZone: string }>> {
+    return tx.country.findMany({ select: { code: true, name: true, currencyCode: true, timeZone: true }, orderBy: [{ name: 'asc' }, { code: 'asc' }] });
+  }
+
   findCountry(tx: TenantTransaction, code: string): Promise<CountryRow | null> {
     return tx.country.findUnique({ where: { code }, select: { currencyCode: true, timeZone: true } });
   }

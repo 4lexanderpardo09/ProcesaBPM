@@ -2,25 +2,27 @@ import { type PriorityResponse, priorityResponseSchema } from '@procesabpm/share
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePermissions } from '@/shared/session';
-import { CatalogList } from '../CatalogList';
+import { AdminList } from '@/shared/admin/AdminList';
 import { PriorityDialog } from './PriorityDialog';
 import styles from '../Catalog.module.css';
+import { CATALOG_DEPENDENTS } from '../../lib/catalog-dependents';
 
 type Editing = { readonly mode: 'create' } | { readonly mode: 'edit'; readonly record: PriorityResponse } | null;
 
 /** The priorities a ticket can have, in the order they are offered. */
 export function PrioritiesTab() {
-  const { t } = useTranslation('catalog');
+  const { t } = useTranslation(['catalog', 'admin']);
   const { can } = usePermissions();
   const [editing, setEditing] = useState<Editing>(null);
   return (
     <>
-      <CatalogList
+      <AdminList
+        alsoInvalidates={CATALOG_DEPENDENTS}
         label={t('priorities.title')}
         path="/priorities"
         item={priorityResponseSchema}
         columns={[
-          { key: 'name', header: t('fields.name'), cell: (row) => row.name },
+          { key: 'name', header: t('admin:fields.name'), cell: (row) => row.name },
           { key: 'order', header: t('priorities.order'), width: '90px', code: true, cell: (row) => row.sortOrder },
           {
             key: 'color',
