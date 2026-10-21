@@ -3,13 +3,19 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Flujos en la web, parte 2: el lienzo (2026-10-21, `feat/web-workflow-builder`):** paleta, lienzo, inspector de bloques y conexiones (reglas de las ramas incluidas), validación en vivo en español, guardar con revisión y publicar. Detalle en arquitectura.md §4.16.
+  - **Decidido (con criterio, el usuario delegó):**
+    - Webhook y Exportar no están en la paleta (el motor no los ejecuta).
+    - Un paso nuevo lo atiende quien creó el ticket; una aprobación nace con modo aprobador y nivel 1.
+    - Al conectar, la salida toma su tipo y nombre del bloque de origen.
+    - La espera «hasta el corte de la empresa» y el plazo por corte no se ofrecen.
+    - Crear un borrador lo abre en el lienzo.
+  - **Sigue:** campos y participantes de cada bloque y topes de monto (parte 3).
 - **Flujos en la web, parte 1 (2026-10-21, `feat/web-workflows`):** la lista, nuevo flujo, la ficha con versiones (nuevo borrador, eliminar) y observadores. La API de la lista ahora nombra la subcategoría y las versiones publicada y en borrador. Detalle en arquitectura.md §4.15.
   - **Decidido (con criterio, el usuario delegó):**
     - Los cortes por empresa no se muestran: el motor aún no los usa.
     - Un borrador nuevo copia por defecto la versión publicada.
-  - **Sigue:**
-    - El lienzo del constructor.
-    - Los campos y participantes de cada bloque.
+  - **Sigue:** ~~el lienzo del constructor~~ (hecho, ver arriba); los campos y participantes de cada bloque.
 - **Campana de notificaciones y etiquetas en el ticket (2026-10-21, `feat/web-notifications-tags`):** la campana con el conteo sin leer, su panel y la página `/notifications`, y la tarjeta «Mis etiquetas» en el detalle del ticket. Detalle en arquitectura.md §4.14.
   - **Decidido (con criterio, el usuario delegó):**
     - El conteo se pide cada minuto en lugar de por WebSocket: la web aún no tiene el cliente de tiempo real (§18), que queda pendiente.

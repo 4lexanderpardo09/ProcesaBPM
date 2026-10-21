@@ -40,6 +40,9 @@ test('a workflow is created for a subcategory, its draft deleted and made again,
   await expect(draft.getByRole('combobox', { name: 'Empezar desde' })).toHaveValue('empty');
   await draft.getByRole('textbox', { name: /Notas/ }).fill('Primera versión');
   await draft.getByRole('button', { name: 'Crear borrador' }).click();
+  // The new draft opens on the canvas; the workflow's page lists it.
+  await expect(page.getByText('Borrador · v1')).toBeVisible();
+  await page.getByRole('navigation', { name: 'Ruta de navegación' }).getByRole('link', { name: 'Orden de compra E2E' }).click();
   await expect(versions.getByText('Primera versión')).toBeVisible();
   await expect(versions.getByText('v1')).toBeVisible();
 

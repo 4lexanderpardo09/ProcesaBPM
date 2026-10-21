@@ -1,9 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
 import { formatShortDate } from '@/shared/lib/format-date-time';
+import { workflowVersionPath } from '@/shared/lib/paths';
 import { useApiClient, useCurrentUser } from '@/shared/session';
-import { Badge, type BadgeTone, Button, Card, Dialog, PlusIcon, Select, Table, type TableColumn, TextArea } from '@/shared/ui';
+import { Badge, type BadgeTone, Button, ButtonLink, Card, Dialog, PlusIcon, Select, Table, type TableColumn, TextArea } from '@/shared/ui';
 import { createVersion, deleteDraft, type VersionSummary, type WorkflowDetail, workflowQueryKeys } from '../api/workflows-api';
 import { WorkflowError } from './WorkflowError';
 import styles from './Workflows.module.css';
@@ -30,23 +32,30 @@ export function VersionsCard({ workflow, canEdit }: { readonly workflow: Workflo
       cell: (version) =>
         version.publishedAt === null ? t('versions.createdOn', { date: formatShortDate(version.createdAt, timeZone) }) : t('versions.publishedOn', { date: formatShortDate(version.publishedAt, timeZone) }),
     },
-    ...(canEdit
-      ? [
-          {
-            key: 'actions',
-            header: '',
-            width: '180px',
-            cell: (version: VersionSummary) =>
-              version.status === 'DRAFT' ? (
-                <div className={styles.rowActions}>
-                  <Button variant="ghost" aria-label={t('versions.deleteDraftNamed', { number: version.number })} onClick={() => setDeleting(version)}>
-                    {t('versions.deleteDraft')}
-                  </Button>
-                </div>
-              ) : null,
-          },
-        ]
-      : []),
+    {
+      key: 'actions',
+      header: '',
+      width: '220px',
+      cell: (version: VersionSummary) => {
+        const editable = canEdit && version.status === 'DRAFT';
+        return (
+          <div className={styles.rowActions}>
+            <ButtonLink
+              to={workflowVersionPath(workflow.id, version.id)}
+              variant="ghost"
+              aria-label={editable ? t('versions.editNamed', { number: version.number }) : t('versions.openNamed', { number: version.number })}
+            >
+              {editable ? t('versions.edit') : t('versions.open')}
+            </ButtonLink>
+            {editable && (
+              <Button variant="ghost" aria-label={t('versions.deleteDraftNamed', { number: version.number })} onClick={() => setDeleting(version)}>
+                {t('versions.deleteDraft')}
+              </Button>
+            )}
+          </div>
+        );
+      },
+    },
   ];
 
   return (
@@ -76,15 +85,17 @@ function NewDraftDialog({ workflow, onClose }: { readonly workflow: WorkflowDeta
   const { t } = useTranslation('workflows');
   const client = useApiClient();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const sources = workflow.versions.filter((version) => version.status !== 'DRAFT');
   const published = sources.find((version) => version.status === 'PUBLISHED');
   const [from, setFrom] = useState((published ?? sources[0])?.id ?? EMPTY);
   const [notes, setNotes] = useState('');
   const create = useMutation({
     mutationFn: () => createVersion(client, workflow.id, { ...(from === EMPTY ? {} : { fromVersionId: from }), ...(notes.trim() === '' ? {} : { notes: notes.trim() }) }),
-    onSuccess: async () => {
+    // The new draft opens on the canvas: making one is the start of changing the workflow.
+    onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: workflowQueryKeys.all });
-      onClose();
+      void navigate(workflowVersionPath(workflow.id, created.id));
     },
   });
   const options = [

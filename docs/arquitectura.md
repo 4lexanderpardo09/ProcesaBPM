@@ -327,6 +327,71 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - Web: la lista, crear sin repetir subcategoría y con su error, borrador copiado y eliminado, editar e inactivo, aviso sin publicar, observadores (grupo, persona, quitar), el lector sin acciones y el 404.
   - E2E contra el API real: categoría y subcategoría desde Catálogo, nuevo flujo, eliminar y rehacer el borrador, observador y la fila de la lista.
 
+### 4.16 Flujos: el lienzo del constructor (hecho, 2026-10-21, `feat/web-workflow-builder`)
+- **`/workflows/:id/versions/:vid` (`features/workflows/builder`):** paleta a la izquierda, lienzo con React Flow al centro e inspector a la derecha.
+  - En la ficha del flujo cada versión tiene «Abrir», o «Editar» si es un borrador y se tiene `update Workflow`. Crear un borrador lo abre en el lienzo.
+  - En una versión publicada o archivada, quien puede editar ve «Crear borrador desde esta versión», o «Abrir el borrador vN» si ya hay uno.
+- **Paleta:**
+  - Grupos como el prototipo: Inicio y Fin; Paso, Aprobación, Decisión y Firma; Condición, Calculadora y Espera; Documento y Notificación.
+  - Webhook y Exportar no se ofrecen porque el motor aún no los ejecuta (`NOT_IMPLEMENTED_*`). Si una versión copiada los trae, se ven y se explican.
+  - Un bloque se arrastra al lienzo o se pulsa; pulsado, cae en el centro de la vista, en el primer hueco libre.
+  - Cada tipo nace con valores por defecto válidos cuando se puede (`lib/block-catalog.ts`): un paso lo atiende quien creó el ticket, y una aprobación nace con modo aprobador y nivel 1, a falta del tipo de grupo.
+- **Lienzo** (`BuilderCanvas`):
+  - Los nodos siguen docs/diseno: franja del color del tipo, tipo, nombre, una línea de estado y el número de errores y advertencias.
+  - Las conexiones muestran su nombre en una pastilla, que también la selecciona. Van punteadas las de los efectos y las «solo del sistema», y en rojo si tienen errores.
+  - Mover un bloque se escribe en el documento al soltarlo. Supr o Retroceso borra lo seleccionado.
+- **Conectar** (`lib/builder-doc.ts`, `connect`):
+  - El tipo sale del bloque de origen. Uno con persona sale por decisiones: «Aprobar», luego «Rechazar» y luego «Opción N» en una aprobación; «Continuar» y luego opciones en un paso.
+  - Uno automático sale por su única salida por defecto. Una condición sale primero por «En otro caso» y luego por ramas con regla.
+  - Se rechaza, con un aviso, lo que la BD rechazaría: salir de un Fin, llegar al Inicio, un bloque automático hacia sí mismo o una segunda salida por defecto.
+  - Los nombres de salida no se repiten dentro del mismo bloque.
+- **Inspector:**
+  - **Bloque:**
+    - Nombre (nunca vacío) y descripción.
+    - Para los pasos con persona:
+      - **Asignación:** modo y lo que pide (cargo, tipo de grupo y nivel, intervalo de reparto, sede, selección manual).
+      - **Plazo y cierre:** plazo en horas o días hábiles, regla de cierre y máximo de vueltas.
+      - **Instrucciones y opciones:** instrucciones, «rechazar exige comentario», atención en lote con su máximo, y el documento a firmar.
+    - Notificación: destinatarios generales, canales, asunto y mensaje.
+    - Espera: un tiempo o hasta la fecha de un campo.
+    - Documento: los del flujo, nombrados por su formato o plantilla, y su uso.
+    - Calculadora: las del registro compartido, cada dato atado a un campo del tipo correcto, y el campo de resultado.
+    - Salidas, con «Agregar salida hacia…», que conecta sin mouse. Eliminar pide confirmación y avisa si el bloque tiene campos.
+  - **Conexión:**
+    - Nombre y tipo, con solo los tipos válidos según el origen.
+    - Si es una rama de condición, sus reglas, que deben cumplirse todas (`ConditionEditor`, `lib/condition-rules.ts`).
+    - Cada regla tiene campo, operador y valor. Solo se ofrecen los operadores que aplican al campo.
+    - El valor se escribe según el campo y el operador: número, fecha, opción de una lista o varios valores separados por comas.
+    - Una regla entra al documento solo cuando tiene campo, así el lienzo siempre se puede guardar.
+- **Validación en vivo:**
+  - `validateDraft` corre en cada cambio `validateWorkflowGraph` y `findEngineSupportProblems` del paquete compartido, lo mismo que el API aplica a un borrador.
+  - El botón «Validación» resume errores y advertencias y abre un panel sobre el lienzo. Cada problema lleva a su bloque o conexión, lo selecciona y centra la vista.
+  - Hay una frase en español por cada código (`i18n/es/workflow-problems.ts`). Un código nuevo dice «Hay un problema que esta pantalla aún no sabe explicar (CÓDIGO)».
+  - Lo que solo el servidor ve (`BLOCK_REFERENCE_UNKNOWN`, `CALCULATOR_NOT_CONFIGURED`, `DOCUMENT_SOURCE_*`) aparece cuando una publicación lo rechaza, y se va con el siguiente cambio.
+- **Guardar:**
+  - `PUT …/graph` con la `revision` leída, solo bloques y conexiones; lo que cuelga de los bloques se edita aparte.
+  - Se guarda con el botón o con Ctrl/⌘+S. Tras guardar, la selección sigue al id que dio el API (`idMap`).
+  - Un 409 `STALE_REVISION` dice que otra persona guardó antes y ofrece «Recargar».
+  - Salir con cambios sin guardar pide confirmación: dentro de la app con `useBlocker` y al cerrar la pestaña con `beforeunload`.
+- **Publicar** (con `publish Workflow`):
+  - El diálogo explica que los tickets nuevos siguen esta versión y los abiertos la suya. Lista las advertencias y pide notas opcionales.
+  - Con errores no deja publicar. Si hay cambios sin guardar, los guarda primero.
+  - Al publicar, la pantalla pasa a la versión publicada en solo lectura, con un aviso de éxito.
+- **Solo lectura:** una versión publicada o archivada, o quien solo tiene `read Workflow`, ve el mismo lienzo sin paleta, sin poder mover ni conectar, y con el inspector deshabilitado.
+- **Accesibilidad:**
+  - Además del lienzo, hay una lista de bloques que aparece al recibir el foco y selecciona y centra cada uno.
+  - El inspector conecta bloques sin mouse.
+  - Una región `status` anuncia «Se agregó…», «Se conectó…» o por qué no se pudo.
+- **Pruebas:**
+  - Web: el modelo del lienzo (tipos y nombres de las salidas, rechazos, hueco libre, lo que se guarda, la selección tras guardar), las reglas de condición, los textos de los problemas y los del servidor.
+  - Web, la página:
+    - Agregar, conectar y guardar con su revisión, y Ctrl+S.
+    - Editar las reglas de una rama, revisión vieja, publicar guardando antes, publicar bloqueado por errores y el rechazo del servidor que lleva al bloque.
+    - Salir con cambios, solo lectura, crear un borrador desde la publicada, el lector y el 404.
+  - E2E contra el API real: dibujar un paso entre Inicio y Fin, guardar, recargar y publicar.
+  - A mano en Chromium: arrastrar desde la paleta, conectar con los puntos de los bloques, mover y borrar con Supr.
+- **Siguiente entrega:** campos de cada bloque y participantes (candidatos, iniciadores, firmantes, SLA por empresa, archivos), destinatarios específicos de una notificación y topes de monto. Hoy el inspector muestra cuántos hay y lo dice.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

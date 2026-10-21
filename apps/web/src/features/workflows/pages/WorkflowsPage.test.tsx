@@ -148,11 +148,12 @@ describe('workflows', () => {
     expect(await within(dialog).findByText('Esa subcategoría ya tiene un flujo.')).toBeInTheDocument();
   });
 
-  it('creates a draft copied from the published version, and deletes it', async () => {
-    const { fake } = renderRoute(`/workflows/${FLOW}`, { handlers: api() });
+  it('creates a draft copied from the published version and opens it on the canvas', async () => {
+    const { fake, router } = renderRoute(`/workflows/${FLOW}`, { handlers: api() });
 
     const versions = await screen.findByRole('table', { name: 'Versiones del flujo' });
     expect(within(versions).getByText('Publicada')).toBeInTheDocument();
+    expect(within(versions).getByRole('link', { name: 'Abrir la versión v1' })).toHaveAttribute('href', `/workflows/${FLOW}/versions/${V1}`);
     await userEvent.click(screen.getByRole('button', { name: 'Nuevo borrador' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo borrador' });
     expect(within(dialog).getByRole('combobox', { name: 'Empezar desde' })).toHaveDisplayValue('Una copia de la versión publicada (v1)');
@@ -160,15 +161,22 @@ describe('workflows', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Crear borrador' }));
 
     await vi.waitFor(() => expect(fake.callsTo(`/workflows/${FLOW}/versions`)[0]?.options.body).toEqual({ fromVersionId: V1, notes: 'Agrega la aprobación del jefe' }));
-    expect(await within(versions).findByText('Agrega la aprobación del jefe')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Nuevo borrador' })).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/workflows/${FLOW}/versions/${V2}`));
+  });
 
+  it('deletes a draft after confirming', async () => {
+    const { fake } = renderRoute(`/workflows/${FLOW}`, { handlers: api({ versions: [version(V2, 2, 'DRAFT'), version(V1, 1, 'PUBLISHED')] }) });
+
+    const versions = await screen.findByRole('table', { name: 'Versiones del flujo' });
+    expect(within(versions).getByRole('link', { name: 'Editar el borrador v2' })).toHaveAttribute('href', `/workflows/${FLOW}/versions/${V2}`);
+    expect(screen.queryByRole('button', { name: 'Nuevo borrador' })).not.toBeInTheDocument();
     await userEvent.click(within(versions).getByRole('button', { name: 'Eliminar el borrador v2' }));
     const confirm = await screen.findByRole('dialog', { name: 'Eliminar borrador' });
     await userEvent.click(within(confirm).getByRole('button', { name: 'Eliminar' }));
 
     await vi.waitFor(() => expect(fake.callsTo(`/workflows/${FLOW}/versions/${V2}`)[0]?.options.method).toBe('DELETE'));
     await vi.waitFor(() => expect(within(versions).queryByText('Borrador')).not.toBeInTheDocument());
+    expect(await screen.findByRole('button', { name: 'Nuevo borrador' })).toBeInTheDocument();
   });
 
   it('renames and deactivates a workflow, and then says it is inactive', async () => {
