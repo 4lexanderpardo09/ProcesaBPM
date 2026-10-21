@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { MembersQuery } from '@procesabpm/shared';
+import { escapeLike } from '../../../common/crud/like-pattern.js';
 import { pageWindow } from '../../../common/crud/pagination.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
@@ -49,6 +50,13 @@ const SELECT = {
   companies: { select: { companyId: true } },
 } as const;
 
+export interface DirectoryRow {
+  readonly userId: string;
+  readonly user: { readonly firstName: string; readonly lastName: string };
+}
+
+const DIRECTORY_SELECT = { userId: true, user: { select: { firstName: true, lastName: true } } } as const;
+
 /** Every query carries the tenant explicitly on top of row-level security. */
 @Injectable()
 export class MemberRepository {
@@ -78,6 +86,31 @@ export class MemberRepository {
       tx.membership.count({ where }),
     ]);
     return { rows, total };
+  }
+
+  /**
+   * Active members whose first or last name holds every word of the search, by name. Pending invitations are left out:
+   * until they accept, their names may be another organization's.
+   */
+  searchDirectory(tx: TenantTransaction, tenantId: string, search: string, limit: number): Promise<DirectoryRow[]> {
+    const words = search.split(/\s+/).filter((word) => word !== '');
+    return tx.membership.findMany({
+      where: {
+        tenantId,
+        status: 'ACTIVE',
+        AND: words.map((word) => ({
+          user: { OR: [{ firstName: { contains: escapeLike(word), mode: 'insensitive' as const } }, { lastName: { contains: escapeLike(word), mode: 'insensitive' as const } }] },
+        })),
+      },
+      select: DIRECTORY_SELECT,
+      orderBy: [{ user: { firstName: 'asc' } }, { user: { lastName: 'asc' } }, { userId: 'asc' }],
+      take: limit,
+    });
+  }
+
+  /** The names behind some ids: members that are or were active (a pending invitation has no names to show yet). */
+  namesOf(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<DirectoryRow[]> {
+    return tx.membership.findMany({ where: { tenantId, userId: { in: [...userIds] }, status: { not: 'INVITED' } }, select: DIRECTORY_SELECT });
   }
 
   findById(tx: TenantTransaction, tenantId: string, userId: string): Promise<MemberRow | null> {

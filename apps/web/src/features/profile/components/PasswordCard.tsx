@@ -56,7 +56,7 @@ export function PasswordCard() {
           />
           <TextField label={t('password.repeat')} type="password" autoComplete="new-password" required value={repeat} error={mismatch || (submitted && repeat === '') ? t('password.mismatch') : undefined} onChange={(event) => setRepeat(event.target.value)} />
         </div>
-        <ProfileError error={change.error} />
+        <ProfileError error={change.error} context="password" />
         {done && <Alert tone="ok">{t('password.changed')}</Alert>}
         <div className={styles.actions}>
           <Button type="submit" variant="brand" disabled={change.isPending}>

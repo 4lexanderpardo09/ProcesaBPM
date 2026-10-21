@@ -43,7 +43,7 @@ export function SignatureCard() {
           <img className={styles.signature} src={signature.data.url} alt={t('signature.alt')} />
         )}
         {problem !== undefined && <Alert tone="danger">{t(problem === 'type' ? 'signature.wrongType' : 'signature.tooLarge')}</Alert>}
-        <ProfileError error={upload.error ?? remove.error} />
+        <ProfileError error={upload.error ?? remove.error} context="signature" />
         <input
           ref={input}
           type="file"

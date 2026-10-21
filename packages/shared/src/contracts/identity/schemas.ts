@@ -143,3 +143,27 @@ export type AddGroupMemberRequest = z.infer<typeof addGroupMemberRequestSchema>;
 
 export const groupMembersResponseSchema = z.object({ userIds: z.array(uuidSchema) });
 export type GroupMembersResponse = z.infer<typeof groupMembersResponseSchema>;
+
+// ---- Directory ----
+/** The most names one directory request returns or looks up. */
+export const MEMBER_DIRECTORY_LIMIT = 20;
+
+/**
+ * `GET /members/directory`, open to every member: find active colleagues by name (each word in the first or last
+ * name), or name the members behind some ids. Exactly one of the two.
+ */
+export const memberDirectoryQuerySchema = z
+  .object({
+    search: z.string().trim().min(2).max(100).optional(),
+    ids: z
+      .string()
+      .transform((value) => value.split(',').filter((id) => id !== ''))
+      .pipe(z.array(uuidSchema).min(1).max(MEMBER_DIRECTORY_LIMIT))
+      .optional(),
+  })
+  .refine((value) => (value.search === undefined) !== (value.ids === undefined), 'Send either search or ids');
+export type MemberDirectoryQuery = z.infer<typeof memberDirectoryQuerySchema>;
+
+/** Only who they are: no e-mail, role, status or placement (those need `read Membership`). */
+export const directoryPersonSchema = z.object({ userId: uuidSchema, firstName: z.string(), lastName: z.string() });
+export type DirectoryPerson = z.infer<typeof directoryPersonSchema>;

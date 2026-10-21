@@ -113,7 +113,7 @@ function Enrollment({ enrollment, onDone, onCancel }: { readonly enrollment: Mfa
         <TextField label={t('mfa.code')} inputMode="numeric" autoComplete="one-time-code" maxLength={6} required value={code} error={submitted && !CODE.test(code) ? t('mfa.codeInvalid') : undefined} onChange={(event) => setCode(event.target.value.trim())} />
         <TextField label={t('mfa.password')} type="password" autoComplete="current-password" required value={password} error={submitted && password === '' ? t('data.required') : undefined} onChange={(event) => setPassword(event.target.value)} />
       </div>
-      <ProfileError error={confirm.error} />
+      <ProfileError error={confirm.error} context="code" />
       <div className={styles.actions}>
         <Button type="submit" variant="brand" disabled={confirm.isPending}>
           {t('mfa.confirm')}
@@ -144,7 +144,7 @@ function Regenerate({ onDone, onCancel }: { readonly onDone: (codes: readonly st
     >
       <p className={styles.note}>{t('mfa.regenerateHint')}</p>
       <TextField label={t('mfa.code')} inputMode="numeric" autoComplete="one-time-code" maxLength={6} required value={code} error={submitted && !CODE.test(code) ? t('mfa.codeInvalid') : undefined} onChange={(event) => setCode(event.target.value.trim())} />
-      <ProfileError error={regenerate.error} />
+      <ProfileError error={regenerate.error} context="code" />
       <div className={styles.actions}>
         <Button type="submit" variant="brand" disabled={regenerate.isPending}>
           {t('mfa.regenerate')}
@@ -200,7 +200,7 @@ function Disable({ onDone, onCancel }: { readonly onDone: () => void; readonly o
           {factor === 'code' ? t('mfa.useBackupCode') : t('mfa.useCode')}
         </Button>
       </div>
-      <ProfileError error={disable.error} factor={factor} />
+      <ProfileError error={disable.error} context={factor} />
       <div className={styles.actions}>
         <Button type="submit" variant="brand" disabled={disable.isPending}>
           {t('mfa.turnOff')}

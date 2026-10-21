@@ -419,3 +419,47 @@ describe('identity API: roles, permissions and groups', () => {
     });
   });
 });
+
+describe('identity API: member directory', () => {
+  let db: TestDatabase;
+  let app: INestApplication;
+  let admin: ApiClient;
+  let tenant: SeededTenant;
+  let plain: ApiClient;
+  let colleague: { id: string; firstName: string; lastName: string };
+
+  beforeAll(async () => {
+    db = connectTestDatabase();
+    ({ app } = await createTestApp());
+    ({ admin, tenant } = await adminOf(db, app));
+    plain = await clientWith(db, app, tenant, []);
+    const other = await clientWith(db, app, tenant, []);
+    colleague = (await other.get('/auth/me').expect(200)).body.user;
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await db.close();
+  });
+
+  it('lets any member find an active colleague by the words of the name, with only id and names', async () => {
+    const found = (await plain.get(`/members/directory?search=${encodeURIComponent(`${colleague.lastName} ${colleague.firstName}`)}`).expect(200)).body;
+    expect(found).toEqual([{ userId: colleague.id, firstName: colleague.firstName, lastName: colleague.lastName }]);
+    await plain.get('/members').expect(403);
+  });
+
+  it('names the members behind some ids, leaving out a pending invitation and the ids of nobody', async () => {
+    const invited = (await admin.post('/members/invitations', { email: emailOf(), firstName: 'Iris', lastName: unique('Pending'), roleId: (await admin.get('/roles?pageSize=1').expect(200)).body.items[0].id, companyIds: [tenant.companyId] }).expect(201)).body;
+    const stranger = '018f3c1e-7b2a-7c3d-9e4f-0123456789ab';
+    const named = (await plain.get(`/members/directory?ids=${colleague.id},${invited.userId},${stranger}`).expect(200)).body;
+    expect(named).toEqual([{ userId: colleague.id, firstName: colleague.firstName, lastName: colleague.lastName }]);
+    expect((await plain.get(`/members/directory?search=${encodeURIComponent(invited.lastName)}`).expect(200)).body).toEqual([]);
+  });
+
+  it('takes % and _ as letters, and refuses a one-letter search, both filters or none', async () => {
+    expect((await plain.get('/members/directory?search=%25%25').expect(200)).body).toEqual([]);
+    await plain.get('/members/directory?search=a').expect(400);
+    await plain.get(`/members/directory?search=ana&ids=${colleague.id}`).expect(400);
+    await plain.get('/members/directory').expect(400);
+  });
+});

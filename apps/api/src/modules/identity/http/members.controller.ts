@@ -1,7 +1,10 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import {
+  type DirectoryPerson,
   type InviteMemberRequest,
   inviteMemberRequestSchema,
+  type MemberDirectoryQuery,
+  memberDirectoryQuerySchema,
   type MemberResponse,
   type MembersQuery,
   membersQuerySchema,
@@ -13,8 +16,9 @@ import { CurrentPrincipal, type Principal } from '../../../common/auth/principal
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
 import { Audited } from '../../../common/audit/audited.decorator.js';
-import { RequirePermission } from '../../../common/auth/route-access.js';
+import { AuthenticatedOnly, RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
+import { MemberDirectoryService } from '../application/member-directory.service.js';
 import { MemberInvitationService } from '../application/member-invitation.service.js';
 import { MembersService } from '../application/members.service.js';
 
@@ -23,12 +27,20 @@ export class MembersController {
   constructor(
     @Inject(MembersService) private readonly members: MembersService,
     @Inject(MemberInvitationService) private readonly invitations: MemberInvitationService,
+    @Inject(MemberDirectoryService) private readonly directoryService: MemberDirectoryService,
   ) {}
 
   @RequirePermission('read', 'Membership')
   @Get()
   list(@Query(new ZodValidationPipe(membersQuerySchema)) query: MembersQuery): Promise<Page<MemberResponse>> {
     return this.members.list(query);
+  }
+
+  /** Open to every member, declared before `:userId`: only ids and names, to choose or name a colleague. */
+  @AuthenticatedOnly()
+  @Get('directory')
+  directory(@Query(new ZodValidationPipe(memberDirectoryQuerySchema)) query: MemberDirectoryQuery): Promise<DirectoryPerson[]> {
+    return this.directoryService.find(query);
   }
 
   @RequirePermission('read', 'Membership')

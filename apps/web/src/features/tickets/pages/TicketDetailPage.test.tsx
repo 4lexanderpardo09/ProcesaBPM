@@ -241,6 +241,23 @@ describe('TicketDetailPage', () => {
     expect(fake.callsTo(`${base}/comments`)).toHaveLength(0);
   });
 
+  it('inserts a text template into the comment, after what was already typed', async () => {
+    const { fake } = renderRoute(base, {
+      handlers: ticketHandlers({
+        '/text-templates': () => [{ id: id(398), title: 'Solicitud recibida', bodyHtml: '<p>Recibimos tu solicitud.</p><p>Te escribimos pronto.</p>', isOwner: false, ownerId: id(397), ownerName: 'Olga Pérez', updatedAt: at }],
+      }),
+    });
+
+    const box = await screen.findByRole('textbox', { name: 'Agregar un comentario' });
+    await userEvent.type(box, 'Hola, Luis:');
+    const template = await screen.findByRole('combobox', { name: 'Insertar plantilla' });
+    await userEvent.selectOptions(template, 'Solicitud recibida');
+
+    expect(box).toHaveValue('Hola, Luis:\n\nRecibimos tu solicitud.\n\nTe escribimos pronto.');
+    expect(template).toHaveValue('');
+    expect(fake.callsTo(`${base}/comments`)).toHaveLength(0);
+  });
+
   it('says so when the person may not comment', async () => {
     renderRoute(base, { handlers: ticketHandlers({ [`${base}/comments`]: forbidden }) });
 
