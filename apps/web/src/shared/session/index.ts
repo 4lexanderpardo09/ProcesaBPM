@@ -5,7 +5,7 @@ export { SessionProvider, useSessionManager } from './react/SessionContext';
 export { type Permission, type PermissionCheck } from './permissions';
 export { useApiClient, useCurrentUser, usePermissions, useSessionState } from './react/use-session';
 export { createBroadcastSessionChannel, type SessionChannel } from './session-channel';
-export { currentUserQueryKey } from './session-api';
+export { currentUserQueryKey, myPermissionsQueryKey } from './session-api';
 export { type MaintenanceDetails, type SessionBlock, type SignOutReason } from './session-errors';
 export { createSessionManager, type SessionManager } from './session-manager';
 export { type SessionState } from './session-state';

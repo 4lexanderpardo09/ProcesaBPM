@@ -1,0 +1,104 @@
+.tabs {
+  margin-bottom: var(--space-4);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.secondary {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.filter {
+  width: min(220px, 100%);
+}
+
+.names {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: var(--space-4);
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices > legend {
+  margin-bottom: var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.subjects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: var(--space-4);
+}
+
+.subject {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+}
+
+.subject > legend {
+  padding: 0 var(--space-1);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.conditional {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.people {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 13.5px;
+}

@@ -1,7 +1,13 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import '@/i18n';
+
+/**
+ * The first render of a test file loads its lazy page; under a full parallel run that can take more than Testing
+ * Library's default second, and `findBy…` failed at random. Three seconds is still short for a real failure.
+ */
+configure({ asyncUtilTimeout: 3000 });
 
 /** jsdom has no layout: React Flow (the workflow diagrams) needs these to mount, as its testing guide shows. */
 class ResizeObserverStub {
