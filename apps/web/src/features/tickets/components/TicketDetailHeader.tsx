@@ -1,10 +1,9 @@
 import type { TicketDetailResponse } from '@procesabpm/shared';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
 import { cx } from '@/shared/lib/cx';
 import { paths } from '@/shared/lib/paths';
-import { Badge } from '@/shared/ui';
+import { Badge, Breadcrumb } from '@/shared/ui';
 import type { SlaBadge } from '../lib/sla-badge';
 import styles from './TicketDetailHeader.module.css';
 import { TicketStatusBadge } from './TicketStatusBadge';
@@ -21,16 +20,7 @@ export function TicketDetailHeader({ ticket, sla, actions }: TicketDetailHeaderP
   const { t } = useTranslation('tickets');
   return (
     <header className={styles.header}>
-      <nav aria-label={t('detail.breadcrumb')}>
-        <ol className={styles.breadcrumb}>
-          <li>
-            <Link to={paths.tickets}>{t('inbox.title')}</Link>
-          </li>
-          <li aria-current="page" className="text-code">
-            {ticket.number}
-          </li>
-        </ol>
-      </nav>
+      <Breadcrumb label={t('detail.breadcrumb')} items={[{ label: t('inbox.title'), to: paths.tickets }, { label: ticket.number, code: true }]} />
       <div className={styles.top}>
         <div className={styles.summary}>
           <div className={styles.titleRow}>

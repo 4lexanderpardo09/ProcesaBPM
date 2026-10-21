@@ -222,6 +222,17 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Pruebas:** unitarias de la subida (hash, encabezados, rechazo del almacenamiento) y la página (tipo rechazado, subida, envío del id). Se probó en local contra SeaweedFS: CORS, `PUT` y confirmación, y en el navegador hasta cerrar el ticket con el PDF en Adjuntos.
 - **Siguiente:** adjuntos sueltos al comentar y al avanzar (`attachments`), con la misma subida.
 
+### 4.6 Nuevo ticket (hecho, 2026-10-21, `feat/web-create-ticket`)
+- **Pantalla `/tickets/new` (`pages/NewTicketPage`)**, como la captura `nuevo-ticket.png`:
+  - **Tipo de solicitud (`RequestTypeCard`):** empresa (solo si la persona está en varias; por defecto la marcada `isDefault` de `/auth/me`), categoría y subcategoría de `GET /catalog/available?companyId=` y prioridad como fichas de radio con las prioridades activas en su orden (`GET /priorities`). Cambiar la empresa, categoría o subcategoría reinicia lo que depende de ellas.
+  - **Datos de la solicitud (`RequestForm`):** sale de `GET /subcategories/:id/creation-form?companyId=`. Si hay varios inicios, se elige el punto de inicio. Pide asunto, los campos del inicio (los mismos componentes del formulario del paso), descripción (texto plano a HTML escapado) y adjuntos sueltos (`FilePicker`, la misma subida de los campos de archivo).
+  - **Resumen al lado (`RequestSummary`):** empresa, categoría, subcategoría (con su descripción), prioridad y paso inicial.
+  - **Crear y enviar:** `POST /tickets` con `startStepId`, `companyId` y `priorityId` solo si la persona la cambió (si no, aplica la de la subcategoría); al crear, abre el ticket. `ASSIGNEE_SELECTION_REQUIRED` pide a quién va el primer paso, como al avanzar.
+  - **Errores con sus palabras (`CreationError`):** sin flujo publicado, no puede iniciarla, falta la empresa o la subcategoría ya no está; lo demás como cualquier acción.
+- **Compartido con avanzar:** la captura de campos (valores, validación antes de enviar, problemas por campo y por celda, archivos subiendo) salió de `AdvanceDialog` a `hooks/use-step-fields`, y `FileInput` se apoya en `FilePicker`. `shared/ui/Breadcrumb` (con story) lo usan el detalle y esta pantalla.
+- **Contratos:** `availableCatalogResponseSchema` y `creationFormResponseSchema` en shared.
+- **Pruebas:** la página (pide elegir primero, prioridades activas en orden, valida asunto y campos, envía y abre el ticket, empresa y prioridad elegidas, inicio no permitido, elegir el primer responsable, sin empresa) y `Breadcrumb`. Se probó contra el API real en local con un adjunto: el ticket se crea y se abre.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|
