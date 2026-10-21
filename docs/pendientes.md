@@ -3,13 +3,24 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Datos de Excel en la web (2026-10-21, `feat/web-datasets`):** lista, detalle con las filas, carga en dos pasos (archivo y columna clave opcional), recarga, editar y eliminar. Detalle en arquitectura.md §4.18.
+  - **Arreglado:**
+    - El constructor ofrecía Excel limitados a otros flujos, que el API rechaza al publicar.
+    - Subir un Excel pedía permisos de tickets. Ahora hay rutas propias en el API (`POST /datasets/uploads` y su confirmación) con `update Workflow`, como las plantillas PDF.
+  - **Decidido (con criterio, el usuario delegó):**
+    - La pantalla vive bajo Flujos (`/workflows/datasets`) y no en el menú, porque usa sus mismos permisos.
+    - La clave se elige después de leer el archivo, sobre la misma subida.
+  - **Por confirmar:**
+    - **Quitar la clave:** una vez puesta no se puede quitar (el API la conserva si no se envía otra).
+    - **Uso de cada Excel:** la pantalla no dice qué campos lo usan; el API no lo expone.
+  - **Pendiente:** el editor de documentos PDF.
 - **Flujos en la web, parte 3: campos, participantes y topes (2026-10-21, `feat/web-workflow-content`):** campos por bloque con la configuración de cada tipo; iniciadores, candidatos, firmantes, plazo por empresa y archivos; destinatarios específicos de una notificación; topes de monto con la conexión de la aprobación extra. Detalle en arquitectura.md §4.17. Con esto el constructor de flujos queda completo en la web.
   - **Decidido (con criterio, el usuario delegó):**
     - Las ediciones por partes suben la revisión en uno; si alguien editó a la vez, el guardado lo detecta y se recarga.
     - Un bloque nuevo se guarda antes de darle campos o participantes.
     - Los campos del Inicio se capturan al crear y los demás en su paso (no se ofrece `BOTH`).
     - Monedas COP, USD y EUR.
-  - **Pendiente:** no hay pantalla de datasets (Excel) ni de documentos PDF; el constructor los usa si existen.
+  - ~~**Pendiente:** no hay pantalla de datasets (Excel) ni de documentos PDF~~ Datasets hecho (entrada de arriba); falta el editor de PDF.
 - **Flujos en la web, parte 2: el lienzo (2026-10-21, `feat/web-workflow-builder`):** paleta, lienzo, inspector de bloques y conexiones (reglas de las ramas incluidas), validación en vivo en español, guardar con revisión y publicar. Detalle en arquitectura.md §4.16.
   - **Decidido (con criterio, el usuario delegó):**
     - Webhook y Exportar no están en la paleta (el motor no los ejecuta).

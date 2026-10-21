@@ -1,7 +1,9 @@
 import { effectiveFieldType, type FieldDocument, type FieldType, listCalculators } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { Link, useParams } from 'react-router';
 import { positionsQueryOptions } from '@/features/people';
+import { paths } from '@/shared/lib/paths';
 import { useApiClient } from '@/shared/session';
 import { Checkbox, Select, TextArea, TextField } from '@/shared/ui';
 import { datasetsQueryOptions } from '../../api/builder-api';
@@ -267,11 +269,22 @@ function ListSource({ config, dataSource, fields, onChange }: { readonly config:
 /** A column of an uploaded Excel; optionally found by the key typed in another field. */
 function DatasetSource({ dataSource, fields, optional = false, onChange }: { readonly dataSource: FieldDataSource; readonly fields: readonly FieldDocument[]; readonly optional?: boolean; readonly onChange: (dataSource: FieldDataSource) => void }) {
   const { t } = useTranslation('workflows');
-  const datasets = useQuery(datasetsQueryOptions(useApiClient()));
+  const { workflowId = '' } = useParams();
+  const datasets = useQuery(datasetsQueryOptions(useApiClient(), workflowId));
   const current = dataSource?.kind === 'DATASET' ? dataSource : null;
   const dataset = datasets.data?.find((candidate) => candidate.id === current?.datasetId);
   const update = (patch: Record<string, unknown>) => onChange(patchConfig({ kind: 'DATASET', datasetId: '', column: '', ...(current ?? {}) }, patch));
-  if (datasets.data !== undefined && datasets.data.length === 0) return optional ? null : <p className={styles.note}>{t('builder.fields.config.noDatasets')}</p>;
+  if (datasets.data !== undefined && datasets.data.length === 0) {
+    if (optional) return null;
+    return (
+      <p className={styles.note}>
+        {t('builder.fields.config.noDatasets')}{' '}
+        <Link to={paths.datasets} target="_blank" rel="noopener">
+          {t('builder.fields.config.loadDataset')}
+        </Link>
+      </p>
+    );
+  }
   return (
     <>
       <Select

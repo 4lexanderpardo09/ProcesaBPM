@@ -94,14 +94,17 @@ export function documentChoicesQueryOptions(client: HttpClient, workflowId: stri
   });
 }
 
-const datasetSchema = z.object({ id: z.string(), name: z.string(), columns: z.array(z.object({ name: z.string(), isKey: z.boolean() })), keyColumn: z.string().nullable(), isActive: z.boolean() });
+const datasetSchema = z.object({ id: z.string(), name: z.string(), workflowId: z.string().nullable(), columns: z.array(z.object({ name: z.string(), isKey: z.boolean() })), keyColumn: z.string().nullable(), isActive: z.boolean() });
 export type DatasetChoice = z.infer<typeof datasetSchema>;
 
-/** Uploaded Excel files a list field can take its options from. */
-export function datasetsQueryOptions(client: HttpClient) {
+/**
+ * Uploaded Excel files a field of this workflow can take its values from: those open to every workflow and those
+ * limited to this one (publishing refuses any other). Inactive ones come too, so a field that uses one still names it.
+ */
+export function datasetsQueryOptions(client: HttpClient, workflowId: string) {
   return queryOptions({
-    queryKey: ['datasets', 'all'] as const,
-    queryFn: ({ signal }) => client.request('/datasets?pageSize=100', { schema: pageResponseSchema(datasetSchema), signal }),
-    select: (page) => page.items,
+    queryKey: ['datasets', 'choices'] as const,
+    queryFn: ({ signal }) => client.request('/datasets?pageSize=100&includeInactive=true', { schema: pageResponseSchema(datasetSchema), signal }),
+    select: (page) => page.items.filter((dataset) => dataset.workflowId === null || dataset.workflowId === workflowId),
   });
 }

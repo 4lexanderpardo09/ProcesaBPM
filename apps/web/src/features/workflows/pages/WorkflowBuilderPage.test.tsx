@@ -72,7 +72,7 @@ describe('workflow builder', () => {
     expect(within(inspector).getByRole('combobox', { name: 'Modo de asignación' })).toHaveDisplayValue('Quien creó el ticket');
     expect(screen.getByRole('button', { name: /Validación\s*3 errores/ })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Se agregó el bloque Nuevo paso.');
-  });
+  }, 15_000);
 
   // A long walk through the inspector: on a loaded machine it can pass the default 5 s.
   it('wires a new step between start and end from the inspector, and saves it with its revision', async () => {

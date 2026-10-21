@@ -7,7 +7,7 @@ import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
 import { ProfilePage } from '@/features/profile';
 import { NewTicketPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
-import { WorkflowBuilderPage, WorkflowPage, WorkflowsPage } from '@/features/workflows';
+import { DatasetPage, DatasetsPage, WorkflowBuilderPage, WorkflowPage, WorkflowsPage } from '@/features/workflows';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
 import { type NavigationItemKey, navigationSections } from '../layouts/app-layout/navigation';
@@ -34,6 +34,8 @@ const workflowRoutes: RouteObject[] = [
   { path: paths.workflows, element: <WorkflowsPage /> },
   { path: paths.workflow, element: <WorkflowPage /> },
   { path: paths.workflowVersion, element: <WorkflowBuilderPage /> },
+  { path: paths.datasets, element: <DatasetsPage /> },
+  { path: paths.dataset, element: <DatasetPage /> },
 ];
 
 const configurationRoutes: RouteObject[] = [
