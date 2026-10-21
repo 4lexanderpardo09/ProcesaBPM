@@ -1,5 +1,6 @@
 import { NOTIFICATION_TYPES, type NotificationTypeValue } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '@/shared/session';
 import { Card } from '@/shared/ui';
@@ -11,24 +12,30 @@ type Channels = { readonly inApp: boolean; readonly email: boolean };
 type Preference = Channels & { readonly type: NotificationTypeValue };
 
 /**
- * Which notifications arrive in the application and which by e-mail, per kind. Each box saves at once; the list
- * shows the change before the API answers and goes back if it fails.
+ * Which notifications arrive in the application and which by e-mail, per kind. Each box saves at once.
  */
 export function NotificationsCard() {
   const { t } = useTranslation('profile');
   const client = useApiClient();
   const queryClient = useQueryClient();
   const preferences = useQuery(preferencesQueryOptions(client));
+  // What was just clicked shows at once, before the API answers; it goes back if the API refuses.
+  const [pending, setPending] = useState<ReadonlyMap<NotificationTypeValue, Channels>>(new Map());
+  const settle = (type: NotificationTypeValue) =>
+    setPending((current) => {
+      const next = new Map(current);
+      next.delete(type);
+      return next;
+    });
   const save = useMutation({
     mutationFn: ({ type, channels }: { type: NotificationTypeValue; channels: Channels }) => savePreference(client, type, channels),
-    onMutate: async ({ type, channels }) => {
-      await queryClient.cancelQueries({ queryKey: toolsQueryKeys.preferences });
-      const before = queryClient.getQueryData<Preference[]>(toolsQueryKeys.preferences);
-      queryClient.setQueryData<Preference[]>(toolsQueryKeys.preferences, (rows) => rows?.map((row) => (row.type === type ? { type, ...channels } : row)));
-      return { before };
-    },
-    onError: (_error, _change, context) => queryClient.setQueryData(toolsQueryKeys.preferences, context?.before),
+    onSuccess: (saved) => queryClient.setQueryData<Preference[]>(toolsQueryKeys.preferences, (rows = []) => [...rows.filter((row) => row.type !== saved.type), saved]),
+    onSettled: (_saved, _error, { type }) => settle(type),
   });
+  const change = (type: NotificationTypeValue, channels: Channels) => {
+    setPending((current) => new Map(current).set(type, channels));
+    save.mutate({ type, channels });
+  };
   const byType = new Map((preferences.data ?? []).map((row) => [row.type, row]));
 
   return (
@@ -49,7 +56,7 @@ export function NotificationsCard() {
             </thead>
             <tbody>
               {NOTIFICATION_TYPES.map((type) => {
-                const row = byType.get(type) ?? { type, inApp: true, email: false };
+                const row = pending.get(type) ?? byType.get(type) ?? { type, inApp: true, email: false };
                 const label = t(`notifications.types.${type}`);
                 return (
                   <tr key={type}>
@@ -60,7 +67,7 @@ export function NotificationsCard() {
                           type="checkbox"
                           aria-label={t(channel === 'inApp' ? 'notifications.inAppNamed' : 'notifications.emailNamed', { kind: label })}
                           checked={row[channel]}
-                          onChange={(event) => save.mutate({ type, channels: { inApp: row.inApp, email: row.email, [channel]: event.target.checked } })}
+                          onChange={(event) => change(type, { inApp: row.inApp, email: row.email, [channel]: event.target.checked })}
                         />
                       </td>
                     ))}
