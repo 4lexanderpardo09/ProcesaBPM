@@ -303,6 +303,30 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - E2E contra el API real con la persona nueva `bell@e2e.test`, que tiene tres notificaciones sembradas: el conteo, marcar una, el filtro y marcar todas, que sobrevive a recargar.
   - Las etiquetas del ticket no tienen E2E contra el API real porque el stack no tiene tickets.
 
+### 4.15 Flujos: lista, ficha, versiones y observadores (hecho, 2026-10-21, `feat/web-workflows`)
+- **`/workflows` (`features/workflows`, requiere `read Workflow`):**
+  - Una fila por flujo con su categoría y subcategoría, la versión publicada («Sin publicar» si no hay), el borrador y el estado.
+  - Busca por nombre, puede mostrar los inactivos y pagina de 25. La fila abre la ficha.
+- **API:** cada fila de `GET /workflows` trae `subcategory {id, name, category {id, name}}`, `publishedVersion` y `draftVersion` (`{id, number}` o `null`). Así la lista no necesita leer cada flujo.
+- **Nuevo flujo** (con `update Workflow`):
+  - Solo ofrece las subcategorías activas que aún no tienen flujo; una subcategoría admite un solo flujo.
+  - El nombre empieza igual que la subcategoría.
+  - Al crearlo se abre su ficha. El flujo nace con el borrador v1, que va de Inicio a Fin.
+- **Ficha `/workflows/:id`:**
+  - Muestra la ruta Categoría › Subcategoría y «Editar» (nombre y activo).
+  - Avisa si el flujo está inactivo (no se ofrece para crear tickets) o si no tiene una versión publicada.
+  - **Versiones:** de la más nueva a la más vieja, con estado, notas y fecha.
+    - «Nuevo borrador» aparece solo si no hay uno. Arranca como copia de la publicada (por defecto), de una archivada, o vacío.
+    - «Eliminar borrador» pide confirmación.
+  - **Observadores:** personas (buscadas en el directorio), cargos o grupos, con quitar.
+  - La URL guarda la pestaña.
+- **Errores:** `lib/workflow-error.ts` traduce cada error según la acción. Un `DUPLICATE` dice «esa subcategoría ya tiene un flujo», «ya hay un borrador» u «observa ya», según el caso.
+- **No están en la web:** los cortes por empresa (`/workflows/:id/cutoffs`). El motor aún no ejecuta plazos ni esperas por corte (`NOT_IMPLEMENTED_*`).
+- **Pruebas:**
+  - API: la fila de la lista con la publicada y el borrador.
+  - Web: la lista, crear sin repetir subcategoría y con su error, borrador copiado y eliminado, editar e inactivo, aviso sin publicar, observadores (grupo, persona, quitar), el lector sin acciones y el 404.
+  - E2E contra el API real: categoría y subcategoría desde Catálogo, nuevo flujo, eliminar y rehacer el borrador, observador y la fila de la lista.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

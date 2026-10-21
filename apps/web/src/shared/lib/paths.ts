@@ -6,6 +6,7 @@ export const paths = {
   newTicket: '/tickets/new',
   ticket: '/tickets/:ticketId',
   workflows: '/workflows',
+  workflow: '/workflows/:workflowId',
   reports: '/reports',
   catalog: '/catalog',
   organization: '/organization',
@@ -16,6 +17,10 @@ export const paths = {
 
 export function ticketPath(ticketId: string): string {
   return `${paths.tickets}/${encodeURIComponent(ticketId)}`;
+}
+
+export function workflowPath(workflowId: string): string {
+  return `${paths.workflows}/${encodeURIComponent(workflowId)}`;
 }
 
 /** Notices the login page accepts from its URL: a fixed list, never free text. */

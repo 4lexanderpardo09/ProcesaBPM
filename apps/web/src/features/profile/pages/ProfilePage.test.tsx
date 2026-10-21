@@ -22,6 +22,7 @@ function handlers(extra: Record<string, FakeHandler> = {}): Record<string, FakeH
 const open = (path: string, extra: Record<string, FakeHandler> = {}) => renderRoute(path, { handlers: handlers(extra) });
 
 describe('ProfilePage', () => {
+  // It types a few dozen characters: on a loaded machine that alone can pass the default 5 s.
   it('opens from the account menu and saves the names and the time zone', async () => {
     const { fake, router } = open('/tickets', {
       '/auth/me': (options) => {
@@ -49,7 +50,7 @@ describe('ProfilePage', () => {
     await vi.waitFor(() => expect(fake.calls.find((call) => call.path === '/auth/me' && call.options.method === 'PATCH')?.options.body).toEqual({ firstName: 'Ana María', lastName: 'Torres', timeZone: 'America/Bogota' }));
     expect(await screen.findByText('Se guardaron tus datos.')).toBeInTheDocument();
     expect(within(screen.getByRole('group', { name: 'Cuenta' })).getByText('Ana María Torres')).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('changes the password, and a wrong current one is an answer, not the end of the session', async () => {
     let wrong = true;

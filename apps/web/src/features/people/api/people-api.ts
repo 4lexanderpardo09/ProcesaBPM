@@ -2,6 +2,7 @@ import {
   approvalGroupTypeResponseSchema,
   approvalMembersResponseSchema,
   approversResponseSchema,
+  groupResponseSchema,
   companyResponseSchema,
   type CreateDelegationRequest,
   delegationResponseSchema,
@@ -38,6 +39,7 @@ export const departmentsQueryOptions = (client: HttpClient) => allOf(client, '/d
 export const positionsQueryOptions = (client: HttpClient) => allOf(client, '/positions', namedRecordResponseSchema);
 export const sitesQueryOptions = (client: HttpClient) => allOf(client, '/sites', siteResponseSchema);
 export const companiesQueryOptions = (client: HttpClient) => allOf(client, '/companies', companyResponseSchema);
+export const groupsQueryOptions = (client: HttpClient) => allOf(client, '/groups', groupResponseSchema);
 
 export interface MembersParams {
   readonly page: number;
