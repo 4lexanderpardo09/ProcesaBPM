@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { TextArea } from '@/shared/ui';
 import { transitionTicket } from '../../api/ticket-actions-api';
+import { useNextAssignee } from '../../hooks/use-next-assignee';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { type FieldIssueKey, fieldIssuesOf } from '../../lib/field-issues';
 import { initialInput, type InputValue, isBlankInput, isCapturable, requestValue } from '../../lib/step-values';
 import { ActionDialog } from '../actions/ActionDialog';
+import { NextAssigneeField } from '../actions/NextAssigneeField';
 import styles from './AdvanceDialog.module.css';
 import { StepFieldInput } from './StepFieldInput';
 
@@ -24,17 +26,28 @@ type Issue = FieldIssueKey | 'NOT_CAPTURABLE';
 interface AdvanceArgs {
   readonly values: Record<string, unknown>;
   readonly comment: string;
+  readonly assigneeId: string | undefined;
 }
 
-/** Answers the step with one of its decisions: the fields captured on this step, and an optional note. */
+/**
+ * Answers the step with one of its decisions: the fields captured on this step, and an optional note. When the next step
+ * needs its assignee chosen, the API says so and the dialog asks for that person before trying again.
+ */
 export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: AdvanceDialogProps) {
   const { t } = useTranslation('tickets');
   const fields = editableFields(form);
   const [inputs, setInputs] = useState<Record<string, InputValue>>(() => Object.fromEntries(fields.map((field) => [field.code, initialInput(field, ticket.values[field.code])])));
   const [comment, setComment] = useState('');
   const [localIssues, setLocalIssues] = useState<ReadonlyMap<string, Issue>>(new Map());
+  const next = useNextAssignee();
   const advance = useTicketMutation((client, args: AdvanceArgs) =>
-    transitionTicket(client, ticket.id, { transitionId: decision.transitionId, visitId, values: args.values, ...(args.comment.trim() === '' ? {} : { comment: plainTextToHtml(args.comment) }) }),
+    transitionTicket(client, ticket.id, {
+      transitionId: decision.transitionId,
+      visitId,
+      values: args.values,
+      ...(args.comment.trim() === '' ? {} : { comment: plainTextToHtml(args.comment) }),
+      ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
+    }),
   );
   const serverIssues = fieldIssuesOf(advance.error);
   const issueOf = (code: string): Issue | undefined => localIssues.get(code) ?? serverIssues?.get(code);
@@ -54,7 +67,8 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       else issues.set(field.code, 'INVALID_TYPE');
     }
     setLocalIssues(issues);
-    if (issues.size === 0) advance.mutate({ values, comment }, { onSuccess: onClose });
+    const assignee = next.request();
+    if (issues.size === 0 && assignee.ok) advance.mutate({ values, comment, assigneeId: assignee.assigneeId }, { onSuccess: onClose, onError: next.onError });
   };
 
   return (
@@ -63,7 +77,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       title={t('advance.title', { decision: decision.label })}
       submitLabel={decision.label}
       pending={advance.isPending}
-      error={serverIssues === undefined ? advance.error : null}
+      error={serverIssues === undefined ? next.shownError(advance.error) : null}
       onClose={onClose}
       onSubmit={submit}
     >
@@ -85,6 +99,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
         );
       })}
       <TextArea label={t('actions.optionalComment')} value={comment} maxLength={5000} rows={3} onChange={(event) => setComment(event.target.value)} />
+      <NextAssigneeField next={next} />
     </ActionDialog>
   );
 }

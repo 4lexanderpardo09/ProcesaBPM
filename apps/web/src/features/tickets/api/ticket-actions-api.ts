@@ -1,5 +1,9 @@
 import {
+  errorSubtypeResponseSchema,
+  errorTypeResponseSchema,
   incidentMutationResponseSchema,
+  pageResponseSchema,
+  type ReopenTicketRequest,
   type TicketCandidatesQuery,
   ticketCandidatesResponseSchema,
   ticketMutationResponseSchema,
@@ -9,6 +13,14 @@ import type { HttpClient } from '@/shared/api';
 import { ticketQueryKeys } from './tickets-api';
 
 const ticketUrl = (ticketId: string) => `/tickets/${encodeURIComponent(ticketId)}`;
+
+/** The most the API returns per page; a catalog of error types is far shorter than that. */
+const CATALOG_PAGE_SIZE = 100;
+
+export const errorTypeQueryKeys = {
+  all: ['error-types'] as const,
+  subtypes: (errorTypeId: string) => [...errorTypeQueryKeys.all, errorTypeId, 'subtypes'] as const,
+};
 
 /** Who the current step can go to (`reassign`) or who can take an incident (`incident`), by name. */
 export function ticketCandidatesQueryOptions(client: HttpClient, ticketId: string, purpose: TicketCandidatesQuery['for']) {
@@ -39,6 +51,34 @@ export function resolveIncident(client: HttpClient, ticketId: string, incidentId
 }
 
 /** Answers the current step with one of its decisions, the values captured on it and an optional comment. */
-export function transitionTicket(client: HttpClient, ticketId: string, body: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string }) {
+export function transitionTicket(client: HttpClient, ticketId: string, body: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string; assigneeId?: string }) {
   return client.request(`${ticketUrl(ticketId)}/transition`, { method: 'POST', body: { ...body, attachments: [] }, schema: ticketMutationResponseSchema });
+}
+
+/** Signs or rejects the caller's own pending signature on a parallel step; `assigneeId` when the step that follows asks for one. */
+export function answerParallelTask(client: HttpClient, ticketId: string, answer: 'sign' | 'reject', body: { visitId: string; comment?: string; assigneeId?: string }) {
+  return client.request(`${ticketUrl(ticketId)}/parallel-tasks/${answer}`, { method: 'POST', body, schema: ticketMutationResponseSchema });
+}
+
+/** Reopens a closed ticket on its last step, with whoever held it, filing an error of a reopening type. */
+export function reopenTicket(client: HttpClient, ticketId: string, body: ReopenTicketRequest) {
+  return client.request(`${ticketUrl(ticketId)}/reopen`, { method: 'POST', body, schema: ticketMutationResponseSchema });
+}
+
+/** The active error types a reopening can be filed under. */
+export function reopeningErrorTypesQueryOptions(client: HttpClient) {
+  return queryOptions({
+    queryKey: errorTypeQueryKeys.all,
+    queryFn: ({ signal }) => client.request(`/error-types?pageSize=${CATALOG_PAGE_SIZE}`, { schema: pageResponseSchema(errorTypeResponseSchema), signal }),
+    select: (page) => page.items.filter((type) => type.isReopening && type.isActive),
+  });
+}
+
+/** The active subtypes of an error type (optional detail of the reopening). */
+export function errorSubtypesQueryOptions(client: HttpClient, errorTypeId: string) {
+  return queryOptions({
+    queryKey: errorTypeQueryKeys.subtypes(errorTypeId),
+    queryFn: ({ signal }) => client.request(`/error-types/${encodeURIComponent(errorTypeId)}/subtypes?pageSize=${CATALOG_PAGE_SIZE}`, { schema: pageResponseSchema(errorSubtypeResponseSchema), signal }),
+    select: (page) => page.items.filter((subtype) => subtype.isActive),
+  });
 }
