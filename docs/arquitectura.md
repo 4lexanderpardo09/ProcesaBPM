@@ -290,6 +290,19 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - `PersonPicker` busca en el directorio (`GET /members/directory`), que cualquier miembro puede leer; `MemberSearch` de Personas sigue usando `/members` (administración).
 - **Pruebas:** API (directorio: buscar por palabras, nombrar ids sin invitaciones pendientes, `%` literal, 400 con ambos o ninguno; protección de rutas) y web (preferencias con vuelta atrás, etiquetas, plantillas de texto a HTML y de vuelta, compartir y reabrir, delegaciones dadas y recibidas con cruce, insertar plantilla en un comentario, `htmlToPlainText`) y E2E contra el API real (preferencia que sobrevive a recargar, etiqueta, plantilla compartida con un colega, delegar y cancelar).
 
+### 4.14 Campana de notificaciones y etiquetas en el ticket (hecho, 2026-10-21, `feat/web-notifications-tags`)
+- **Campana (`features/notifications`, en la barra superior junto al nombre):** muestra cuántas sin leer hay (`GET /notifications/unread-count`, «9+» desde 10). Se vuelve a pedir **cada minuto** y al volver a la ventana; la web aún no usa el tiempo real (§18). Un clic abre un panel con las 8 más recientes (`GET /notifications?page=1&pageSize=8`).
+  - Cada notificación muestra su título, el texto y la hora relativa («hace 5 minutos», «ayer»; después de una semana, la fecha en la zona del perfil). Las que no se han leído llevan un punto y «Sin leer:» para lectores de pantalla.
+  - Si es sobre un ticket, es un enlace a él; abrirla la marca leída (`POST /notifications/:id/read`). Un botón la marca leída sin abrirla, y «Marcar todas como leídas» llama a `POST /notifications/read-all`.
+  - El panel se cierra con Escape (el foco vuelve a la campana), con un clic fuera o al cambiar de página.
+  - «Ver todas» lleva a `/notifications`: pestañas «Todas» y «Sin leer» y páginas de 25; la URL guarda `?filter=unread&page=`.
+- **Mis etiquetas en el detalle del ticket (`TicketTagsCard`, columna derecha):** las etiquetas propias del ticket, cada una con su botón para quitarla (`DELETE /tickets/:id/tags/:tagId`). «Agregar» abre la lista de las etiquetas propias que el ticket aún no tiene (`POST /tickets/:id/tags`); si no queda ninguna, enlaza a Mi perfil › Etiquetas.
+  - Solo cambia el detalle en la caché (no se vuelve a pedir todo el ticket) y se vuelven a leer las bandejas.
+- **Pruebas:**
+  - Web: la campana con su conteo, abrir un ticket marcándolo leído, marcar una y todas, Escape y clic fuera, la página con su filtro, la hora relativa, y agregar y quitar etiquetas del ticket.
+  - E2E contra el API real con la persona nueva `bell@e2e.test`, que tiene tres notificaciones sembradas: el conteo, marcar una, el filtro y marcar todas, que sobrevive a recargar.
+  - Las etiquetas del ticket no tienen E2E contra el API real porque el stack no tiene tickets.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

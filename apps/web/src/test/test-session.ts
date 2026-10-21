@@ -38,6 +38,8 @@ export function createTestSession({ signedIn = true, handlers = {} }: TestSessio
     '/tickets': () => ({ items: [], page: 1, pageSize: 25, total: 0 }),
     // The comment form offers the person's templates: none unless a test says otherwise.
     '/text-templates': () => [],
+    // The bell in the top bar: nothing unread unless a test says otherwise.
+    '/notifications/unread-count': () => ({ count: 0 }),
     ...handlers,
   };
   const fake = createFakeTransport(routes);

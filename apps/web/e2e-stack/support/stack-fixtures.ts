@@ -6,4 +6,6 @@ export const PEOPLE = {
   tabs: { email: 'tabs@e2e.test', name: 'Tomás Rey' },
   twoOrganizations: { email: 'leo@e2e.test', name: 'Leo Mora' },
   mustEnroll: { email: 'eva@e2e.test', name: 'Eva Ríos' },
+  /** Has two unread notifications and one read. */
+  notified: { email: 'bell@e2e.test', name: 'Bruno Paz' },
 } as const;

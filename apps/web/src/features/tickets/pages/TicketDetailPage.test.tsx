@@ -318,6 +318,45 @@ describe('TicketDetailPage', () => {
     expect(screen.queryByText('SLA vencido')).toBeNull();
   });
 
+  it('adds one of my tags to the ticket and removes another, without reading the whole ticket again', async () => {
+    const urgent = { id: id(390), name: 'Urgente', color: '#be123c' };
+    const vip = { id: id(391), name: 'Cliente VIP', color: '#6d28d9' };
+    const { fake } = renderRoute(base, {
+      handlers: ticketHandlers({
+        [base]: () => detail({ tags: [urgent] }),
+        '/tags': () => [urgent, vip],
+        [`${base}/tags`]: () => undefined,
+        [`${base}/tags/${urgent.id}`]: () => undefined,
+      }),
+    });
+
+    const tags = await screen.findByRole('list', { name: 'Mis etiquetas' });
+    expect(within(tags).getByText('Urgente')).toBeInTheDocument();
+    await userEvent.click(within(tags).getByRole('button', { name: 'Agregar' }));
+    const picker = await screen.findByRole('dialog', { name: 'Agregar etiqueta' });
+    expect(within(picker).queryByRole('button', { name: 'Urgente' })).not.toBeInTheDocument();
+    await userEvent.click(within(picker).getByRole('button', { name: 'Cliente VIP' }));
+
+    await vi.waitFor(() => expect(fake.callsTo(`${base}/tags`)[0]?.options).toMatchObject({ method: 'POST', body: { tagId: vip.id } }));
+    expect(await within(tags).findByText('Cliente VIP')).toBeInTheDocument();
+    await userEvent.click(within(tags).getByRole('button', { name: 'Quitar la etiqueta Urgente' }));
+
+    await vi.waitFor(() => expect(within(tags).queryByText('Urgente')).not.toBeInTheDocument());
+    expect(fake.callsTo(`${base}/tags/${urgent.id}`)[0]?.options.method).toBe('DELETE');
+    expect(fake.callsTo(base)).toHaveLength(1);
+  });
+
+  it('sends to the profile to create tags when there is none left to add', async () => {
+    const urgent = { id: id(390), name: 'Urgente', color: '#be123c' };
+    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ tags: [urgent] }), '/tags': () => [urgent] }) });
+
+    await userEvent.click(within(await screen.findByRole('list', { name: 'Mis etiquetas' })).getByRole('button', { name: 'Agregar' }));
+    const picker = await screen.findByRole('dialog', { name: 'Agregar etiqueta' });
+
+    expect(await within(picker).findByText(/Este ticket ya tiene todas tus etiquetas/)).toBeInTheDocument();
+    expect(within(picker).getByRole('link', { name: 'Administrar mis etiquetas' })).toHaveAttribute('href', '/profile?tab=tags');
+  });
+
   it('marks an open ticket past its due date', async () => {
     renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ sla: { dueAt: '2026-01-01T15:00:00.000Z', overdue: true, paused: false } }) }) });
     expect(await screen.findByText('SLA vencido')).toBeInTheDocument();

@@ -1,2 +1,2 @@
 export type { IconProps } from './Icon';
-export { BuildingIcon, ChartIcon, CheckIcon, ChevronDownIcon, CopyIcon, DownloadIcon, GridIcon, InboxIcon, LogOutIcon, PlusIcon, SearchIcon, UserIcon, WorkflowIcon } from './icons';
+export { BellIcon, BuildingIcon, ChartIcon, CheckIcon, ChevronDownIcon, CopyIcon, DownloadIcon, GridIcon, InboxIcon, LogOutIcon, PlusIcon, SearchIcon, UserIcon, WorkflowIcon } from './icons';
