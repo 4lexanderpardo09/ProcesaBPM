@@ -88,3 +88,20 @@ export const ticketFormResponseSchema = z.object({
   editableFieldCodes: z.array(z.string()),
   decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string() })),
 }) satisfies z.ZodType<TicketFormResponse>;
+
+/** `GET /fields/:fieldId/options`: the people, sites or preset entries a USER, SITE or preset list field accepts, by name. */
+export const fieldOptionsQuerySchema = z.object({ q: z.string().trim().max(100).default(''), limit: z.coerce.number().int().min(1).max(50).default(20) });
+export type FieldOptionsQuery = z.infer<typeof fieldOptionsQuerySchema>;
+
+export interface FieldOptionResponse {
+  /** The id the field stores. */
+  readonly value: string;
+  readonly label: string;
+}
+
+/** Ordered by label; at most `limit`, so a long list is narrowed with `q`. */
+export interface FieldOptionsResponse {
+  readonly options: readonly FieldOptionResponse[];
+}
+
+export const fieldOptionsResponseSchema = z.object({ options: z.array(z.object({ value: uuidSchema, label: z.string() })) }) satisfies z.ZodType<FieldOptionsResponse>;
