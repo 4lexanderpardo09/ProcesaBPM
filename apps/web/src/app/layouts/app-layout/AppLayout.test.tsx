@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderRoute } from '@/test/render-route';
 
 const mainNavigation = () => screen.findByRole('navigation', { name: 'Navegación principal' });
@@ -9,16 +9,26 @@ describe('AppLayout', () => {
   it('shows the navigation grouped by section', async () => {
     renderRoute('/tickets');
     const nav = await mainNavigation();
+    await within(nav).findByRole('link', { name: 'Catálogo' });
     const operation = within(nav).getByRole('region', { name: 'Operación' });
     const configuration = within(nav).getByRole('region', { name: 'Configuración' });
     expect(within(operation).getAllByRole('link').map((link) => link.textContent)).toEqual(['Bandejas', 'Flujos', 'Reportes']);
     expect(within(configuration).getAllByRole('link').map((link) => link.textContent)).toEqual(['Catálogo', 'Personas']);
   });
 
+  it('shows only the sections the role can use', async () => {
+    const requester = { permissions: [{ action: 'create', subject: 'Ticket', conditional: false }, { action: 'read', subject: 'Category', conditional: false }] };
+    const { fake } = renderRoute('/tickets', { handlers: { '/auth/me/permissions': () => requester } });
+    const nav = await mainNavigation();
+    await vi.waitFor(() => expect(fake.callsTo('/auth/me/permissions')).toHaveLength(1));
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['Bandejas']);
+    expect(within(nav).queryByRole('region', { name: 'Configuración' })).toBeNull();
+  });
+
   it('marks the current section and shows its page', async () => {
     renderRoute('/workflows');
     expect(await screen.findByRole('heading', { level: 1, name: 'Flujos' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Flujos' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('link', { name: 'Flujos' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Bandejas' })).not.toHaveAttribute('aria-current');
   });
 

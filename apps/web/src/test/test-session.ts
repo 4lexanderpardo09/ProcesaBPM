@@ -32,6 +32,8 @@ export function createTestSession({ signedIn = true, handlers = {} }: TestSessio
     '/auth/refresh': server.refresh,
     '/auth/logout': server.logout,
     '/auth/me': (options) => fakeProfile(options.headers?.Authorization),
+    // An administrator by default: a test about permissions replaces it.
+    '/auth/me/permissions': () => ({ permissions: [{ action: 'manage', subject: 'all', conditional: false }] }),
     '/auth/select-tenant': (options) => server.issue((options.body as { tenantId: string }).tenantId),
     '/tickets': () => ({ items: [], page: 1, pageSize: 25, total: 0 }),
     ...handlers,

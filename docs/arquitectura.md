@@ -233,6 +233,15 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **Contratos:** `availableCatalogResponseSchema` y `creationFormResponseSchema` en shared.
 - **Pruebas:** la página (pide elegir primero, prioridades activas en orden, valida asunto y campos, envía y abre el ticket, empresa y prioridad elegidas, inicio no permitido, elegir el primer responsable, sin empresa) y `Breadcrumb`. Se probó contra el API real en local con un adjunto: el ticket se crea y se abre.
 
+### 4.7 Permisos en la web y catálogo (hecho, 2026-10-21, `feat/web-catalog-admin`)
+- **Permisos de la sesión:** `usePermissions()` (`shared/session`) lee `GET /auth/me/permissions` (clave `['session','permissions']`, se borra con la sesión) y responde `can(acción, sujeto)` y `canAny([...])` como CASL (`manage` es cualquier acción, `all` cualquier sujeto; una regla condicional cuenta). Mientras carga no concede nada: un botón aparece un momento después en vez de aparecer y fallar. El API sigue decidiendo cada petición.
+- **Menú:** cada entrada puede declarar `requires` (cualquiera basta). Flujos pide `read Workflow`; Reportes, `read Report`; Catálogo, crear o editar algo del catálogo (un agente que solo lo lee para abrir tickets no lo ve); Personas, leer miembros, roles o grupos. Una sección sin entradas no se muestra. En las pruebas, la sesión falsa es administradora salvo que la prueba diga otra cosa.
+- **Catálogo (`features/catalog`, `/catalog`):** pestañas Categorías, Prioridades y Tipos de error, cada una solo si se puede leer (la pestaña va en `?tab=`).
+  - **`CatalogList`** (genérica): búsqueda por nombre (300 ms), "Mostrar inactivos", páginas de 25, estado como insignia y las acciones que el rol permite: crear (`create`), editar (`update`) y activar/desactivar (necesita `update` y `delete`, porque el API pide uno para cada cosa). Desactivar es el "borrar" del API: lo que ya lo usa lo conserva, pero no se ofrece más.
+  - **Categorías** con el panel de sus **subcategorías** (nombre, descripción que ve quien abre el ticket, prioridad por defecto). **Prioridades** con orden y color opcional. **Tipos de error** con su uso (reapertura, cierra el ticket, error de proceso; reapertura y cerrar se excluyen en el formulario como en el API) y el panel de **subtipos**, que usan los permisos de su tipo.
+  - **Diálogos (`CatalogDialog`)** con los errores en palabras (`lib/catalog-error`): nombre repetido (`DUPLICATE`), sin permiso, datos rechazados o algo que lo usa. Al guardar se vuelven a leer las listas del catálogo y lo que cachea "Nuevo ticket" (catálogo disponible y prioridades).
+- **Pruebas:** `grants`, el menú según el rol, `catalogErrorMessage` y la página (lista con acciones, búsqueda e inactivos, crear con nombre repetido, desactivar, subcategorías con prioridad, reapertura excluye cerrar, rol de solo lectura sin acciones, rol sin catálogo). Se probó en local contra el API real.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|
