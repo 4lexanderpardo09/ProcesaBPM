@@ -238,4 +238,16 @@ describe('authorization (CASL, deny by default)', () => {
       expect(logLines.some((line) => (JSON.parse(line) as { event?: string }).event === 'authorization.rule_dropped')).toBe(true);
     });
   });
+
+  describe('GET /auth/me/permissions', () => {
+    it('lists what the role grants, so the web shows only what the person can use', async () => {
+      const token = await tokenOf(tenantA, { roleId: companyReaderRole });
+      expect((await get('/auth/me/permissions', token).expect(200)).body).toEqual({ permissions: [{ action: 'read', subject: 'Company', conditional: false }] });
+    });
+
+    it('is empty for a role without permissions, and needs a session', async () => {
+      expect((await get('/auth/me/permissions', await tokenOf(tenantA, { roleId: noPermissionsRole })).expect(200)).body).toEqual({ permissions: [] });
+      await http().get('/auth/me/permissions').expect(401);
+    });
+  });
 });

@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { AuthorizationCoreModule } from './authorization-core.module.js';
 import { ABILITY_CACHE, InMemoryAbilityCache } from './application/ability-cache.js';
 import { AbilityService, SUBJECT_REGISTRY } from './application/ability.service.js';
+import { MyPermissionsController } from './http/my-permissions.controller.js';
 import { PermissionGuard } from './http/permission.guard.js';
 import { RequestAuthGuard } from './http/request-auth.guard.js';
 import { RouteAccessAuditor } from './http/route-access-auditor.js';
@@ -15,6 +16,7 @@ import { ScopedActionsAuditor } from './http/scoped-actions-auditor.js';
  */
 @Module({
   imports: [AuthModule, AuthorizationCoreModule],
+  controllers: [MyPermissionsController],
   providers: [
     { provide: ABILITY_CACHE, useClass: InMemoryAbilityCache },
     AbilityService,
