@@ -3,6 +3,7 @@ import { Navigate, type RouteObject } from 'react-router';
 import { ForgotPasswordPage, LoginPage } from '@/features/auth';
 import { CatalogPage } from '@/features/catalog';
 import { OrganizationPage } from '@/features/organization';
+import { PeoplePage } from '@/features/people';
 import { NewTicketPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
@@ -18,7 +19,7 @@ function SectionPlaceholder({ itemKey }: { readonly itemKey: NavigationItemKey }
   return <UnderConstructionPage title={t(`items.${itemKey}`)} />;
 }
 
-const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets', 'catalog', 'organization']);
+const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets', 'catalog', 'organization', 'people']);
 
 const ticketRoutes: RouteObject[] = [
   { path: paths.tickets, element: <TicketInboxPage /> },
@@ -29,6 +30,7 @@ const ticketRoutes: RouteObject[] = [
 const configurationRoutes: RouteObject[] = [
   { path: paths.catalog, element: <CatalogPage /> },
   { path: paths.organization, element: <OrganizationPage /> },
+  { path: paths.people, element: <PeoplePage /> },
 ];
 
 const sectionRoutes: RouteObject[] = navigationSections.flatMap((section) =>
