@@ -27,6 +27,7 @@ test.describe('ticket inbox', () => {
     await expect(page.getByRole('tab', { name: /Todos\s*3/ })).toBeVisible();
 
     await page.getByRole('tab', { name: /^Todos/ }).click();
+    await expect(page).toHaveURL(/\/tickets\?view=all$/);
     await page.getByRole('combobox', { name: 'Estado' }).selectOption('CLOSED');
 
     await expect(page).toHaveURL(/\/tickets\?view=all&status=CLOSED$/);

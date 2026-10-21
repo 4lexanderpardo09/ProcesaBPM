@@ -10,7 +10,17 @@ const ASSIGNED = id(500);
 const QUOTA = id(501);
 const OLD = id(502);
 
-const notification = (notificationId: string, overrides: Record<string, unknown> = {}) => ({
+interface FakeNotification {
+  readonly id: string;
+  readonly type: string;
+  readonly title: string;
+  readonly body: string;
+  readonly ticketId: string | null;
+  readonly readAt: string | null;
+  readonly createdAt: string;
+}
+
+const notification = (notificationId: string, overrides: Partial<FakeNotification> = {}): FakeNotification => ({
   id: notificationId,
   type: 'TICKET_ASSIGNED',
   title: 'Te asignaron el ticket T-1042',
