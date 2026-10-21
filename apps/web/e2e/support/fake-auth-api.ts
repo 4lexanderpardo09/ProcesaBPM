@@ -281,6 +281,11 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
         tenantMode: 'ACTIVE',
       });
     },
+    // An administrator: every section of the menu shows.
+    'GET /api/auth/me/permissions': (route, _body, authorization) => {
+      if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+      return json(route, 200, { permissions: [{ action: 'manage', subject: 'all', conditional: false }] });
+    },
     'GET /api/tickets': (route, _body, authorization, search) => {
       if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
       return json(route, 200, ticketPage(search));
