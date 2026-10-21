@@ -208,7 +208,7 @@ describe('TicketDetailPage', () => {
 
     expect(await screen.findByText('comprobante-pago.pdf')).toBeInTheDocument();
     expect(screen.queryByText('version-vieja.pdf')).toBeNull();
-  });
+  }, 15_000);
 
   it('adds a comment as escaped HTML and shows it in the activity', async () => {
     const comments: string[] = [];

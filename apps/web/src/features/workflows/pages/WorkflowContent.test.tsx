@@ -155,6 +155,26 @@ describe('workflow content', () => {
     await vi.waitFor(() => expect(transport.callsTo(`${url}/fields`)[0]?.options.body).toMatchObject({ code: 'MEDIO', type: 'SELECT', config: { options: [{ value: 'Efectivo', label: 'Efectivo' }] } }));
   });
 
+  it('offers a list field only the Excel files this workflow may use, and reads a column of the chosen one', async () => {
+    const fake = api(startingDoc());
+    const excel = (datasetId: string, name: string, workflowId: string | null) => ({ id: datasetId, name, workflowId, columns: [{ name: 'Banco', isKey: false }], keyColumn: null, rowCount: 3, sourceFileName: null, loadedAt: at, isActive: true });
+    const { fake: transport } = renderRoute(url, { handlers: { ...fake.handlers, '/datasets': () => page([excel(id(80), 'Bancos', null), excel(id(81), 'Sedes de este flujo', FLOW), excel(id(82), 'De otro flujo', id(99))]) } });
+
+    await openBlock('Inicio: Inicio');
+    await userEvent.click(within(inspector()).getByRole('button', { name: 'Agregar campo' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo campo' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /^Nombre/ }), 'Banco');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Tipo' }), 'Lista (una opción)');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'De dónde salen las opciones' }), 'Una columna de un Excel cargado');
+    const excelChoice = await within(dialog).findByRole('combobox', { name: 'Excel' });
+    expect(within(excelChoice).getAllByRole('option').map((option) => option.textContent)).toEqual(['Elige un Excel', 'Bancos', 'Sedes de este flujo']);
+    await userEvent.selectOptions(excelChoice, 'Bancos');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Columna' }), 'Banco');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Agregar campo' }));
+
+    await vi.waitFor(() => expect(transport.callsTo(`${url}/fields`)[0]?.options.body).toMatchObject({ code: 'BANCO', type: 'SELECT', dataSource: { kind: 'DATASET', datasetId: id(80), column: 'Banco' } }));
+  }, 15_000);
+
   it('edits a field without its code or type, moves it down and takes another out', async () => {
     const fake = api({
       ...startingDoc(),

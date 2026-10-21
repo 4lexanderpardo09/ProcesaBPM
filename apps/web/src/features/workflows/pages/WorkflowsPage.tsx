@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 import { useDebouncedValue } from '@/shared/lib/use-debounced-value';
-import { workflowPath } from '@/shared/lib/paths';
+import { paths, workflowPath } from '@/shared/lib/paths';
 import { useApiClient, usePermissions } from '@/shared/session';
-import { Badge, Button, Checkbox, PageHeader, Pagination, PlusIcon, Table, type TableColumn, TextField } from '@/shared/ui';
+import { Badge, Button, ButtonLink, Checkbox, PageHeader, Pagination, PlusIcon, Table, type TableColumn, TextField } from '@/shared/ui';
 import { WORKFLOWS_PAGE_SIZE, type WorkflowListItem, workflowsQueryOptions } from '../api/workflows-api';
 import { NewWorkflowDialog } from '../components/NewWorkflowDialog';
 import styles from '../components/Workflows.module.css';
@@ -51,11 +51,14 @@ export function WorkflowsPage() {
         title={t('title')}
         subtitle={t('subtitle')}
         actions={
-          can('update', 'Workflow') ? (
-            <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setCreating(true)}>
-              {t('new')}
-            </Button>
-          ) : undefined
+          <div className={styles.rowActions}>
+            <ButtonLink to={paths.datasets}>{t('datasets.title')}</ButtonLink>
+            {can('update', 'Workflow') && (
+              <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setCreating(true)}>
+                {t('new')}
+              </Button>
+            )}
+          </div>
         }
       />
       <div className={styles.toolbar}>

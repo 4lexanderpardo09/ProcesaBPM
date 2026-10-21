@@ -8,6 +8,8 @@ export const paths = {
   workflows: '/workflows',
   workflow: '/workflows/:workflowId',
   workflowVersion: '/workflows/:workflowId/versions/:versionId',
+  datasets: '/workflows/datasets',
+  dataset: '/workflows/datasets/:datasetId',
   reports: '/reports',
   catalog: '/catalog',
   organization: '/organization',
@@ -26,6 +28,10 @@ export function workflowPath(workflowId: string): string {
 
 export function workflowVersionPath(workflowId: string, versionId: string): string {
   return `${workflowPath(workflowId)}/versions/${encodeURIComponent(versionId)}`;
+}
+
+export function datasetPath(datasetId: string): string {
+  return `${paths.datasets}/${encodeURIComponent(datasetId)}`;
 }
 
 /** Notices the login page accepts from its URL: a fixed list, never free text. */
