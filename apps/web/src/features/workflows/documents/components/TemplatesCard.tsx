@@ -2,9 +2,11 @@ import { MAX_FILE_BYTES, PDF_LIMITS } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ChangeEvent, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 import { companiesQueryOptions } from '@/features/people';
 import { uploadFiles } from '@/shared/files/upload-files';
 import { formatFileSize } from '@/shared/lib/format-file-size';
+import { pdfTemplatePath } from '@/shared/lib/paths';
 import { useApiClient } from '@/shared/session';
 import { Badge, Button, Card, Checkbox, Dialog, PlusIcon, Select, Table, type TableColumn, TextField } from '@/shared/ui';
 import { deletePdfTemplate, documentQueryKeys, type PdfTemplate, pdfTemplatesQueryOptions, previewPdfTemplate, registerPdfTemplate, TEMPLATE_UPLOAD_ROUTES, updatePdfTemplate } from '../api/documents-api';
@@ -37,7 +39,15 @@ export function TemplatesCard({ workflowId, can }: { readonly workflowId: string
 
   const companyName = (companyId: string | null) => (companyId === null ? t('documents.generated.allCompanies') : (companies.data?.find((company) => company.id === companyId)?.name ?? '…'));
   const columns: TableColumn<PdfTemplate>[] = [
-    { key: 'name', header: t('documents.templates.name'), cell: (row) => row.name },
+    {
+      key: 'name',
+      header: t('documents.templates.name'),
+      cell: (row) => (
+        <Link to={pdfTemplatePath(workflowId, row.id)} className={styles.link} aria-label={t('documents.templates.mapNamed', { name: row.name })}>
+          {row.name}
+        </Link>
+      ),
+    },
     { key: 'pages', header: t('documents.templates.pages'), width: '90px', cell: (row) => row.pageCount },
     { key: 'form', header: t('documents.templates.form'), width: '170px', cell: (row) => (row.hasAcroform ? t('documents.templates.formFields', { count: row.acroformFields.length }) : t('documents.templates.noForm')) },
     { key: 'company', header: t('documents.generated.company'), cell: (row) => companyName(row.companyId) },
@@ -79,6 +89,7 @@ export function TemplatesCard({ workflowId, can }: { readonly workflowId: string
     >
       <div className={styles.stack}>
         <p className={styles.note}>{t('documents.templates.hint')}</p>
+        <p className={styles.note}>{t('documents.templates.mapHint')}</p>
         {blocked && <p className={styles.note}>{t('documents.popupBlocked')}</p>}
         <DocumentError error={remove.error ?? preview.error} context="source" />
         <Table
