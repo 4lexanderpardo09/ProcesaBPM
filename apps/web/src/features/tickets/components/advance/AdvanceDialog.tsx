@@ -40,7 +40,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const [comment, setComment] = useState('');
   const [localIssues, setLocalIssues] = useState<ReadonlyMap<string, Issue>>(new Map());
   const next = useNextAssignee();
-  const knownLabels = { ...ticket.valueNames.users, ...ticket.valueNames.sites };
+  const knownLabels = Object.assign({}, ...Object.values(ticket.valueNames)) as Record<string, string>;
   const advance = useTicketMutation((client, args: AdvanceArgs) =>
     transitionTicket(client, ticket.id, {
       transitionId: decision.transitionId,

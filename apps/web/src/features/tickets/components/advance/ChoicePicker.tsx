@@ -17,7 +17,7 @@ export interface ChoicePickerProps {
   readonly source: ChoiceSource;
   /** One id or value, or several for a MULTI_SELECT. */
   readonly value: string | readonly string[];
-  /** Names already known for the ticket's values (people and sites of the detail). */
+  /** Names already known for the ticket's values (`valueNames` of the detail). */
   readonly knownLabels: Readonly<Record<string, string>>;
   readonly error: string | undefined;
   readonly onChange: (value: string | readonly string[]) => void;
