@@ -6,7 +6,7 @@ import {
   type UpdateWorkflowRequest,
   updateWorkflowRequestSchema,
   type WorkflowDetailResponse,
-  type WorkflowResponse,
+  type WorkflowListItem,
   type WorkflowsQuery,
   workflowsQuerySchema,
 } from '@procesabpm/shared';
@@ -21,7 +21,7 @@ export class WorkflowsController {
 
   @RequirePermission('read', 'Workflow')
   @Get()
-  list(@Query(new ZodValidationPipe(workflowsQuerySchema)) query: WorkflowsQuery): Promise<Page<WorkflowResponse>> {
+  list(@Query(new ZodValidationPipe(workflowsQuerySchema)) query: WorkflowsQuery): Promise<Page<WorkflowListItem>> {
     return this.workflows.list(query);
   }
 

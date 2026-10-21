@@ -107,6 +107,19 @@ describe('workflows API (builder backend)', () => {
       expect(((await admin.get(`/workflows?subcategoryId=${subcategory}`).expect(200)).body.items as Array<{ id: string }>).map((w) => w.id)).toEqual([created.id]);
       expect((await admin.patch(`/workflows/${created.id}`, { name: `${name}-2` }).expect(200)).body.name).toBe(`${name}-2`);
     });
+
+    it('a list row names its subcategory and the published and draft versions', async () => {
+      const c = await newWorkflow();
+      const { name, subcategoryId } = (await admin.get(`/workflows/${c.workflowId}`).expect(200)).body as { name: string; subcategoryId: string };
+      const row = async () => ((await admin.get(`/workflows?search=${encodeURIComponent(name)}`).expect(200)).body.items as Array<Record<string, unknown>>)[0];
+      expect(await row()).toMatchObject({ id: c.workflowId, subcategory: { id: subcategoryId, category: { name: expect.any(String) } }, publishedVersion: null, draftVersion: { id: c.versionId, number: 1 } });
+
+      await publishFlow(c).then((response) => expect(response.status).toBe(200));
+      expect(await row()).toMatchObject({ publishedVersion: { id: c.versionId, number: 1 }, draftVersion: null });
+
+      const draft = (await admin.post(`/workflows/${c.workflowId}/versions`, { fromVersionId: c.versionId }).expect(201)).body;
+      expect(await row()).toMatchObject({ publishedVersion: { id: c.versionId, number: 1 }, draftVersion: { id: draft.id, number: 2 } });
+    });
   });
 
   describe('save graph', () => {
