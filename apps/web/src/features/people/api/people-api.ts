@@ -1,5 +1,10 @@
 import {
+  approvalGroupTypeResponseSchema,
+  approvalMembersResponseSchema,
+  approversResponseSchema,
   companyResponseSchema,
+  type CreateDelegationRequest,
+  delegationResponseSchema,
   groupMembersResponseSchema,
   type InviteMemberRequest,
   type MemberStatus,
@@ -127,4 +132,66 @@ export function addGroupMember(client: HttpClient, groupId: string, userId: stri
 
 export function removeGroupMember(client: HttpClient, groupId: string, userId: string) {
   return client.request(`/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+}
+
+export function approvalTypesQueryOptions(client: HttpClient) {
+  return queryOptions({
+    queryKey: [...adminQueryKeys.all, '/approval-group-types', 'all'] as const,
+    queryFn: ({ signal }) => client.request(`/approval-group-types?pageSize=${String(ALL)}`, { schema: pageResponseSchema(approvalGroupTypeResponseSchema), signal }),
+    select: (page) => page.items,
+  });
+}
+
+/** The type in use by a group or a workflow step, and the default one, are kept (the API refuses them). */
+export function deleteApprovalType(client: HttpClient, typeId: string) {
+  return client.request(`/approval-group-types/${encodeURIComponent(typeId)}`, { method: 'DELETE' });
+}
+
+/** In order: the first is the primary approver, the others substitute them in turn. */
+export function approversQueryOptions(client: HttpClient, groupId: string) {
+  return queryOptions({
+    queryKey: [...adminQueryKeys.all, '/approval-groups', groupId, 'approvers'] as const,
+    queryFn: ({ signal }) => client.request(`/approval-groups/${encodeURIComponent(groupId)}/approvers`, { schema: approversResponseSchema, signal }),
+    select: (response) => [...response.approvers].sort((a, b) => a.position - b.position).map((approver) => approver.userId),
+  });
+}
+
+export function replaceApprovers(client: HttpClient, groupId: string, userIds: readonly string[]) {
+  return client.request(`/approval-groups/${encodeURIComponent(groupId)}/approvers`, { method: 'PUT', body: { userIds }, schema: approversResponseSchema });
+}
+
+/** The people whose requests this group approves. */
+export function approvalMembersQueryOptions(client: HttpClient, groupId: string) {
+  return queryOptions({
+    queryKey: [...adminQueryKeys.all, '/approval-groups', groupId, 'members'] as const,
+    queryFn: ({ signal }) => client.request(`/approval-groups/${encodeURIComponent(groupId)}/members`, { schema: approvalMembersResponseSchema, signal }),
+    select: (response) => response.userIds,
+  });
+}
+
+export function addApprovalMember(client: HttpClient, groupId: string, userId: string) {
+  return client.request(`/approval-groups/${encodeURIComponent(groupId)}/members`, { method: 'POST', body: { userId } });
+}
+
+export function removeApprovalMember(client: HttpClient, groupId: string, userId: string) {
+  return client.request(`/approval-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+}
+
+/** One page of delegations; `current` keeps only the ones in force now or still to come. */
+export function delegationsQueryOptions(client: HttpClient, page: number, current: boolean) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(ADMIN_PAGE_SIZE), current: String(current) });
+  return queryOptions({
+    queryKey: [...adminQueryKeys.all, '/delegations', page, current] as const,
+    queryFn: ({ signal }) => client.request(`/delegations?${params.toString()}`, { schema: pageResponseSchema(delegationResponseSchema), signal }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function createDelegation(client: HttpClient, request: CreateDelegationRequest) {
+  return client.request('/delegations', { method: 'POST', body: request, schema: delegationResponseSchema });
+}
+
+/** A delegation still to come is removed; one in force ends now. */
+export function cancelDelegation(client: HttpClient, delegationId: string) {
+  return client.request(`/delegations/${encodeURIComponent(delegationId)}/cancel`, { method: 'POST' });
 }

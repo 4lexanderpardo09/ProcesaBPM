@@ -1,5 +1,5 @@
 import { type GroupResponse, groupResponseSchema, type MemberResponse } from '@procesabpm/shared';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AdminDialog } from '@/shared/admin/AdminDialog';
@@ -7,18 +7,16 @@ import { AdminError } from '@/shared/admin/AdminError';
 import { AdminList } from '@/shared/admin/AdminList';
 import { saveAdminItem } from '@/shared/admin/admin-api';
 import { useAdminMutation } from '@/shared/admin/use-admin-mutation';
-import { useDebouncedValue } from '@/shared/lib/use-debounced-value';
 import { useApiClient, usePermissions } from '@/shared/session';
 import { Button, Dialog, TextField } from '@/shared/ui';
-import { addGroupMember, groupMembersQueryOptions, memberQueryOptions, membersQueryOptions, removeGroupMember } from '../api/people-api';
+import { MemberSearch } from './MemberSearch';
+import { addGroupMember, groupMembersQueryOptions, removeGroupMember } from '../api/people-api';
+import { useMembersById } from '../hooks/use-members-by-id';
 import { memberName } from '../lib/member-name';
 import adminStyles from '@/shared/admin/Admin.module.css';
 import styles from './People.module.css';
 
 const NAME_MAX = 200;
-const SEARCH_DELAY_MS = 300;
-/** Enough results to find someone by name; more means the search should be more precise. */
-const SEARCH_RESULTS = 8;
 
 type Dialog = { readonly kind: 'create' } | { readonly kind: 'edit' | 'members'; readonly group: GroupResponse } | null;
 
@@ -77,15 +75,12 @@ function GroupDialog({ record, onClose }: { readonly record: GroupResponse | und
 function GroupMembersDialog({ group, canEdit, onClose }: { readonly group: GroupResponse; readonly canEdit: boolean; readonly onClose: () => void }) {
   const { t } = useTranslation(['people', 'admin']);
   const client = useApiClient();
-  const [search, setSearch] = useState('');
-  const settled = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
   const userIds = useQuery(groupMembersQueryOptions(client, group.id));
-  const people = useQueries({ queries: (userIds.data ?? []).map((userId) => memberQueryOptions(client, userId)) });
-  const candidates = useQuery({ ...membersQueryOptions(client, { page: 1, search: settled, roleId: '', status: 'ACTIVE' }), enabled: canEdit && settled !== '' });
+  const people = useMembersById(userIds.data ?? []);
   const add = useAdminMutation((c, userId: string) => addGroupMember(c, group.id, userId));
   const remove = useAdminMutation((c, userId: string) => removeGroupMember(c, group.id, userId));
   const inGroup = new Set(userIds.data ?? []);
-  const members = people.flatMap((query) => (query.data === undefined ? [] : [query.data])).sort((a, b) => memberName(a).localeCompare(memberName(b), 'es'));
+  const members = [...people.byId.values()].sort((a, b) => memberName(a).localeCompare(memberName(b), 'es'));
 
   return (
     <Dialog
@@ -96,7 +91,7 @@ function GroupMembersDialog({ group, canEdit, onClose }: { readonly group: Group
       footer={<Button onClick={onClose}>{t('people:permissions.close')}</Button>}
     >
       <div className={adminStyles.dialogFields}>
-        {userIds.data === undefined || people.some((query) => query.isPending) ? (
+        {userIds.data === undefined || people.loading ? (
           <p className={styles.note}>{userIds.isError ? t('admin:list.failed') : t('admin:list.loading')}</p>
         ) : members.length === 0 ? (
           <p className={styles.note}>{t('groups.noMembers')}</p>
@@ -118,28 +113,15 @@ function GroupMembersDialog({ group, canEdit, onClose }: { readonly group: Group
         )}
         <AdminError error={add.error ?? remove.error} />
         {canEdit && (
-          <>
-            <TextField label={t('groups.search')} hint={t('groups.searchHint')} type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
-            {settled !== '' && candidates.data !== undefined && (
-              <ul className={styles.people} aria-label={t('groups.search')}>
-                {candidates.data.items.length === 0 && <li className={styles.note}>{t('groups.noResults')}</li>}
-                {candidates.data.items.slice(0, SEARCH_RESULTS).map((candidate) => (
-                  <li key={candidate.userId} className={styles.person}>
-                    <span>
-                      {memberName(candidate)} <span className={styles.secondary}>{candidate.email}</span>
-                    </span>
-                    {inGroup.has(candidate.userId) ? (
-                      <span className={styles.secondary}>{t('groups.alreadyIn')}</span>
-                    ) : (
-                      <Button variant="ghost" aria-label={t('groups.addNamed', { name: memberName(candidate) })} disabled={add.isPending} onClick={() => add.mutate(candidate.userId)}>
-                        {t('groups.add')}
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+          <MemberSearch
+            label={t('groups.search')}
+            actionLabel={t('groups.add')}
+            actionLabelNamed={(name) => t('groups.addNamed', { name })}
+            taken={inGroup}
+            takenLabel={t('groups.alreadyIn')}
+            pending={add.isPending}
+            onPick={(candidate) => add.mutate(candidate.userId)}
+          />
         )}
       </div>
     </Dialog>

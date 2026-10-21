@@ -50,7 +50,7 @@ export const navigationSections: readonly NavigationSection[] = [
     items: [
       { key: 'catalog', path: paths.catalog, icon: GridIcon, requires: CATALOG_SCREENS },
       { key: 'organization', path: paths.organization, icon: BuildingIcon, requires: ORGANIZATION_SCREENS },
-      { key: 'people', path: paths.people, icon: UserIcon, requires: [['read', 'Membership'], ['read', 'Role'], ['read', 'Group']] },
+      { key: 'people', path: paths.people, icon: UserIcon, requires: [['read', 'Membership'], ['read', 'Role'], ['read', 'Group'], ['read', 'ApprovalGroup'], ['manage', 'Delegation']] },
     ],
   },
 ];
