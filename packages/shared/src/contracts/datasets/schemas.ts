@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { nameSchema, pageQuerySchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
+import { requestUploadsSchema } from '../files/schemas.js';
 
 /**
  * Datasets: a spreadsheet loaded as the source of a field's values (the old `tm_data_excel`). The administrator uploads
@@ -15,6 +16,9 @@ export const DATASET_MAX_ROWS = 20_000;
 export const DATASET_MAX_CELL_CHARACTERS = 1_000;
 
 const columnNameSchema = z.string().trim().min(1).max(DATASET_MAX_COLUMN_NAME);
+
+/** One `.xlsx` to load: it goes through the usual two-phase upload, asked for with the workflow permissions. */
+export const requestDatasetUploadSchema = requestUploadsSchema.refine((body) => body.files.length === 1 && body.files[0]!.name.toLowerCase().endsWith('.xlsx'), 'Upload exactly one .xlsx file');
 
 export const createDatasetRequestSchema = z.object({
   name: nameSchema,

@@ -2,6 +2,7 @@ import { type CreateDatasetRequest, pageResponseSchema, type ReloadDatasetReques
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
+import type { UploadRoutes } from '@/shared/files/upload-files';
 
 export const DATASETS_PAGE_SIZE = 25;
 export const DATASET_ROWS_PAGE_SIZE = 50;
@@ -58,6 +59,9 @@ export function datasetRowsQueryOptions(client: HttpClient, datasetId: string, p
     placeholderData: keepPreviousData,
   });
 }
+
+/** A workbook is uploaded under the workflow permissions, not the ticket ones a designer may lack. */
+export const DATASET_UPLOAD_ROUTES: UploadRoutes = { request: '/datasets/uploads', confirm: (fileId) => `/datasets/uploads/${encodeURIComponent(fileId)}/confirm` };
 
 export function createDataset(client: HttpClient, body: CreateDatasetRequest) {
   return client.request('/datasets', { method: 'POST', body, schema: datasetSchema });

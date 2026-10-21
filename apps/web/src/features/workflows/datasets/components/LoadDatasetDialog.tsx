@@ -7,7 +7,7 @@ import { formatFileSize } from '@/shared/lib/format-file-size';
 import { useApiClient } from '@/shared/session';
 import { Button, Dialog, Select, TextField } from '@/shared/ui';
 import { allWorkflowsQueryOptions } from '../../api/workflows-api';
-import { createDataset, type Dataset, datasetQueryKeys, reloadDataset } from '../api/datasets-api';
+import { createDataset, DATASET_UPLOAD_ROUTES, type Dataset, datasetQueryKeys, reloadDataset } from '../api/datasets-api';
 import { DatasetError } from './DatasetError';
 import styles from './Datasets.module.css';
 
@@ -51,7 +51,7 @@ export function LoadDatasetDialog({ dataset, onClose }: LoadDatasetDialogProps) 
   };
   const load = useMutation({
     mutationFn: async (chosen: File) => {
-      const [uploaded] = await uploadFiles(client, [chosen]);
+      const [uploaded] = await uploadFiles(client, [chosen], fetch, DATASET_UPLOAD_ROUTES);
       const fileId = uploaded!.id;
       const saved = creating ? await createDataset(client, { name: name.trim(), fileId, ...(workflowId === ALL_WORKFLOWS ? {} : { workflowId }) }) : await reloadDataset(client, dataset.id, { fileId });
       return { fileId, dataset: saved };

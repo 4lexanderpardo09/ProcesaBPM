@@ -4,7 +4,9 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
 
 ## 0. Hecho
 - **Datos de Excel en la web (2026-10-21, `feat/web-datasets`):** lista, detalle con las filas, carga en dos pasos (archivo y columna clave opcional), recarga, editar y eliminar. Detalle en arquitectura.md §4.18.
-  - **Arreglado:** el constructor ofrecía Excel limitados a otros flujos, que el API rechaza al publicar.
+  - **Arreglado:**
+    - El constructor ofrecía Excel limitados a otros flujos, que el API rechaza al publicar.
+    - Subir un Excel pedía permisos de tickets. Ahora hay rutas propias en el API (`POST /datasets/uploads` y su confirmación) con `update Workflow`, como las plantillas PDF.
   - **Decidido (con criterio, el usuario delegó):**
     - La pantalla vive bajo Flujos (`/workflows/datasets`) y no en el menú, porque usa sus mismos permisos.
     - La clave se elige después de leer el archivo, sobre la misma subida.

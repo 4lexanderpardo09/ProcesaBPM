@@ -5,7 +5,7 @@ import { type Sheet } from '../../src/infrastructure/spreadsheet/spreadsheet-wri
 import { WriteExcelFileWriter } from '../../src/infrastructure/spreadsheet/write-excel-file.writer.js';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
-import { pdf, uploadFile } from '../support/file-uploads.js';
+import { declare, pdf, putToStorage, type UploadSlot, uploadFile } from '../support/file-uploads.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type Member, type PublishedFlow, publishFlow, simpleFlow, TicketWorld, unique } from '../support/ticket-world.js';
 
@@ -190,6 +190,24 @@ describe('datasets', () => {
     expect((await db.owner.query('SELECT 1 FROM dataset_rows WHERE dataset_id = $1', [dataset.id])).rowCount).toBe(0);
     const actions = await db.owner.query<{ action: string }>('SELECT action FROM audit_logs WHERE entity_id = $1 ORDER BY created_at', [dataset.id]);
     expect(actions.rows.map((row) => row.action)).toEqual(['dataset.created', 'dataset.updated', 'dataset.deleted']);
+  });
+
+  it('a designer without ticket permissions uploads the workbook through the dataset routes, which take only one .xlsx', async () => {
+    const designer = await world.member([
+      { action: 'read', subject: 'Workflow' },
+      { action: 'update', subject: 'Workflow' },
+    ]);
+    const content = await writer.write([EMPLOYEES]);
+    await designer.client.post('/files/uploads', { files: [declare({ name: 'empleados.xlsx', content })] }).expect(403);
+    await designer.client.post('/datasets/uploads', { files: [declare({ name: 'acta.pdf', content: pdf() })] }).expect(400);
+    await filler.client.post('/datasets/uploads', { files: [declare({ name: 'empleados.xlsx', content })] }).expect(403);
+
+    const slot = (await designer.client.post('/datasets/uploads', { files: [declare({ name: 'empleados.xlsx', content })] }).expect(201)).body.uploads[0] as UploadSlot;
+    expect((await putToStorage(slot, content)).ok).toBe(true);
+    await filler.client.post(`/datasets/uploads/${slot.fileId}/confirm`).expect(403);
+    await designer.client.post(`/datasets/uploads/${slot.fileId}/confirm`).expect(200);
+    const dataset = (await designer.client.post('/datasets', { name: unique('Designer'), fileId: slot.fileId, keyColumn: 'CEDULA' }).expect(201)).body;
+    expect(dataset).toMatchObject({ rowCount: 3, keyColumn: 'CEDULA' });
   });
 
   it('managing datasets needs the workflow permissions', async () => {

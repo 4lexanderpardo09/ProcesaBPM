@@ -15,6 +15,14 @@ export class StorageUploadError extends Error {
   }
 }
 
+/** Where uploads are asked for and confirmed: the ticket routes by default; datasets and PDF templates have their own, under their permissions. */
+export interface UploadRoutes {
+  readonly request: string;
+  readonly confirm: (fileId: string) => string;
+}
+
+export const TICKET_UPLOAD_ROUTES: UploadRoutes = { request: '/files/uploads', confirm: (fileId) => `/files/${encodeURIComponent(fileId)}/confirm` };
+
 /** `content-length` is the browser's to set (a forbidden header for `fetch`); it sends the real one, which was signed. */
 const BROWSER_SET_HEADERS = new Set(['content-length']);
 
@@ -22,9 +30,9 @@ const BROWSER_SET_HEADERS = new Set(['content-length']);
  * Uploads files in the API's two phases: declare them (name, size and SHA-256, so the server can compare the content),
  * send each one straight to storage with its presigned URL, then confirm it. Only confirmed files can be attached.
  */
-export async function uploadFiles(client: HttpClient, files: readonly File[], fetchFn: typeof fetch = fetch): Promise<UploadedFile[]> {
+export async function uploadFiles(client: HttpClient, files: readonly File[], fetchFn: typeof fetch = fetch, routes: UploadRoutes = TICKET_UPLOAD_ROUTES): Promise<UploadedFile[]> {
   const declared = await Promise.all(files.map(async (file) => ({ name: file.name, sizeBytes: file.size, sha256: await sha256Of(file) })));
-  const { uploads } = await client.request('/files/uploads', { method: 'POST', body: { files: declared }, schema: uploadsResponseSchema });
+  const { uploads } = await client.request(routes.request, { method: 'POST', body: { files: declared }, schema: uploadsResponseSchema });
   const uploaded: UploadedFile[] = [];
   for (const [index, slot] of uploads.entries()) {
     const file = files[index]!;
@@ -36,7 +44,7 @@ export async function uploadFiles(client: HttpClient, files: readonly File[], fe
       throw new StorageUploadError(undefined);
     }
     if (!response.ok) throw new StorageUploadError(response.status);
-    const stored = await client.request(`/files/${encodeURIComponent(slot.fileId)}/confirm`, { method: 'POST', schema: storedFileResponseSchema });
+    const stored = await client.request(routes.confirm(slot.fileId), { method: 'POST', schema: storedFileResponseSchema });
     uploaded.push({ id: stored.id, name: stored.name, sizeBytes: stored.sizeBytes });
   }
   return uploaded;

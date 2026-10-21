@@ -58,8 +58,8 @@ function api(overrides: Record<string, FakeHandler> = {}) {
         { Cédula: '1010', Nombre: 'Ana Ruiz' },
         { Cédula: '2020', Nombre: 'Luis Gómez' },
       ]),
-    '/files/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }),
-    [`/files/${FILE_ID}/confirm`]: () => stored,
+    '/datasets/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }),
+    [`/datasets/uploads/${FILE_ID}/confirm`]: () => stored,
     ...overrides,
   };
   return handlers;
