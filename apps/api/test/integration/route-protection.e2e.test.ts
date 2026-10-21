@@ -43,6 +43,7 @@ const AUTHENTICATED_ONLY_ROUTES = [
   'POST /auth/mfa/enrollment/confirm',
   'POST /auth/mfa/disable',
   'POST /auth/mfa/backup-codes',
+  'GET /auth/me/permissions',
   'GET /delegations',
   'POST /delegations',
   'POST /delegations/:id/cancel',
