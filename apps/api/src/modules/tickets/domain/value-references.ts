@@ -1,6 +1,6 @@
 import { isUuid, type TicketValueNamesResponse } from '@procesabpm/shared';
 
-/** What a stored field value needs to know whether it points to people or sites. */
+/** What a stored field value needs to know whether it points to records of the tenant (people, sites, preset entries). */
 export interface ReferencingValue {
   readonly value: unknown;
   readonly field: { readonly type: string; readonly dataSource: unknown };
@@ -14,7 +14,9 @@ export type ValueReferences = Readonly<Record<ReferenceKind, readonly string[]>>
 /** Names found in the tenant, by lower-case id. */
 export type FoundNames = Readonly<Record<ReferenceKind, ReadonlyMap<string, string>>>;
 
-const PRESET_KINDS: Readonly<Record<string, ReferenceKind>> = { USERS: 'users', SITES: 'sites' };
+export const REFERENCE_KINDS: readonly ReferenceKind[] = ['users', 'sites', 'companies', 'departments', 'positions'];
+
+const PRESET_KINDS: Readonly<Record<string, ReferenceKind>> = { USERS: 'users', SITES: 'sites', COMPANIES: 'companies', DEPARTMENTS: 'departments', POSITIONS: 'positions' };
 
 const presetOf = (dataSource: unknown): string | undefined => {
   if (typeof dataSource !== 'object' || dataSource === null) return undefined;
@@ -22,7 +24,7 @@ const presetOf = (dataSource: unknown): string | undefined => {
   return source.kind === 'PRESET' && typeof source.preset === 'string' ? source.preset : undefined;
 };
 
-/** USER and SITE fields hold one id; SELECT and MULTI_SELECT fields hold ids only when their preset lists users or sites. */
+/** USER and SITE fields hold one id; SELECT and MULTI_SELECT fields hold ids when they take a preset list. */
 export function referenceKindOf(field: ReferencingValue['field']): ReferenceKind | undefined {
   if (field.type === 'USER') return 'users';
   if (field.type === 'SITE') return 'sites';
@@ -34,12 +36,12 @@ export function referenceKindOf(field: ReferencingValue['field']): ReferenceKind
 const idsIn = (value: unknown): string[] => (Array.isArray(value) ? value : [value]).filter(isUuid);
 
 export function valueReferences(values: readonly ReferencingValue[]): ValueReferences {
-  const found: Record<ReferenceKind, Set<string>> = { users: new Set(), sites: new Set() };
+  const found = Object.fromEntries(REFERENCE_KINDS.map((kind) => [kind, new Set<string>()])) as Record<ReferenceKind, Set<string>>;
   for (const entry of values) {
     const kind = referenceKindOf(entry.field);
     if (kind !== undefined) for (const id of idsIn(entry.value)) found[kind].add(id);
   }
-  return { users: [...found.users], sites: [...found.sites] };
+  return Object.fromEntries(REFERENCE_KINDS.map((kind) => [kind, [...found[kind]]])) as Record<ReferenceKind, string[]>;
 }
 
 /** Each referenced id that names something of the tenant, keyed as it appears in the values; the rest are left out. */
@@ -49,5 +51,5 @@ export function valueNamesOf(references: ValueReferences, names: FoundNames): Ti
       const name = names[kind].get(id.toLowerCase());
       return name === undefined ? [] : [[id, name] as const];
     }));
-  return { users: named('users'), sites: named('sites') };
+  return Object.fromEntries(REFERENCE_KINDS.map((kind) => [kind, named(kind)])) as unknown as TicketValueNamesResponse;
 }

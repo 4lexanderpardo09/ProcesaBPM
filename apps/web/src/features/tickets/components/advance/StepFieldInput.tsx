@@ -15,7 +15,7 @@ export interface StepFieldInputProps {
   readonly field: FormFieldResponse;
   readonly value: InputValue;
   readonly error: string | undefined;
-  /** Names already known for ids the ticket holds (people and sites). */
+  /** Names already known for ids the ticket holds (people, sites and preset entries). */
   readonly knownLabels: Readonly<Record<string, string>>;
   readonly onChange: (value: InputValue) => void;
 }

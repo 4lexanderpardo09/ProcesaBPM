@@ -89,7 +89,13 @@ export class TicketQueriesService {
     if (row === null) throw new NotFoundError();
     const references = valueReferences(row.fieldValues);
     // One query after another: an interactive transaction has a single connection.
-    const names = { users: await this.tickets.memberNames(tx, tenantId, references.users), sites: await this.tickets.siteNames(tx, tenantId, references.sites) };
+    const names = {
+      users: await this.tickets.memberNames(tx, tenantId, references.users),
+      sites: await this.tickets.siteNames(tx, tenantId, references.sites),
+      companies: await this.tickets.presetNames(tx, tenantId, 'companies', references.companies),
+      departments: await this.tickets.presetNames(tx, tenantId, 'departments', references.departments),
+      positions: await this.tickets.presetNames(tx, tenantId, 'positions', references.positions),
+    };
     return toDetail(row, this.clock.now(), valueNamesOf(references, names));
   }
 

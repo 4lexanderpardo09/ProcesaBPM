@@ -27,6 +27,7 @@ describe('GET /tickets/:id and /timeline: names next to the ids', () => {
   let stranger: Member;
   let site: { id: string; name: string };
   let department: { id: string; name: string };
+  let position: { id: string; name: string };
   let ticket: { id: string; openVisitId: string };
 
   const nameOf = async (member: Member) =>
@@ -48,6 +49,8 @@ describe('GET /tickets/:id and /timeline: names next to the ids', () => {
     site.id = (await world.admin.post('/sites', { name: site.name }).expect(201)).body.id as string;
     department = { name: unique('Treasury'), id: '' };
     department.id = (await world.admin.post('/departments', { name: department.name }).expect(201)).body.id as string;
+    position = { name: unique('Cashier'), id: '' };
+    position.id = await world.position(position.name);
     creator = await world.member(REQUESTER_GRANTS, { siteId: site.id, departmentId: department.id });
     registrar = await world.member([grant('create_for_others'), grant('read_created')]);
     worker = await world.member([...WORKER_GRANTS, grant('open_incident')]);
@@ -62,6 +65,8 @@ describe('GET /tickets/:id and /timeline: names next to the ids', () => {
         { step: 'start', code: 'BRANCH', type: 'SITE', capture: 'CREATION' },
         { step: 'start', code: 'PEOPLE', type: 'MULTI_SELECT', capture: 'CREATION', dataSource: { kind: 'PRESET', preset: 'USERS' } },
         { step: 'start', code: 'NOTE', type: 'TEXT', capture: 'CREATION' },
+        { step: 'start', code: 'AREA', type: 'SELECT', capture: 'CREATION', dataSource: { kind: 'PRESET', preset: 'DEPARTMENTS' } },
+        { step: 'start', code: 'ROLES', type: 'MULTI_SELECT', capture: 'CREATION', dataSource: { kind: 'PRESET', preset: 'POSITIONS' } },
       ],
     });
     ticket = (
@@ -70,7 +75,7 @@ describe('GET /tickets/:id and /timeline: names next to the ids', () => {
           subcategoryId: flow.subcategoryId,
           requesterId: creator.userId,
           title: unique('Named'),
-          values: { APPROVER: picked.userId, BRANCH: site.id, PEOPLE: [picked.userId, helper.userId], NOTE: picked.userId },
+          values: { APPROVER: picked.userId, BRANCH: site.id, PEOPLE: [picked.userId, helper.userId], NOTE: picked.userId, AREA: department.id, ROLES: [position.id] },
         })
         .expect(201)
     ).body;
@@ -99,10 +104,16 @@ describe('GET /tickets/:id and /timeline: names next to the ids', () => {
       });
     });
 
-    it('names the people and sites the values point to, and only those', async () => {
+    it('names the people, sites and preset entries the values point to, and only those', async () => {
       const detail = await detailFor(creator);
       expect(detail.values).toMatchObject({ APPROVER: picked.userId, BRANCH: site.id, NOTE: picked.userId });
-      expect(detail.valueNames).toEqual({ users: { [picked.userId]: await nameOf(picked), [helper.userId]: await nameOf(helper) }, sites: { [site.id]: site.name } });
+      expect(detail.valueNames).toEqual({
+        users: { [picked.userId]: await nameOf(picked), [helper.userId]: await nameOf(helper) },
+        sites: { [site.id]: site.name },
+        companies: {},
+        departments: { [department.id]: department.name },
+        positions: { [position.id]: position.name },
+      });
     });
 
     it('names both people of the open incident', async () => {
@@ -152,9 +163,11 @@ describe('GET /tickets/:id and /timeline: names next to the ids', () => {
       await setValue('APPROVER', foreignMember.userId);
       await setValue('BRANCH', foreignSite);
       await setValue('PEOPLE', [nobody, 'not-an-id', picked.userId]);
+      await setValue('AREA', nobody);
+      await setValue('ROLES', []);
       const detail = await detailFor(reader);
       expect(detail.values).toMatchObject({ APPROVER: foreignMember.userId, BRANCH: foreignSite });
-      expect(detail.valueNames).toEqual({ users: { [picked.userId]: await nameOf(picked) }, sites: {} });
+      expect(detail.valueNames).toEqual({ users: { [picked.userId]: await nameOf(picked) }, sites: {}, companies: {}, departments: {}, positions: {} });
     });
 
     it('another tenant cannot read the ticket or its timeline', async () => {

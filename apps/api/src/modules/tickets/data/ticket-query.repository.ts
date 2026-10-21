@@ -139,6 +139,14 @@ export class TicketQueryRepository {
     return new Map(rows.map((row) => [row.userId, fullName(row)]));
   }
 
+  /** Names of the tenant's companies, departments or positions among the given ids, by id; an unknown id is left out. */
+  async presetNames(tx: TenantTransaction, tenantId: string, kind: 'companies' | 'departments' | 'positions', ids: readonly string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const where = { tenantId, id: { in: [...ids] } };
+    const rows = kind === 'companies' ? await tx.company.findMany({ where, select: NAMED }) : kind === 'departments' ? await tx.department.findMany({ where, select: NAMED }) : await tx.position.findMany({ where, select: NAMED });
+    return new Map(rows.map((row) => [row.id, row.name]));
+  }
+
   /** Names of the tenant's sites among the given ids, by id; an unknown id is left out. */
   async siteNames(tx: TenantTransaction, tenantId: string, siteIds: readonly string[]): Promise<Map<string, string>> {
     if (siteIds.length === 0) return new Map();

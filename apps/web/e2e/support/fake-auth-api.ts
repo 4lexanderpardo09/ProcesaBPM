@@ -165,7 +165,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     closedBy: null,
     department: null,
     site: null,
-    valueNames: { users: {}, sites: {} },
+    valueNames: { users: {}, sites: {}, companies: {}, departments: {}, positions: {} },
     actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, ...ticket.actions },
   });
 

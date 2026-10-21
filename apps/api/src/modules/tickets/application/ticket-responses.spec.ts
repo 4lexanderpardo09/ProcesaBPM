@@ -81,7 +81,7 @@ const detailRow = (overrides: Partial<TicketDetailRow> = {}): TicketDetailRow =>
   fieldValues: [],
   ...overrides,
 });
-const noValueNames = { users: {}, sites: {} };
+const noValueNames = { users: {}, sites: {}, companies: {}, departments: {}, positions: {} };
 
 describe('toDetail', () => {
   it('names the company, who registered it, department, site and the signers of the current step', () => {
@@ -116,7 +116,7 @@ describe('toDetail', () => {
   });
 
   it('carries the value names it is given and, with the actions, matches the contract the web parses', () => {
-    const valueNames = { users: { [id(8)]: 'Luis Gómez' }, sites: { [id(14)]: 'Bogotá' } };
+    const valueNames = { ...noValueNames, users: { [id(8)]: 'Luis Gómez' }, sites: { [id(14)]: 'Bogotá' } };
     const detail = toDetail(detailRow({ closedById: id(3), closedBy: person('Ana', 'Pérez') }), now, valueNames);
     expect(detail.valueNames).toEqual(valueNames);
     expect(detail.closedBy).toEqual({ id: id(3), name: 'Ana Pérez' });

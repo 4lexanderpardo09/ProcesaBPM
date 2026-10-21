@@ -44,7 +44,7 @@ const detail = {
   closedBy: null,
   department: null,
   site: { id: id(14), name: 'Bogotá' },
-  valueNames: { users: { [id(15)]: 'Luis Gómez' }, sites: {} },
+  valueNames: { users: { [id(15)]: 'Luis Gómez' }, sites: {}, companies: {}, departments: {}, positions: {} },
   actions: { advance: true, take: false, reassign: false, close: true, openIncident: true, resolveIncident: false, reopen: false, signParallelTask: false, comment: true },
 };
 
@@ -61,7 +61,7 @@ describe('ticketDetailResponseSchema', () => {
   it('requires the names of the values, even when there are none', () => {
     const { valueNames: _, ...withoutNames } = detail;
     expect(ticketDetailResponseSchema.safeParse(withoutNames).success).toBe(false);
-    expect(ticketDetailResponseSchema.safeParse({ ...detail, valueNames: { users: { [id(15)]: 7 }, sites: {} } }).success).toBe(false);
+    expect(ticketDetailResponseSchema.safeParse({ ...detail, valueNames: { users: { [id(15)]: 7 }, sites: {}, companies: {}, departments: {}, positions: {} } }).success).toBe(false);
   });
 
   it('requires every action flag, as a boolean', () => {
