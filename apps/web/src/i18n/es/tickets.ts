@@ -183,6 +183,18 @@ export const tickets = {
       download: 'Descargar {{name}}',
       downloadFailed: 'No se pudo descargar el archivo. Intenta de nuevo.',
     },
+    tags: {
+      title: 'Mis etiquetas',
+      add: 'Agregar',
+      remove: 'Quitar la etiqueta {{name}}',
+      pickTitle: 'Agregar etiqueta',
+      close: 'Cerrar',
+      loading: 'Cargando tus etiquetas…',
+      loadFailed: 'No se pudieron cargar tus etiquetas. Cierra e intenta de nuevo.',
+      noneYet: 'Aún no tienes etiquetas.',
+      allUsed: 'Este ticket ya tiene todas tus etiquetas.',
+      manage: 'Administrar mis etiquetas',
+    },
   },
   actions: {
     label: 'Acciones del ticket',

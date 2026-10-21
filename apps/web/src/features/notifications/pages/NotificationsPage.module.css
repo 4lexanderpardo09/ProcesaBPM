@@ -1,0 +1,16 @@
+.toolbar {
+  margin-bottom: var(--space-4);
+}
+
+.muted {
+  margin: 0;
+  padding: var(--space-4) 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.pagination {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line-2);
+}

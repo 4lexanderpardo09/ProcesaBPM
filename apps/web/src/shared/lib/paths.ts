@@ -11,6 +11,7 @@ export const paths = {
   organization: '/organization',
   people: '/people',
   profile: '/profile',
+  notifications: '/notifications',
 } as const;
 
 export function ticketPath(ticketId: string): string {

@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router';
 import { UserMenu } from '@/features/auth';
+import { NotificationBell } from '@/features/notifications';
 import styles from './AppLayout.module.css';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -10,7 +11,14 @@ export function AppLayout() {
     <div className={styles.shell}>
       <Sidebar />
       <div className={styles.main}>
-        <Topbar end={<UserMenu />} />
+        <Topbar
+          end={
+            <>
+              <NotificationBell />
+              <UserMenu />
+            </>
+          }
+        />
         <main className={styles.content}>
           <Outlet />
         </main>

@@ -87,3 +87,10 @@ export const DownloadIcon = createIcon('DownloadIcon', (
 ));
 
 export const CheckIcon = createIcon('CheckIcon', <path d="M20 6 9 17l-5-5" />);
+
+export const BellIcon = createIcon('BellIcon', (
+  <>
+    <path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5" />
+    <path d="M10 19a2 2 0 0 0 4 0" />
+  </>
+));

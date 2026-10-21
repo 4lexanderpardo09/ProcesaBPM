@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, type RouteObject } from 'react-router';
 import { ForgotPasswordPage, LoginPage } from '@/features/auth';
 import { CatalogPage } from '@/features/catalog';
+import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
 import { ProfilePage } from '@/features/profile';
@@ -33,6 +34,7 @@ const configurationRoutes: RouteObject[] = [
   { path: paths.organization, element: <OrganizationPage /> },
   { path: paths.people, element: <PeoplePage /> },
   { path: paths.profile, element: <ProfilePage /> },
+  { path: paths.notifications, element: <NotificationsPage /> },
 ];
 
 const sectionRoutes: RouteObject[] = navigationSections.flatMap((section) =>

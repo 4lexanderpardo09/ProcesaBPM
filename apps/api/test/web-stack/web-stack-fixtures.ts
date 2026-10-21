@@ -17,6 +17,14 @@ const PEOPLE = [
   { email: 'tabs@e2e.test', firstName: 'Tomás', lastName: 'Rey', organizations: ['acme'] },
   { email: 'leo@e2e.test', firstName: 'Leo', lastName: 'Mora', organizations: ['acme', 'globex'] },
   { email: 'eva@e2e.test', firstName: 'Eva', lastName: 'Ríos', organizations: ['securia'] },
+  { email: 'bell@e2e.test', firstName: 'Bruno', lastName: 'Paz', organizations: ['acme'] },
+] as const;
+
+/** What the bell shows Bruno: two unread and one read, none about a ticket (the stack has no worker and no tickets). */
+const BELL_NOTIFICATIONS = [
+  { type: 'STORAGE_QUOTA', title: 'El almacenamiento llegó al 80 %', body: 'Usan 8 GB de 10 GB.', read: false, minutesAgo: 5 },
+  { type: 'SYSTEM', title: 'Mantenimiento programado', body: 'El domingo a las 02:00 la aplicación no estará disponible.', read: false, minutesAgo: 90 },
+  { type: 'SYSTEM', title: 'Bienvenida a ProcesaBPM', body: 'Ya puedes crear tickets.', read: true, minutesAgo: 60 * 24 * 10 },
 ] as const;
 
 type OrganizationKey = (typeof ORGANIZATIONS)[number]['key'];
@@ -36,7 +44,25 @@ export async function seedWebStack(platform: pg.Pool): Promise<void> {
     const userId = await seedMember(platform, first);
     await platform.query('UPDATE users SET email = $2, first_name = $3, last_name = $4, password_hash = $5 WHERE id = $1', [userId, person.email, person.firstName, person.lastName, hash]);
     for (const tenant of others) await addActiveMembership(platform, tenant, userId);
+    if (person.email === 'bell@e2e.test') await seedNotifications(platform, first, userId);
   }
+}
+
+async function seedNotifications(platform: pg.Pool, tenant: SeededTenant, userId: string): Promise<void> {
+  await withPlatformTransaction(platform, async (tx) => {
+    for (const notification of BELL_NOTIFICATIONS) {
+      const createdAt = new Date(Date.now() - notification.minutesAgo * 60_000);
+      await tx.query('INSERT INTO notifications (tenant_id, user_id, type, title, body, read_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)', [
+        tenant.tenantId,
+        userId,
+        notification.type,
+        notification.title,
+        notification.body,
+        notification.read ? createdAt : null,
+        createdAt,
+      ]);
+    }
+  });
 }
 
 async function addActiveMembership(platform: pg.Pool, tenant: SeededTenant, userId: string): Promise<void> {

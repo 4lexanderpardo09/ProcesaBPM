@@ -286,6 +286,11 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
       return json(route, 200, { permissions: [{ action: 'manage', subject: 'all', conditional: false }] });
     },
+    // The bell in the top bar: nothing unread.
+    'GET /api/notifications/unread-count': (route, _body, authorization) => {
+      if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+      return json(route, 200, { count: 0 });
+    },
     'GET /api/tickets': (route, _body, authorization, search) => {
       if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
       return json(route, 200, ticketPage(search));

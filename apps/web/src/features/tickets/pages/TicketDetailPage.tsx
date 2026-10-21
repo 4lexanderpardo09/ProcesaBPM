@@ -13,6 +13,7 @@ import { TicketAttachments } from '../components/TicketAttachments';
 import { TicketDetailHeader } from '../components/TicketDetailHeader';
 import { TicketFacts } from '../components/TicketFacts';
 import { TicketFieldValues } from '../components/TicketFieldValues';
+import { TicketTagsCard } from '../components/TicketTagsCard';
 import { TicketActions } from '../components/actions/TicketActions';
 import { TicketFlow } from '../components/flow/TicketFlow';
 import { useTicketDetail } from '../hooks/use-ticket-detail';
@@ -21,7 +22,7 @@ import styles from './TicketDetailPage.module.css';
 
 const NOT_FOUND = 404;
 
-/** One ticket: its facts, its progress through the workflow, description, activity with comments, captured values and attachments. */
+/** One ticket: its facts, its progress through the workflow, description, activity with comments, captured values, attachments and the caller's tags. */
 export function TicketDetailPage() {
   const { ticketId = '' } = useParams();
   const { t } = useTranslation('tickets');
@@ -51,6 +52,7 @@ export function TicketDetailPage() {
         <aside className={styles.side}>
           <TicketFieldValues values={ticket.values} valueNames={ticket.valueNames} form={form} timeZone={timeZone} />
           <TicketAttachments ticketId={ticket.id} documents={documents} timeZone={timeZone} />
+          <TicketTagsCard ticket={ticket} />
         </aside>
       </div>
     </>
