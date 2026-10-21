@@ -4,6 +4,7 @@ import { ForgotPasswordPage, LoginPage } from '@/features/auth';
 import { CatalogPage } from '@/features/catalog';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
+import { ProfilePage } from '@/features/profile';
 import { NewTicketPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
@@ -31,6 +32,7 @@ const configurationRoutes: RouteObject[] = [
   { path: paths.catalog, element: <CatalogPage /> },
   { path: paths.organization, element: <OrganizationPage /> },
   { path: paths.people, element: <PeoplePage /> },
+  { path: paths.profile, element: <ProfilePage /> },
 ];
 
 const sectionRoutes: RouteObject[] = navigationSections.flatMap((section) =>
