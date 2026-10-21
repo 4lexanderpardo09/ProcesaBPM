@@ -198,6 +198,16 @@ export const meResponseSchema = z.object({
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
 
+/**
+ * `GET /auth/me/permissions`: what the session's role grants, so the web shows only the screens and buttons the person
+ * can use. `manage` and `all` mean what they mean in CASL. A `conditional` grant only reaches some records (their own,
+ * their department…): the API still decides record by record, this only says the action is possible at all.
+ */
+export const myPermissionsResponseSchema = z.object({
+  permissions: z.array(z.object({ action: z.string(), subject: z.string(), conditional: z.boolean() })),
+});
+export type MyPermissionsResponse = z.infer<typeof myPermissionsResponseSchema>;
+
 /** The user edits their own profile: their name, language and time zone (the e-mail has its own flow). */
 export const updateProfileRequestSchema = z
   .object({
