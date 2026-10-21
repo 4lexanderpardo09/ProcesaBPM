@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { ChartIcon, GridIcon, type IconProps, InboxIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
 import { paths } from '@/shared/lib/paths';
+import type { PermissionCheck } from '@/shared/session';
 
 export type NavigationItemKey = 'tickets' | 'workflows' | 'reports' | 'catalog' | 'people';
 
@@ -8,6 +9,8 @@ export interface NavigationItem {
   readonly key: NavigationItemKey;
   readonly path: string;
   readonly icon: ComponentType<IconProps>;
+  /** Shown when the role grants any of these; without the list, to everyone. */
+  readonly requires?: readonly PermissionCheck[];
 }
 
 export interface NavigationSection {
@@ -15,20 +18,32 @@ export interface NavigationSection {
   readonly items: readonly NavigationItem[];
 }
 
+/** The catalog screen manages these; an agent that only reads them to open tickets does not need it. */
+const CATALOG_SCREENS: readonly PermissionCheck[] = [
+  ['create', 'Category'],
+  ['update', 'Category'],
+  ['create', 'Subcategory'],
+  ['update', 'Subcategory'],
+  ['create', 'Priority'],
+  ['update', 'Priority'],
+  ['create', 'ErrorType'],
+  ['update', 'ErrorType'],
+];
+
 export const navigationSections: readonly NavigationSection[] = [
   {
     key: 'operation',
     items: [
       { key: 'tickets', path: paths.tickets, icon: InboxIcon },
-      { key: 'workflows', path: paths.workflows, icon: WorkflowIcon },
-      { key: 'reports', path: paths.reports, icon: ChartIcon },
+      { key: 'workflows', path: paths.workflows, icon: WorkflowIcon, requires: [['read', 'Workflow']] },
+      { key: 'reports', path: paths.reports, icon: ChartIcon, requires: [['read', 'Report']] },
     ],
   },
   {
     key: 'configuration',
     items: [
-      { key: 'catalog', path: paths.catalog, icon: GridIcon },
-      { key: 'people', path: paths.people, icon: UserIcon },
+      { key: 'catalog', path: paths.catalog, icon: GridIcon, requires: CATALOG_SCREENS },
+      { key: 'people', path: paths.people, icon: UserIcon, requires: [['read', 'Membership'], ['read', 'Role'], ['read', 'Group']] },
     ],
   },
 ];

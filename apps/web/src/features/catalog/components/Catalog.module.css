@@ -1,0 +1,77 @@
+.tabs {
+  margin-bottom: var(--space-4);
+}
+
+.stack,
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+}
+
+.search {
+  width: min(320px, 100%);
+}
+
+.toolbarEnd {
+  margin-left: auto;
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-left: calc(-1 * var(--space-3));
+}
+
+.badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.color {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.dialogFields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.flags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.flags legend {
+  margin-bottom: var(--space-2);
+  color: var(--slate);
+}
+
+.note {
+  color: var(--muted);
+  font-size: 13.5px;
+}
