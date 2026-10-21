@@ -15,7 +15,7 @@ const field = (type: FormFieldResponse['type'], config: Record<string, unknown> 
   dataSource: null,
 });
 
-const noNames = { users: {}, sites: {} };
+const noNames = { users: {}, sites: {}, companies: {}, departments: {}, positions: {} };
 
 const textOf = (display: ReturnType<typeof fieldValueDisplay>) => (display?.kind === 'text' ? display.text.replace(/\s/g, ' ') : display);
 
@@ -31,6 +31,8 @@ describe('fieldValueDisplay', () => {
     expect(textOf(fieldValueDisplay(field('SELECT', { options }), 'capital', noNames))).toBe('Abono a capital');
     expect(textOf(fieldValueDisplay(field('MULTI_SELECT', { options }), ['capital', 'fee'], noNames))).toBe('Abono a capital, Cuota');
     expect(textOf(fieldValueDisplay(field('SELECT'), 'from-dataset', noNames))).toBe('from-dataset');
+    const position = '018f0000-0000-7000-8000-000000000009';
+    expect(textOf(fieldValueDisplay(field('MULTI_SELECT'), [position], { ...noNames, positions: { [position]: 'Jefe de compras' } }))).toBe('Jefe de compras');
   });
 
   it('formats numbers and currency in Colombian Spanish, decimals sent as text included', () => {
@@ -50,7 +52,7 @@ describe('fieldValueDisplay', () => {
 
   it('names people and sites, also in lists of people or sites, and marks ids the organization no longer has', () => {
     const [ana, north, gone] = ['018f0000-0000-7000-8000-000000000004', '018f0000-0000-7000-8000-000000000005', '018f0000-0000-7000-8000-000000000006'];
-    const names = { users: { [ana]: 'Ana Pérez' }, sites: { [north]: 'Sede Norte' } };
+    const names = { ...noNames, users: { [ana]: 'Ana Pérez' }, sites: { [north]: 'Sede Norte' } };
     expect(textOf(fieldValueDisplay(field('USER'), ana, names))).toBe('Ana Pérez');
     expect(textOf(fieldValueDisplay(field('SITE'), north, names))).toBe('Sede Norte');
     expect(textOf(fieldValueDisplay(field('MULTI_SELECT'), [ana, north], names))).toBe('Ana Pérez, Sede Norte');

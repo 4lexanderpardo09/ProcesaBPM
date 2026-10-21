@@ -227,6 +227,10 @@ export type TicketCandidatesQuery = z.infer<typeof ticketCandidatesQuerySchema>;
 export interface TicketValueNamesResponse {
   readonly users: Readonly<Record<string, string>>;
   readonly sites: Readonly<Record<string, string>>;
+  /** Entries of the COMPANIES, DEPARTMENTS and POSITIONS presets. */
+  readonly companies: Readonly<Record<string, string>>;
+  readonly departments: Readonly<Record<string, string>>;
+  readonly positions: Readonly<Record<string, string>>;
 }
 
 export interface TicketEventResponse {
@@ -285,7 +289,13 @@ export const ticketDetailResponseSchema = ticketSummaryResponseSchema.extend({
   closedBy: namedRefSchema.nullable(),
   department: namedRefSchema.nullable(),
   site: namedRefSchema.nullable(),
-  valueNames: z.object({ users: z.record(z.string(), z.string()), sites: z.record(z.string(), z.string()) }),
+  valueNames: z.object({
+    users: z.record(z.string(), z.string()),
+    sites: z.record(z.string(), z.string()),
+    companies: z.record(z.string(), z.string()),
+    departments: z.record(z.string(), z.string()),
+    positions: z.record(z.string(), z.string()),
+  }),
   actions: z.object({
     advance: z.boolean(),
     take: z.boolean(),

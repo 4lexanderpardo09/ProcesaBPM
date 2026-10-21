@@ -42,6 +42,7 @@ function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null)
     findDetail: vi.fn(() => Promise.resolve(detail)),
     memberNames: vi.fn(() => Promise.resolve(new Map([[PICKED_USER, 'Luis Gómez']]))),
     siteNames: vi.fn(() => Promise.resolve(new Map())),
+    presetNames: vi.fn(() => Promise.resolve(new Map())),
   } as unknown as TicketQueryRepository;
   const actionStates = { read: vi.fn(() => Promise.resolve(closedState)) } as unknown as TicketActionStateReader;
   const service = new TicketQueriesService(runner, context, tickets, new Clock(), actionStates);
@@ -85,7 +86,7 @@ describe('TicketQueriesService', () => {
       expect(runner.withTenantTransaction).toHaveBeenCalledTimes(1);
       expect(tickets.memberNames).toHaveBeenCalledWith(tx, TENANT, [PICKED_USER]);
       expect(tickets.siteNames).toHaveBeenCalledWith(tx, TENANT, [PICKED_SITE]);
-      expect(detail.valueNames).toEqual({ users: { [PICKED_USER]: 'Luis Gómez' }, sites: {} });
+      expect(detail.valueNames).toEqual({ users: { [PICKED_USER]: 'Luis Gómez' }, sites: {}, companies: {}, departments: {}, positions: {} });
     });
 
     it('a ticket the caller cannot read is not found, and nothing else is looked up', async () => {

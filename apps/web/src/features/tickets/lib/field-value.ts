@@ -55,11 +55,11 @@ const text = (value: string): FieldValueDisplay => ({ kind: 'text', text: value 
 
 const named = (name: string | undefined): FieldValueDisplay => (name === undefined ? { kind: 'unknown' } : text(name));
 
-/** The option's label; lists of people or sites (presets) hold ids the API names in `valueNames`. */
+/** The option's label; lists from presets (people, sites, companies, departments, positions) hold ids the API names in `valueNames`. */
 function optionLabel(field: FormFieldResponse, value: string, names: TicketValueNamesResponse): string {
   const options = field.config['options'];
   const label = Array.isArray(options) ? (options as readonly Option[]).find((option) => option.value === value)?.label : undefined;
-  return label ?? names.users[value] ?? names.sites[value] ?? value;
+  return label ?? names.users[value] ?? names.sites[value] ?? names.companies[value] ?? names.departments[value] ?? names.positions[value] ?? value;
 }
 
 function numberConfig(field: FormFieldResponse, key: string): number | undefined {

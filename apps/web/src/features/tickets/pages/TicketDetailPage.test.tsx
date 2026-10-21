@@ -59,7 +59,7 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
   closedBy: null,
   department: null,
   site: null,
-  valueNames: { users: {}, sites: {} },
+  valueNames: { users: {}, sites: {}, companies: {}, departments: {}, positions: {} },
   actions: noActions,
   ...overrides,
 });
