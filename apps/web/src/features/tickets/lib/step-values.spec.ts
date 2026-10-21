@@ -1,6 +1,6 @@
 import type { FormFieldResponse } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { decimalText, initialInput, isCapturable, requestValue } from './step-values';
+import { choiceSourceOf, decimalText, initialInput, isBlankInput, isCapturable, requestValue } from './step-values';
 
 const field = (type: FormFieldResponse['type'], config: Record<string, unknown> = {}, dataSource: Record<string, unknown> | null = null): FormFieldResponse => ({
   id: '018f0000-0000-7000-8000-000000000001',
@@ -24,10 +24,21 @@ describe('isCapturable', () => {
     expect(isCapturable(field('MULTI_SELECT', { options }))).toBe(true);
   });
 
-  it('leaves for later people, sites, tables, files, computed fields and lists from presets or datasets', () => {
-    expect(['USER', 'SITE', 'TABLE', 'FILE', 'FORMULA', 'CALCULATOR'].some((type) => isCapturable(field(type as FormFieldResponse['type'])))).toBe(false);
-    expect(isCapturable(field('SELECT', {}, { kind: 'PRESET', preset: 'USERS' }))).toBe(false);
-    expect(isCapturable(field('TEXT', {}, { kind: 'DATASET', datasetId: 'x', column: 'c' }))).toBe(false);
+  it('captures people, sites, tables and lists from presets or datasets; files and computed fields wait', () => {
+    expect(['USER', 'SITE', 'TABLE'].every((type) => isCapturable(field(type as FormFieldResponse['type'])))).toBe(true);
+    expect(['FILE', 'FORMULA', 'CALCULATOR'].some((type) => isCapturable(field(type as FormFieldResponse['type'])))).toBe(false);
+  });
+});
+
+describe('choiceSourceOf', () => {
+  it('asks the API for people, sites, presets and datasets, and not for lists with their own options', () => {
+    expect(choiceSourceOf(field('USER'))).toBe('REFERENCE');
+    expect(choiceSourceOf(field('SITE'))).toBe('REFERENCE');
+    expect(choiceSourceOf(field('MULTI_SELECT', {}, { kind: 'PRESET', preset: 'USERS' }))).toBe('REFERENCE');
+    expect(choiceSourceOf(field('SELECT', {}, { kind: 'DATASET', datasetId: 'x', column: 'c' }))).toBe('DATASET');
+    expect(choiceSourceOf(field('TEXT', {}, { kind: 'DATASET', datasetId: 'x', column: 'c' }))).toBe('DATASET');
+    expect(choiceSourceOf(field('SELECT', { options }))).toBeUndefined();
+    expect(choiceSourceOf(field('TEXT'))).toBeUndefined();
   });
 });
 
@@ -38,6 +49,10 @@ describe('decimalText', () => {
     ['99,5', '99.5'],
     [' 12.75 ', '12.75'],
     ['-3', '-3'],
+    ['350.000', '350000'],
+    ['1.250.000', '1250000'],
+    ['1.5', '1.5'],
+    ['1234.567', '1234.567'],
   ])('reads %s as %s', (input, expected) => {
     expect(decimalText(input)).toBe(expected);
   });
@@ -64,6 +79,31 @@ describe('requestValue', () => {
   it('sends a local date-time with its instant', () => {
     const result = requestValue(field('DATETIME'), '2026-10-20T14:30');
     expect(result.ok && new Date(result.value as string).getTime()).toBe(new Date('2026-10-20T14:30').getTime());
+  });
+});
+
+describe('tables', () => {
+  const table = field('TABLE', {
+    columns: [
+      { code: 'item', label: 'Ítem', type: 'TEXT' },
+      { code: 'price', label: 'Precio', type: 'CURRENCY' },
+      { code: 'on', label: 'Fecha', type: 'DATE' },
+    ],
+  });
+
+  it('drops blank rows, leaves out blank cells and sends numbers as decimal text', () => {
+    expect(requestValue(table, [{ item: ' Papel ', price: '1.200,50', on: '' }, { item: '', price: ' ' }, { price: '3' }])).toEqual({ ok: true, value: [{ item: 'Papel', price: '1200.50' }, { price: '3' }] });
+  });
+
+  it('refuses a number cell that is not a number, and reads only blank rows as blank', () => {
+    expect(requestValue(table, [{ price: 'mil' }])).toEqual({ ok: false });
+    expect(isBlankInput([{ item: ' ' }])).toBe(true);
+    expect(requestValue(table, [])).toEqual({ ok: true, value: [] });
+  });
+
+  it('shows the rows the ticket already has as text', () => {
+    expect(initialInput(table, [{ item: 'Papel', price: 1200.5 }])).toEqual([{ item: 'Papel', price: '1200.5' }]);
+    expect(initialInput(table, null)).toEqual([]);
   });
 });
 

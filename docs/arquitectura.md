@@ -188,7 +188,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **`shared`:** esquemas zod con `satisfies` para el detalle, la actividad, el formulario del paso, los documentos, el enlace de descarga y la respuesta del comentario.
 - **Pruebas:** unitarias de `RichText`, `plainTextToHtml`, los valores, los responsables y la página completa (contenido, comentar, comentario vacío, 403, descarga y su error, novedad, vencido, cerrado, 404); E2E simulado (ver y comentar, 404 con regreso a la bandeja) y E2E contra el stack real (un ticket ajeno da 404 y la página lo dice).
 
-### 4.5 Acciones del detalle (parte 1, 2a y primera entrega de 2b hechas, 2026-10-20)
+### 4.5 Acciones del detalle (parte 1, 2a y 2b menos archivos, hechas, 2026-10-20)
 - **Qué se ofrece:** solo lo que dice `actions` del detalle (el API calcula cada bandera con las mismas reglas que la ruta de la acción). Botones a la derecha del título: Resolver novedad y Tomar (`primary`), Reasignar, Abrir novedad y Cerrar ticket. Sin `actions.comment` no aparece el cuadro de comentario.
 - **Diálogos (`components/actions/`):** `ActionDialog` sobre el nuevo `shared/ui/Dialog` (el `<dialog>` nativo: el navegador atrapa el foco, deja inerte la página y cierra con Escape; confirmar en `brand`, cancelar en `secondary`).
   - Reasignar elige entre `GET /tickets/:id/candidates?for=reassign`.
@@ -208,7 +208,13 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Firmas paralelas:** con `actions.signParallelTask` aparecen Firmar (`primary`) y Rechazar; `ParallelTaskDialog` envía `POST /tickets/:id/parallel-tasks/sign|reject`. Firmar lleva un comentario opcional; rechazar pide el motivo.
   - **Reabrir:** con `actions.reopen` (ticket cerrado) aparece Reabrir ticket; `ReopenDialog` pide el tipo de error (de `GET /error-types`, solo los activos de reapertura), un subtipo opcional (si el tipo tiene subtipos activos) y qué quedó mal, y envía `POST /tickets/:id/reopen`. El paso, el responsable del error y quién recibe el ticket quedan en lo que decide el API: el último paso, quien lo cerró y quienes lo tenían.
   - **Pruebas:** unitarias de `assignee-choices` y la página con elegir responsable al avanzar, firmar, rechazar sin y con motivo y reabrir con subtipo. Se probó además contra el API real en local: avanzar a un paso con selección manual, firmar, rechazar (vuelve por la transición `SYSTEM_ONLY`) y reabrir.
-- **Siguiente (parte 2b, segunda entrega):** campos de persona y sede, tablas, archivos (subida en dos fases) y listas de presets y datasets en el formulario del paso.
+- **Parte 2b, segunda entrega (2026-10-20, `feat/web-step-fields`):** el formulario del paso ya captura todos los tipos menos archivos (y los calculados, que nunca se escriben).
+  - **Persona, sede, presets y datasets (`ChoicePicker`):** las opciones vienen del API por el campo (`api/field-choices-api`): `GET /fields/:id/options` para persona, sede y presets (guardan el id) y `GET /fields/:id/dataset-options` para datasets (guardan el valor). Llegan hasta 50; si la lista se corta ahí, aparece un buscador ("Buscar en «…»", espera 300 ms, `shared/lib/use-debounced-value`). Una selección múltiple muestra lo elegido como fichas que se quitan y un selector para agregar. El nombre de un valor que ya tenía el ticket sale de `valueNames` (personas y sedes). Un campo de texto con dataset es texto libre con sugerencias (`<datalist>`).
+  - **Tablas (`TableInput`):** una fila por entrada y una celda por columna (texto, número, moneda, fecha o lista), agregar y quitar filas (hasta `maxRows`). Al enviar se quitan las filas vacías también de la pantalla, para que la fila que el API señala (`row` y `column` de `FIELD_VALUES_INVALID`, `lib/field-issues`) sea la que se ve: "Fila 1, «Cantidad»: …".
+  - **Números:** "350.000" y "1.250.000" (puntos que agrupan miles, sin coma) se leen como miles; antes se tomaban como decimales.
+  - **Mensajes nuevos:** `NOT_FOUND` (el valor ya no está disponible), `TOO_FEW_ROWS` y `TOO_MANY_ROWS`.
+  - **Pruebas:** unitarias de `step-values` (tablas, origen de las opciones, miles) y `field-issues` (celdas), y la página con persona buscada en una lista larga, selección múltiple corta y tabla con una celda rechazada. Se probó contra el API real en local: persona, sede de un nivel, preset de cargos, varias personas y tabla, hasta cerrar el ticket.
+- **Siguiente:** archivos en el formulario del paso (subida en dos fases con URL prefirmada) y nombres de los valores de presets de empresas, departamentos y cargos en el detalle (hoy se ve el id).
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |

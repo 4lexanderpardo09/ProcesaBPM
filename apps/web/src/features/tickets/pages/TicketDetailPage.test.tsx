@@ -573,8 +573,81 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/transition`)[1]?.options.body).toEqual({ transitionId: APPROVE, visitId: VISIT, values: {}, assigneeId: id(51), attachments: [] });
     });
 
+    it('picks a person among what the API offers for the field, searching a long list by name, and sends the id', async () => {
+      const AUDITOR = id(7 + 200);
+      const people = (path: string) => {
+        const q = new URL(path, 'http://x').searchParams.get('q') ?? '';
+        const all = [
+          { value: OTHER, label: 'Luis Gómez' },
+          { value: id(51), label: 'Marta Ruiz' },
+          ...Array.from({ length: 60 }, (_, index) => ({ value: id(1000 + index), label: `Persona ${index + 1}` })),
+        ];
+        return { options: all.filter((option) => option.label.toLowerCase().includes(q.toLowerCase())).slice(0, 50) };
+      };
+      const { fake } = renderRoute(base, {
+        handlers: handlers({ [`/fields/${AUDITOR}/options`]: (_, path) => people(path), [`${base}/transition`]: () => mutation }, { editableFieldCodes: ['auditor'] }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      await within(dialog).findByRole('option', { name: 'Luis Gómez' });
+      expect(within(dialog).getByRole('combobox', { name: 'Auditor' })).toHaveAccessibleDescription('Se muestran los primeros 50; escribe para buscar.');
+      await userEvent.type(within(dialog).getByRole('searchbox', { name: 'Buscar en «Auditor»' }), 'mar');
+      await vi.waitFor(() => expect(within(dialog).queryByRole('option', { name: 'Luis Gómez' })).toBeNull(), { timeout: 2000 });
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Auditor' }), 'Marta Ruiz');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ values: { auditor: id(51) } }));
+      expect(fake.callsTo(`/fields/${AUDITOR}/options`).at(-1)?.path).toBe(`/fields/${AUDITOR}/options?q=mar&limit=50`);
+    });
+
+    it('offers a short list as it is, without a search box, and adds and removes several choices', async () => {
+      const WATCHERS = id(210);
+      const watchers = field(10, 'watchers', 'Personas a informar', 'MULTI_SELECT', {});
+      const { fake } = renderRoute(base, {
+        handlers: handlers(
+          { [`/fields/${WATCHERS}/options`]: () => ({ options: [{ value: OTHER, label: 'Luis Gómez' }, { value: id(51), label: 'Marta Ruiz' }] }), [`${base}/transition`]: () => mutation },
+          { fields: [{ ...watchers, dataSource: { kind: 'PRESET', preset: 'USERS' } }], editableFieldCodes: ['watchers'] },
+        ),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      const add = within(dialog).getByRole('combobox', { name: 'Agregar a «Personas a informar»' });
+      await userEvent.selectOptions(add, await within(dialog).findByRole('option', { name: 'Luis Gómez' }));
+      await userEvent.selectOptions(add, 'Marta Ruiz');
+      expect(within(dialog).queryByRole('searchbox')).toBeNull();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Quitar Luis Gómez' }));
+      expect(within(within(dialog).getByRole('list', { name: 'Elegidos en «Personas a informar»' })).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Marta Ruiz×']);
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ values: { watchers: [id(51)] } }));
+    });
+
+    it('fills a table row by row, drops blank rows and says which cell the API rejects', async () => {
+      const items = { ...field(9, 'items', 'Ítems', 'TABLE', { columns: [{ code: 'item', label: 'Ítem', type: 'TEXT' }, { code: 'price', label: 'Precio', type: 'CURRENCY' }] }) };
+      const rejected = () => {
+        throw new ApiError({ status: 422, code: 'FIELD_VALUES_INVALID', message: 'x', details: { issues: [{ code: 'OUT_OF_RANGE', fieldCode: 'items', row: 0, column: 'price' }] } });
+      };
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: rejected }, { fields: [items], editableFieldCodes: ['items'] }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      expect(within(dialog).getByText('Sin filas.')).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Agregar fila' }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Agregar fila' }));
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Ítem, fila 2' }), 'Papel');
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Precio, fila 2' }), '1.200,50');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ values: { items: [{ item: 'Papel', price: '1200.50' }] } }));
+      expect(await within(dialog).findByText('Fila 1, «Precio»: El valor está fuera del rango permitido.')).toBeInTheDocument();
+      expect(within(dialog).getByRole('textbox', { name: 'Ítem, fila 1' })).toHaveValue('Papel');
+      expect(within(dialog).queryByRole('textbox', { name: 'Ítem, fila 2' })).toBeNull();
+    });
+
     it('says when a required field of the step cannot be filled from the web yet', async () => {
-      const { fake } = renderRoute(base, { handlers: handlers({}, { editableFieldCodes: ['auditor'], fields: [field(7, 'auditor', 'Auditor', 'USER')].map((entry) => ({ ...entry, isRequired: true })) }) });
+      const { fake } = renderRoute(base, { handlers: handlers({}, { editableFieldCodes: ['receipt'], fields: [field(8, 'receipt', 'Soporte', 'FILE')].map((entry) => ({ ...entry, isRequired: true })) }) });
 
       await userEvent.click(await screen.findByRole('button', { name: 'Devolver' }));
       const dialog = screen.getByRole('dialog', { name: 'Devolver' });
