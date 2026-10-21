@@ -1,6 +1,6 @@
 import type { FormFieldResponse } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { choiceSourceOf, decimalText, initialInput, isBlankInput, isCapturable, requestValue } from './step-values';
+import { choiceSourceOf, decimalText, initialInput, isBlankInput, requestValue } from './step-values';
 
 const field = (type: FormFieldResponse['type'], config: Record<string, unknown> = {}, dataSource: Record<string, unknown> | null = null): FormFieldResponse => ({
   id: '018f0000-0000-7000-8000-000000000001',
@@ -16,19 +16,6 @@ const field = (type: FormFieldResponse['type'], config: Record<string, unknown> 
 });
 
 const options = [{ value: 'yes', label: 'Sí' }];
-
-describe('isCapturable', () => {
-  it('captures plain inputs and lists with their own options', () => {
-    expect(['TEXT', 'TEXTAREA', 'NUMBER', 'CURRENCY', 'DAYS', 'DATE', 'DATETIME'].every((type) => isCapturable(field(type as FormFieldResponse['type'])))).toBe(true);
-    expect(isCapturable(field('SELECT', { options }))).toBe(true);
-    expect(isCapturable(field('MULTI_SELECT', { options }))).toBe(true);
-  });
-
-  it('captures people, sites, tables and lists from presets or datasets; files and computed fields wait', () => {
-    expect(['USER', 'SITE', 'TABLE'].every((type) => isCapturable(field(type as FormFieldResponse['type'])))).toBe(true);
-    expect(['FILE', 'FORMULA', 'CALCULATOR'].some((type) => isCapturable(field(type as FormFieldResponse['type'])))).toBe(false);
-  });
-});
 
 describe('choiceSourceOf', () => {
   it('asks the API for people, sites, presets and datasets, and not for lists with their own options', () => {
@@ -112,5 +99,6 @@ describe('initialInput', () => {
     expect(initialInput(field('NUMBER'), 12.5)).toBe('12.5');
     expect(initialInput(field('MULTI_SELECT', { options }), ['yes'])).toEqual(['yes']);
     expect(initialInput(field('TEXT'), null)).toBe('');
+    expect(initialInput(field('FILE'), ['018f0000-0000-7000-8000-000000000003'])).toEqual(['018f0000-0000-7000-8000-000000000003']);
   });
 });

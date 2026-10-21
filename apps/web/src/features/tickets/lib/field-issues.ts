@@ -1,7 +1,19 @@
 import { ApiError } from '@/shared/api';
 
 /** What the API says is wrong with each field (`FIELD_VALUES_INVALID`), as a message key per field code. */
-export type FieldIssueKey = 'REQUIRED' | 'INVALID_TYPE' | 'OUT_OF_RANGE' | 'TOO_MANY_DECIMALS' | 'NOT_AN_OPTION' | 'NOT_FOUND' | 'TOO_FEW_ROWS' | 'TOO_MANY_ROWS' | 'OTHER';
+export type FieldIssueKey =
+  | 'REQUIRED'
+  | 'INVALID_TYPE'
+  | 'OUT_OF_RANGE'
+  | 'TOO_MANY_DECIMALS'
+  | 'NOT_AN_OPTION'
+  | 'NOT_FOUND'
+  | 'TOO_FEW_ROWS'
+  | 'TOO_MANY_ROWS'
+  | 'TOO_MANY_FILES'
+  | 'FILE_NOT_ATTACHABLE'
+  | 'FILE_TYPE_NOT_ACCEPTED'
+  | 'OTHER';
 
 /** The first cell of a TABLE field the API rejects: its row (from 0, as sent) and column code. */
 export interface CellIssue {
@@ -10,7 +22,7 @@ export interface CellIssue {
   readonly column: string;
 }
 
-const KNOWN: ReadonlySet<string> = new Set(['REQUIRED', 'INVALID_TYPE', 'OUT_OF_RANGE', 'TOO_MANY_DECIMALS', 'NOT_AN_OPTION', 'NOT_FOUND', 'TOO_FEW_ROWS', 'TOO_MANY_ROWS']);
+const KNOWN: ReadonlySet<string> = new Set(['REQUIRED', 'INVALID_TYPE', 'OUT_OF_RANGE', 'TOO_MANY_DECIMALS', 'NOT_AN_OPTION', 'NOT_FOUND', 'TOO_FEW_ROWS', 'TOO_MANY_ROWS', 'TOO_MANY_FILES', 'FILE_NOT_ATTACHABLE', 'FILE_TYPE_NOT_ACCEPTED']);
 
 interface RawIssue {
   readonly code?: unknown;

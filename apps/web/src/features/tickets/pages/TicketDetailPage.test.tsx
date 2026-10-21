@@ -646,15 +646,35 @@ describe('TicketDetailPage', () => {
       expect(within(dialog).queryByRole('textbox', { name: 'Ítem, fila 2' })).toBeNull();
     });
 
-    it('says when a required field of the step cannot be filled from the web yet', async () => {
-      const { fake } = renderRoute(base, { handlers: handlers({}, { editableFieldCodes: ['receipt'], fields: [field(8, 'receipt', 'Soporte', 'FILE')].map((entry) => ({ ...entry, isRequired: true })) }) });
+    it('uploads a file as soon as it is chosen and sends its id with the step', async () => {
+      const FILE_ID = id(900);
+      const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/key?sig=1', method: 'PUT', headers: { 'content-type': 'application/pdf', 'content-length': '4' }, expiresAt: at };
+      const stored = { id: FILE_ID, name: 'extracto.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at };
+      const put = vi.fn(() => Promise.resolve(new Response(null, { status: 200 })));
+      vi.stubGlobal('fetch', put);
+      const receipt = { ...field(8, 'receipt', 'Soporte', 'FILE', { maxFiles: 1, accept: ['PDF'] }), isRequired: true };
+      const { fake } = renderRoute(base, {
+        handlers: handlers(
+          { '/files/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }), [`/files/${FILE_ID}/confirm`]: () => stored, [`${base}/transition`]: () => mutation },
+          { editableFieldCodes: ['receipt'], fields: [receipt] },
+        ),
+      });
 
       await userEvent.click(await screen.findByRole('button', { name: 'Devolver' }));
       const dialog = screen.getByRole('dialog', { name: 'Devolver' });
+      const input = within(dialog).getByLabelText('Adjuntar un archivo');
+      expect(input).toHaveAttribute('accept', '.pdf');
+      await userEvent.upload(input, new File(['nope'], 'foto.png', { type: 'image/png' }), { applyAccept: false });
+      expect(within(dialog).getByText('«foto.png» no es de un tipo permitido aquí.')).toBeInTheDocument();
+
+      await userEvent.upload(input, new File(['%PDF'], 'extracto.pdf', { type: 'application/pdf' }));
+      expect(await within(dialog).findByRole('list', { name: 'Archivos de «Soporte»' })).toHaveTextContent('extracto.pdf');
+      expect(put).toHaveBeenCalledWith(slot.url, expect.objectContaining({ method: 'PUT', headers: { 'content-type': 'application/pdf' } }));
+      expect(within(dialog).queryByLabelText('Adjuntar un archivo')).toBeNull();
       await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
 
-      expect(within(dialog).getByText('Este dato es obligatorio y todavía no se puede llenar desde la web.')).toBeInTheDocument();
-      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ values: { receipt: [FILE_ID] } }));
+      vi.unstubAllGlobals();
     });
   });
 });

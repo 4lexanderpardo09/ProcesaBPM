@@ -1,13 +1,16 @@
 import type { FormDecisionResponse, FormFieldResponse, TicketDetailResponse, TicketFormResponse } from '@procesabpm/shared';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { plainTextToHtml } from '@/shared/lib/plain-text-html';
+import { useApiClient } from '@/shared/session';
 import { TextArea } from '@/shared/ui';
 import { transitionTicket } from '../../api/ticket-actions-api';
+import { ticketDocumentsQueryOptions } from '../../api/ticket-detail-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { cellIssuesOf, type FieldIssueKey, fieldIssuesOf } from '../../lib/field-issues';
-import { columnsOf, initialInput, type InputValue, isBlankInput, isCapturable, requestValue, type TableRow } from '../../lib/step-values';
+import { columnsOf, initialInput, type InputValue, isBlankInput, requestValue, type TableRow } from '../../lib/step-values';
 import { ActionDialog } from '../actions/ActionDialog';
 import { NextAssigneeField } from '../actions/NextAssigneeField';
 import styles from './AdvanceDialog.module.css';
@@ -21,7 +24,7 @@ export interface AdvanceDialogProps {
   readonly onClose: () => void;
 }
 
-type Issue = FieldIssueKey | 'NOT_CAPTURABLE';
+type Issue = FieldIssueKey;
 
 interface AdvanceArgs {
   readonly values: Record<string, unknown>;
@@ -40,6 +43,9 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const [comment, setComment] = useState('');
   const [localIssues, setLocalIssues] = useState<ReadonlyMap<string, Issue>>(new Map());
   const next = useNextAssignee();
+  const [uploading, setUploading] = useState(new Set<string>());
+  const documents = useQuery(ticketDocumentsQueryOptions(useApiClient(), ticket.id));
+  const knownFiles = Object.fromEntries((documents.data ?? []).map((document) => [document.file.id, document.file.name]));
   const knownLabels = Object.assign({}, ...Object.values(ticket.valueNames)) as Record<string, string>;
   const advance = useTicketMutation((client, args: AdvanceArgs) =>
     transitionTicket(client, ticket.id, {
@@ -72,10 +78,6 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
     const values: Record<string, unknown> = {};
     for (const field of fields) {
       const input = sent[field.code] ?? '';
-      if (!isCapturable(field)) {
-        if (field.isRequired && isBlankValue(ticket.values[field.code])) issues.set(field.code, 'NOT_CAPTURABLE');
-        continue;
-      }
       if (field.isRequired && isBlankInput(input)) issues.set(field.code, 'REQUIRED');
       const value = requestValue(field, input);
       if (value.ok) values[field.code] = value.value;
@@ -91,7 +93,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       open
       title={t('advance.title', { decision: decision.label })}
       submitLabel={decision.label}
-      pending={advance.isPending}
+      pending={advance.isPending || uploading.size > 0}
       error={serverIssues === undefined ? next.shownError(advance.error) : null}
       onClose={onClose}
       onSubmit={submit}
@@ -105,6 +107,8 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
           value={inputs[field.code] ?? ''}
           error={messageOf(field)}
           knownLabels={knownLabels}
+          knownFiles={knownFiles}
+          onBusyChange={(busy) => setUploading((current) => withBusy(current, field.code, busy))}
           onChange={(value) => {
             setInputs((current) => ({ ...current, [field.code]: value }));
             setLocalIssues((current) => withoutIssue(current, field.code));
@@ -123,6 +127,13 @@ function editableFields(form: TicketFormResponse): readonly FormFieldResponse[] 
   return form.fields.filter((field) => editable.has(field.code) && !field.isReadOnly && field.type !== 'FORMULA' && field.type !== 'CALCULATOR').sort((left, right) => left.sortOrder - right.sortOrder);
 }
 
+function withBusy(busy: ReadonlySet<string>, code: string, isBusy: boolean): Set<string> {
+  const next = new Set(busy);
+  if (isBusy) next.add(code);
+  else next.delete(code);
+  return next;
+}
+
 function withoutBlankRows(fields: readonly FormFieldResponse[], inputs: Readonly<Record<string, InputValue>>): Record<string, InputValue> {
   const next: Record<string, InputValue> = { ...inputs };
   for (const field of fields) {
@@ -132,9 +143,6 @@ function withoutBlankRows(fields: readonly FormFieldResponse[], inputs: Readonly
   return next;
 }
 
-function isBlankValue(value: unknown): boolean {
-  return value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
-}
 
 function withoutIssue(issues: ReadonlyMap<string, Issue>, code: string): ReadonlyMap<string, Issue> {
   if (!issues.has(code)) return issues;

@@ -6,9 +6,6 @@ export type TableRow = Readonly<Record<string, string>>;
 /** What the person types, per field: text for single inputs, a list for multiple choice, rows for a table. */
 export type InputValue = string | readonly string[] | readonly TableRow[];
 
-/** The only field type the web cannot capture yet: files need their two-phase upload. Computed fields are never typed. */
-const NOT_CAPTURABLE = new Set<FormFieldResponse['type']>(['FILE', 'FORMULA', 'CALCULATOR']);
-
 const DECIMAL = /^-?\d+(\.\d+)?$/;
 const INTEGER = /^-?\d+$/;
 
@@ -52,13 +49,9 @@ export function columnsOf(field: FormFieldResponse): readonly TableColumn[] {
   return Array.isArray(columns) ? (columns as readonly TableColumn[]) : [];
 }
 
-export function isCapturable(field: FormFieldResponse): boolean {
-  return !NOT_CAPTURABLE.has(field.type);
-}
-
 /** The value already on the ticket, as the input shows it. */
 export function initialInput(field: FormFieldResponse, value: unknown): InputValue {
-  if (field.type === 'MULTI_SELECT') return Array.isArray(value) ? value.map(String) : [];
+  if (field.type === 'MULTI_SELECT' || field.type === 'FILE') return Array.isArray(value) ? value.map(String) : [];
   if (field.type === 'TABLE') return Array.isArray(value) ? value.map(tableRowOf) : [];
   if (value === null || value === undefined) return '';
   if (field.type === 'DATETIME' && typeof value === 'string') return toLocalDateTime(value);

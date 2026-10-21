@@ -88,6 +88,12 @@ export interface DownloadUrlResponse {
 }
 
 /** Parse schemas of the responses above (for the web client); `satisfies` keeps them in step with the interfaces. */
+/** Parses `UploadsResponse` (for the web client). */
+export const uploadsResponseSchema = z.object({
+  uploads: z.array(z.object({ fileId: uuidSchema, url: z.string(), method: z.literal('PUT'), headers: z.record(z.string(), z.string()), expiresAt: z.string() })),
+  quota: z.object({ overLimit: z.boolean() }),
+}) satisfies z.ZodType<UploadsResponse>;
+
 export const commentTicketResponseSchema = z.object({ eventId: uuidSchema }) satisfies z.ZodType<CommentTicketResponse>;
 
 export const storedFileResponseSchema = z.object({

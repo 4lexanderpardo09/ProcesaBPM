@@ -214,7 +214,13 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Números:** "350.000" y "1.250.000" (puntos que agrupan miles, sin coma) se leen como miles; antes se tomaban como decimales.
   - **Mensajes nuevos:** `NOT_FOUND` (el valor ya no está disponible), `TOO_FEW_ROWS` y `TOO_MANY_ROWS`.
   - **Pruebas:** unitarias de `step-values` (tablas, origen de las opciones, miles) y `field-issues` (celdas), y la página con persona buscada en una lista larga, selección múltiple corta y tabla con una celda rechazada. Se probó contra el API real en local: persona, sede de un nivel, preset de cargos, varias personas y tabla, hasta cerrar el ticket.
-- **Siguiente:** archivos en el formulario del paso (subida en dos fases con URL prefirmada) y nombres de los valores de presets de empresas, departamentos y cargos en el detalle (hoy se ve el id).
+- **Archivos en el formulario del paso (2026-10-20, `feat/web-step-files`):** con esto el formulario captura todos los tipos (los calculados nunca se escriben), así que se quitó el aviso "todavía no se puede llenar desde la web".
+  - **Subida (`shared/files/upload-files`):** en las dos fases del API. Primero `POST /files/uploads` con nombre, tamaño y SHA-256 (WebCrypto); luego el `PUT` directo al almacenamiento con la URL prefirmada y sus encabezados (menos `content-length`, que pone el navegador); por último `POST /files/:id/confirm`. Si el almacenamiento rechaza, no se confirma (`StorageUploadError`).
+  - **`FileInput`:** sube el archivo apenas se elige y el campo guarda los ids confirmados; se muestran como fichas que se quitan, con el nombre (el de los que ya tenía el ticket sale de `GET /tickets/:id/documents`). Antes de subir revisa lo que el navegador sabe: tipo por extensión contra `config.accept`, hasta 4 MB y no más de `config.maxFiles`. El selector del navegador filtra por esas extensiones. Mientras sube, el botón de enviar queda deshabilitado.
+  - **Mensajes del API:** `TOO_MANY_FILES`, `FILE_NOT_ATTACHABLE` y `FILE_TYPE_NOT_ACCEPTED`.
+  - **Stack local con almacenamiento:** `WEB_STACK_STORAGE=1 pnpm --filter @procesabpm/api e2e:web-stack` arranca un S3 real (SeaweedFS con Docker, como las integraciones, o `TEST_S3_ENDPOINT`) y le pone CORS para la web (`http://localhost:4174` y `WEB_STACK_WEB_ORIGINS`). Sin la variable, todo sigue igual (las subidas fallan).
+  - **Pruebas:** unitarias de la subida (hash, encabezados, rechazo del almacenamiento) y la página (tipo rechazado, subida, envío del id). Se probó en local contra SeaweedFS: CORS, `PUT` y confirmación, y en el navegador hasta cerrar el ticket con el PDF en Adjuntos.
+- **Siguiente:** adjuntos sueltos al comentar y al avanzar (`attachments`), con la misma subida.
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
