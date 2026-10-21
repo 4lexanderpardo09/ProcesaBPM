@@ -8,6 +8,7 @@ export const paths = {
   workflows: '/workflows',
   workflow: '/workflows/:workflowId',
   workflowVersion: '/workflows/:workflowId/versions/:versionId',
+  pdfFormat: '/workflows/:workflowId/formats/:formatId',
   datasets: '/workflows/datasets',
   dataset: '/workflows/datasets/:datasetId',
   reports: '/reports',
@@ -28,6 +29,10 @@ export function workflowPath(workflowId: string): string {
 
 export function workflowVersionPath(workflowId: string, versionId: string): string {
   return `${workflowPath(workflowId)}/versions/${encodeURIComponent(versionId)}`;
+}
+
+export function pdfFormatPath(workflowId: string, formatId: string): string {
+  return `${workflowPath(workflowId)}/formats/${encodeURIComponent(formatId)}`;
 }
 
 export function datasetPath(datasetId: string): string {
