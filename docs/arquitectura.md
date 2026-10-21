@@ -272,6 +272,14 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **Piezas:** `MemberSearch` (buscar un miembro activo y actuar sobre él; lo usan grupos, aprobadores, miembros y delegaciones) y `useMembersById` (los nombres detrás de una lista de ids).
 - **Pruebas:** con API falsa (tipos y grupos, crear con el tipo predeterminado, reordenar y guardar aprobadores, miembro en otro grupo, tipo en uso, delegaciones con estado y terminar, crear con cruce, pestaña solo para quien administra delegaciones), `delegation-state` y E2E contra el API real (crear tipo y grupo, aprobadores en orden, un miembro y una delegación vigente).
 
+### 4.12 Mi perfil: datos, seguridad y firma (hecho, 2026-10-21, `feat/web-profile`)
+- **Pantalla `/profile`** (para todo miembro; se abre desde el nombre en la barra superior, que ahora es un enlace), con pestañas:
+  - **Mis datos:** nombres, apellidos y zona horaria (`PATCH /auth/me`; la respuesta reemplaza el perfil de la sesión, así que el nombre de la barra cambia al momento). El correo se muestra sin poder editarlo.
+  - **Seguridad:** cambiar la contraseña (la actual y la nueva dos veces, mínimo `PASSWORD_MIN_LENGTH`) y la **verificación en dos pasos**: activarla (QR y clave, código de la app y contraseña; muestra los códigos de respaldo una sola vez con `BackupCodesPanel` del login), generar códigos nuevos (con un código de la app) y desactivarla (contraseña y código de la app o de respaldo). Si una organización la exige, no se ofrece desactivarla. Una contraseña o un código equivocados son un 401 que la sesión conserva (solo `UNAUTHENTICATED` la termina) y se dicen con su mensaje (`lib/profile-error.ts`).
+  - **Firma:** la imagen actual (enlace firmado de `GET /auth/me/signature`), subir o cambiar (PNG o JPEG de hasta 2 MB: subida en dos fases y `PUT /auth/me/signature`) y quitar.
+- `features/auth` exporta `BackupCodesPanel`, `CopyButton` y `groupSecret` para reutilizarlos.
+- **Pruebas:** la página con API falsa (abrir desde la barra y guardar datos, contraseña equivocada sin cerrar la sesión, activar con códigos de respaldo, desactivar con código de respaldo, exigida por la organización, firma que no es imagen y quitarla), `profile-error` y E2E contra el API real (`e2e-stack/profile.spec.ts`: nombre, contraseña equivocada y cambio de ida y vuelta, activar con un código TOTP real y desactivar con un código de respaldo; deja todo como estaba).
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

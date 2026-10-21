@@ -10,6 +10,7 @@ export const paths = {
   catalog: '/catalog',
   organization: '/organization',
   people: '/people',
+  profile: '/profile',
 } as const;
 
 export function ticketPath(ticketId: string): string {
