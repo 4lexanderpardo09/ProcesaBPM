@@ -390,7 +390,56 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
     - Salir con cambios, solo lectura, crear un borrador desde la publicada, el lector y el 404.
   - E2E contra el API real: dibujar un paso entre Inicio y Fin, guardar, recargar y publicar.
   - A mano en Chromium: arrastrar desde la paleta, conectar con los puntos de los bloques, mover y borrar con Supr.
-- **Siguiente entrega:** campos de cada bloque y participantes (candidatos, iniciadores, firmantes, SLA por empresa, archivos), destinatarios específicos de una notificación y topes de monto. Hoy el inspector muestra cuántos hay y lo dice.
+- **Campos, participantes y topes de monto:** §4.17.
+
+### 4.17 Flujos: campos, participantes y topes de monto (hecho, 2026-10-21, `feat/web-workflow-content`)
+- **Cómo se guardan:** son las ediciones por partes del borrador (`fields`, `amount-rules`, `steps/:id/{candidates,initiators,signers,sla-overrides,files}`), que se guardan al momento.
+  - `useDraftContent` aplica la respuesta al documento del lienzo (`builder.applySaved`) sin marcarlo como cambio sin guardar, y suma uno a la `revision`: el API la sube exactamente en uno por edición. Así el siguiente guardado del lienzo lleva la revisión correcta.
+  - Si otra persona editó a la vez, el guardado responde `STALE_REVISION` y la pantalla ofrece recargar.
+  - Las ediciones esperan a que termine un guardado del lienzo, y el lienzo espera a las ediciones.
+- **Bloque nuevo sin guardar** (`new:`): las ediciones por partes necesitan su id, así que el inspector pide guardar primero y lo ofrece ahí mismo.
+- **Campos** (Inicio y pasos con persona):
+  - Lista en orden, con subir y bajar (cambia `sortOrder` de los dos vecinos), editar y quitar con confirmación.
+  - Los del Inicio se capturan al crear el ticket (`CREATION`) y los demás en su paso (`STEP`).
+  - **Diálogo:**
+    - Nombre y código sugerido (`codeFromLabel`: «Monto total» → `MONTO_TOTAL`, sin tildes y sin repetir). El código y el tipo no cambian después.
+    - Obligatorio y de solo lectura.
+    - La configuración por tipo (`FieldConfigEditor`):
+      - texto con largo y, opcional, el valor de un Excel;
+      - número y moneda con mínimo, máximo, decimales o moneda;
+      - listas con opciones propias, una lista de la organización (`PRESET`) o la columna de un Excel (`DATASET`, con búsqueda por clave);
+      - fechas con «Hoy» o una fecha;
+      - días, nivel de sede y cargos de una persona;
+      - tabla con sus columnas (código, tipo, obligatoria, total y opciones);
+      - archivos con máximo y tipos;
+      - fórmula con resultado y decimales;
+      - calculadora con sus datos.
+  - **Antes de enviar,** `fieldConfigProblems` dice en español lo que falta: opciones, columnas, fórmula, Excel y columna, rango invertido, tipos de archivo. Lo demás que el esquema rechazaría da un mensaje general.
+- **Participantes** (`participants/`):
+  - Quién puede crear tickets (Inicio): personas, cargos, grupos, departamentos, empresas o sedes; vacío es «cualquiera».
+  - Candidatos según el modo: personas, un grupo, o personas, cargos y grupos en bolsa y reparto aleatorio.
+  - Firmantes en orden, en un paso Firma o en paralelo: una persona, un cargo, el aprobador, el creador o quien atiende (este último no en paralelo), con rótulo opcional y subir y bajar.
+  - Plazo por empresa y archivos de apoyo (subida en dos fases y nombre). Cada lista se reemplaza entera con un `PUT`.
+  - Los nombres salen del directorio (personas) y de las listas de la organización (`useRecordNames`).
+- **Notificación:** sus destinatarios específicos (personas, cargos o grupos) van en su `config` y se guardan con el lienzo.
+- **Topes de monto** (botón del encabezado, con su número):
+  - Lista y formulario. El formulario pide el campo con el monto; en una tabla, la columna del monto y, opcional, la de tipo con su valor.
+  - Luego tope (decimal), moneda, acción (impedir, advertir o aprobación extra), paso donde se revisa, aprobación extra, cargo, empresa, mensaje y activo.
+  - Si a una aprobación extra le falta la conexión «solo del sistema», el botón «Crear la conexión a la aprobación» la agrega al lienzo (`connectSystem`), y se guarda con él.
+  - En el panel de validación, un problema de un tope abre esta lista. El monto se muestra en formato es-CO.
+- **Accesibilidad:**
+  - Cada sección del inspector es una región con su título.
+  - La lista de bloques para el teclado ahora aparece como una capa superpuesta. Antes se desplegaba dentro del inspector y, al plegarse, movía el contenido justo cuando se hacía clic: un clic en una salida no la seleccionaba.
+- **También:** dentro de un borrador ya no se ofrece «Abrir el borrador», que salía con los datos que la ficha del flujo había dejado en caché.
+- **Pruebas:**
+  - Web: código sugerido, documento, participantes y problemas de configuración.
+  - Web, la página:
+    - Un campo con su cuerpo exacto y la revisión del siguiente guardado.
+    - Lista sin opciones y código repetido; editar sin código ni tipo, mover y quitar.
+    - Bloque nuevo que pide guardar.
+    - Iniciadores, candidatos y plazo por empresa; firmantes en orden; destinatarios de una notificación.
+    - Tope con aprobación extra y su conexión.
+  - E2E contra el API real: campo, iniciador, paso en bolsa con candidato, tope que impide avanzar, guardar encima y publicar.
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |

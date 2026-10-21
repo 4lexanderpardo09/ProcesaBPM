@@ -5,68 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
+import { at, DRAFT, END, FLOW, id, link, START, startingDoc, step, versionOf, versionUrl } from '../test/builder-fixtures';
 
-const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
-const FLOW = id(20);
-const DRAFT = id(22);
-const START = id(30);
-const END = id(31);
 const CHECK = id(32);
-const at = '2026-10-21T15:00:00.000Z';
-const url = `/workflows/${FLOW}/versions/${DRAFT}`;
-
-function step(stepId: string, type: StepDocument['type'], name: string, overrides: Partial<StepDocument> = {}): StepDocument {
-  return {
-    id: stepId,
-    type,
-    name,
-    description: null,
-    assignmentMode: 'NONE',
-    manualSelection: false,
-    siteScope: 'SAME_SITE',
-    positionId: null,
-    approvalGroupTypeId: null,
-    approvalLevel: null,
-    closeRule: 'NOT_ALLOWED',
-    slaValue: null,
-    slaUnit: null,
-    deadlineType: 'SLA',
-    deadlineFieldCode: null,
-    deadlineBusinessDays: null,
-    maxLoops: null,
-    dispatchIntervalMin: null,
-    allowsBatch: false,
-    config: {},
-    ui: { x: 0, y: 0 },
-    candidates: [],
-    initiators: [],
-    slaOverrides: [],
-    signers: [],
-    files: [],
-    ...overrides,
-  };
-}
-
-const link = (transitionId: string, from: string, to: string, overrides: Partial<TransitionDocument> = {}): TransitionDocument => ({
-  id: transitionId,
-  fromStepId: from,
-  toStepId: to,
-  type: 'DEFAULT',
-  label: 'Continuar',
-  condition: null,
-  sortOrder: 0,
-  uiPoints: null,
-  ...overrides,
-});
-
-const startingDoc = (): WorkflowVersionDocument => ({
-  steps: [step(START, 'START', 'Inicio'), step(END, 'END', 'Fin', { ui: { x: 400, y: 0 } })],
-  transitions: [link(id(40), START, END)],
-  fields: [],
-  amountRules: [],
-});
-
-const versionOf = (status: string, revision = 0) => ({ id: DRAFT, number: 2, status, notes: null, revision, publishedAt: status === 'DRAFT' ? null : at, publishedById: null, createdAt: at });
+const url = versionUrl;
 
 /** A fake API that keeps the version in memory: saving replaces it (giving ids to new rows) and publishing changes its status. */
 function api(initial: WorkflowVersionDocument = startingDoc(), options: { status?: string; save?: FakeHandler; publish?: FakeHandler } = {}) {
@@ -173,7 +115,7 @@ describe('workflow builder', () => {
     expect(within(screen.getByRole('complementary', { name: 'Propiedades' })).getByRole('heading', { name: 'Inicio → Revisar pago' })).toBeInTheDocument();
 
     await userEvent.click(within(outline()).getByRole('button', { name: 'Paso: Revisar pago' }));
-    await userEvent.type(within(screen.getByRole('complementary', { name: 'Propiedades' })).getByRole('textbox', { name: /Plazo/ }), '2');
+    await userEvent.type(within(screen.getByRole('complementary', { name: 'Propiedades' })).getByRole('textbox', { name: 'Plazo' }), '2');
     await userEvent.keyboard('{Control>}s{/Control}');
     await vi.waitFor(() => expect(fake.callsTo(`${url}/graph`)).toHaveLength(2));
     const second = fake.callsTo(`${url}/graph`)[1]?.options.body as { revision: number; steps: Array<{ name: string; slaValue: number | null; slaUnit: string | null }> };
@@ -312,6 +254,16 @@ describe('workflow builder', () => {
 
     await vi.waitFor(() => expect(fake.callsTo(`/workflows/${FLOW}/versions`)[0]?.options.body).toEqual({ fromVersionId: DRAFT }));
     await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/workflows/${FLOW}/versions/${id(23)}`));
+  });
+
+  it('inside a draft offers no other draft, even with the workflow page already read', async () => {
+    renderRoute(`/workflows/${FLOW}`, { handlers: api() });
+
+    await userEvent.click(await screen.findByRole('link', { name: 'Editar el borrador v2' }));
+
+    expect(await screen.findByText('Todo guardado')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Abrir el borrador/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear borrador desde esta versión' })).not.toBeInTheDocument();
   });
 
   it('a reader sees the draft without the editing', async () => {

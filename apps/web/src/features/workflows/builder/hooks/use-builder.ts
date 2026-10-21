@@ -39,7 +39,16 @@ export function useBuilder(detail: VersionDetail) {
     },
   });
 
-  return { doc, change, revision, dirty, selection, setSelection, validation, save };
+  /**
+   * A piece of the draft edited on its own (a field, a list of a block, an amount rule): the API already keeps it and
+   * bumped the revision by one, so the canvas takes the answer without counting it as unsaved work.
+   */
+  const applySaved = useCallback((next: (current: WorkflowVersionDocument) => WorkflowVersionDocument) => {
+    setDocState(next);
+    setRevision((current) => current + 1);
+  }, []);
+
+  return { doc, change, applySaved, revision, dirty, selection, setSelection, validation, save };
 }
 
 export type Builder = ReturnType<typeof useBuilder>;

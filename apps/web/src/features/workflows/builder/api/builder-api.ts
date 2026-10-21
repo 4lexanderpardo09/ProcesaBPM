@@ -93,3 +93,15 @@ export function documentChoicesQueryOptions(client: HttpClient, workflowId: stri
     },
   });
 }
+
+const datasetSchema = z.object({ id: z.string(), name: z.string(), columns: z.array(z.object({ name: z.string(), isKey: z.boolean() })), keyColumn: z.string().nullable(), isActive: z.boolean() });
+export type DatasetChoice = z.infer<typeof datasetSchema>;
+
+/** Uploaded Excel files a list field can take its options from. */
+export function datasetsQueryOptions(client: HttpClient) {
+  return queryOptions({
+    queryKey: ['datasets', 'all'] as const,
+    queryFn: ({ signal }) => client.request('/datasets?pageSize=100', { schema: pageResponseSchema(datasetSchema), signal }),
+    select: (page) => page.items,
+  });
+}

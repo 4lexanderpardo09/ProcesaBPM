@@ -108,6 +108,10 @@
   }
 }
 
+.inspector {
+  position: relative;
+}
+
 .palette,
 .inspector {
   display: flex;
@@ -606,7 +610,10 @@
   gap: var(--space-3);
 }
 
-/* A list of the blocks for keyboard and screen readers: visible only when focused. */
+/*
+ * A list of the blocks for keyboard and screen readers: visible only when focused, and then as a layer over the inspector,
+ * so showing or hiding it never moves what is under the pointer.
+ */
 .outline {
   position: absolute;
   width: 1px;
@@ -616,10 +623,19 @@
 }
 
 .outline:focus-within {
-  position: static;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  left: var(--space-3);
+  z-index: 4;
   width: auto;
   height: auto;
-  margin: 0 var(--space-4) var(--space-4);
+  max-height: 60%;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
   clip-path: none;
 }
 
@@ -650,4 +666,93 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.block {
+  display: block;
+}
+
+.ruleCompact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+}
+
+.fieldList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fieldRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.fieldRow:last-child {
+  border-bottom: none;
+}
+
+.fieldText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fieldName {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fieldMeta {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.fieldBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.fieldActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.participants {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.addParticipant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+}
+
+.fieldMetaPlain {
+  color: var(--muted);
+  font-size: 11.5px;
 }

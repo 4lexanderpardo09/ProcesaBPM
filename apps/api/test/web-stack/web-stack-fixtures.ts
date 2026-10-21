@@ -18,6 +18,7 @@ const PEOPLE = [
   { email: 'leo@e2e.test', firstName: 'Leo', lastName: 'Mora', organizations: ['acme', 'globex'] },
   { email: 'eva@e2e.test', firstName: 'Eva', lastName: 'Ríos', organizations: ['securia'] },
   { email: 'bell@e2e.test', firstName: 'Bruno', lastName: 'Paz', organizations: ['acme'] },
+  { email: 'flows@e2e.test', firstName: 'Fabio', lastName: 'Ruiz', organizations: ['acme'] },
 ] as const;
 
 /** What the bell shows Bruno: two unread and one read, none about a ticket (the stack has no worker and no tickets). */

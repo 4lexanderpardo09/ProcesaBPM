@@ -4,14 +4,14 @@ import { PEOPLE } from './support/stack-fixtures';
 
 test('a workflow is created for a subcategory, its draft deleted and made again, and an observer added, through the real API', async ({ page }) => {
   await page.goto('/catalog');
-  await signIn(page, PEOPLE.singleOrganization.email);
+  await signIn(page, PEOPLE.designer.email);
 
   // The stack has no catalog: a category and a subcategory for the workflow.
   await page.getByRole('button', { name: 'Nueva categoría' }).click();
   const category = page.getByRole('dialog', { name: 'Nueva categoría' });
   await category.getByRole('textbox', { name: /Nombre/ }).fill('Compras E2E');
   await category.getByRole('button', { name: 'Guardar' }).click();
-  await page.getByRole('button', { name: 'Subcategorías de Compras E2E' }).click();
+  await page.getByRole('button', { name: 'Subcategorías de Compras E2E', exact: true }).click();
   await page.getByRole('button', { name: 'Nueva subcategoría' }).click();
   const subcategory = page.getByRole('dialog', { name: 'Nueva subcategoría' });
   await subcategory.getByRole('textbox', { name: /Nombre/ }).fill('Orden de compra E2E');

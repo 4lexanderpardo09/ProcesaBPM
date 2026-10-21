@@ -163,6 +163,28 @@ export function connect(doc: WorkflowVersionDocument, fromId: string, toId: stri
   return { doc: { ...doc, transitions: [...doc.transitions, transition] }, id };
 }
 
+/**
+ * The system-only way from a step to the approval an amount rule asks for: the engine takes it when the amount is passed
+ * (`AMOUNT_RULE_EXTRA_APPROVAL_NOT_WIRED` until it exists).
+ */
+export function connectSystem(doc: WorkflowVersionDocument, fromId: string, toId: string, label: string): { doc: WorkflowVersionDocument; id: string } {
+  const existing = doc.transitions.find((transition) => transition.type === 'SYSTEM_ONLY' && transition.fromStepId === fromId && transition.toStepId === toId);
+  if (existing !== undefined) return { doc, id: existing.id };
+  const exits = doc.transitions.filter((transition) => transition.fromStepId === fromId);
+  const id = nextRef('t', doc.transitions.map((transition) => transition.id));
+  const transition: TransitionDocument = {
+    id,
+    fromStepId: fromId,
+    toStepId: toId,
+    type: 'SYSTEM_ONLY',
+    label: uniqueName(label, exits.map((exit) => exit.label)),
+    condition: null,
+    sortOrder: exits.length,
+    uiPoints: null,
+  };
+  return { doc: { ...doc, transitions: [...doc.transitions, transition] }, id };
+}
+
 /** The same check the API runs on a draft: design rules plus what the engine cannot run yet. */
 export function validateDraft(doc: WorkflowVersionDocument): WorkflowValidation {
   const design = validateWorkflowGraph(doc);

@@ -11,9 +11,11 @@ import { Alert, Badge, Breadcrumb, Button, ButtonLink, Dialog } from '@/shared/u
 import { createVersion, workflowQueryKeys, workflowQueryOptions } from '../../api/workflows-api';
 import { builderQueryKeys, publishVersion, type VersionDetail } from '../api/builder-api';
 import { useBuilder } from '../hooks/use-builder';
-import { addStep, connect, freeSpot, removeStep, removeTransition, type Selection, updateStep, updateTransition } from '../lib/builder-doc';
+import { useDraftContent } from '../hooks/use-draft-content';
+import { addStep, connect, connectSystem, freeSpot, removeStep, removeTransition, type Selection, updateStep, updateTransition } from '../lib/builder-doc';
 import { problemsByElement, problemTarget } from '../lib/problems';
 import { serverOnlyProblems, withServerProblems } from '../lib/server-problems';
+import { AmountRulesDialog } from './AmountRulesDialog';
 import { BlockPalette } from './BlockPalette';
 import { BuilderCanvas } from './BuilderCanvas';
 import { ProblemsPanel } from './ProblemsPanel';
@@ -37,6 +39,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
   const canvasRef = useRef<HTMLDivElement>(null);
   const builder = useBuilder(detail);
   const { doc, change, dirty, selection, setSelection, save } = builder;
+  const content = useDraftContent(builder, detail.workflow.id, detail.version.id);
   const status = detail.version.status;
   const readOnly = status !== 'DRAFT' || !can('update', 'Workflow');
   const [serverProblems, setServerProblems] = useState<WorkflowProblem[]>([]);
@@ -44,10 +47,14 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
   const problemsOf = useMemo(() => problemsByElement(validation), [validation]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [amountRulesOpen, setAmountRulesOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const navigate = useNavigate();
   // From a version that no longer changes, the way on is the draft: open it, or make one from this version.
-  const versions = useQuery({ ...workflowQueryOptions(client, detail.workflow.id), enabled: status !== 'DRAFT' && can('update', 'Workflow') }).data?.versions;
+  const offerDraft = status !== 'DRAFT' && can('update', 'Workflow');
+  // `enabled` alone would still hand back what the workflow's page cached: inside a draft there is nothing to offer.
+  const workflowVersions = useQuery({ ...workflowQueryOptions(client, detail.workflow.id), enabled: offerDraft }).data?.versions;
+  const versions = offerDraft ? workflowVersions : undefined;
   const draft = versions?.find((version) => version.status === 'DRAFT');
   const copy = useMutation({
     mutationFn: () => createVersion(client, detail.workflow.id, { fromVersionId: detail.version.id }),
@@ -112,6 +119,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
     const target = problemTarget(problem);
     if (target?.kind === 'step') return doc.steps.find((step) => step.id === target.id)?.name;
     if (target?.kind === 'transition') return doc.transitions.find((transition) => transition.id === target.id)?.label;
+    if (problem.amountRuleId !== undefined) return t('builder.panel.amountRule');
     return undefined;
   };
 
@@ -143,12 +151,12 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
-        if (dirty && !save.isPending) save.mutate();
+        if (dirty && !save.isPending && !content.pending) save.mutate();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [readOnly, dirty, save]);
+  }, [readOnly, dirty, save, content.pending]);
 
   // Leaving with unsaved work asks first: in the app, and when the tab is closed or reloaded.
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
@@ -180,6 +188,9 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
           {!readOnly && <span className={dirty ? styles.dirty : styles.clean}>{dirty ? t('builder.dirty') : t('builder.clean')}</span>}
         </div>
         <div className={styles.headerActions}>
+          <Button onClick={() => setAmountRulesOpen(true)}>
+            {doc.amountRules.length === 0 ? t('builder.amountRules.open') : t('builder.amountRules.openCount', { count: doc.amountRules.length })}
+          </Button>
           <Button aria-expanded={panelOpen} onClick={() => setPanelOpen((open) => !open)}>
             {t('builder.problems')}
             <span className={errors > 0 ? styles.countError : warnings > 0 ? styles.countWarning : styles.countOk}>
@@ -196,7 +207,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
             ))}
           {!readOnly && (
             <>
-              <Button disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
+              <Button disabled={!dirty || save.isPending || content.pending} onClick={() => save.mutate()}>
                 {save.isPending ? t('builder.saving') : t('builder.save')}
               </Button>
               {can('publish', 'Workflow') && (
@@ -236,7 +247,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
             onConnect={connectBlocks}
             onDropBlock={addBlock}
           />
-          {panelOpen && <ProblemsPanel validation={validation} nameOf={problemOwner} onGoTo={goTo} onClose={() => setPanelOpen(false)} />}
+          {panelOpen && <ProblemsPanel validation={validation} nameOf={problemOwner} onGoTo={goTo} onOpenAmountRules={() => setAmountRulesOpen(true)} onClose={() => setPanelOpen(false)} />}
         </div>
         <aside className={styles.inspector} aria-label={t('builder.inspector.label')}>
           {selectedStep !== undefined ? (
@@ -255,6 +266,9 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
               }}
               onConnect={(toId) => connectBlocks(selectedStep.id, toId)}
               onSelect={select}
+              content={content}
+              saving={save.isPending}
+              onSave={() => save.mutate()}
             />
           ) : selectedTransition !== undefined ? (
             <TransitionInspector
@@ -306,6 +320,15 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
             setPublishing(false);
             publish.reset();
           }}
+        />
+      )}
+      {amountRulesOpen && (
+        <AmountRulesDialog
+          doc={doc}
+          readOnly={readOnly || save.isPending}
+          content={content}
+          onWire={(fromId, toId) => edit((current) => connectSystem(current, fromId, toId, t('builder.amountRules.wireLabel')).doc)}
+          onClose={() => setAmountRulesOpen(false)}
         />
       )}
       {blocker.state === 'blocked' && (
