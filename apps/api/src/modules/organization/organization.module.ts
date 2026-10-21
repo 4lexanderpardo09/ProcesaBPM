@@ -15,6 +15,7 @@ import { PositionRepository } from './data/position.repository.js';
 import { SiteLevelRepository } from './data/site-level.repository.js';
 import { SiteRepository } from './data/site.repository.js';
 import { CalendarsController } from './http/calendars.controller.js';
+import { CountriesController } from './http/countries.controller.js';
 import { CompaniesController } from './http/companies.controller.js';
 import { DepartmentsController } from './http/departments.controller.js';
 import { PositionsController } from './http/positions.controller.js';
@@ -23,7 +24,7 @@ import { SitesController } from './http/sites.controller.js';
 
 /** Companies, departments, positions, sites and calendars of a tenant. */
 @Module({
-  controllers: [CompaniesController, DepartmentsController, PositionsController, SiteLevelsController, SitesController, CalendarsController],
+  controllers: [CompaniesController, CountriesController, DepartmentsController, PositionsController, SiteLevelsController, SitesController, CalendarsController],
   providers: [
     CompanyRepository,
     DepartmentRepository,

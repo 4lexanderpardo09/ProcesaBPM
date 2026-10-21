@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type CompanyResponse,
+  type CountryResponse,
   type CreateCompanyRequest,
   InvalidReferenceError,
   InvalidStateError,
@@ -31,6 +32,11 @@ export class CompaniesService {
       const { rows, total } = await this.repository.list(tx, this.tenantId, query);
       return toPage(rows, total, query, toResponse);
     });
+  }
+
+  /** The countries a company can be of: only those the platform knows (it holds their currency, time zone and holidays). */
+  countries(): Promise<CountryResponse[]> {
+    return this.runner.withTenantTransaction((tx) => this.repository.listCountries(tx));
   }
 
   get(id: string): Promise<CompanyResponse> {

@@ -8,6 +8,7 @@ export const paths = {
   workflows: '/workflows',
   reports: '/reports',
   catalog: '/catalog',
+  organization: '/organization',
   people: '/people',
 } as const;
 

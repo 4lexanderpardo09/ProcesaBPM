@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react';
-import { ChartIcon, GridIcon, type IconProps, InboxIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
+import { BuildingIcon, ChartIcon, GridIcon, type IconProps, InboxIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
 import { paths } from '@/shared/lib/paths';
 import type { PermissionCheck } from '@/shared/session';
 
-export type NavigationItemKey = 'tickets' | 'workflows' | 'reports' | 'catalog' | 'people';
+export type NavigationItemKey = 'tickets' | 'workflows' | 'reports' | 'catalog' | 'organization' | 'people';
 
 export interface NavigationItem {
   readonly key: NavigationItemKey;
@@ -30,6 +30,12 @@ const CATALOG_SCREENS: readonly PermissionCheck[] = [
   ['update', 'ErrorType'],
 ];
 
+/** The organization screen manages these. */
+const ORGANIZATION_SCREENS: readonly PermissionCheck[] = ['Company', 'Site', 'Department', 'Position'].flatMap((subject) => [
+  ['create', subject] as const,
+  ['update', subject] as const,
+]);
+
 export const navigationSections: readonly NavigationSection[] = [
   {
     key: 'operation',
@@ -43,6 +49,7 @@ export const navigationSections: readonly NavigationSection[] = [
     key: 'configuration',
     items: [
       { key: 'catalog', path: paths.catalog, icon: GridIcon, requires: CATALOG_SCREENS },
+      { key: 'organization', path: paths.organization, icon: BuildingIcon, requires: ORGANIZATION_SCREENS },
       { key: 'people', path: paths.people, icon: UserIcon, requires: [['read', 'Membership'], ['read', 'Role'], ['read', 'Group']] },
     ],
   },
