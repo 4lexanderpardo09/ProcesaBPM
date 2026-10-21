@@ -1,0 +1,36 @@
+export const admin = {
+  fields: {
+    name: 'Nombre',
+    nameRequired: 'Escribe el nombre.',
+    description: 'Descripción',
+  },
+  list: {
+    search: 'Buscar por nombre',
+    showInactive: 'Mostrar inactivos',
+    status: 'Estado',
+    active: 'Activo',
+    inactive: 'Inactivo',
+    actions: 'Acciones',
+    edit: 'Editar',
+    editNamed: 'Editar {{name}}',
+    activate: 'Activar',
+    activateNamed: 'Activar {{name}}',
+    deactivate: 'Desactivar',
+    deactivateNamed: 'Desactivar {{name}}',
+    loading: 'Cargando…',
+    failed: 'No se pudo cargar la lista.',
+    noMatches: 'Nada coincide con la búsqueda.',
+  },
+  dialog: {
+    save: 'Guardar',
+    saving: 'Guardando…',
+    cancel: 'Cancelar',
+    close: 'Cerrar',
+  },
+  errors: {
+    duplicate: 'Ya existe uno con ese nombre. Usa otro.',
+    forbidden: 'Tu rol no puede hacer este cambio.',
+    invalid: 'Revisa los datos: el servidor no los aceptó.',
+    inUse: 'No se puede hacer este cambio ahora: algo lo está usando.',
+  },
+};

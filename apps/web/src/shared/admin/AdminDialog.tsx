@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Dialog } from '@/shared/ui';
-import { CatalogError } from './CatalogError';
-import styles from './Catalog.module.css';
+import { AdminError } from './AdminError';
+import styles from './Admin.module.css';
 
-export interface CatalogDialogProps {
+export interface AdminDialogProps {
   readonly title: string;
   readonly submitLabel: string;
   readonly pending: boolean;
@@ -15,8 +15,8 @@ export interface CatalogDialogProps {
 }
 
 /** Create or edit one record of the catalog: its fields, why the API refused it, and Cancel / Save. */
-export function CatalogDialog({ title, submitLabel, pending, error, onSubmit, onClose, children }: CatalogDialogProps) {
-  const { t } = useTranslation('catalog');
+export function AdminDialog({ title, submitLabel, pending, error, onSubmit, onClose, children }: AdminDialogProps) {
+  const { t } = useTranslation('admin');
   return (
     <Dialog
       open
@@ -38,7 +38,7 @@ export function CatalogDialog({ title, submitLabel, pending, error, onSubmit, on
     >
       <div className={styles.dialogFields}>
         {children}
-        <CatalogError error={error} />
+        <AdminError error={error} />
       </div>
     </Dialog>
   );

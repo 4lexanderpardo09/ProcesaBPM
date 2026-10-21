@@ -2,34 +2,11 @@
   margin-bottom: var(--space-4);
 }
 
-.stack,
-.list {
+.stack {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   min-width: 0;
-}
-
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-3) var(--space-4);
-}
-
-.search {
-  width: min(320px, 100%);
-}
-
-.toolbarEnd {
-  margin-left: auto;
-}
-
-.rowActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-left: calc(-1 * var(--space-3));
 }
 
 .badges {
@@ -49,12 +26,6 @@
   height: 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-}
-
-.dialogFields {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
 }
 
 .flags {
