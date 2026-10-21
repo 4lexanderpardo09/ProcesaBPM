@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import type { HttpClient, RequestOptions } from '@/shared/api';
 
-type AnyOptions = RequestOptions & { readonly schema?: z.ZodType };
+type AnyOptions = RequestOptions & { readonly schema?: z.ZodType; readonly responseType?: 'blob' };
 /** Gets the request options and the full path, query included. */
 export type FakeHandler = (options: AnyOptions, path: string) => unknown;
 
@@ -21,6 +21,7 @@ export function createFakeTransport(handlers: Record<string, FakeHandler>) {
       const handler = handlers[path] ?? handlers[pathnameOf(path)];
       if (handler === undefined) throw new Error(`No fake handler for ${path}`);
       const body = await handler(options, path);
+      if (options.responseType === 'blob') return body;
       return options.schema === undefined ? undefined : options.schema.parse(body);
     },
   } as HttpClient;

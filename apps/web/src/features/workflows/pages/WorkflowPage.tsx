@@ -9,10 +9,11 @@ import { Alert, Breadcrumb, Button, PageHeader, Tabs } from '@/shared/ui';
 import { allWorkflowsQueryOptions, workflowQueryOptions } from '../api/workflows-api';
 import { EditWorkflowDialog } from '../components/EditWorkflowDialog';
 import { ObserversCard } from '../components/ObserversCard';
+import { DocumentsTab } from '../documents/components/DocumentsTab';
 import { VersionsCard } from '../components/VersionsCard';
 import styles from '../components/Workflows.module.css';
 
-const TABS = ['versions', 'observers'] as const;
+const TABS = ['versions', 'observers', 'documents'] as const;
 type WorkflowTab = (typeof TABS)[number];
 const NOT_FOUND = 404;
 
@@ -21,12 +22,14 @@ export function WorkflowPage() {
   const { workflowId = '' } = useParams();
   const { t } = useTranslation('workflows');
   const client = useApiClient();
-  const canEdit = usePermissions().can('update', 'Workflow');
+  const { can } = usePermissions();
+  const canEdit = can('update', 'Workflow');
+  const tabs = TABS.filter((tab) => tab !== 'documents' || can('read', 'PdfDocument'));
   const workflow = useQuery(workflowQueryOptions(client, workflowId));
   // The list already names the subcategory and its category; the detail only has its id.
   const listed = useQuery(allWorkflowsQueryOptions(client)).data?.find((row) => row.id === workflowId);
   const [params, setParams] = useSearchParams();
-  const current: WorkflowTab = TABS.find((tab) => tab === params.get('tab')) ?? 'versions';
+  const current: WorkflowTab = tabs.find((tab) => tab === params.get('tab')) ?? 'versions';
   const [editing, setEditing] = useState(false);
 
   const breadcrumb = (name: string) => <Breadcrumb label={t('detail.breadcrumb')} items={[{ label: t('detail.back'), to: paths.workflows }, { label: name }]} />;
@@ -55,10 +58,11 @@ export function WorkflowPage() {
         {data.isActive && published === undefined && <Alert tone="info">{t('detail.unpublishedNotice')}</Alert>}
         <div>
           <div className={styles.tabs}>
-            <Tabs label={t('detail.tabsLabel')} items={TABS.map((tab) => ({ value: tab, label: t(`detail.tabs.${tab}`) }))} value={current} onChange={(tab) => setParams({ tab }, { replace: true })} />
+            <Tabs label={t('detail.tabsLabel')} items={tabs.map((tab) => ({ value: tab, label: t(`detail.tabs.${tab}`) }))} value={current} onChange={(tab) => setParams({ tab }, { replace: true })} />
           </div>
           {current === 'versions' && <VersionsCard workflow={data} canEdit={canEdit} />}
           {current === 'observers' && <ObserversCard workflowId={data.id} canEdit={canEdit} />}
+          {current === 'documents' && <DocumentsTab workflowId={data.id} />}
         </div>
       </div>
       {editing && <EditWorkflowDialog workflow={data} onClose={() => setEditing(false)} />}

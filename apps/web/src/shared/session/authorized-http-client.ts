@@ -15,7 +15,7 @@ export interface SessionErrorSink {
   report(error: ApiError): void;
 }
 
-type AnyRequestOptions = RequestOptions & { readonly schema?: z.ZodType };
+type AnyRequestOptions = RequestOptions & { readonly schema?: z.ZodType; readonly responseType?: 'blob' };
 type SendRequest = (path: string, options: AnyRequestOptions) => Promise<unknown>;
 
 /** Only this means the access token itself was refused; other 401s (a wrong current password, a wrong code) are answers. */

@@ -13,6 +13,8 @@ export interface RequestOptions {
 export interface HttpClient {
   /** Parses the 2xx body with its contract (from `@procesabpm/shared`). */
   request<TSchema extends z.ZodType>(path: string, options: RequestOptions & { readonly schema: TSchema }): Promise<z.infer<TSchema>>;
+  /** A 2xx body that is a file (a generated PDF); errors still come as JSON. */
+  request(path: string, options: RequestOptions & { readonly responseType: 'blob' }): Promise<Blob>;
   /** For responses whose body is not used. */
   request(path: string, options?: RequestOptions): Promise<void>;
 }
@@ -22,7 +24,7 @@ export interface HttpClientConfig {
   readonly fetchFn?: typeof fetch;
 }
 
-type AnyRequestOptions = RequestOptions & { readonly schema?: z.ZodType };
+type AnyRequestOptions = RequestOptions & { readonly schema?: z.ZodType; readonly responseType?: 'blob' };
 
 const NO_CONTENT = 204;
 
@@ -33,8 +35,9 @@ const NO_CONTENT = 204;
 export function createHttpClient({ baseUrl, fetchFn = (...args) => globalThis.fetch(...args) }: HttpClientConfig): HttpClient {
   const root = baseUrl.replace(/\/+$/, '');
 
-  async function request(path: string, { method = 'GET', body, headers, signal, schema }: AnyRequestOptions = {}): Promise<unknown> {
+  async function request(path: string, { method = 'GET', body, headers, signal, schema, responseType }: AnyRequestOptions = {}): Promise<unknown> {
     const response = await send(fetchFn, `${root}${path}`, requestInit({ method, body, headers, signal }));
+    if (responseType === 'blob' && response.ok) return response.blob();
     const payload = await readJson(response);
     if (!response.ok) throw apiErrorFrom(response.status, payload, response.headers);
     if (schema === undefined) return undefined;

@@ -3,6 +3,16 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Documentos PDF en la web (2026-10-21, `feat/web-pdf-documents`):** pestaña «Documentos PDF» en la ficha del flujo (documentos que se generan, formatos y PDF propios) y diseñador de formatos con revisión en vivo y vista previa. Detalle en arquitectura.md §4.19.
+  - **Decidido (con criterio, el usuario delegó):**
+    - **Vista previa:** muestra lo último guardado, porque el API dibuja el formato guardado.
+    - **Revisión:** se revisa contra la versión publicada, como el API.
+    - **Tabla:** arranca con las columnas de su campo.
+    - **Formato nuevo:** empieza con el número del ticket y todos los campos.
+  - **Por confirmar:**
+    - **Datos de ejemplo:** la vista previa los usa siempre; no se pueden escribir valores propios.
+    - **Columnas de tabla:** el ancho solo se da en proporción; la API acepta también puntos.
+  - **Pendiente:** ubicar los datos sobre un PDF propio (mapeo por coordenadas o campos de formulario).
 - **Datos de Excel en la web (2026-10-21, `feat/web-datasets`):** lista, detalle con las filas, carga en dos pasos (archivo y columna clave opcional), recarga, editar y eliminar. Detalle en arquitectura.md §4.18.
   - **Arreglado:**
     - El constructor ofrecía Excel limitados a otros flujos, que el API rechaza al publicar.
@@ -13,7 +23,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Por confirmar:**
     - **Quitar la clave:** una vez puesta no se puede quitar (el API la conserva si no se envía otra).
     - **Uso de cada Excel:** la pantalla no dice qué campos lo usan; el API no lo expone.
-  - **Pendiente:** el editor de documentos PDF.
+  - ~~**Pendiente:** el editor de documentos PDF.~~ Hecho (entrada de arriba), salvo el mapeo de los PDF propios.
 - **Flujos en la web, parte 3: campos, participantes y topes (2026-10-21, `feat/web-workflow-content`):** campos por bloque con la configuración de cada tipo; iniciadores, candidatos, firmantes, plazo por empresa y archivos; destinatarios específicos de una notificación; topes de monto con la conexión de la aprobación extra. Detalle en arquitectura.md §4.17. Con esto el constructor de flujos queda completo en la web.
   - **Decidido (con criterio, el usuario delegó):**
     - Las ediciones por partes suben la revisión en uno; si alguien editó a la vez, el guardado lo detecta y se recarga.

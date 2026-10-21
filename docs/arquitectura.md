@@ -463,6 +463,28 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - En el constructor: solo los Excel del flujo.
   - El E2E de CI no tiene almacenamiento S3. Por eso se probó en local contra SeaweedFS: carga, clave, detalle y recarga rechazada sin cambios.
 
+### 4.19 Documentos PDF: documentos del flujo, formatos y PDF propios (hecho, 2026-10-21, `feat/web-pdf-documents`)
+- **Pestaña «Documentos PDF»** en la ficha del flujo (`features/workflows/documents/`), visible con `read PdfDocument`. Crear, editar y quitar siguen `create`, `update` y `delete PdfDocument`. Tiene tres tarjetas:
+  - **Documentos que se generan:** de qué formato o PDF propio sale cada uno, para qué empresa (todas o una, fija al crear) y cuándo: al crear, cada vez que avanza, al cerrar o solo con un bloque Documento (`moment` nulo). Se agregan, se editan (momento y activo) y se quitan; si un bloque Documento lo pide, el API responde `DOCUMENT_SOURCE_IN_USE` y se explica.
+  - **Formatos diseñados:** lista con la revisión (los problemas que da el API) y la fecha. «Nuevo formato» crea uno con `emptyDesign()` (título con el número y todos los campos) y abre el diseñador.
+  - **PDF propios:** se suben por las rutas propias (`/pdf-templates/uploads`, con `UploadRoutes`), con nombre (por defecto, el del archivo) y empresa. Se ven páginas y campos de formulario (AcroForm), y tienen vista previa, editar (nombre, activo) y quitar. Cada rechazo de `PDF_TEMPLATE_INVALID` tiene su mensaje.
+- **Vista previa:** `POST …/preview` devuelve el PDF. El cliente HTTP acepta `responseType: 'blob'` (los errores siguen llegando como JSON y pasan por la sesión igual que el resto).
+  - **PDF propio:** se abre en una pestaña nueva. La pestaña se abre al hacer clic y recibe el archivo cuando llega, porque una abierta después de esperar la bloquea el navegador; si la bloquea igual, se avisa.
+  - **Formato:** se ve al lado del diseñador.
+- **Diseñador `/workflows/:workflowId/formats/:formatId` (`PdfFormatPage`):**
+  - **Página:** tamaño, orientación, márgenes y letra normal.
+  - **Zonas:** encabezado y pie se activan aparte; en ellos solo van bloques que caben en una banda. El cuerpo es una lista de bloques que se suben, bajan, quitan y abren en acordeón con sus ajustes:
+    - **Por tipo:** título, texto, datos en columnas, todos los campos (con los que se ocultan), tabla, firmas, logo, línea, espacio y salto de página.
+    - **Tabla:** al elegir su campo, arranca con las columnas de ese campo (`{{row.CODE}}`) y puede sumar columnas al final.
+    - **Comunes:** espacio antes y después, y «Mostrar solo si…» con el `ConditionEditor` del constructor.
+  - **Insertar dato (`ExpressionField`):** pone el dato en el cursor. Ofrece los del ticket, los campos (con el formato que les va: moneda, fecha, número), quién terminó cada paso y cuándo, y la fecha de generación. El número de página y el total solo en encabezado y pie; las columnas de la fila, solo dentro de una tabla.
+  - **Revisión en vivo (`lib/design-problems`):** primero las reglas del propio formato (`pdfDesignSchema`), luego `validateDesign` del paquete compartido contra la versión publicada y, aparte, contra el borrador. El orden es el mismo del API: los tickets corren sobre la publicada, así que un campo que solo tiene el borrador no deja guardar. Cada problema sale en español en su bloque.
+  - **Guardar:** el diseño completo (`PATCH`), con Ctrl+S, y se avisa antes de salir con cambios. Los ajustes (nombre, descripción, nombre del archivo, activo) se guardan aparte. La vista previa es del último guardado y se actualiza al guardar.
+- **Pruebas:**
+  - **Unitarias:** cliente con `blob`; la pestaña (agregar documento, quitar uno en uso, subir un PDF propio con rechazo y reintento, crear formato, rol sin permiso); y el diseñador (tabla desde las columnas del campo, insertar dato, cuerpo completo guardado, campo solo del borrador, número de página solo en el pie, salir con cambios).
+  - **En local contra el API real:** un formato con tabla, firmas y pie se guardó y la vista previa (texto extraído del PDF) trae título, campos, filas, firma y «Página 1».
+- **Siguiente:** ubicar los datos y las firmas sobre un PDF propio (`PUT …/mapping`), por coordenadas o en sus campos de formulario.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

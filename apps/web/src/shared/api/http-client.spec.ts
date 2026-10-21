@@ -48,6 +48,15 @@ describe('createHttpClient', () => {
     await expect(client.request('/auth/login', { method: 'POST', body: {} })).rejects.toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 42 });
   });
 
+  it('hands a file body back as it came, and still reads an error as JSON', async () => {
+    const pdf = await clientAnswering(new Response('%PDF-1.7', { status: 200, headers: { 'Content-Type': 'application/pdf' } })).client.request('/preview', { method: 'POST', responseType: 'blob' });
+    expect(pdf).toBeInstanceOf(Blob);
+    expect(await pdf.text()).toBe('%PDF-1.7');
+
+    const refused = clientAnswering(jsonResponse(404, { error: { code: 'NOT_FOUND', message: 'x' } })).client.request('/preview', { method: 'POST', responseType: 'blob' });
+    await expect(refused).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
   it('resolves to undefined on 204', async () => {
     const { client } = clientAnswering(new Response(null, { status: 204 }));
     await expect(client.request('/tags/t1', { method: 'DELETE' })).resolves.toBeUndefined();
