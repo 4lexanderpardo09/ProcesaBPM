@@ -441,6 +441,28 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
     - Tope con aprobación extra y su conexión.
   - E2E contra el API real: campo, iniciador, paso en bolsa con candidato, tope que impide avanzar, guardar encima y publicar.
 
+### 4.18 Datos de Excel (datasets) (hecho, 2026-10-21, `feat/web-datasets`)
+- **Pantallas en `features/workflows/datasets/`:** se llega desde Flujos con el botón «Datos de Excel».
+  - **Lista `/workflows/datasets`:** nombre, quién lo puede usar (todos los flujos o uno, con su nombre), filas, fecha de carga y estado. Tiene buscador y «Mostrar inactivos».
+  - **Detalle `/workflows/datasets/:id`:** datos de la carga (archivo, fecha, filas y columnas, columna clave, alcance) y las filas tal como se guardaron, de 50 en 50, con la columna clave marcada. La numeración `#` es la posición entre las filas cargadas (las filas vacías del Excel no cuentan).
+- **Cargar (`LoadDatasetDialog`), en dos pasos:**
+  1. **El archivo:** `.xlsx` de hasta 4 MB, revisado en el navegador. Para uno nuevo también se piden el nombre (por defecto, el del archivo) y el alcance, que no cambia después. Se sube con la subida en dos fases y se crea con `POST /datasets`, o se recarga con `PUT /datasets/:id/content`.
+  2. **La columna clave (opcional):** se elige entre las columnas que el API encontró. Se aplica releyendo la **misma subida** (`PUT …/content` con el mismo `fileId` y `keyColumn`), así que no se sube dos veces. Si la clave tiene valores repetidos o vacíos, el error dice la fila y la carga anterior queda.
+- **Editar y eliminar:** nombre y activo (inactivo: los formularios no ofrecen sus valores). Eliminar solo funciona si ningún campo lo usa; si no, el API responde `DATASET_IN_USE` y la pantalla sugiere desactivarlo.
+- **Mensajes (`lib/dataset-error`):** cada `problem` de `DATASET_FILE_INVALID` tiene su texto, con la columna, la fila (la de Excel) o el límite. Para `DATASET_IN_USE` al recargar se nombran las columnas que los campos aún leen.
+- **Constructor:** al elegir un Excel para un campo, ahora solo se ofrecen los de todos los flujos y los limitados a este. Antes salían también los de otros flujos, que el API rechaza al publicar. Si no hay ninguno, un enlace abre la pantalla de Excel en otra pestaña.
+- **Pruebas:**
+  - Unitarias de la página:
+    - archivo que no es `.xlsx`;
+    - carga con alcance;
+    - clave aplicada sobre la misma subida, primero rechazada por un valor repetido;
+    - error de encabezado;
+    - recarga con columnas en uso;
+    - editar, eliminar en uso y sin uso;
+    - lector sin botones.
+  - En el constructor: solo los Excel del flujo.
+  - El E2E de CI no tiene almacenamiento S3. Por eso se probó en local contra SeaweedFS: carga, clave, detalle y recarga rechazada sin cambios.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|
