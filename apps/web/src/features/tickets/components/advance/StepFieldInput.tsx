@@ -6,9 +6,10 @@ import { useDebouncedValue } from '@/shared/lib/use-debounced-value';
 import { useApiClient } from '@/shared/session';
 import { Checkbox, Select, TextArea, TextField } from '@/shared/ui';
 import { fieldChoicesQueryOptions } from '../../api/field-choices-api';
-import { choiceSourceOf, type InputValue, isCapturable, optionsOf, type TableRow } from '../../lib/step-values';
+import { choiceSourceOf, type InputValue, optionsOf, type TableRow } from '../../lib/step-values';
 import styles from './AdvanceDialog.module.css';
 import { ChoicePicker } from './ChoicePicker';
+import { FileInput } from './FileInput';
 import { TableInput } from './TableInput';
 
 export interface StepFieldInputProps {
@@ -17,26 +18,22 @@ export interface StepFieldInputProps {
   readonly error: string | undefined;
   /** Names already known for ids the ticket holds (people, sites and preset entries). */
   readonly knownLabels: Readonly<Record<string, string>>;
+  /** Names of the files the ticket already has, by id. */
+  readonly knownFiles: Readonly<Record<string, string>>;
   readonly onChange: (value: InputValue) => void;
+  /** A file field says when an upload starts and ends. */
+  readonly onBusyChange: (busy: boolean) => void;
 }
 
 /** One field of the step, with the input its type needs; a field the web cannot capture yet says so. */
-export function StepFieldInput({ field, value, error, knownLabels, onChange }: StepFieldInputProps) {
+export function StepFieldInput({ field, value, error, knownLabels, knownFiles, onChange, onBusyChange }: StepFieldInputProps) {
   const { t } = useTranslation('tickets');
   const common = { label: field.label, required: field.isRequired, error };
   const text = typeof value === 'string' ? value : '';
   const config = field.config;
 
-  if (!isCapturable(field)) {
-    return (
-      <div className={styles.pending}>
-        <span className="text-label">{field.label}</span>
-        <span className={styles.pendingNote}>{t('advance.notCapturable')}</span>
-        {error !== undefined && <span className={styles.pendingError}>{error}</span>}
-      </div>
-    );
-  }
   const source = choiceSourceOf(field);
+  if (field.type === 'FILE') return <FileInput field={field} value={Array.isArray(value) ? (value as readonly string[]) : []} knownNames={knownFiles} error={error} onChange={onChange} onBusyChange={onBusyChange} />;
   if (field.type === 'TABLE') return <TableInput field={field} rows={Array.isArray(value) ? (value as readonly TableRow[]) : []} error={error} onChange={onChange} />;
   if (source === 'DATASET' && field.type === 'TEXT') return <DatasetText field={field} value={text} error={error} onChange={onChange} />;
   if (source !== undefined) {
