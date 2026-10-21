@@ -50,3 +50,49 @@ test('the profile edits the name, changes the password and turns two-step verifi
   await page.getByRole('button', { name: 'Desactivar' }).last().click();
   await expect(page.getByText('Inactiva')).toBeVisible();
 });
+
+test('the profile keeps tags, a shared template, a notification choice and a delegation, through the real API', async ({ page }) => {
+  await page.goto('/profile?tab=notifications');
+  await signIn(page, PEOPLE.tabs.email);
+
+  const email = page.getByRole('checkbox', { name: 'Te asignaron un ticket: por correo' });
+  const wanted = !(await email.isChecked());
+  await email.setChecked(wanted);
+  await page.reload();
+  await expect(page.getByRole('checkbox', { name: 'Te asignaron un ticket: por correo' })).toBeChecked({ checked: wanted });
+
+  await page.getByRole('tab', { name: 'Etiquetas' }).click();
+  await page.getByRole('button', { name: 'Nueva etiqueta' }).click();
+  await page.getByRole('dialog', { name: 'Nueva etiqueta' }).getByRole('textbox', { name: /Nombre/ }).fill('Revisar E2E');
+  await page.getByRole('dialog', { name: 'Nueva etiqueta' }).getByRole('button', { name: 'Guardar' }).click();
+  await expect(page.getByRole('list', { name: 'Etiquetas' })).toContainText('Revisar E2E');
+
+  await page.getByRole('tab', { name: 'Plantillas' }).click();
+  await page.getByRole('button', { name: 'Nueva plantilla' }).click();
+  const create = page.getByRole('dialog', { name: 'Nueva plantilla' });
+  await create.getByRole('textbox', { name: /Título/ }).fill('Recibido E2E');
+  await create.getByRole('textbox', { name: /Texto/ }).fill('Recibimos tu solicitud.\n\nGracias');
+  await create.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Compartir la plantilla Recibido E2E' }).click();
+  const share = page.getByRole('dialog', { name: 'Compartir «Recibido E2E»' });
+  await share.getByRole('searchbox', { name: /Buscar con quién compartir/ }).fill('Leo');
+  await share.getByRole('button', { name: 'Compartir con Leo Mora' }).click();
+  await share.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Compartir la plantilla Recibido E2E' }).click();
+  await expect(page.getByRole('dialog', { name: 'Compartir «Recibido E2E»' }).getByRole('list', { name: 'Compartida con' })).toContainText('Leo Mora');
+  await page.getByRole('dialog', { name: 'Compartir «Recibido E2E»' }).getByRole('button', { name: 'Cancelar' }).click();
+
+  await page.getByRole('tab', { name: 'Delegaciones' }).click();
+  await page.getByRole('button', { name: 'Delegar' }).click();
+  const delegate = page.getByRole('dialog', { name: 'Delegar' });
+  await delegate.getByRole('searchbox', { name: /Buscar quién te reemplaza/ }).fill('Leo');
+  await delegate.getByRole('button', { name: 'Elegir a Leo Mora' }).click();
+  const inADay = new Date(Date.now() + 24 * 3_600_000 - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  await delegate.getByLabel(/Hasta/).fill(inADay);
+  await delegate.getByRole('button', { name: 'Crear delegación' }).click();
+  const given = page.getByRole('list', { name: 'Las que diste' });
+  await expect(given).toContainText('A Leo Mora');
+  await expect(given).toContainText('Vigente');
+  await given.getByRole('button', { name: 'Cancelar la delegación a Leo Mora' }).click();
+  await expect(page.getByText('No has delegado a nadie.')).toBeVisible();
+});

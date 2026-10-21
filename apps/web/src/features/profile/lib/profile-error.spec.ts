@@ -13,6 +13,13 @@ describe('profileErrorKey', () => {
     expect(profileErrorKey(apiError(403, 'MFA_REQUIRED_BY_POLICY'))).toBe('errors.requiredByPolicy');
   });
 
+  it('reads a refused image or password only where they apply', () => {
+    expect(profileErrorKey(apiError(422, 'INVALID_STATE'), 'signature')).toBe('errors.notAnImage');
+    expect(profileErrorKey(apiError(422, 'INVALID_STATE'))).toBeUndefined();
+    expect(profileErrorKey(apiError(400, 'VALIDATION_FAILED'), 'password')).toBe('errors.weakPassword');
+    expect(profileErrorKey(apiError(400, 'VALIDATION_FAILED'))).toBeUndefined();
+  });
+
   it('leaves the rest to the generic messages', () => {
     expect(profileErrorKey(apiError(500, 'INTERNAL'))).toBeUndefined();
     expect(profileErrorKey(new Error('network'))).toBeUndefined();

@@ -3,15 +3,22 @@ import { useSearchParams } from 'react-router';
 import { useCurrentUser } from '@/shared/session';
 import { PageHeader, Tabs } from '@/shared/ui';
 import { MfaCard } from '../components/MfaCard';
+import { MyDelegationsCard } from '../components/MyDelegationsCard';
+import { NotificationsCard } from '../components/NotificationsCard';
 import { PasswordCard } from '../components/PasswordCard';
 import { PersonalDataCard } from '../components/PersonalDataCard';
 import { SignatureCard } from '../components/SignatureCard';
+import { TagsCard } from '../components/TagsCard';
+import { TemplatesCard } from '../components/TemplatesCard';
 import styles from '../components/Profile.module.css';
 
-const TABS = ['data', 'security', 'signature'] as const;
+const TABS = ['data', 'security', 'signature', 'notifications', 'tags', 'templates', 'delegations'] as const;
 type ProfileTab = (typeof TABS)[number];
 
-/** The person's own account: their data, password and second factor, and signature. Every member has it. */
+/**
+ * The person's own account and tools: data, password and second factor, signature, which notifications reach them, their
+ * tags, text templates and delegations. Every member has it.
+ */
 export function ProfilePage() {
   const { t } = useTranslation('profile');
   const { data: me } = useCurrentUser();
@@ -33,6 +40,10 @@ export function ProfilePage() {
           </>
         )}
         {current === 'signature' && <SignatureCard />}
+        {current === 'notifications' && <NotificationsCard />}
+        {current === 'tags' && <TagsCard />}
+        {current === 'templates' && <TemplatesCard />}
+        {current === 'delegations' && <MyDelegationsCard />}
       </div>
     </>
   );

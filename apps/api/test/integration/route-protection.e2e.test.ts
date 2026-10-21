@@ -47,6 +47,7 @@ const AUTHENTICATED_ONLY_ROUTES = [
   'GET /delegations',
   'POST /delegations',
   'POST /delegations/:id/cancel',
+  'GET /members/directory',
   'GET /notifications',
   'GET /notifications/unread-count',
   'GET /notifications/preferences',

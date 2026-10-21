@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { plainTextToHtml } from './plain-text-html';
+import { htmlToPlainText, plainTextToHtml } from './plain-text-html';
 
 describe('plainTextToHtml', () => {
   it('turns blank lines into paragraphs and keeps single line breaks', () => {
@@ -12,5 +12,16 @@ describe('plainTextToHtml', () => {
 
   it('trims the surrounding space', () => {
     expect(plainTextToHtml('  \n listo \n\n ')).toBe('<p>listo</p>');
+  });
+});
+
+describe('htmlToPlainText', () => {
+  it('undoes plainTextToHtml', () => {
+    const text = 'Hola, <equipo>:\nrevisen esto.\n\nGracias & saludos';
+    expect(htmlToPlainText(plainTextToHtml(text))).toBe(text);
+  });
+
+  it('keeps the text of other markup', () => {
+    expect(htmlToPlainText('<p>Uno <strong>dos</strong></p><p class="x">tres</p>')).toBe('Uno dos\n\ntres');
   });
 });

@@ -157,6 +157,8 @@ export const tickets = {
       PARALLEL_TASK_COMPLETED: 'completó su firma',
     },
     comment: {
+      template: 'Insertar plantilla',
+      chooseTemplate: 'Elige una plantilla',
       label: 'Agregar un comentario',
       placeholder: 'Escribe una nota para el equipo…',
       submit: 'Comentar',

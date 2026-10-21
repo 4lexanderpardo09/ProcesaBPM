@@ -36,6 +36,8 @@ export function createTestSession({ signedIn = true, handlers = {} }: TestSessio
     '/auth/me/permissions': () => ({ permissions: [{ action: 'manage', subject: 'all', conditional: false }] }),
     '/auth/select-tenant': (options) => server.issue((options.body as { tenantId: string }).tenantId),
     '/tickets': () => ({ items: [], page: 1, pageSize: 25, total: 0 }),
+    // The comment form offers the person's templates: none unless a test says otherwise.
+    '/text-templates': () => [],
     ...handlers,
   };
   const fake = createFakeTransport(routes);
