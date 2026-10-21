@@ -4,7 +4,7 @@
 #   deploy/verify.sh --skip-unit     only the smoke test
 #   deploy/verify.sh --skip-smoke    only the unit tests
 #
-# Afterwards it frees the disk every build fills: the unit test image goes away and the build cache older than a day is
+# Afterwards it frees the disk every build fills: the unit test image goes away and the build cache older than 6 hours is
 # pruned (left alone, the cache filled the 29 GB of the test server in three weeks). It never touches volumes or containers.
 #
 # The smoke test is `smoke.js` of the worker image: it drives the real API like a customer (administrator with MFA, organization,
@@ -85,7 +85,7 @@ fi
 
 section "Disk"
 # A day of cache keeps the next deployment's build fast; what is older is the bulk of what fills the disk.
-docker builder prune -f --filter until=24h >/dev/null 2>&1 || echo "Could not prune the build cache."
+docker builder prune -f --filter until=6h >/dev/null 2>&1 || echo "Could not prune the build cache."
 df -h / | tail -n 1
 
 section "Result"
