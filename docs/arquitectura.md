@@ -188,7 +188,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **`shared`:** esquemas zod con `satisfies` para el detalle, la actividad, el formulario del paso, los documentos, el enlace de descarga y la respuesta del comentario.
 - **Pruebas:** unitarias de `RichText`, `plainTextToHtml`, los valores, los responsables y la página completa (contenido, comentar, comentario vacío, 403, descarga y su error, novedad, vencido, cerrado, 404); E2E simulado (ver y comentar, 404 con regreso a la bandeja) y E2E contra el stack real (un ticket ajeno da 404 y la página lo dice).
 
-### 4.5 Acciones del detalle, parte 1 (hecha, 2026-10-20)
+### 4.5 Acciones del detalle (parte 1, 2a y primera entrega de 2b hechas, 2026-10-20)
 - **Qué se ofrece:** solo lo que dice `actions` del detalle (el API calcula cada bandera con las mismas reglas que la ruta de la acción). Botones a la derecha del título: Resolver novedad y Tomar (`primary`), Reasignar, Abrir novedad y Cerrar ticket. Sin `actions.comment` no aparece el cuadro de comentario.
 - **Diálogos (`components/actions/`):** `ActionDialog` sobre el nuevo `shared/ui/Dialog` (el `<dialog>` nativo: el navegador atrapa el foco, deja inerte la página y cierra con Escape; confirmar en `brand`, cancelar en `secondary`).
   - Reasignar elige entre `GET /tickets/:id/candidates?for=reassign`.
@@ -202,8 +202,13 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **Avanzar (parte 2a):** con `actions.advance`, cada decisión del paso (`GET /tickets/:id/form`) es un botón; si hay una sola es la acción principal (`primary`) y si hay varias van con el mismo peso. `components/advance/AdvanceDialog` pide los campos que se llenan en el paso (`editableFieldCodes`, sin los calculados), con lo que el ticket ya tiene, y un comentario opcional; envía `POST /tickets/:id/transition` con `visitId`, la decisión y los valores.
   - **Valores (`lib/step-values`):** decimales como texto (acepta "1.250.000,50" y "1250000.50"), días como entero, fecha y hora con su instante (zona del navegador) y lo vacío como `null`.
   - **Campos que todavía no se capturan:** persona, sede, tabla, archivo y listas de un preset o dataset dicen "todavía no se puede llenar desde la web"; si son obligatorios y están vacíos, no se envía.
-  - **Errores:** la web solo valida lo obligatorio y el formato; el API valida el resto, y `FIELD_VALUES_INVALID` marca cada campo con su motivo (`lib/field-issues`). `ASSIGNEE_SELECTION_REQUIRED` y `NO_ASSIGNEE_CANDIDATES` tienen su propio mensaje.
-- **Siguiente (parte 2b):** campos de persona y sede, tablas, archivos (subida en dos fases), listas de presets y datasets, elegir al responsable del paso siguiente, reabrir (pide un tipo de error del catálogo) y las firmas paralelas.
+  - **Errores:** la web solo valida lo obligatorio y el formato; el API valida el resto, y `FIELD_VALUES_INVALID` marca cada campo con su motivo (`lib/field-issues`). `NO_ASSIGNEE_CANDIDATES` tiene su propio mensaje.
+- **Parte 2b, primera entrega (2026-10-20, `feat/web-ticket-actions-2`):**
+  - **Elegir al responsable del paso siguiente:** el API solo sabe si hay que elegir al intentar avanzar (un paso con `manual_selection` y varios candidatos), así que la web no pregunta de antemano: si la respuesta es `ASSIGNEE_SELECTION_REQUIRED`, el diálogo muestra "Quién recibe el siguiente paso" con los `details.candidates` de ese error (`lib/assignee-choices`) y vuelve a enviar con `assigneeId`. `hooks/use-next-assignee` guarda la lista en el estado (no la lee del error) para que el campo siga ahí mientras se reintenta; lo usan avanzar y las firmas paralelas.
+  - **Firmas paralelas:** con `actions.signParallelTask` aparecen Firmar (`primary`) y Rechazar; `ParallelTaskDialog` envía `POST /tickets/:id/parallel-tasks/sign|reject`. Firmar lleva un comentario opcional; rechazar pide el motivo.
+  - **Reabrir:** con `actions.reopen` (ticket cerrado) aparece Reabrir ticket; `ReopenDialog` pide el tipo de error (de `GET /error-types`, solo los activos de reapertura), un subtipo opcional (si el tipo tiene subtipos activos) y qué quedó mal, y envía `POST /tickets/:id/reopen`. El paso, el responsable del error y quién recibe el ticket quedan en lo que decide el API: el último paso, quien lo cerró y quienes lo tenían.
+  - **Pruebas:** unitarias de `assignee-choices` y la página con elegir responsable al avanzar, firmar, rechazar sin y con motivo y reabrir con subtipo. Se probó además contra el API real en local: avanzar a un paso con selección manual, firmar, rechazar (vuelve por la transición `SYSTEM_ONLY`) y reabrir.
+- **Siguiente (parte 2b, segunda entrega):** campos de persona y sede, tablas, archivos (subida en dos fases) y listas de presets y datasets en el formulario del paso.
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |

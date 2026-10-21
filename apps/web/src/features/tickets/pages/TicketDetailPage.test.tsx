@@ -417,6 +417,65 @@ describe('TicketDetailPage', () => {
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/incidents/${id(500)}/resolve`)[0]?.options.body).toEqual({ resolution: '<p>Llegó el extracto</p>' }));
     });
+
+    it('signs a parallel step with an optional note', async () => {
+      const { fake } = renderRoute(base, { handlers: withActions(allowed('signParallelTask'), { [`${base}/parallel-tasks/sign`]: () => mutation }) });
+
+      const group = await screen.findByRole('group', { name: 'Acciones del ticket' });
+      expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual(['Firmar', 'Rechazar']);
+      await userEvent.click(within(group).getByRole('button', { name: 'Firmar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Firmar el paso' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Firmar' }));
+
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/parallel-tasks/sign`)[0]?.options.body).toEqual({ visitId: VISIT });
+    });
+
+    it('asks why before rejecting a parallel step', async () => {
+      const { fake } = renderRoute(base, { handlers: withActions(allowed('signParallelTask'), { [`${base}/parallel-tasks/reject`]: () => mutation }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Rechazar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Rechazar el paso' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Rechazar' }));
+      expect(within(dialog).getByRole('textbox', { name: /Motivo del rechazo/ })).toHaveAccessibleDescription('Escribe por qué rechazas.');
+      expect(fake.callsTo(`${base}/parallel-tasks/reject`)).toHaveLength(0);
+
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /Motivo del rechazo/ }), 'El monto no cuadra');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Rechazar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/parallel-tasks/reject`)[0]?.options.body).toEqual({ visitId: VISIT, comment: '<p>El monto no cuadra</p>' }));
+    });
+
+    it('reopens a closed ticket under a reopening error type, with its subtype', async () => {
+      const errorType = (index: number, name: string, overrides: Record<string, unknown> = {}) => ({ id: id(700 + index), name, description: null, isProcessError: false, forcesClose: false, isReopening: true, isActive: true, ...overrides });
+      const types = { items: [errorType(1, 'Cierre prematuro'), errorType(2, 'Error de digitación', { isReopening: false }), errorType(3, 'Inactivo', { isActive: false })], page: 1, pageSize: 100, total: 3 };
+      const subtypes = { items: [{ id: id(710), errorTypeId: id(701), name: 'Faltó un soporte', description: null, isActive: true }], page: 1, pageSize: 100, total: 1 };
+      const { fake } = renderRoute(base, {
+        handlers: ticketHandlers({
+          [base]: () => detail({ status: 'CLOSED', openVisit: null, closedAt: at, closedById: OTHER, closedBy: { id: OTHER, name: 'Luis Gómez' }, actions: allowed('reopen') }),
+          '/error-types': () => types,
+          [`/error-types/${id(701)}/subtypes`]: () => subtypes,
+          [`${base}/reopen`]: () => mutation,
+        }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Reabrir ticket' }));
+      const dialog = screen.getByRole('dialog', { name: 'Reabrir ticket' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reabrir' }));
+      expect(within(dialog).getByRole('combobox', { name: /Tipo de error/ })).toHaveAccessibleDescription('Elige el tipo de error.');
+      expect(within(dialog).getByRole('textbox', { name: /Qué quedó mal/ })).toHaveAccessibleDescription('Describe por qué se reabre.');
+
+      const typeSelect = within(dialog).getByRole('combobox', { name: /Tipo de error/ });
+      await within(dialog).findByRole('option', { name: 'Cierre prematuro' });
+      expect(within(typeSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['Elige una opción', 'Cierre prematuro']);
+      await userEvent.selectOptions(typeSelect, 'Cierre prematuro');
+      await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Subtipo (opcional)' }), 'Faltó un soporte');
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /Qué quedó mal/ }), 'Faltaba el extracto');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reabrir' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/reopen`)[0]?.options.body).toEqual({ errorTypeId: id(701), errorSubtypeId: id(710), description: '<p>Faltaba el extracto</p>' }));
+      expect(fake.callsTo('/error-types')[0]?.path).toBe('/error-types?pageSize=100');
+    });
   });
 
   describe('advance', () => {
@@ -486,6 +545,32 @@ describe('TicketDetailPage', () => {
 
       expect(await within(dialog).findByText('Revisa los datos marcados.')).toBeInTheDocument();
       expect(within(dialog).getByRole('textbox', { name: /Monto verificado/ })).toHaveAccessibleDescription(/El valor está fuera del rango permitido\./);
+    });
+
+    it('asks who receives the next step when the API says it must be chosen, then sends that person', async () => {
+      let calls = 0;
+      const transition = () => {
+        calls += 1;
+        if (calls === 1) throw new ApiError({ status: 422, code: 'ASSIGNEE_SELECTION_REQUIRED', message: 'x', details: { stepId: id(601), candidates: [{ userId: OTHER, name: 'Luis Gómez' }, { userId: id(51), name: 'Marta Ruiz' }] } });
+        return mutation;
+      };
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: transition }, { fields: [], editableFieldCodes: [] }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      const next = await within(dialog).findByRole('combobox', { name: /Quién recibe el siguiente paso/ });
+      expect(within(dialog).queryByRole('alert')).toBeNull();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      expect(next).toHaveAccessibleDescription(/Elige quién recibe el siguiente paso\./);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(1);
+
+      await userEvent.selectOptions(next, 'Marta Ruiz');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/transition`)[1]?.options.body).toEqual({ transitionId: APPROVE, visitId: VISIT, values: {}, assigneeId: id(51), attachments: [] });
     });
 
     it('says when a required field of the step cannot be filled from the web yet', async () => {
