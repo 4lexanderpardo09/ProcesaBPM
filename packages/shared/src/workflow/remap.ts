@@ -12,6 +12,7 @@ export function remapVersionDocument(doc: WorkflowVersionDocument, newId: () => 
     steps: doc.steps.map((step) => ({
       ...step,
       id: ref(step.id),
+      sameAssigneeStepId: step.sameAssigneeStepId === null ? null : ref(step.sameAssigneeStepId),
       candidates: step.candidates.map((candidate) => ({ ...candidate, id: newId() })),
       initiators: step.initiators.map((initiator) => ({ ...initiator, id: newId() })),
       slaOverrides: step.slaOverrides.map((override) => ({ ...override })),

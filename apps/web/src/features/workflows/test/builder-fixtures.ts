@@ -21,6 +21,7 @@ export function step(stepId: string, type: StepDocument['type'], name: string, o
     positionId: null,
     approvalGroupTypeId: null,
     approvalLevel: null,
+    sameAssigneeStepId: null,
     closeRule: 'NOT_ALLOWED',
     slaValue: null,
     slaUnit: null,

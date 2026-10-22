@@ -8,6 +8,7 @@ import {
   type TicketEventResponse,
   type TicketFiltersQuery,
   type TicketSummaryResponse,
+  TICKET_VIEWS,
   type TicketView,
 } from '@procesabpm/shared';
 import type { Principal } from '../../../common/auth/principal.js';
@@ -72,7 +73,9 @@ export class TicketQueriesService {
       const tenantId = this.context.require().tenantId;
       const count = (view: TicketView) => this.tickets.count(tx, tenantId, this.filtersFor(principal, ability, view, query));
       // One query after another: an interactive transaction has a single connection.
-      return { assigned: await count('assigned'), created: await count('created'), observed: await count('observed'), all: await count('all') };
+      const counts: Record<TicketView, number> = { assigned: 0, created: 0, observed: 0, all: 0, history: 0, reopened: 0, errors_reported: 0, errors_received: 0 };
+      for (const view of TICKET_VIEWS) counts[view] = await count(view);
+      return counts;
     });
   }
 
@@ -101,6 +104,6 @@ export class TicketQueriesService {
 
   /** The view, the inbox filters and the access filter, all in one `AND`: what was asked can only narrow what may be read. */
   private filtersFor(principal: Principal, ability: AppAbility, view: TicketView, query: TicketFiltersQuery): Where[] {
-    return [viewFilter(view, { userId: principal.userId, membership: principal.membership }), ...ticketFilters(query), readableTickets(ability)];
+    return [viewFilter(view, { userId: principal.userId, membership: principal.membership }), ...ticketFilters(query, principal.userId), readableTickets(ability)];
   }
 }

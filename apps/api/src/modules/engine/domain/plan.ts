@@ -35,7 +35,7 @@ export interface OutboxIntent {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
-export type EventType = 'CREATED' | 'TRANSITIONED' | 'COMMENTED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED' | 'INCIDENT_OPENED' | 'INCIDENT_RESOLVED' | 'REOPENED' | 'PARALLEL_TASK_COMPLETED' | 'SYSTEM';
+export type EventType = 'CREATED' | 'TRANSITIONED' | 'COMMENTED' | 'ASSIGNED' | 'REASSIGNED' | 'CLOSED' | 'AMOUNT_WARNING' | 'FIELDS_UPDATED' | 'INCIDENT_OPENED' | 'INCIDENT_RESOLVED' | 'REOPENED' | 'ERROR_REPORTED' | 'PARALLEL_TASK_COMPLETED' | 'SYSTEM';
 
 /** Uploads a movement attaches to the ticket, written right after its event (which they point to). */
 export interface AttachmentsPlan {
@@ -104,7 +104,9 @@ export interface TicketMutation {
   /** `current` moves the ticket to a people step; `closed` ends it. */
   readonly ticket:
     | { readonly kind: 'current'; readonly stepId: string; readonly loop: number }
-    | { readonly kind: 'closed'; readonly stepId: string | null }
+    | { readonly kind: 'closed'; readonly stepId: string | null; readonly forced?: boolean }
+    /** The ticket stays where it is: only events are written (an error that is just recorded). */
+    | { readonly kind: 'unchanged' }
     | { readonly kind: 'reopened'; readonly stepId: string; readonly loop: number };
   readonly events: readonly EventPlan[];
 }

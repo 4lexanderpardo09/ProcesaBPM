@@ -208,6 +208,16 @@ export class TicketWriteRepository {
     await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { userId: toUserId } });
   }
 
+  /** Who delivered the step last in this ticket (SAME_AS_STEP): the person on the newest clock that ended by leaving it. */
+  async lastDelivererOf(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<string | undefined> {
+    const clock = await tx.ticketSlaClock.findFirst({
+      where: { tenantId, ticketId, stepId, completionReason: 'STEP_EXITED', responsibleId: { not: null } },
+      orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+      select: { responsibleId: true },
+    });
+    return clock?.responsibleId ?? undefined;
+  }
+
   /** How many tickets each person holds right now (to spread positions' signatures). */
   async assignmentLoads(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, number>> {
     if (userIds.length === 0) return new Map();
@@ -364,8 +374,9 @@ export class TicketWriteRepository {
   }
 
   /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
-  async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string | null, stepId: string | null): Promise<void> {
-    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, ...(stepId === null ? {} : { currentStepId: stepId }) } });
+  /** `forced`: an error type that forces the close ended it (the reports tell it from a normal close). */
+  async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string | null, stepId: string | null, forced = false): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, ...(forced ? { forcedClose: true } : {}), ...(stepId === null ? {} : { currentStepId: stepId }) } });
   }
 
   /** What a person may edit of a ticket: its subject, description and priority. */

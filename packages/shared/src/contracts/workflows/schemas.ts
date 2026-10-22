@@ -108,6 +108,7 @@ export const stepGraphInputSchema = z
     positionId: nullableUuid.default(null),
     approvalGroupTypeId: nullableUuid.default(null),
     approvalLevel: z.number().int().min(1).max(5).nullable().default(null),
+    sameAssigneeStepId: blockRefSchema.nullable().default(null),
     closeRule: z.enum(CLOSE_RULES).default('NOT_ALLOWED'),
     slaValue: z.number().int().min(1).max(100_000).nullable().default(null),
     slaUnit: z.enum(SLA_UNITS).nullable().default(null),

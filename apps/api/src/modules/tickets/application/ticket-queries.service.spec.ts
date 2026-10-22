@@ -1,4 +1,4 @@
-import { NotFoundError } from '@procesabpm/shared';
+import { NotFoundError, TICKET_VIEWS, type TicketView } from '@procesabpm/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { Principal } from '../../../common/auth/principal.js';
 import { Clock } from '../../../infrastructure/clock.js';
@@ -28,7 +28,7 @@ const PICKED_SITE = '0199a000-0000-7000-8000-000000000006';
 /** A closed ticket the caller may only comment on. */
 const closedState: TicketActionState = {
   actorId: USER, status: 'CLOSED', companyId: CATEGORY, visit: null, step: undefined, hasDecisionExit: false, assignees: [], signatures: [], openIncident: null, hasReopenTarget: true,
-  grants: { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: true, update: false },
+  grants: { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: true, report_error: false, update: false },
 };
 
 function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null) {
@@ -50,20 +50,15 @@ function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null)
   return { service, tickets, runner, tx, inTenant, actionStates };
 }
 
-const expectedFilters = (view: 'assigned' | 'created' | 'observed' | 'all'): Where[] => [viewFilter(view, principal), ...ticketFilters(query), readableTickets(ability)];
+const expectedFilters = (view: TicketView): Where[] => [viewFilter(view, principal), ...ticketFilters(query, USER), readableTickets(ability)];
 
 describe('TicketQueriesService', () => {
   describe('counts', () => {
     it('counts every view in one transaction, each with the view, the inbox filters and the access filter', async () => {
-      const { service, tickets, runner, tx, inTenant } = setUp([3, 4, 0, 7]);
-      expect(await inTenant(() => service.counts(principal, ability, query))).toEqual({ assigned: 3, created: 4, observed: 0, all: 7 });
+      const { service, tickets, runner, tx, inTenant } = setUp([4, 3, 0, 7, 9, 1, 2, 5]);
+      expect(await inTenant(() => service.counts(principal, ability, query))).toEqual({ created: 4, assigned: 3, observed: 0, all: 7, history: 9, reopened: 1, errors_reported: 2, errors_received: 5 });
       expect(runner.withTenantTransaction).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(tickets.count).mock.calls).toEqual([
-        [tx, TENANT, expectedFilters('assigned')],
-        [tx, TENANT, expectedFilters('created')],
-        [tx, TENANT, expectedFilters('observed')],
-        [tx, TENANT, expectedFilters('all')],
-      ]);
+      expect(vi.mocked(tickets.count).mock.calls).toEqual(TICKET_VIEWS.map((view) => [tx, TENANT, expectedFilters(view)]));
     });
   });
 
@@ -100,7 +95,7 @@ describe('TicketQueriesService', () => {
       const { service, actionStates, tx, inTenant } = setUp(undefined, detailRow);
       const detail = await inTenant(() => service.get(ability, TICKET, USER));
       expect(actionStates.read).toHaveBeenCalledWith(tx, TENANT, TICKET, expect.objectContaining({ userId: USER }));
-      expect(detail.actions).toEqual({ advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, edit: false });
+      expect(detail.actions).toEqual({ advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false, edit: false });
     });
 
     it('the body alone does not judge the actions', async () => {

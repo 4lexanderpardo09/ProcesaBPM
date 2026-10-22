@@ -16,6 +16,7 @@ export function step(id: string, type: StepType, overrides: Partial<StepDocument
     positionId: null,
     approvalGroupTypeId: null,
     approvalLevel: null,
+    sameAssigneeStepId: null,
     closeRule: 'NOT_ALLOWED',
     slaValue: null,
     slaUnit: null,
