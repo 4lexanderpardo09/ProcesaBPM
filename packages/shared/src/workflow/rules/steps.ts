@@ -1,4 +1,4 @@
-import { isAutomaticStep } from '../constants.js';
+import { isAutomaticStep, PEOPLE_STEP_TYPES } from '../constants.js';
 import { effectiveFieldType } from '../transition-condition.js';
 import { parseBlockConfig } from '../block-config.js';
 import { type RuleContext } from './context.js';
@@ -10,7 +10,7 @@ function templateCodes(text: unknown): string[] {
 }
 
 /** Assignment, SLA, deadline and `config` of each block. */
-export function checkSteps({ doc, fieldByCode, problems }: RuleContext): void {
+export function checkSteps({ doc, graph, stepById, fieldByCode, problems }: RuleContext): void {
   for (const step of doc.steps) {
     const at = { stepId: step.id };
     const automatic = isAutomaticStep(step.type);
@@ -31,9 +31,17 @@ export function checkSteps({ doc, fieldByCode, problems }: RuleContext): void {
       problems.error('ASSIGNMENT_MISSING_CANDIDATES', { ...at, params: { mode: step.assignmentMode } });
     }
     if (step.assignmentMode === 'RANDOM_DISPATCH' && (step.dispatchIntervalMin === null || step.dispatchIntervalMin <= 0)) problems.error('RANDOM_DISPATCH_WITHOUT_INTERVAL', at);
+    if (step.assignmentMode === 'SAME_AS_STEP') {
+      const source = step.sameAssigneeStepId === null ? undefined : stepById.get(step.sameAssigneeStepId);
+      if (source === undefined) problems.error('SAME_STEP_MISSING', at);
+      // The source must be a step one person delivers, other than this one, that the ticket can visit before arriving here.
+      else if (source.id === step.id || !PEOPLE_STEP_TYPES.has(source.type) || source.assignmentMode === 'PARALLEL') problems.error('SAME_STEP_INVALID', at);
+      else if (!graph.ancestorsOf(step.id).has(source.id)) problems.error('SAME_STEP_NOT_BEFORE', at);
+      else if (!graph.dominates(source.id, step.id)) problems.warning('SAME_STEP_MAYBE_SKIPPED', at);
+    }
     if (step.assignmentMode === 'PARALLEL' && step.signers.length === 0) problems.error('PARALLEL_WITHOUT_SIGNERS', at);
     if (step.type === 'SIGNATURE' && step.signers.length === 0) problems.error('SIGNATURE_WITHOUT_SIGNERS', at);
-    if (step.manualSelection && ['CREATOR', 'APPROVER', 'PARALLEL', 'RANDOM_DISPATCH'].includes(step.assignmentMode)) problems.warning('MANUAL_SELECTION_NOT_APPLICABLE', at);
+    if (step.manualSelection && ['CREATOR', 'APPROVER', 'PARALLEL', 'RANDOM_DISPATCH', 'SAME_AS_STEP'].includes(step.assignmentMode)) problems.warning('MANUAL_SELECTION_NOT_APPLICABLE', at);
 
     if (step.deadlineType === 'CUTOFF') {
       if (automatic) problems.error('CUTOFF_ON_AUTOMATIC_BLOCK', at);

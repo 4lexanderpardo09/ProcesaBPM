@@ -214,6 +214,16 @@ export class TicketWriteRepository {
     return line?.definition.name;
   }
 
+  /** Who delivered the step last in this ticket (SAME_AS_STEP): the person on the newest clock that ended by leaving it. */
+  async lastDelivererOf(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<string | undefined> {
+    const clock = await tx.ticketSlaClock.findFirst({
+      where: { tenantId, ticketId, stepId, completionReason: 'STEP_EXITED', responsibleId: { not: null } },
+      orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+      select: { responsibleId: true },
+    });
+    return clock?.responsibleId ?? undefined;
+  }
+
   /** How many tickets each person holds right now (to spread positions' signatures). */
   async assignmentLoads(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, number>> {
     if (userIds.length === 0) return new Map();

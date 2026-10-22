@@ -330,7 +330,6 @@ describe('assignment, pool, reassignment', () => {
       const ID = '0199a000-0000-7000-8000-0000000000bb';
       const blocks: Array<[StepType, Record<string, unknown>, string]> = [
         ['WEBHOOK', { webhookId: ID }, 'NOT_IMPLEMENTED_WEBHOOK_BLOCK'],
-        ['EXPORT', { exportDefinitionId: ID }, 'NOT_IMPLEMENTED_EXPORT_BLOCK'],
       ];
       for (const [type, config, code] of blocks) {
         const flow = { steps: [{ key: 'start', type: 'START' as const }, { key: 'b', type, extra: { config } }, { key: 'end', type: 'END' as const }], transitions: [{ from: 'start', to: 'b', type: 'DEFAULT' as const }, { from: 'b', to: 'end', type: 'DEFAULT' as const }] };

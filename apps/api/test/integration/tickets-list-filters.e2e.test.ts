@@ -141,6 +141,28 @@ describe('GET /tickets filters and GET /tickets/counts', () => {
       expect((await list(stranger, `view=all&priorityId=${priority}`)).total).toBe(0);
       expect((await list(observer, `view=all&categoryId=${categoryA}`)).total).toBe(0);
     });
+
+    it('by subcategory, requester and who holds the ticket now', async () => {
+      expect(await ids(reader, `view=all&subcategoryId=${flowA.subcategoryId}`)).toEqual(idsOf('percent', 'plain', 'colleague'));
+      expect(await ids(reader, `view=all&creatorId=${colleague.userId}`)).toEqual(idsOf('colleague'));
+      expect(await ids(reader, `view=all&assigneeId=${colleague.userId}`)).toEqual(idsOf('colleague'));
+    });
+
+    it('by one of the caller\'s own tags: somebody else\'s tag finds nothing', async () => {
+      const tag = (await requester.client.post('/tags', { name: unique('follow'), color: '#4F46E5' }).expect(201)).body.id as string;
+      await requester.client.post(`/tickets/${ticket.percent.id}/tags`, { tagId: tag }).expect(201);
+      expect(await ids(requester, `view=all&tagId=${tag}`)).toEqual(idsOf('percent'));
+      expect((await list(reader, `view=all&tagId=${tag}`)).total).toBe(0);
+    });
+
+    it('by creation dates, the end excluded, and refuses a range that ends before it starts', async () => {
+      const soon = new Date(Date.now() + 3_600_000).toISOString();
+      const past = new Date(Date.now() - 3_600_000).toISOString();
+      expect((await list(reader, `view=all&createdFrom=${encodeURIComponent(soon)}`)).total).toBe(0);
+      expect(await ids(requester, `view=created&createdFrom=${encodeURIComponent(past)}&createdTo=${encodeURIComponent(soon)}`)).toEqual(idsOf('percent', 'plain', 'underscore', 'noUnderscore'));
+      await requester.client.get(`/tickets?createdFrom=${encodeURIComponent(soon)}&createdTo=${encodeURIComponent(past)}`).expect(400);
+      await requester.client.get(`/tickets/counts?createdFrom=${encodeURIComponent(soon)}&createdTo=${encodeURIComponent(past)}`).expect(400);
+    });
   });
 
   describe('GET /tickets/counts', () => {

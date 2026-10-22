@@ -24,7 +24,7 @@ export const PEOPLE_STEP_TYPES: ReadonlySet<StepType> = new Set(['TASK', 'APPROV
 
 export const isAutomaticStep = (type: StepType): boolean => AUTOMATIC_STEP_TYPES.has(type);
 
-export const ASSIGNMENT_MODES = ['NONE', 'POSITION', 'USERS', 'GROUP', 'CREATOR', 'APPROVER', 'POOL', 'PARALLEL', 'RANDOM_DISPATCH'] as const;
+export const ASSIGNMENT_MODES = ['NONE', 'POSITION', 'USERS', 'GROUP', 'CREATOR', 'APPROVER', 'POOL', 'PARALLEL', 'RANDOM_DISPATCH', 'SAME_AS_STEP'] as const;
 export type AssignmentMode = (typeof ASSIGNMENT_MODES)[number];
 
 export const SITE_SCOPES = ['SAME_SITE', 'PARENT_SITE', 'ANY_SITE'] as const;

@@ -13,6 +13,8 @@ export interface AssignmentContext {
   readonly companyId: string;
   readonly siteId: string | null;
   readonly creatorId: string;
+  /** `null` while the ticket is being created (no step of it was delivered yet). */
+  readonly ticketId: string | null;
   /** The instant delegations are checked at. */
   readonly at: Date;
 }
@@ -83,6 +85,10 @@ export class AssignmentResolver {
         return this.single(tx, ticket, ticket.creatorId);
       case 'APPROVER':
         return this.single(tx, ticket, await this.approverOf(tx, step, ticket));
+      case 'SAME_AS_STEP': {
+        const deliverer = ticket.ticketId === null || step.sameAssigneeStepId === null ? undefined : await this.writes.lastDelivererOf(tx, tenantId, ticket.ticketId, step.sameAssigneeStepId);
+        return deliverer === undefined ? [] : this.single(tx, ticket, deliverer);
+      }
       case 'POOL':
       case 'RANDOM_DISPATCH': {
         const positions = [...participantIds(step, 'POSITION'), ...(step.positionId === null ? [] : [step.positionId])];
