@@ -131,6 +131,7 @@ enum AssignmentMode {
   POOL
   PARALLEL
   RANDOM_DISPATCH
+  SAME_AS_STEP
 
   @@map("assignment_mode")
 }
@@ -1447,6 +1448,8 @@ model Step {
   positionId           String?        @map("position_id") @db.Uuid
   approvalGroupTypeId  String?        @map("approval_group_type_id") @db.Uuid
   approvalLevel        Int?           @map("approval_level") @db.SmallInt
+  /// SAME_AS_STEP: the step of the same version whose last deliverer takes this one (FK deferred, in the migration).
+  sameAssigneeStepId   String?        @map("same_assignee_step_id") @db.Uuid
   closeRule            CloseRule      @default(NOT_ALLOWED) @map("close_rule")
   slaValue             Int?           @map("sla_value")
   slaUnit              SlaUnit?       @map("sla_unit")

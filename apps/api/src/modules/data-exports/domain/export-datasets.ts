@@ -94,7 +94,7 @@ export const EXPORT_DATASETS = [
   table('workflows', 'workflows', ['tenant_id', 'id', 'subcategory_id', 'name', 'is_active', 'created_at'], ['id']),
   table('workflow_observers', 'workflows', ['tenant_id', 'id', 'workflow_id', 'participant_type', 'user_id', 'position_id', 'group_id'], ['id']),
   table('workflow_versions', 'workflows', ['tenant_id', 'id', 'workflow_id', 'number', 'status', 'notes', 'published_at', 'published_by_id', 'created_at', 'revision'], ['id']),
-  table('steps', 'workflows', ['tenant_id', 'id', 'version_id', 'type', 'name', 'description', 'assignment_mode', 'manual_selection', 'site_scope', 'position_id', 'approval_group_type_id', 'approval_level', 'close_rule', 'sla_value', 'sla_unit', 'deadline_type', 'deadline_field_code', 'deadline_business_days', 'max_loops', 'dispatch_interval_min', 'allows_batch', 'config', 'ui_x', 'ui_y'], ['id']),
+  table('steps', 'workflows', ['tenant_id', 'id', 'version_id', 'type', 'name', 'description', 'assignment_mode', 'manual_selection', 'site_scope', 'position_id', 'approval_group_type_id', 'approval_level', 'same_assignee_step_id', 'close_rule', 'sla_value', 'sla_unit', 'deadline_type', 'deadline_field_code', 'deadline_business_days', 'max_loops', 'dispatch_interval_min', 'allows_batch', 'config', 'ui_x', 'ui_y'], ['id']),
   table('step_candidates', 'workflows', ['tenant_id', 'id', 'step_id', 'participant_type', 'user_id', 'position_id', 'group_id'], ['id']),
   table('step_initiators', 'workflows', ['tenant_id', 'id', 'step_id', 'participant_type', 'user_id', 'position_id', 'group_id', 'department_id', 'company_id', 'site_id'], ['id']),
   table('step_sla_overrides', 'workflows', ['tenant_id', 'step_id', 'company_id', 'sla_value', 'sla_unit'], ['step_id', 'company_id']),

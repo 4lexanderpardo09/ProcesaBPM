@@ -12,7 +12,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - ~~calculadoras~~ (hecho, arquitectura §4.23);
     - ~~probar quién aprueba~~ (hecho, §4.24).
   - **API y web:**
-    - «mismo responsable que el paso X»;
+    - ~~«mismo responsable que el paso X»~~ (hecho, arquitectura §14.2);
     - cortes por empresa y plazo por corte en el motor;
     - planos (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte);
     - procesar en lote;

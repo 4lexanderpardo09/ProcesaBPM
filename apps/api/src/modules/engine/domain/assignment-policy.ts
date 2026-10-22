@@ -24,7 +24,7 @@ export interface AssigneeDecision {
   readonly userIds: readonly string[];
 }
 
-const AUTOMATIC_MODES: ReadonlySet<AssignmentMode> = new Set(['CREATOR', 'APPROVER']);
+const AUTOMATIC_MODES: ReadonlySet<AssignmentMode> = new Set(['CREATOR', 'APPROVER', 'SAME_AS_STEP']);
 
 /**
  * Who gets a step. Pure: the candidates are resolved elsewhere; this only applies the rules of the mode.

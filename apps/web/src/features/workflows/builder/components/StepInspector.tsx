@@ -39,7 +39,7 @@ export function StepInspector({ step, doc, workflowId, readOnly, problems, onCha
   const fieldsHere = doc.fields.filter((field) => field.stepId === step.id).length;
   const exits = doc.transitions.filter((transition) => transition.fromStepId === step.id);
   const nameOf = (id: string) => doc.steps.find((candidate) => candidate.id === id)?.name ?? '';
-  const section = { step, fields: doc.fields, readOnly, onChange };
+  const section = { step, steps: doc.steps, fields: doc.fields, readOnly, onChange };
 
   return (
     <div className={styles.inspectorBody}>

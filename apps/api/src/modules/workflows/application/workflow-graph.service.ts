@@ -54,7 +54,13 @@ export class WorkflowGraphService {
       const stepIds = resolveReferences(stepRefs, existingSteps, allocated.slice(0, countNewRefs(stepRefs)), 'block');
       const transitionIds = resolveReferences(transitionRefs, existingTransitions, allocated.slice(countNewRefs(stepRefs)), 'transition');
 
-      const steps: StepRow[] = request.steps.map((step) => ({ ...step, id: stepIds.get(step.id)!, config: this.normalizedConfig(step) }));
+      // A reference to a block that is not in the request is dropped: the validator then asks for the step again.
+      const steps: StepRow[] = request.steps.map((step) => ({
+        ...step,
+        id: stepIds.get(step.id)!,
+        sameAssigneeStepId: step.sameAssigneeStepId === null ? null : (stepIds.get(step.sameAssigneeStepId) ?? null),
+        config: this.normalizedConfig(step),
+      }));
       const transitions: TransitionDocument[] = request.transitions.map((transition) => ({
         ...transition,
         id: transitionIds.get(transition.id)!,
