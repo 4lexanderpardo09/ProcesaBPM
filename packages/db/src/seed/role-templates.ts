@@ -35,7 +35,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     name: 'Supervisor',
     isAdmin: false,
     permissions: [
-      ...ticket('create', 'create_for_others', 'read_all', 'comment', 'transition', 'reassign', 'open_incident', 'close', 'reopen', 'report_error'),
+      ...ticket('create', 'create_for_others', 'read_all', 'comment', 'transition', 'reassign', 'open_incident', 'close', 'reopen', 'report_error', 'update'),
       ...read(...CATALOG_SUBJECTS, 'Workflow', 'Report', 'Export', 'Membership', 'ErrorType'),
       { action: 'export', subject: 'Report' },
       { action: 'manage', subject: 'Delegation' },

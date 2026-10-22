@@ -86,6 +86,7 @@ const TICKET_ACTIONS: readonly PermissionSeed[] = [
   { action: 'close', subject: 'Ticket', description: 'Close tickets on a step that allows it' },
   { action: 'reopen', subject: 'Ticket', description: 'Reopen closed tickets' },
   { action: 'report_error', subject: 'Ticket', description: 'Report an error against a responsible' },
+  { action: 'update', subject: 'Ticket', description: 'Edit the subject, description and priority of tickets that are not closed' },
   { action: 'delete', subject: 'Ticket', description: 'Soft-delete tickets' },
 ];
 
