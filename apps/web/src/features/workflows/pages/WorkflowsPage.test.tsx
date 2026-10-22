@@ -46,6 +46,7 @@ function api(initial: { versions?: ReturnType<typeof version>[]; isActive?: bool
   let versions = initial.versions ?? [version(V1, 1, 'PUBLISHED')];
   let workflow = { id: FLOW, subcategoryId: PAYMENTS, name: 'Confirmación de pagos', isActive: initial.isActive ?? true, createdAt: at };
   let observers: Array<Record<string, unknown>> = [{ id: id(50), participantType: 'POSITION', userId: null, positionId: POSITION, groupId: null }];
+  let cutoffs: Array<Record<string, unknown>> = [];
   const detail = () => ({ ...workflow, versions });
   const handlers: Record<string, FakeHandler> = {
     '/workflows': (options) => {
@@ -77,6 +78,27 @@ function api(initial: { versions?: ReturnType<typeof version>[]; isActive?: bool
     [`/workflows/${FLOW}/observers/${id(50)}`]: () => {
       observers = observers.filter((observer) => observer.id !== id(50));
     },
+    [`/workflows/${FLOW}/cutoffs`]: (options) => {
+      if (options.method === 'POST') {
+        const added = { id: id(70), description: null, isActive: true, ...(options.body as object) };
+        cutoffs = [...cutoffs, added];
+        return added;
+      }
+      return cutoffs;
+    },
+    [`/workflows/${FLOW}/cutoffs/${id(70)}`]: (options) => {
+      if (options.method === 'DELETE') {
+        cutoffs = [];
+        return undefined;
+      }
+      cutoffs = cutoffs.map((cutoff) => ({ ...cutoff, ...(options.body as object) }));
+      return cutoffs[0];
+    },
+    '/companies': () =>
+      page([
+        { id: id(80), name: 'Arpesod', taxId: null, countryCode: 'CO', currencyCode: 'COP', timeZone: 'America/Bogota', calendarId: null, isDefault: true, isActive: true, createdAt: at },
+        { id: id(81), name: 'Finansueños', taxId: null, countryCode: 'CO', currencyCode: 'COP', timeZone: 'America/Bogota', calendarId: null, isDefault: false, isActive: true, createdAt: at },
+      ]),
     '/categories': () => page([{ id: CAT, name: 'Cartera', isActive: true, createdAt: at }]),
     '/subcategories': () => page([PAYMENTS, REFUNDS].map((subId, index) => ({ id: subId, categoryId: CAT, name: index === 0 ? 'Pagos' : 'Devoluciones', description: null, defaultPriorityId: null, isActive: true, createdAt: at }))),
     '/positions': () => page([{ id: POSITION, name: 'Analista de cartera', isActive: true, createdAt: at }]),
@@ -198,6 +220,40 @@ describe('workflows', () => {
     renderRoute(`/workflows/${FLOW}`, { handlers: api({ versions: [version(V1, 1, 'DRAFT')] }) });
 
     expect(await screen.findByText(/aún no tiene una versión publicada/)).toBeInTheDocument();
+  });
+
+  it('adds a company cutoff with grace days, edits it and removes it', async () => {
+    const { fake } = renderRoute(`/workflows/${FLOW}?tab=cutoffs`, { handlers: api() });
+
+    expect(await screen.findByText('Este flujo no tiene cortes.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar corte' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Agregar corte' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    expect(within(dialog).getByText('Escribe el día del mes.')).toBeInTheDocument();
+    await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: /Empresa/ }), 'Finansueños');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Día del mes/ }), '25');
+    await userEvent.clear(within(dialog).getByRole('textbox', { name: /Días hábiles de gracia/ }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Días hábiles de gracia/ }), '2');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+
+    await vi.waitFor(() =>
+      expect(fake.calls.find((call) => call.path === `/workflows/${FLOW}/cutoffs` && call.options.method === 'POST')?.options.body).toEqual({ companyId: id(81), cutoffDay: 25, graceBusinessDays: 2, description: null, isActive: true }),
+    );
+    const list = await screen.findByRole('list', { name: 'Cortes del flujo' });
+    expect(await within(list).findByText('Finansueños: día 25')).toBeInTheDocument();
+    expect(within(list).getByText(/2 días hábiles de gracia/)).toBeInTheDocument();
+
+    await userEvent.click(within(list).getByRole('button', { name: 'Editar el corte Finansueños: día 25' }));
+    dialog = await screen.findByRole('dialog', { name: 'Editar corte' });
+    expect(within(dialog).getByRole('combobox', { name: /Empresa/ })).toBeDisabled();
+    await userEvent.clear(within(dialog).getByRole('textbox', { name: /Día del mes/ }));
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Día del mes/ }), '30');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    await vi.waitFor(() => expect(fake.calls.find((call) => call.options.method === 'PATCH')?.options.body).toEqual({ cutoffDay: 30, graceBusinessDays: 2, description: null, isActive: true }));
+    expect(await within(list).findByText('Finansueños: día 30')).toBeInTheDocument();
+
+    await userEvent.click(within(list).getByRole('button', { name: 'Quitar el corte Finansueños: día 30' }));
+    expect(await screen.findByText('Este flujo no tiene cortes.')).toBeInTheDocument();
   });
 
   it('adds a position and a person as observers and removes one', async () => {

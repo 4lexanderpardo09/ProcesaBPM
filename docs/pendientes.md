@@ -13,7 +13,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - ~~probar quién aprueba~~ (hecho, §4.24).
   - **API y web:**
     - «mismo responsable que el paso X»;
-    - cortes por empresa y plazo por corte en el motor;
+    - ~~cortes por empresa y plazo por corte en el motor~~ (hecho, arquitectura §14.2); el vencimiento se calcula al llegar al paso y no se recalcula si el campo se llena después;
     - planos (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte);
     - procesar en lote;
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2);

@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type FormulaFailure, type RouteHop, routeThroughAutomaticBlocks, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { cutoffDeadline, type CutoffTerm, type FormulaFailure, InvalidCalendarError, type RouteHop, routeThroughAutomaticBlocks, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
-import { openSla, type SlaTerms } from '../../sla/domain/clock-math.js';
-import type { ResolvedCalendar } from '../data/ticket-context.repository.js';
+import { type OpenedSla, openSla, type SlaTerms } from '../../sla/domain/clock-math.js';
+import { type ResolvedCalendar, TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import { decideAssignees } from '../domain/assignment-policy.js';
 import { nextLoop } from '../domain/loop-policy.js';
@@ -15,6 +15,8 @@ export interface ArrivalRequest {
   readonly tenantId: string;
   /** `null` while the ticket is being created: it has no visits yet. */
   readonly ticketId: string | null;
+  /** The version of `document`: the company cutoffs belong to its workflow. */
+  readonly workflowVersionId: string;
   readonly document: WorkflowVersionDocument;
   readonly entryStepId: string;
   /** Canonical values of the ticket after this submission: what conditions read. */
@@ -51,6 +53,22 @@ export type Arrival =
 const SIDE_EFFECT_OUTBOX: Readonly<Record<string, string>> = { DOCUMENT: 'block.document', NOTIFICATION: 'block.notification', WEBHOOK: 'block.webhook', EXPORT: 'block.export' };
 
 /** The SLA that applies in a company: its override of the step, else the step's own. */
+/** Whether the version has a CUTOFF deadline or a WAIT on the company cutoff: only then are the cutoffs read. */
+function usesCutoffs(document: WorkflowVersionDocument): boolean {
+  return document.steps.some((step) => step.deadlineType === 'CUTOFF' || (step.type === 'WAIT' && step.config.mode === 'COMPANY_CUTOFF'));
+}
+
+/**
+ * A CUTOFF deadline has no SLA terms: it is due on the date the step's field and the company cutoffs give
+ * (`cutoffDeadline`), and has no due date while that field is blank.
+ */
+function cutoffSla(step: StepDocument, values: Readonly<Record<string, unknown>>, cutoffs: readonly CutoffTerm[], request: ArrivalRequest): OpenedSla {
+  const calendar = request.calendar?.calendar ?? null;
+  if (calendar === null) throw new InvalidCalendarError('The company has no calendar to count the cutoff deadline with');
+  const dueAt = cutoffDeadline({ base: values[step.deadlineFieldCode ?? ''], businessDays: step.deadlineBusinessDays ?? 0, cutoffs, calendar, timeZone: request.timeZone });
+  return { value: null, unit: null, dueAt };
+}
+
 export function slaTermsOf(step: StepDocument, companyId: string): SlaTerms {
   const override = step.slaOverrides.find((candidate) => candidate.companyId === companyId);
   return override === undefined ? { value: step.slaValue, unit: step.slaUnit } : { value: override.slaValue, unit: override.slaUnit };
@@ -101,6 +119,7 @@ export class ArrivalPlanner {
     @Inject(AssignmentResolver) private readonly resolver: AssignmentResolver,
     @Inject(TicketWriteRepository) private readonly tickets: TicketWriteRepository,
     @Inject(ComputeEnvironment) private readonly environments: ComputeEnvironment,
+    @Inject(TicketContextRepository) private readonly context: TicketContextRepository,
   ) {}
 
   private async signers(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
@@ -121,7 +140,8 @@ export class ArrivalPlanner {
 
   async plan(tx: TenantTransaction, request: ArrivalRequest): Promise<Arrival> {
     const environment = await this.environments.build(tx, request.tenantId, request.document, { timeZone: request.timeZone, calendar: request.calendar, at: request.at });
-    const route = routeThroughAutomaticBlocks(request.document, request.entryStepId, request.values, { ...environment, calendar: request.calendar?.calendar ?? null, at: request.at });
+    const cutoffs = usesCutoffs(request.document) ? await this.context.cutoffsOf(tx, request.tenantId, request.workflowVersionId, request.companyId) : [];
+    const route = routeThroughAutomaticBlocks(request.document, request.entryStepId, request.values, { ...environment, calendar: request.calendar?.calendar ?? null, at: request.at, cutoffs });
     const computed = computedOf(request, route);
     if (route.arrival.kind === 'END') return { kind: 'END', hops: route.hops, endStepId: route.arrival.stepId, computed };
 
@@ -129,7 +149,7 @@ export class ArrivalPlanner {
     const previousLoops = request.ticketId === null ? [] : await this.tickets.loopsOf(tx, request.tenantId, request.ticketId, step.id);
     if (route.arrival.kind === 'WAIT') return this.park(request, route.hops, step, route.arrival.resumeAt, previousLoops, computed);
     const loop = request.ignoreMaxLoops === true ? nextReopenLoop(previousLoops) : nextLoop(previousLoops, step.maxLoops, step.id);
-    const sla = openSla(slaTermsOf(step, request.companyId), request.calendar?.calendar ?? null, request.at);
+    const sla = step.deadlineType === 'CUTOFF' ? cutoffSla(step, route.values, cutoffs, request) : openSla(slaTermsOf(step, request.companyId), request.calendar?.calendar ?? null, request.at);
     const decision: { type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; userIds: readonly string[] } =
       request.holders !== undefined && request.holders.length > 0 && step.assignmentMode !== 'PARALLEL' ? { type: 'PRIMARY', userIds: request.holders } : step.assignmentMode === 'PARALLEL' ? await this.signers(tx, request, step) : await this.decide(tx, request, step);
 

@@ -12,10 +12,8 @@ export function findEngineSupportProblems(doc: WorkflowVersionDocument): Workflo
 
   for (const step of doc.steps) {
     const at = { stepId: step.id };
-    if (step.type === 'WAIT' && step.config.mode === 'COMPANY_CUTOFF') error('NOT_IMPLEMENTED_WAIT_COMPANY_CUTOFF', at);
     if (step.type === 'WEBHOOK') error('NOT_IMPLEMENTED_WEBHOOK_BLOCK', at);
     if (step.type === 'EXPORT') error('NOT_IMPLEMENTED_EXPORT_BLOCK', at);
-    if (step.deadlineType === 'CUTOFF') error('NOT_IMPLEMENTED_CUTOFF_DEADLINE', at);
   }
   for (const rule of doc.amountRules.filter((candidate) => candidate.isActive)) {
     const at = { amountRuleId: rule.id };
