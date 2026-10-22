@@ -8,11 +8,11 @@ test.describe('app shell', () => {
     await installFakeAuthApi(context, { organizations: [{ tenantId: ACME, slug: 'acme', name: 'Acme' }], signedInTo: ACME });
   });
 
-  test('opens on the inboxes and moves between sections from the sidebar', async ({ page }) => {
+  test('opens on the home and moves between sections from the sidebar', async ({ page }) => {
     await page.goto('/');
 
-    await expect(page).toHaveURL(/\/tickets$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Tickets' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /^Hola, / })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page');
 
     const nav = page.getByRole('navigation', { name: 'Navegación principal' });
     await nav.getByRole('link', { name: 'Flujos' }).click();
@@ -31,7 +31,7 @@ test.describe('app shell', () => {
     await page.goto('/does-not-exist');
     await expect(page.getByRole('heading', { level: 1, name: 'Página no encontrada' })).toBeVisible();
     await page.getByRole('link', { name: 'Volver al inicio' }).click();
-    await expect(page).toHaveURL(/\/tickets$/);
+    await expect(page.getByRole('heading', { level: 1, name: /^Hola, / })).toBeVisible();
   });
 
   test('loads the design tokens and the logo', async ({ page }) => {

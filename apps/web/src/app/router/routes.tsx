@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
-import { Navigate, type RouteObject } from 'react-router';
+import type { RouteObject } from 'react-router';
 import { AcceptInvitationPage, ForgotPasswordPage, LoginPage, ResetPasswordPage } from '@/features/auth';
 import { CatalogPage } from '@/features/catalog';
+import { HomePage } from '@/features/home';
 import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
@@ -23,7 +24,7 @@ function SectionPlaceholder({ itemKey }: { readonly itemKey: NavigationItemKey }
   return <UnderConstructionPage title={t(`items.${itemKey}`)} />;
 }
 
-const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets', 'workflows', 'catalog', 'organization', 'people', 'settings']);
+const builtSections: ReadonlySet<NavigationItemKey> = new Set(['home', 'tickets', 'workflows', 'catalog', 'organization', 'people', 'settings']);
 
 const ticketRoutes: RouteObject[] = [
   { path: paths.tickets, element: <TicketInboxPage /> },
@@ -70,7 +71,7 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         element: <AppLayout />,
-        children: [{ index: true, element: <Navigate to={paths.tickets} replace /> }, ...ticketRoutes, ...workflowRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
+        children: [{ index: true, element: <HomePage /> }, ...ticketRoutes, ...workflowRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
       },
     ],
   },

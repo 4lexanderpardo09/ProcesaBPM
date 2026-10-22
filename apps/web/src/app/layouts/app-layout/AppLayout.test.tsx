@@ -12,7 +12,7 @@ describe('AppLayout', () => {
     await within(nav).findByRole('link', { name: 'Catálogo' });
     const operation = within(nav).getByRole('region', { name: 'Operación' });
     const configuration = within(nav).getByRole('region', { name: 'Configuración' });
-    expect(within(operation).getAllByRole('link').map((link) => link.textContent)).toEqual(['Bandejas', 'Flujos', 'Reportes']);
+    expect(within(operation).getAllByRole('link').map((link) => link.textContent)).toEqual(['Inicio', 'Bandejas', 'Flujos', 'Reportes']);
     expect(within(configuration).getAllByRole('link').map((link) => link.textContent)).toEqual(['Catálogo', 'Organización', 'Personas', 'Ajustes']);
   });
 
@@ -21,7 +21,7 @@ describe('AppLayout', () => {
     const { fake } = renderRoute('/tickets', { handlers: { '/auth/me/permissions': () => requester } });
     const nav = await mainNavigation();
     await vi.waitFor(() => expect(fake.callsTo('/auth/me/permissions')).toHaveLength(1));
-    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['Bandejas']);
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['Inicio', 'Bandejas']);
     expect(within(nav).queryByRole('region', { name: 'Configuración' })).toBeNull();
   });
 

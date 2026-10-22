@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router';
 import { loginPath, paths, type UrlLoginNotice } from '@/shared/lib/paths';
-import { type SessionState, type SignOutReason, useCurrentUser, useSessionState } from '@/shared/session';
+import { type SessionState, type SignOutReason, takeSwitchDestination, useCurrentUser, useSessionState } from '@/shared/session';
 import { DeletionPendingPage } from '../../pages/DeletionPendingPage';
 import { SessionBlockedPage } from '../../pages/SessionBlockedPage';
 import { SessionSplash } from '../../pages/SessionSplash';
@@ -40,14 +40,14 @@ export function RequireSession() {
   }
 }
 
-/** A page of one organization means nothing in another: after a switch (in any tab) go back home. */
+/** A page of one organization means nothing in another: after a switch go back home, or where this tab asked to go. */
 function useHomeOnIdentityChange(state: SessionState) {
   const navigate = useNavigate();
   const previous = useRef<string | undefined>(undefined);
   const current = state.status === 'signedIn' ? `${state.identity.userId}/${state.identity.tenantId}` : undefined;
   useEffect(() => {
     if (current === undefined) return;
-    if (previous.current !== undefined && previous.current !== current) void navigate(paths.home, { replace: true });
+    if (previous.current !== undefined && previous.current !== current) void navigate(takeSwitchDestination() ?? paths.home, { replace: true });
     previous.current = current;
   }, [current, navigate]);
 }

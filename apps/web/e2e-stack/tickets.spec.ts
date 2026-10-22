@@ -3,13 +3,11 @@ import { signIn } from './support/sign-in';
 import { PEOPLE } from './support/stack-fixtures';
 
 test('the inbox reads every tab from the real API', async ({ page }) => {
-  const ticketQueries: URL[] = [];
+  const countQueries: URL[] = [];
   page.on('response', (response) => {
     const url = new URL(response.url());
-    if (url.pathname === '/api/tickets') {
-      expect(response.status()).toBe(200);
-      ticketQueries.push(url);
-    }
+    if (url.pathname === '/api/tickets' || url.pathname === '/api/tickets/counts') expect(response.status()).toBe(200);
+    if (url.pathname === '/api/tickets/counts') countQueries.push(url);
   });
   await page.goto('/tickets');
   await signIn(page, PEOPLE.singleOrganization.email);
@@ -18,11 +16,13 @@ test('the inbox reads every tab from the real API', async ({ page }) => {
   await expect(page.getByRole('cell', { name: 'No tienes tickets asignados.' })).toBeVisible();
   await expect(page.getByRole('tab', { name: /^Todos\s*0$/ })).toBeVisible();
 
-  const closedPage = page.waitForResponse((response) => response.url().includes('/api/tickets?') && response.url().includes('view=assigned') && response.url().includes('status=CLOSED') && !response.url().includes('pageSize=1&'));
+  const closedPage = page.waitForResponse((response) => response.url().includes('/api/tickets?') && response.url().includes('view=assigned') && response.url().includes('status=CLOSED'));
+  const closedCounts = page.waitForResponse((response) => response.url().includes('/api/tickets/counts?status=CLOSED'));
   await page.getByRole('combobox', { name: 'Estado' }).selectOption('CLOSED');
   expect((await closedPage).status()).toBe(200);
+  expect(await (await closedCounts).json()).toEqual({ assigned: 0, created: 0, observed: 0, all: 0 });
   await expect(page.getByRole('cell', { name: 'Ningún ticket coincide con el filtro.' })).toBeVisible();
-  expect(new Set(ticketQueries.map((url) => url.searchParams.get('view')))).toEqual(new Set(['assigned', 'created', 'observed', 'all']));
+  expect(countQueries.length).toBeGreaterThan(0);
 });
 
 test('a ticket the person cannot see reads as not found from the real API', async ({ page }) => {

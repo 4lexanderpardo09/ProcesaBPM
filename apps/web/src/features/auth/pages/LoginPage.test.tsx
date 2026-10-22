@@ -105,7 +105,7 @@ describe('LoginPage', () => {
   it('sends the selection token as a bearer and the organization in the body', async () => {
     const view = renderLogin({ '/auth/login': () => selection([organization(ACME, 'Acme')]) });
     await signIn();
-    await screen.findByRole('heading', { level: 1, name: 'Tickets' });
+    await screen.findByRole('heading', { level: 1, name: 'Hola, Ana' });
     const call = view.fake.callsTo('/auth/select-tenant')[0];
     expect(call?.options.headers).toEqual({ Authorization: 'Bearer selection-token' });
     expect(call?.options.body).toEqual({ tenantId: ACME });
@@ -141,7 +141,7 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Esta organización está suspendida. Contacta a su administrador o elige otra.')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /Globex/ }));
-    await screen.findByRole('heading', { level: 1, name: 'Tickets' });
+    await screen.findByRole('heading', { level: 1, name: 'Hola, Ana' });
   });
 
   it('tells a platform admin the console is not in the web yet, without entering by itself', async () => {
@@ -176,7 +176,7 @@ describe('LoginPage', () => {
     await userEvent.clear(codeField());
     await userEvent.type(codeField(), '123456');
     await userEvent.click(screen.getByRole('button', { name: 'Verificar' }));
-    await screen.findByRole('heading', { level: 1, name: 'Tickets' });
+    await screen.findByRole('heading', { level: 1, name: 'Hola, Ana' });
     expect(view.fake.callsTo('/auth/login/mfa')[0]?.options.headers).toEqual({ Authorization: 'Bearer challenge' });
   });
 
@@ -259,7 +259,7 @@ describe('LoginPage', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Guardé los códigos en un lugar seguro' }));
     await userEvent.click(continueButton);
-    await screen.findByRole('heading', { level: 1, name: 'Tickets' });
+    await screen.findByRole('heading', { level: 1, name: 'Hola, Ana' });
     expect(screen.queryByText(codes[0] ?? '')).not.toBeInTheDocument();
   });
 
