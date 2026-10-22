@@ -295,6 +295,22 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
       return json(route, 200, ticketPage(search));
     },
+    // How many tickets each tab holds, under the same status filter as the listing.
+    'GET /api/tickets/counts': (route, _body, authorization, search) => {
+      if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+      const status = search.get('status');
+      const count = (view: 'assigned' | 'created' | 'observed' | 'all') => (options.tickets?.[view] ?? []).filter((ticket) => status === null || ticket.status === status).length;
+      return json(route, 200, { assigned: count('assigned'), created: count('created'), observed: count('observed'), all: count('all') });
+    },
+    // The home: the counters and nothing pending.
+    'GET /api/dashboard/stats': (route, _body, authorization) => {
+      if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+      return json(route, 200, { myOpen: 0, myOverdue: 0, myDueSoon: 0, createdByMeOpen: 0, closedByMeWeek: 0 });
+    },
+    'GET /api/dashboard/pending': (route, _body, authorization) => {
+      if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+      return json(route, 200, []);
+    },
   };
 
   await context.route('**/api/**', async (route) => {
