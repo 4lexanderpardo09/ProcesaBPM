@@ -8,6 +8,8 @@ import { AssignmentResolver } from './application/assignment-resolver.js';
 import { CloseTicketService } from './application/close-ticket.service.js';
 import { ComputeEnvironment } from './application/compute-environment.js';
 import { CommentTicketService } from './application/comment-ticket.service.js';
+import { TicketBatchService } from './application/ticket-batch.service.js';
+import { BatchTicketsRepository } from './data/batch-tickets.repository.js';
 import { EditTicketService } from './application/edit-ticket.service.js';
 import { CreationFormService } from './application/creation-form.service.js';
 import { CreationGate } from './application/creation-gate.js';
@@ -60,6 +62,8 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     TakeTicketService,
     CloseTicketService,
     CommentTicketService,
+    TicketBatchService,
+    BatchTicketsRepository,
     EditTicketService,
     OpenIncidentService,
     ResolveIncidentService,
@@ -71,6 +75,6 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     TicketCandidatesService,
     FieldOptionsService,
   ],
-  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ReportTicketErrorService, EditTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository, TicketActionStateReader, TicketCandidatesService, FieldOptionsService],
+  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, TicketBatchService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ReportTicketErrorService, EditTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository, TicketActionStateReader, TicketCandidatesService, FieldOptionsService],
 })
 export class EngineModule {}
