@@ -53,6 +53,7 @@ export function WorkflowsPage() {
         actions={
           <div className={styles.rowActions}>
             <ButtonLink to={paths.datasets}>{t('datasets.title')}</ButtonLink>
+            {can('read', 'Export') && <ButtonLink to={paths.exports}>{t('exports.title')}</ButtonLink>}
             {can('update', 'Workflow') && (
               <Button variant="primary" icon={<PlusIcon size={15} />} onClick={() => setCreating(true)}>
                 {t('new')}

@@ -13,6 +13,11 @@ export const paths = {
   pdfFormat: '/workflows/:workflowId/formats/:formatId',
   pdfTemplate: '/workflows/:workflowId/templates/:templateId',
   datasets: '/workflows/datasets',
+  exports: '/workflows/exports',
+  newExport: '/workflows/exports/new',
+  exportCatalogs: '/workflows/exports/catalogs',
+  export: '/workflows/exports/:exportId',
+  myExports: '/my-exports',
   dataset: '/workflows/datasets/:datasetId',
   reports: '/reports',
   catalog: '/catalog',
@@ -41,6 +46,10 @@ export function pdfFormatPath(workflowId: string, formatId: string): string {
 
 export function pdfTemplatePath(workflowId: string, templateId: string): string {
   return `${workflowPath(workflowId)}/templates/${encodeURIComponent(templateId)}`;
+}
+
+export function exportPath(exportId: string): string {
+  return `${paths.exports}/${encodeURIComponent(exportId)}`;
 }
 
 export function datasetPath(datasetId: string): string {

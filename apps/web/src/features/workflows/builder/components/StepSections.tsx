@@ -15,9 +15,10 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { approvalTypesQueryOptions, positionsQueryOptions } from '@/features/people';
 import { ApiError } from '@/shared/api';
-import { useApiClient } from '@/shared/session';
+import { useApiClient, usePermissions } from '@/shared/session';
 import { Checkbox, Select, TextArea, TextField } from '@/shared/ui';
 import { documentChoicesQueryOptions } from '../api/builder-api';
+import { exportsQueryOptions } from '../../exports/api/exports-api';
 import { patchConfig } from '../lib/numbers';
 import { fromRecipients } from '../lib/participants';
 import { ParticipantList } from './participants/ParticipantList';
@@ -31,6 +32,8 @@ export interface SectionProps {
   readonly fields: readonly FieldDocument[];
   readonly readOnly: boolean;
   readonly onChange: (patch: Partial<StepDocument>) => void;
+  /** The workflow of the version, for settings that list its own records (documents, exports). */
+  readonly workflowId?: string;
 }
 
 const FORBIDDEN = 403;
@@ -143,7 +146,7 @@ export function AssignmentSection({ step, steps, readOnly, onChange }: SectionPr
 }
 
 /** Deadline, closing, loops, instructions and what each kind of person's step adds. */
-export function PeopleSection({ step, readOnly, onChange }: SectionProps) {
+export function PeopleSection({ step, readOnly, onChange, workflowId }: SectionProps) {
   const { t } = useTranslation('workflows');
   const config = step.config;
   const setConfig = (patch: Record<string, unknown>) => onChange({ config: patchConfig(config, patch) });
@@ -202,6 +205,15 @@ export function PeopleSection({ step, readOnly, onChange }: SectionProps) {
             {step.allowsBatch && (
               <WholeNumberField label={t('builder.batch.max')} min={1} max={500} disabled={readOnly} value={batch} onChange={(value) => setConfig({ batch: value === null ? undefined : { maxTickets: value } })} />
             )}
+            <ExportChoice
+              label={t('builder.export.required')}
+              hint={t('builder.export.requiredHint')}
+              placeholder={t('builder.export.notRequired')}
+              workflowId={workflowId}
+              readOnly={readOnly}
+              value={text(config.requiredExportId)}
+              onChange={(id) => setConfig({ requiredExportId: id })}
+            />
           </>
         )}
       </Section>
@@ -418,3 +430,41 @@ export function CalculatorSection({ step, fields, readOnly, onChange }: SectionP
 }
 
 export { Section };
+
+/** One of the workflow's exports ("planos"); hidden to a role that cannot read them. */
+function ExportChoice({ label, hint, placeholder, workflowId, readOnly, value, onChange }: { readonly label: string; readonly hint?: string; readonly placeholder: string; readonly workflowId: string | undefined; readonly readOnly: boolean; readonly value: string; readonly onChange: (id: string | undefined) => void }) {
+  const { t } = useTranslation('workflows');
+  const canRead = usePermissions().can('read', 'Export');
+  const exports = useQuery({ ...exportsQueryOptions(useApiClient()), enabled: canRead });
+  if (!canRead) return value === '' ? null : <p className={styles.note}>{t('builder.export.forbidden')}</p>;
+  const options = (exports.data ?? []).filter((definition) => definition.workflowId === workflowId || definition.id === value).map((definition) => ({ value: definition.id, label: definition.name }));
+  return (
+    <Select
+      label={label}
+      {...(hint === undefined ? {} : { hint })}
+      disabled={readOnly}
+      placeholder={exports.data !== undefined && options.length === 0 ? t('builder.export.none') : placeholder}
+      options={options}
+      value={value}
+      onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
+    />
+  );
+}
+
+/** The EXPORT block: which export the ticket writes its line into when it goes through. */
+export function ExportSection({ step, readOnly, onChange, workflowId }: SectionProps) {
+  const { t } = useTranslation('workflows');
+  return (
+    <Section title={t('builder.types.EXPORT')}>
+      <ExportChoice
+        label={t('builder.export.source')}
+        hint={t('builder.export.sourceHint')}
+        placeholder={t('builder.export.choose')}
+        workflowId={workflowId}
+        readOnly={readOnly}
+        value={text(step.config.exportDefinitionId)}
+        onChange={(id) => onChange({ config: patchConfig(step.config, { exportDefinitionId: id }) })}
+      />
+    </Section>
+  );
+}
