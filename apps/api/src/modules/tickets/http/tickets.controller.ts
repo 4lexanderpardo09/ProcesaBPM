@@ -22,6 +22,8 @@ import {
   parallelTaskActionRequestSchema,
   type ReopenTicketRequest,
   reopenTicketRequestSchema,
+  type ReportTicketErrorRequest,
+  reportTicketErrorRequestSchema,
   listTicketsQuerySchema,
   type Page,
   type ReassignTicketRequest,
@@ -50,6 +52,7 @@ import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
 import { ParallelTaskService } from '../../engine/application/parallel-task.service.js';
 import { ReopenTicketService } from '../../engine/application/reopen-ticket.service.js';
+import { ReportTicketErrorService } from '../../engine/application/report-ticket-error.service.js';
 import { OpenIncidentService } from '../../engine/application/open-incident.service.js';
 import { ResolveIncidentService } from '../../engine/application/resolve-incident.service.js';
 import { CloseTicketService } from '../../engine/application/close-ticket.service.js';
@@ -78,6 +81,7 @@ export class TicketsController {
     @Inject(CloseTicketService) private readonly closing: CloseTicketService,
     @Inject(ParallelTaskService) private readonly parallelTasks: ParallelTaskService,
     @Inject(ReopenTicketService) private readonly reopening: ReopenTicketService,
+    @Inject(ReportTicketErrorService) private readonly errorReports: ReportTicketErrorService,
     @Inject(OpenIncidentService) private readonly incidentOpening: OpenIncidentService,
     @Inject(ResolveIncidentService) private readonly incidentResolution: ResolveIncidentService,
     @Inject(CommentTicketService) private readonly commenting: CommentTicketService,
@@ -212,6 +216,14 @@ export class TicketsController {
   @HttpCode(HttpStatus.OK)
   reopen(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(reopenTicketRequestSchema)) body: ReopenTicketRequest): Promise<TicketMutationResponse> {
     return this.reopening.reopen(this.actor(principal, ability), id, body);
+  }
+
+  /** The permission for this very ticket is checked by the service (stored conditions apply); the route only needs it at all. */
+  @RequirePermission('report_error', TICKET_SUBJECT)
+  @Post(':id/errors')
+  @HttpCode(HttpStatus.OK)
+  reportError(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(reportTicketErrorRequestSchema)) body: ReportTicketErrorRequest): Promise<TicketMutationResponse> {
+    return this.errorReports.report(this.actor(principal, ability), id, body);
   }
 
   /** Being the named signer is the authorization (checked against the signatures of the step); the permission only gets you to the route. */

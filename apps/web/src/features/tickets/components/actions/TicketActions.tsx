@@ -12,10 +12,11 @@ import { OpenIncidentDialog } from './OpenIncidentDialog';
 import { type ParallelAnswer, ParallelTaskDialog } from './ParallelTaskDialog';
 import { ReassignDialog } from './ReassignDialog';
 import { ReopenDialog } from './ReopenDialog';
+import { ReportErrorDialog } from './ReportErrorDialog';
 import { ResolveIncidentDialog } from './ResolveIncidentDialog';
 import styles from './TicketActions.module.css';
 
-type OpenDialog = 'edit' | 'reassign' | 'close' | 'incident' | 'resolve' | 'reopen' | { readonly parallel: ParallelAnswer } | { readonly decision: FormDecisionResponse };
+type OpenDialog = 'edit' | 'reassign' | 'close' | 'incident' | 'resolve' | 'reopen' | 'reportError' | { readonly parallel: ParallelAnswer } | { readonly decision: FormDecisionResponse };
 
 export interface TicketActionsProps {
   readonly ticket: TicketDetailResponse;
@@ -59,6 +60,7 @@ export function TicketActions({ ticket, form }: TicketActionsProps) {
     actions.reassign && onVisit && <Button key="reassign" onClick={() => setDialog('reassign')}>{t('actions.reassign.open')}</Button>,
     actions.openIncident && onVisit && <Button key="incident" onClick={() => setDialog('incident')}>{t('actions.incident.open')}</Button>,
     actions.close && onVisit && <Button key="close" onClick={() => setDialog('close')}>{t('actions.close.open')}</Button>,
+    actions.reportError && onVisit && <Button key="reportError" onClick={() => setDialog('reportError')}>{t('actions.reportError.open')}</Button>,
     actions.reopen && <Button key="reopen" variant="primary" onClick={() => setDialog('reopen')}>{t('actions.reopen.open')}</Button>,
     actions.edit && <Button key="edit" onClick={() => setDialog('edit')}>{t('actions.edit.open')}</Button>,
   ].filter(Boolean);
@@ -78,6 +80,7 @@ export function TicketActions({ ticket, form }: TicketActionsProps) {
       )}
       {dialog === 'edit' && <EditTicketDialog ticket={ticket} onClose={closeDialog} />}
       {dialog === 'reopen' && <ReopenDialog ticketId={ticket.id} onClose={closeDialog} />}
+      {dialog === 'reportError' && visitId !== undefined && <ReportErrorDialog ticketId={ticket.id} visitId={visitId} onClose={closeDialog} />}
       {typeof dialog === 'object' && dialog !== null && 'decision' in dialog && form !== undefined && visitId !== undefined && (
         <AdvanceDialog ticket={ticket} form={form} visitId={visitId} decision={dialog.decision} onClose={closeDialog} />
       )}

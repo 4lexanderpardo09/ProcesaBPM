@@ -7,7 +7,11 @@ import { type TagResponse, tagResponseSchema } from '../tags/schemas.js';
 const values = z.record(z.string(), z.unknown()).default({});
 /** An HTML fragment, sanitized by the server; the length limit applies to what is sent. */
 const comment = z.string().trim().min(1).max(5000).optional();
-export const TICKET_VIEWS = ['created', 'assigned', 'observed', 'all'] as const;
+/**
+ * The inboxes: created by me, assigned to me now, observed, all I may read; and, like the help desk, the ones I worked
+ * on before (`history`), the ones reopened, and those with errors I reported or that were attributed to me.
+ */
+export const TICKET_VIEWS = ['created', 'assigned', 'observed', 'all', 'history', 'reopened', 'errors_reported', 'errors_received'] as const;
 export const ticketStatusSchema = z.enum(['OPEN', 'PAUSED', 'CLOSED']);
 
 export const createTicketRequestSchema = z.object({
@@ -85,6 +89,19 @@ export const reopenTicketRequestSchema = z.object({
   description: z.string().trim().min(1).max(5000),
 });
 export type ReopenTicketRequest = z.infer<typeof reopenTicketRequestSchema>;
+
+/**
+ * Reports an error on an open ticket (`report_error`). It is attributed to whoever handled the previous people step
+ * (the creator when there is none, or when the type forces the close). A process error sends the ticket back to that
+ * person on that step; a type that forces the close closes it. `visitId` is the visit the caller saw.
+ */
+export const reportTicketErrorRequestSchema = z.object({
+  visitId: uuidSchema,
+  errorTypeId: uuidSchema,
+  errorSubtypeId: uuidSchema.optional(),
+  description: z.string().trim().min(1).max(5000),
+});
+export type ReportTicketErrorRequest = z.infer<typeof reportTicketErrorRequestSchema>;
 
 /** Signing or rejecting one's own pending signature of a PARALLEL step; `assigneeId` is for a manual-selection step that follows. */
 export const parallelTaskActionRequestSchema = z.object({ visitId: uuidSchema, comment, assigneeId: uuidSchema.optional() });
@@ -227,6 +244,8 @@ export interface TicketActionsResponse {
   readonly signParallelTask: boolean;
   /** `POST /tickets/:id/comments`. */
   readonly comment: boolean;
+  /** `POST /tickets/:id/errors`: open ticket on a step, and the caller may report errors on it. */
+  readonly reportError: boolean;
   /** `PATCH /tickets/:id`: the ticket is not closed and the caller may edit it. */
   readonly edit: boolean;
 }
@@ -323,6 +342,7 @@ export const ticketDetailResponseSchema = ticketSummaryResponseSchema.extend({
     reopen: z.boolean(),
     signParallelTask: z.boolean(),
     comment: z.boolean(),
+    reportError: z.boolean(),
     edit: z.boolean(),
   }),
 }) satisfies z.ZodType<TicketDetailResponse>;

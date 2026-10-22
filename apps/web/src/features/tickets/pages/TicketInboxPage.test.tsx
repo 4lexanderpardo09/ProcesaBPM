@@ -1,3 +1,4 @@
+import type { TicketView } from '@procesabpm/shared';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,7 +13,7 @@ interface FakeTicket {
   readonly tags?: readonly { id: string; name: string; color: string }[];
 }
 
-type View = 'assigned' | 'created' | 'observed' | 'all';
+type View = TicketView;
 
 const ticketId = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 const ticket = (index: number, overrides: Partial<FakeTicket> = {}): FakeTicket => ({ id: ticketId(index), number: `T-${1000 + index}`, title: `Solicitud ${index}`, status: 'OPEN', ...overrides });
@@ -53,7 +54,7 @@ function ticketsApi(byView: Partial<Record<View, readonly FakeTicket[]>>) {
     queries.push(search);
     const status = search.get('status');
     const count = (view: View) => (byView[view] ?? []).filter((item) => status === null || item.status === status).length;
-    return { assigned: count('assigned'), created: count('created'), observed: count('observed'), all: count('all') };
+    return { assigned: count('assigned'), created: count('created'), observed: count('observed'), all: count('all'), history: count('history'), reopened: count('reopened'), errors_reported: count('errors_reported'), errors_received: count('errors_received') };
   };
   const listQueries = () => queries.filter((search) => search.has('pageSize'));
   return { handler, handlers: { '/tickets': handler, '/tickets/counts': counts }, listQueries, queries };

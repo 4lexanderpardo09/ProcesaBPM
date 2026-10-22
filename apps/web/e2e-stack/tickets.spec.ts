@@ -20,7 +20,7 @@ test('the inbox reads every tab from the real API', async ({ page }) => {
   const closedCounts = page.waitForResponse((response) => response.url().includes('/api/tickets/counts?status=CLOSED'));
   await page.getByRole('combobox', { name: 'Estado' }).selectOption('CLOSED');
   expect((await closedPage).status()).toBe(200);
-  expect(await (await closedCounts).json()).toEqual({ assigned: 0, created: 0, observed: 0, all: 0 });
+  expect(await (await closedCounts).json()).toEqual({ assigned: 0, created: 0, observed: 0, all: 0, history: 0, reopened: 0, errors_reported: 0, errors_received: 0 });
   await expect(page.getByRole('cell', { name: 'Ningún ticket coincide con el filtro.' })).toBeVisible();
   expect(countQueries.length).toBeGreaterThan(0);
 });

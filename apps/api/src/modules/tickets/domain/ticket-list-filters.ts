@@ -51,5 +51,13 @@ export function viewFilter(view: TicketView, caller: SubjectContext): Condition 
       return observedBy(caller);
     case 'all':
       return {};
+    case 'history':
+      return { slaClocks: { some: { responsibleId: caller.userId } } };
+    case 'reopened':
+      return { events: { some: { type: 'REOPENED' } } };
+    case 'errors_reported':
+      return { errors: { some: { reporterId: caller.userId } } };
+    case 'errors_received':
+      return { errors: { some: { responsibleId: caller.userId } } };
   }
 }
