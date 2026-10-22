@@ -168,6 +168,46 @@ describe('validateWorkflowGraph: people blocks', () => {
     expect(codes(withTask({ assignmentMode: 'CREATOR', manualSelection: true }), 'warnings')).toContain('MANUAL_SELECTION_NOT_APPLICABLE');
   });
 
+  describe('the same assignee as another step', () => {
+    /** START -> review -> (ok | back) ; ok -> sign -> END ; with review optional when `skippable`. */
+    const flow = (sign: Parameters<typeof step>[2], skippable = false) =>
+      version({
+        steps: [step('start', 'START'), step('cond', 'CONDITION'), step('review', 'TASK'), step('approve', 'APPROVAL'), step('sign', 'TASK', sign), step('end', 'END')],
+        transitions: [
+          next('start', 'cond'),
+          transition('cond->review', 'cond', 'review', 'DEFAULT'),
+          ...(skippable ? [transition('cond->sign', 'cond', 'sign', 'CONDITION', { condition: [{ field: 'AMOUNT', op: 'gt', value: 1 }] })] : []),
+          next('review', 'approve', 'DECISION'),
+          next('approve', 'sign', 'DECISION'),
+          next('sign', 'end', 'DECISION'),
+        ],
+        fields: [field('f', 'start', 'AMOUNT', { type: 'NUMBER' })],
+      });
+
+    it('takes a people step that is always visited before', () => {
+      const result = validateWorkflowGraph(flow({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'review' }));
+      expect(result.errors).toEqual([]);
+      expect(result.warnings.map((problem) => problem.code)).not.toContain('SAME_STEP_MAYBE_SKIPPED');
+    });
+
+    it('needs the step, a people step other than itself, that can come before', () => {
+      expect(codes(flow({ assignmentMode: 'SAME_AS_STEP' }))).toContain('SAME_STEP_MISSING');
+      expect(codes(flow({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'gone' }))).toContain('SAME_STEP_MISSING');
+      expect(codes(flow({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'sign' }))).toContain('SAME_STEP_INVALID');
+      expect(codes(flow({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'cond' }))).toContain('SAME_STEP_INVALID');
+      const after = version({
+        steps: [step('start', 'START'), step('first', 'TASK', { assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'later' }), step('later', 'TASK'), step('end', 'END')],
+        transitions: [next('start', 'first'), next('first', 'later', 'DECISION'), next('later', 'end', 'DECISION')],
+      });
+      expect(codes(after)).toContain('SAME_STEP_NOT_BEFORE');
+    });
+
+    it('warns when some path skips the step, and manual selection does not apply', () => {
+      expect(codes(flow({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'review' }, true), 'warnings')).toContain('SAME_STEP_MAYBE_SKIPPED');
+      expect(codes(flow({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'review', manualSelection: true }), 'warnings')).toContain('MANUAL_SELECTION_NOT_APPLICABLE');
+    });
+  });
+
   it('a CUTOFF deadline needs a date field of the version and its business days', () => {
     expect(codes(withTask({ deadlineType: 'CUTOFF' }))).toContain('CUTOFF_CONFIG_MISSING');
     expect(codes(withTask({ deadlineType: 'CUTOFF', deadlineFieldCode: 'NOPE', deadlineBusinessDays: 2 }))).toContain('DEADLINE_FIELD_UNKNOWN');

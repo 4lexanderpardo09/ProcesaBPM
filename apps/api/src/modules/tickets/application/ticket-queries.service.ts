@@ -104,6 +104,6 @@ export class TicketQueriesService {
 
   /** The view, the inbox filters and the access filter, all in one `AND`: what was asked can only narrow what may be read. */
   private filtersFor(principal: Principal, ability: AppAbility, view: TicketView, query: TicketFiltersQuery): Where[] {
-    return [viewFilter(view, { userId: principal.userId, membership: principal.membership }), ...ticketFilters(query), readableTickets(ability)];
+    return [viewFilter(view, { userId: principal.userId, membership: principal.membership }), ...ticketFilters(query, principal.userId), readableTickets(ability)];
   }
 }

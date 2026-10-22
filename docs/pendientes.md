@@ -9,16 +9,16 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - ~~inicio con resumen y pendientes; bandeja con filtros y conteos; crear para otra persona~~ (hecho, §4.22);
     - ~~visibilidad de categorías; ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría); avisos; copia de los datos en eliminación~~ (hecho, §4.23);
     - ~~búsqueda por clave de un Excel en el formulario~~ (hecho, §4.24);
-    - calculadoras;
+    - ~~calculadoras~~ (hecho, arquitectura §4.23);
     - ~~probar quién aprueba~~ (hecho, §4.24).
   - **API y web:**
-    - «mismo responsable que el paso X»;
+    - ~~«mismo responsable que el paso X»~~ (hecho, arquitectura §14.2);
     - ~~cortes por empresa y plazo por corte en el motor~~ (hecho, arquitectura §14.2); el vencimiento se calcula al llegar al paso y no se recalcula si el campo se llena después;
     - planos (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte);
     - procesar en lote;
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2);
     - ~~registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»~~ (hecho, arquitectura §14.2);
-    - filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, valor de un campo, fechas).
+    - ~~filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, fechas)~~ (hecho, arquitectura §4.22); falta filtrar por el valor de un campo.
   - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ProcesaBPM es por bloques.
   - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
   - **Fuera del alcance:** ventas, listas de precios y la parte propia de viáticos.
@@ -71,7 +71,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Sigue:** ~~campos y participantes de cada bloque y topes de monto~~ (hecho, parte 3).
 - **Flujos en la web, parte 1 (2026-10-21, `feat/web-workflows`):** la lista, nuevo flujo, la ficha con versiones (nuevo borrador, eliminar) y observadores. La API de la lista ahora nombra la subcategoría y las versiones publicada y en borrador. Detalle en arquitectura.md §4.15.
   - **Decidido (con criterio, el usuario delegó):**
-    - Los cortes por empresa no se muestran: el motor aún no los usa.
+    - ~~Los cortes por empresa no se muestran: el motor aún no los usa.~~ Ya se usan y tienen su pestaña (arquitectura §14.2).
     - Un borrador nuevo copia por defecto la versión publicada.
   - **Sigue:** ~~el lienzo del constructor~~ (hecho, ver arriba); los campos y participantes de cada bloque.
 - **Campana de notificaciones y etiquetas en el ticket (2026-10-21, `feat/web-notifications-tags`):** la campana con el conteo sin leer, su panel y la página `/notifications`, y la tarjeta «Mis etiquetas» en el detalle del ticket. Detalle en arquitectura.md §4.14.

@@ -38,5 +38,9 @@ describe('decideAssignees', () => {
     expect(run({ mode: 'RANDOM_DISPATCH' })).toEqual({ type: 'DISPATCH', userIds: [] });
     expect(() => run({ mode: 'RANDOM_DISPATCH', candidates: [] })).toThrow(NoAssigneeCandidatesError);
   });
+  it('SAME_AS_STEP goes to the one person found, and fails when nobody delivered the step', () => {
+    expect(run({ mode: 'SAME_AS_STEP', candidates: [person('a')] })).toEqual({ type: 'PRIMARY', userIds: ['a'] });
+    expect(() => run({ mode: 'SAME_AS_STEP', candidates: [] })).toThrow(NoAssigneeCandidatesError);
+  });
   it('NONE has no assignees', () => expect(() => run({ mode: 'NONE' })).toThrow(InvalidStateError));
 });

@@ -123,12 +123,12 @@ export class ArrivalPlanner {
   ) {}
 
   private async signers(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
-    const userIds = await this.resolver.signersFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, at: request.at });
+    const userIds = await this.resolver.signersFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, ticketId: request.ticketId, at: request.at });
     return { type: 'PARALLEL' as const, userIds };
   }
 
   private async decide(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
-    const candidates = await this.resolver.candidatesFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, at: request.at });
+    const candidates = await this.resolver.candidatesFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, ticketId: request.ticketId, at: request.at });
     return decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: request.chosenAssigneeId });
   }
 

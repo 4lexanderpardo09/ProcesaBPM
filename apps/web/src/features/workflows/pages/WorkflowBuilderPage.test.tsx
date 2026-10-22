@@ -74,6 +74,32 @@ describe('workflow builder', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Se agregó el bloque Nuevo paso.');
   }, 15_000);
 
+  it('gives a step the assignee of an earlier one, and asks for the step until it is chosen', async () => {
+    const REVIEW = id(40);
+    const SETTLE = id(41);
+    const doc: WorkflowVersionDocument = {
+      ...startingDoc(),
+      steps: [step(START, 'START', 'Inicio'), step(REVIEW, 'TASK', 'Revisar pago'), step(SETTLE, 'TASK', 'Liquidar'), step(END, 'END', 'Fin')],
+      transitions: [link(id(50), START, REVIEW), link(id(51), REVIEW, SETTLE, { type: 'DECISION' }), link(id(52), SETTLE, END, { type: 'DECISION' })],
+    };
+    const { fake } = renderRoute(url, { handlers: api(doc) });
+
+    await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
+    await userEvent.click(within(outline()).getByRole('button', { name: /Liquidar/ }));
+    const inspector = screen.getByRole('complementary', { name: 'Propiedades' });
+    await userEvent.selectOptions(within(inspector).getByRole('combobox', { name: 'Modo de asignación' }), 'Mismo responsable que otro paso');
+    expect(within(inspector).getByText('Elige el paso cuyo responsable atiende este.')).toBeInTheDocument();
+    const source = within(inspector).getByRole('combobox', { name: 'Paso' });
+    expect(within(source).getAllByRole('option').map((option) => option.textContent)).toEqual(['Elige un paso', 'Revisar pago']);
+    await userEvent.selectOptions(source, 'Revisar pago');
+    expect(within(inspector).queryByText('Elige el paso cuyo responsable atiende este.')).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
+    const body = fake.callsTo(`${url}/graph`)[0]?.options.body as { steps: Array<{ id: string; assignmentMode: string; sameAssigneeStepId: string | null }> };
+    expect(body.steps.find((saved) => saved.id === SETTLE)).toMatchObject({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: REVIEW });
+  }, 15_000);
+
   // A long walk through the inspector: on a loaded machine it can pass the default 5 s.
   it('wires a new step between start and end from the inspector, and saves it with its revision', async () => {
     const { fake } = renderRoute(url, { handlers: api() });

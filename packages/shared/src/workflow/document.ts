@@ -61,6 +61,8 @@ export interface StepDocument {
   readonly positionId: string | null;
   readonly approvalGroupTypeId: string | null;
   readonly approvalLevel: number | null;
+  /** SAME_AS_STEP: the step whose last deliverer in the ticket takes this one. */
+  readonly sameAssigneeStepId: BlockRef | null;
   readonly closeRule: CloseRule;
   readonly slaValue: number | null;
   readonly slaUnit: 'BUSINESS_HOURS' | 'BUSINESS_DAYS' | null;

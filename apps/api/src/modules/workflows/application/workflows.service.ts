@@ -39,6 +39,7 @@ export function startingDocument(ids: { start: string; end: string; transition: 
     positionId: null,
     approvalGroupTypeId: null,
     approvalLevel: null,
+    sameAssigneeStepId: null,
     closeRule: 'NOT_ALLOWED' as const,
     slaValue: null,
     slaUnit: null,

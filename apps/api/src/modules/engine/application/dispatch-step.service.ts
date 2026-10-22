@@ -55,7 +55,7 @@ export class DispatchStepService {
     const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
     const step = document.steps.find((candidate) => candidate.id === stepId);
     if (step === undefined) return null;
-    const candidates = await this.resolver.candidatesFor(tx, step, { tenantId, companyId: ticket.companyId, siteId: ticket.siteId, creatorId: ticket.creatorId, at });
+    const candidates = await this.resolver.candidatesFor(tx, step, { tenantId, companyId: ticket.companyId, siteId: ticket.siteId, creatorId: ticket.creatorId, ticketId: ticket.id, at });
     if (candidates.length === 0) return null;
     const chosen = pickRoundRobin(candidates.map((candidate) => candidate.userId), last);
     const visit = (await this.writes.findOpenVisit(tx, tenantId, ticket.id))!;
