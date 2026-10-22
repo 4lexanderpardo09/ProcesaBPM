@@ -47,7 +47,7 @@ export function TicketDetailPage() {
           <Card title={t('detail.description.title')}>
             {ticket.descriptionHtml === '' ? <p className={styles.muted}>{t('detail.description.empty')}</p> : <RichText html={ticket.descriptionHtml} />}
           </Card>
-          <TicketActivity ticketId={ticket.id} timeline={timeline} canComment={ticket.actions.comment} timeZone={timeZone} />
+          <TicketActivity ticketId={ticket.id} timeline={timeline} canComment={ticket.actions.comment} timeZone={timeZone} fields={form.data?.fields ?? []} valueNames={ticket.valueNames} />
         </div>
         <aside className={styles.side}>
           <TicketFieldValues values={ticket.values} valueNames={ticket.valueNames} form={form} timeZone={timeZone} />

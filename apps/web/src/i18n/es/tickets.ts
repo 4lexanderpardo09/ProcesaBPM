@@ -220,6 +220,14 @@ export const tickets = {
       toAssignee: 'a {{name}}',
       decision: 'con «{{name}}»',
     },
+    changes: {
+      change: '{{label}}: {{before}} → {{after}}',
+      title: 'Asunto',
+      priority: 'Prioridad',
+      description: 'Cambió la descripción',
+      none: '(vacío)',
+      otherPriority: 'otra prioridad',
+    },
     events: {
       CREATED: 'creó el ticket',
       TRANSITIONED: 'avanzó el ticket',
