@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterQuery, NO_FILTERS, readInboxParams, writeInboxParams } from './inbox-params';
+import { apiFieldFilter, type FieldOperator, filterQuery, NO_FILTERS, readInboxParams, writeInboxParams } from './inbox-params';
 
 const read = (query: string) => readInboxParams(new URLSearchParams(query));
 const PRIORITY = '018f0000-0000-7000-8000-000000000001';
@@ -50,5 +50,41 @@ describe('writeInboxParams', () => {
 describe('filterQuery', () => {
   it('names the filters as the API does, only those set', () => {
     expect(filterQuery({ ...NO_FILTERS, search: 'ana', priorityId: PRIORITY }).toString()).toBe(`search=ana&priorityId=${PRIORITY}`);
+  });
+});
+
+describe('the field filter', () => {
+  const NOW = new Date(2026, 9, 22, 18, 0);
+  const field = (fieldOperator: FieldOperator, fieldValue?: string, fieldValueTo?: string) => ({ ...NO_FILTERS, fieldCode: 'DUE_ON', fieldOperator, fieldValue, fieldValueTo });
+
+  it('reads the code, the condition and the values from the URL, and drops a code that is not one', () => {
+    expect(read('field=DUE_ON&op=between&fv=2026-01-01&fv2=%202026-01-31%20')).toMatchObject({ fieldCode: 'DUE_ON', fieldOperator: 'between', fieldValue: '2026-01-01', fieldValueTo: '2026-01-31' });
+    expect(read('field=due&op=filled&fv=x')).toMatchObject({ fieldCode: undefined, fieldOperator: undefined, fieldValue: undefined });
+    expect(read('field=DUE_ON&op=sometime')).toMatchObject({ fieldCode: 'DUE_ON', fieldOperator: undefined });
+  });
+
+  it('round-trips through the URL', () => {
+    const params = { ...defaults, ...field('upcoming', '15') };
+    expect(read(writeInboxParams(params).toString())).toEqual(params);
+  });
+
+  it('sends only a whole filter to the API', () => {
+    expect(apiFieldFilter(field('contains', 'fac'), NOW)).toEqual({ fieldCode: 'DUE_ON', fieldOperator: 'contains', fieldValue: 'fac' });
+    expect(apiFieldFilter(field('contains'), NOW)).toBeUndefined();
+    expect(apiFieldFilter(field('between', 'a'), NOW)).toBeUndefined();
+    expect(apiFieldFilter(field('between', undefined, '10'), NOW)).toEqual({ fieldCode: 'DUE_ON', fieldOperator: 'between', fieldValue: undefined, fieldValueTo: '10' });
+    expect(apiFieldFilter(field('filled', 'x'), NOW)).toEqual({ fieldCode: 'DUE_ON', fieldOperator: 'filled' });
+    expect(apiFieldFilter({ ...NO_FILTERS, fieldCode: 'DUE_ON' }, NOW)).toBeUndefined();
+  });
+
+  it('turns overdue and upcoming into ranges of the person\'s own days', () => {
+    expect(apiFieldFilter(field('overdue'), NOW)).toEqual({ fieldCode: 'DUE_ON', fieldOperator: 'between', fieldValueTo: '2026-10-21' });
+    expect(apiFieldFilter(field('upcoming', '10'), NOW)).toEqual({ fieldCode: 'DUE_ON', fieldOperator: 'between', fieldValue: '2026-10-22', fieldValueTo: '2026-11-01' });
+    expect(apiFieldFilter(field('upcoming', '-1'), NOW)).toBeUndefined();
+    expect(apiFieldFilter(field('upcoming', '2.5'), NOW)).toBeUndefined();
+  });
+
+  it('goes in the API query with the other filters', () => {
+    expect(filterQuery(field('equals', '77')).toString()).toBe('fieldCode=DUE_ON&fieldOperator=equals&fieldValue=77');
   });
 });

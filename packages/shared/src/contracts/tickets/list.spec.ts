@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listTicketsQuerySchema, ticketCountsResponseSchema, ticketFiltersQuerySchema } from './list.js';
+import { fieldRangeKind, listTicketsQuerySchema, ticketCountsResponseSchema, ticketFiltersQuerySchema } from './list.js';
 
 const ID = '018f0000-0000-7000-8000-000000000001';
 
@@ -25,6 +25,44 @@ describe('listTicketsQuerySchema', () => {
 describe('ticketFiltersQuerySchema', () => {
   it('has no page nor view: the counts cover every view', () => {
     expect(ticketFiltersQuerySchema.parse({ view: 'all', page: '2', search: 'x' })).toEqual({ search: 'x' });
+  });
+});
+
+describe('the field filter', () => {
+  const parse = (query: Record<string, string>) => ticketFiltersQuerySchema.safeParse(query).success;
+
+  it('takes a code with its operator and the values it needs', () => {
+    expect(parse({ fieldCode: 'DUE_ON', fieldOperator: 'between', fieldValue: '2026-01-01', fieldValueTo: '2026-01-31' })).toBe(true);
+    expect(parse({ fieldCode: 'DUE_ON', fieldOperator: 'between', fieldValueTo: '2026-01-31' })).toBe(true);
+    expect(parse({ fieldCode: 'AMOUNT', fieldOperator: 'between', fieldValue: '-5.5' })).toBe(true);
+    expect(parse({ fieldCode: 'REF', fieldOperator: 'contains', fieldValue: ' fac ' })).toBe(true);
+    expect(parse({ fieldCode: 'REF', fieldOperator: 'empty' })).toBe(true);
+  });
+
+  it.each([
+    ['a code alone', { fieldCode: 'REF' }],
+    ['an operator alone', { fieldOperator: 'filled' }],
+    ['a value alone', { fieldValue: 'x' }],
+    ['equals without a value', { fieldCode: 'REF', fieldOperator: 'equals' }],
+    ['contains with an end', { fieldCode: 'REF', fieldOperator: 'contains', fieldValue: 'a', fieldValueTo: 'b' }],
+    ['a range without ends', { fieldCode: 'REF', fieldOperator: 'between' }],
+    ['a range of words', { fieldCode: 'REF', fieldOperator: 'between', fieldValue: 'a' }],
+    ['filled with a value', { fieldCode: 'REF', fieldOperator: 'filled', fieldValue: 'x' }],
+    ['a lowercase code', { fieldCode: 'ref', fieldOperator: 'filled' }],
+  ])('rejects %s', (_, query) => {
+    expect(parse(query)).toBe(false);
+  });
+});
+
+describe('fieldRangeKind', () => {
+  it('tells dates from numbers, and refuses a mix, an impossible date or ends out of order', () => {
+    expect(fieldRangeKind('2026-02-01', '2026-02-28')).toBe('date');
+    expect(fieldRangeKind(undefined, '10')).toBe('number');
+    expect(fieldRangeKind('2026-02-01', '10')).toBeUndefined();
+    expect(fieldRangeKind('2026-13-01', undefined)).toBeUndefined();
+    expect(fieldRangeKind('2026-03-01', '2026-02-01')).toBeUndefined();
+    expect(fieldRangeKind('9', '10')).toBe('number');
+    expect(fieldRangeKind(undefined, undefined)).toBeUndefined();
   });
 });
 

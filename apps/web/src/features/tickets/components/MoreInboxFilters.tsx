@@ -6,6 +6,7 @@ import type { HttpClient } from '@/shared/api';
 import { useApiClient, usePermissions } from '@/shared/session';
 import { Button, Select, TextField } from '@/shared/ui';
 import type { InboxFilters as Filters } from '../lib/inbox-params';
+import { FieldInboxFilter } from './FieldInboxFilter';
 import styles from './InboxFilters.module.css';
 
 const subcategoriesQueryOptions = (client: HttpClient) =>
@@ -31,7 +32,7 @@ export interface MoreInboxFiltersProps {
 
 /**
  * The folded filters: subcategory (of the chosen category, if any), site, requester, current holder, one of the
- * person's own tags and the creation dates. Lists the role cannot read are left out.
+ * person's own tags, the creation dates and the value of a field of the forms. Lists the role cannot read are left out.
  */
 export function MoreInboxFilters({ filters, onChange }: MoreInboxFiltersProps) {
   const { t } = useTranslation('tickets');
@@ -58,6 +59,7 @@ export function MoreInboxFilters({ filters, onChange }: MoreInboxFiltersProps) {
       <TextField label={t('filters.createdTo')} type="date" value={filters.createdTo ?? ''} min={filters.createdFrom} onChange={(event) => onChange({ createdTo: event.target.value === '' ? undefined : event.target.value })} />
       <PersonFilter label={t('filters.requester')} userId={filters.creatorId} onChange={(creatorId) => onChange({ creatorId })} />
       <PersonFilter label={t('filters.assignee')} userId={filters.assigneeId} onChange={(assigneeId) => onChange({ assigneeId })} />
+      <FieldInboxFilter filters={filters} onChange={onChange} />
     </div>
   );
 }
