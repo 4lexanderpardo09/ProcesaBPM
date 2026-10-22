@@ -750,6 +750,7 @@ model Tenant {
   ticketDocuments         TicketDocument[]
   pdfFormats              PdfFormat[]
   pdfTemplates            PdfTemplate[]
+  pdfImages               PdfImage[]
   pdfTemplateFields       PdfTemplateField[]
   pdfTemplateSignatures   PdfTemplateSignature[]
   workflowDocuments       WorkflowDocument[]
@@ -1370,6 +1371,7 @@ model Workflow {
   datasets          Dataset[]
   pdfFormats        PdfFormat[]
   pdfTemplates      PdfTemplate[]
+  pdfImages         PdfImage[]
   workflowDocuments WorkflowDocument[]
   exportDefinitions ExportDefinition[]
 
@@ -2252,6 +2254,7 @@ model StoredFile {
   ticketSignatures     TicketSignature[]
   ticketDocuments      TicketDocument[]
   pdfTemplates         PdfTemplate[]
+  pdfImages            PdfImage[]
   exportCutoffs        ExportCutoff[]
 
   @@id([tenantId, id])
@@ -2318,6 +2321,26 @@ model PdfFormat {
   @@unique([tenantId, workflowId, name])
   @@index([tenantId, updatedById])
   @@map("pdf_formats")
+}
+
+/// An image the formats of a workflow can show (a seal, a banner). The file is referenced, not linked: once the row is
+/// gone, nothing holds the upload and the stale-upload purge removes it.
+model PdfImage {
+  tenantId   String   @map("tenant_id") @db.Uuid
+  id         String   @default(dbgenerated("uuidv7()")) @db.Uuid
+  workflowId String   @map("workflow_id") @db.Uuid
+  fileId     String   @map("file_id") @db.Uuid
+  name       String
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflow Workflow   @relation(fields: [tenantId, workflowId], references: [tenantId, id], onDelete: Cascade)
+  file     StoredFile @relation(fields: [tenantId, fileId], references: [tenantId, id], onDelete: NoAction)
+
+  @@id([tenantId, id])
+  @@unique([tenantId, fileId])
+  @@index([tenantId, workflowId])
+  @@map("pdf_images")
 }
 
 /// PDF uploaded by the customer; fields are placed by coordinates and/or AcroForm names.

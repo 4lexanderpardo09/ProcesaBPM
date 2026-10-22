@@ -45,6 +45,8 @@ export const AUDIT_ACTIONS = [
   'export.download_url_issued',
   'export_catalog.updated',
   'tenant.security_policy_updated',
+  'tenant.logo_updated',
+  'tenant.logo_removed',
   'support_access.granted',
   'support_access.revoked',
   'support.request',

@@ -135,6 +135,13 @@ export const WORKFLOWS_READERS = {
       FROM pdf_templates WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
   },
+  pdf_images: {
+    start: [NIL_UUID],
+    page: (tenantId, [id], limit) => Prisma.sql`
+      SELECT tenant_id, id, workflow_id, file_id, name, created_at
+      FROM pdf_images WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
+      ORDER BY id LIMIT ${limit}`,
+  },
   pdf_template_fields: {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`

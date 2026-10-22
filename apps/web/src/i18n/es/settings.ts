@@ -162,6 +162,8 @@ export const settings = {
       'support_access.granted': 'Dio acceso al soporte',
       'support_access.revoked': 'Terminó el acceso del soporte',
       'tenant.security_policy_updated': 'Cambió la política de seguridad',
+      'tenant.logo_updated': 'Cambió el logo de la organización',
+      'tenant.logo_removed': 'Quitó el logo de la organización',
       'user.looked_up': 'Consultó una persona',
       'workflow.created': 'Creó un flujo',
       'workflow.updated': 'Editó un flujo',

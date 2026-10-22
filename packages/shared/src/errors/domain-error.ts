@@ -76,6 +76,7 @@ export const ERROR_CODES = {
   pdfTemplateInvalid: 'PDF_TEMPLATE_INVALID',
   pdfRenderFailed: 'PDF_RENDER_FAILED',
   documentSourceInUse: 'DOCUMENT_SOURCE_IN_USE',
+  pdfImageInUse: 'PDF_IMAGE_IN_USE',
   datasetFileInvalid: 'DATASET_FILE_INVALID',
   datasetInUse: 'DATASET_IN_USE',
   reportTooLarge: 'REPORT_TOO_LARGE',
@@ -662,6 +663,12 @@ export class PdfRenderFailedError extends DomainError {
 export class DocumentSourceInUseError extends DomainError {
   constructor() {
     super(ERROR_CODES.documentSourceInUse, 'A workflow document still uses it: deactivate it instead');
+  }
+}
+
+export class PdfImageInUseError extends DomainError {
+  constructor(readonly formats: readonly string[]) {
+    super(ERROR_CODES.pdfImageInUse, 'A format still shows this image: take it out of the format first', { details: { formats } });
   }
 }
 

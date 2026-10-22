@@ -108,6 +108,7 @@ export const EXPORT_DATASETS = [
   table('dataset_rows', 'workflows', ['tenant_id', 'id', 'dataset_id', 'lookup_key', 'data'], ['id']),
   table('pdf_formats', 'workflows', ['tenant_id', 'id', 'workflow_id', 'name', 'description', 'design', 'file_name_pattern', 'updated_by_id', 'is_active', 'created_at', 'updated_at'], ['id']),
   table('pdf_templates', 'workflows', ['tenant_id', 'id', 'workflow_id', 'company_id', 'file_id', 'name', 'pages', 'has_acroform', 'is_active', 'created_at', 'acroform_fields', 'updated_at'], ['id']),
+  table('pdf_images', 'workflows', ['tenant_id', 'id', 'workflow_id', 'file_id', 'name', 'created_at'], ['id']),
   table('pdf_template_fields', 'workflows', ['tenant_id', 'id', 'template_id', 'mode', 'field_code', 'expression', 'acroform_name', 'page', 'x', 'y', 'font_size', 'max_width', 'align'], ['id']),
   table('pdf_template_signatures', 'workflows', ['tenant_id', 'id', 'template_id', 'mode', 'step_name', 'signer_type', 'signer_label', 'acroform_name', 'page', 'x', 'y', 'width', 'height'], ['id']),
   table('workflow_documents', 'workflows', ['tenant_id', 'id', 'workflow_id', 'company_id', 'kind', 'format_id', 'template_id', 'moment', 'is_active'], ['id']),

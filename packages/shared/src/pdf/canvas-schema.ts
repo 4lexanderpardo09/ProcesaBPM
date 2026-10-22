@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FORMULA_LIMITS } from '../engine/formulas/types.js';
 import { FIELD_CODE_PATTERN } from '../workflow/constants.js';
 import { expressionSchema, type PdfDesign, pdfDesignSchema } from './design-schema.js';
+import { uuidSchema } from '../contracts/ids.js';
 import { PDF_LIMITS } from './limits.js';
 
 /**
@@ -120,8 +121,14 @@ const tableElement = z
   })
   .strict();
 
-/** For now only the organization's logo; the rest of the images live in the format itself (pending). */
-const imageElement = z.object({ ...base, type: z.literal('image'), source: z.literal('TENANT_LOGO'), fit: z.enum(['CONTAIN', 'COVER', 'STRETCH']) }).strict();
+/**
+ * `TENANT_LOGO`: the organization's logo, whatever it is when the document is drawn; `UPLOADED`: one of the images of the
+ * workflow (`imageId`), uploaded for its formats.
+ */
+const imageElement = z
+  .object({ ...base, type: z.literal('image'), source: z.enum(['TENANT_LOGO', 'UPLOADED']), imageId: uuidSchema.optional(), fit: z.enum(['CONTAIN', 'COVER', 'STRETCH']) })
+  .strict()
+  .refine((element) => element.source !== 'UPLOADED' || element.imageId !== undefined, { message: 'Say which image', path: ['imageId'] });
 
 const lineElement = z
   .object({ ...base, type: z.literal('line'), orientation: z.enum(['HORIZONTAL', 'VERTICAL']), thickness: z.number().min(0.1).max(10), color, dash: z.enum(['SOLID', 'DASHED', 'DOTTED']) })

@@ -15,6 +15,8 @@ export const PDF_LIMITS = {
   maxMappedFields: 500,
   maxMappedSignatures: 100,
   maxSignatureImageBytes: 1024 * 1024,
+  /** Images a workflow keeps for its formats (seals, banners). */
+  maxImagesPerWorkflow: 50,
   defaultRenderTimeoutMs: 30_000,
   maxRenderTimeoutMs: 120_000,
 } as const;

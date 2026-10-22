@@ -200,6 +200,7 @@ export class StoredFileRepository {
         AND NOT EXISTS (SELECT 1 FROM step_files x WHERE x.tenant_id = f.tenant_id AND x.file_id = f.id)
         AND NOT EXISTS (SELECT 1 FROM memberships x WHERE x.tenant_id = f.tenant_id AND x.signature_file_id = f.id)
         AND NOT EXISTS (SELECT 1 FROM pdf_templates x WHERE x.tenant_id = f.tenant_id AND x.file_id = f.id)
+        AND NOT EXISTS (SELECT 1 FROM pdf_images x WHERE x.tenant_id = f.tenant_id AND x.file_id = f.id)
         AND NOT EXISTS (SELECT 1 FROM export_cutoffs x WHERE x.tenant_id = f.tenant_id AND x.file_id = f.id)
         AND NOT EXISTS (SELECT 1 FROM ticket_signatures x WHERE x.tenant_id = f.tenant_id AND x.file_id = f.id)
         AND NOT EXISTS (SELECT 1 FROM ticket_documents x WHERE x.tenant_id = f.tenant_id AND x.file_id = f.id)

@@ -7,8 +7,10 @@ import { PdfRenderer } from '../../../infrastructure/pdf/pdf-renderer.js';
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
 import { DocumentSourceRepository, type WorkflowDocumentSource } from '../data/document-source.repository.js';
 import { PdfFormatRepository } from '../data/pdf-format.repository.js';
+import { PdfImageRepository } from '../data/pdf-image.repository.js';
 import { PdfTemplateRepository } from '../data/pdf-template.repository.js';
 import { RenderFactsRepository } from '../data/render-facts.repository.js';
+import { uploadedImageIds, uploadedImageKey } from '../domain/canvas-resolver.js';
 import { buildPreviewFacts } from '../domain/preview-facts.js';
 import { planRender, type RenderPlan } from '../domain/render-plan.js';
 import { DocumentSourceValidator } from './document-source.validator.js';
@@ -24,7 +26,8 @@ export interface PreviewPdf {
 
 interface Prepared {
   readonly plan: RenderPlan;
-  readonly logoKey: string | null;
+  /** Storage key of each image the plan draws that exists (`logo`, `img:<image id>`). */
+  readonly imageStorageKeys: ReadonlyMap<string, string>;
 }
 
 /** Draws a format or a template with sample data so the editor can show the result. Nothing is stored. */
@@ -41,6 +44,7 @@ export class PdfPreviewService {
     @Inject(PdfTemplateRepository) private readonly templates: PdfTemplateRepository,
     @Inject(DocumentSourceRepository) private readonly sources: DocumentSourceRepository,
     @Inject(RenderFactsRepository) private readonly facts: RenderFactsRepository,
+    @Inject(PdfImageRepository) private readonly images: PdfImageRepository,
     @Inject(ImageLoader) private readonly imageLoader: ImageLoader,
   ) {}
 
@@ -74,13 +78,16 @@ export class PdfPreviewService {
     const locale = await this.sources.tenantLocale(tx, tenantId);
     const facts = buildPreviewFacts(document.fields, document.steps, overrides, locale, this.clock.now());
     const plan = planRender(source, facts);
+    const imageStorageKeys = new Map<string, string>();
     const logoFileId = plan.imageKeys.has('logo') ? await this.facts.logoFileId(tx, tenantId) : null;
-    const logoKey = logoFileId === null ? null : ((await this.facts.imageKeys(tx, tenantId, [logoFileId])).get(logoFileId) ?? null);
-    return { plan, logoKey };
+    const logoKey = logoFileId === null ? undefined : (await this.facts.imageKeys(tx, tenantId, [logoFileId])).get(logoFileId);
+    if (logoKey !== undefined) imageStorageKeys.set('logo', logoKey);
+    for (const [id, key] of await this.images.storageKeys(tx, tenantId, workflowId, uploadedImageIds(plan.imageKeys))) imageStorageKeys.set(uploadedImageKey(id), key);
+    return { plan, imageStorageKeys };
   }
 
-  private async draw({ plan, logoKey }: Prepared): Promise<PreviewPdf> {
-    const images = await this.imageLoader.load(plan.imageKeys, new Map(logoKey === null ? [] : [['logo', logoKey]]));
+  private async draw({ plan, imageStorageKeys }: Prepared): Promise<PreviewPdf> {
+    const images = await this.imageLoader.load(plan.imageKeys, imageStorageKeys);
     const deadlineAt = Date.now() + PREVIEW_TIMEOUT_MS;
     const meta = { title: plan.fileName, createdAt: this.clock.now() };
     try {

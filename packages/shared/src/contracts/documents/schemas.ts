@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { nameSchema, pageQuerySchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 import { requestUploadsSchema } from '../files/schemas.js';
+import { extensionOf } from '../../files/file-types.js';
+import { PDF_LIMITS } from '../../pdf/limits.js';
 import { anyPdfDesignSchema } from '../../pdf/canvas-schema.js';
 import { expressionSchema } from '../../pdf/design-schema.js';
 import { templateMappingSchema } from '../../pdf/mapping-schema.js';
@@ -33,6 +35,21 @@ export type UpdatePdfTemplateRequest = z.infer<typeof updatePdfTemplateRequestSc
 export const requestTemplateUploadSchema = requestUploadsSchema.refine((body) => body.files.length === 1 && body.files[0]!.name.toLowerCase().endsWith('.pdf'), 'Upload exactly one PDF');
 
 export const putTemplateMappingRequestSchema = templateMappingSchema;
+
+const PDF_IMAGE_EXTENSIONS: readonly string[] = ['png', 'jpg', 'jpeg'];
+
+/** One PNG or JPEG for the formats or the organization's logo, no heavier than what a document draws (anything else would be left out). */
+export const requestPdfImageUploadSchema = requestUploadsSchema.refine(
+  (body) => body.files.length === 1 && PDF_IMAGE_EXTENSIONS.includes(extensionOf(body.files[0]!.name)) && body.files[0]!.sizeBytes <= PDF_LIMITS.maxSignatureImageBytes,
+  'Upload exactly one PNG or JPEG image of up to 1 MB',
+);
+
+/** The file must be an upload of the caller, confirmed through `POST /pdf-images/uploads` and its confirmation. */
+export const registerPdfImageRequestSchema = z.object({ fileId: uuidSchema, name: nameSchema }).strict();
+export type RegisterPdfImageRequest = z.infer<typeof registerPdfImageRequestSchema>;
+
+export const setTenantLogoRequestSchema = z.object({ fileId: uuidSchema }).strict();
+export type SetTenantLogoRequest = z.infer<typeof setTenantLogoRequestSchema>;
 
 /** Sample values for a preview, by field code; anything not given is filled with a sample of its type. */
 export const previewRequestSchema = z.object({ values: z.record(z.string(), z.unknown()).default({}) }).strict();
@@ -95,4 +112,22 @@ export interface WorkflowDocumentResponse {
   readonly templateId: string | null;
   readonly moment: (typeof DOCUMENT_MOMENTS)[number] | null;
   readonly isActive: boolean;
+}
+
+/** An image the workflow's formats can show; `url` is short-lived, for the editor to draw it. */
+export interface PdfImageResponse {
+  readonly id: string;
+  readonly workflowId: string;
+  readonly name: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly createdAt: string;
+  readonly url: string;
+  readonly urlExpiresAt: string;
+}
+
+/** A short-lived URL of the organization's logo. */
+export interface TenantLogoResponse {
+  readonly url: string;
+  readonly expiresAt: string;
 }

@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { FilesModule } from '../files/files.module.js';
+import { TenantLogoService } from './application/tenant-logo.service.js';
+import { TenantLogoRepository } from './data/tenant-logo.repository.js';
+import { TenantLogoController } from './http/tenant-logo.controller.js';
 import { CalendarHolidaysService } from './application/calendar-holidays.service.js';
 import { CalendarPreviewService } from './application/calendar-preview.service.js';
 import { CalendarsService } from './application/calendars.service.js';
@@ -22,10 +26,13 @@ import { PositionsController } from './http/positions.controller.js';
 import { SiteLevelsController } from './http/site-levels.controller.js';
 import { SitesController } from './http/sites.controller.js';
 
-/** Companies, departments, positions, sites and calendars of a tenant. */
+/** Companies, departments, positions, sites, calendars and the logo of a tenant. */
 @Module({
-  controllers: [CompaniesController, CountriesController, DepartmentsController, PositionsController, SiteLevelsController, SitesController, CalendarsController],
+  imports: [FilesModule],
+  controllers: [TenantLogoController, CompaniesController, CountriesController, DepartmentsController, PositionsController, SiteLevelsController, SitesController, CalendarsController],
   providers: [
+    TenantLogoRepository,
+    TenantLogoService,
     CompanyRepository,
     DepartmentRepository,
     PositionRepository,

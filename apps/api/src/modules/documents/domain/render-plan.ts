@@ -11,7 +11,7 @@ import { resolveTemplateFields, resolveTemplateSignatures } from './template-res
 /** Everything to draw one document except the bytes (images, the template PDF) and the deadline, which the renderer step adds. */
 export type RenderPlan = {
   readonly fileName: string;
-  /** Image keys the job refers to (`logo`, `sig:<user>`): the caller supplies their bytes. */
+  /** Image keys the job refers to (`logo`, `img:<image id>`, `sig:<user>`): the caller supplies their bytes. */
   readonly imageKeys: ReadonlySet<string>;
 } & (
   | { readonly kind: 'DESIGN'; readonly job: Omit<DesignJob, 'images' | 'deadlineAt' | 'meta'> }
@@ -27,14 +27,14 @@ export function planRender(source: WorkflowDocumentSource, facts: RenderFacts): 
     if (!design.success) throw new PdfDesignInvalidError(design.error.issues.map((issue) => ({ code: 'DESIGN_SCHEMA', path: issue.path.join('.'), detail: issue.message })));
     if (design.data.version === 2) {
       const canvas = new CanvasResolver(facts).resolve(design.data);
-      return { kind: 'CANVAS', fileName: fileNameOf(source.format.fileNamePattern, source.format.name, canvas.texts, facts), imageKeys: imageKeysOf(facts, canvas.usesLogo), job: canvas.content };
+      return { kind: 'CANVAS', fileName: fileNameOf(source.format.fileNamePattern, source.format.name, canvas.texts, facts), imageKeys: imageKeysOf(facts, canvas.imageKeys), job: canvas.content };
     }
     const resolved = resolver.resolve(design.data);
     const fileName = fileNameOf(source.format.fileNamePattern, source.format.name, resolver, facts);
     return {
       kind: 'DESIGN',
       fileName,
-      imageKeys: imageKeysOf(facts, resolved.usesLogo),
+      imageKeys: imageKeysOf(facts, resolved.usesLogo ? ['logo'] : []),
       job: { page: resolved.page, defaultFontSize: resolved.defaultFontSize, body: resolved.body, header: resolved.header, footer: resolved.footer },
     };
   }
@@ -42,7 +42,7 @@ export function planRender(source: WorkflowDocumentSource, facts: RenderFacts): 
   return {
     kind: 'TEMPLATE',
     fileName: fileNameOf(null, template.name, resolver, facts),
-    imageKeys: imageKeysOf(facts, false),
+    imageKeys: imageKeysOf(facts, []),
     templateStorageKey: template.storageKey,
     job: { fields: resolveTemplateFields(template.fields, resolver), signatures: resolveTemplateSignatures(template.signatures, resolver) },
   };
@@ -54,5 +54,5 @@ function fileNameOf(pattern: string | null, sourceName: string, resolver: Design
   return generatedFileName(base, fallback);
 }
 
-const imageKeysOf = (facts: RenderFacts, logo: boolean): ReadonlySet<string> =>
-  new Set([...(logo ? ['logo'] : []), ...[...facts.signers.values()].flatMap((records) => records.flatMap((record) => (record.imageKey === null ? [] : [record.imageKey])))]);
+const imageKeysOf = (facts: RenderFacts, shown: Iterable<string>): ReadonlySet<string> =>
+  new Set([...shown, ...[...facts.signers.values()].flatMap((records) => records.flatMap((record) => (record.imageKey === null ? [] : [record.imageKey])))]);
