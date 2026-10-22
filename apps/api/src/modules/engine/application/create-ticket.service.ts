@@ -95,6 +95,7 @@ export class CreateTicketService {
       const arrival = await this.planner.plan(tx, {
         tenantId,
         ticketId: null,
+        workflowVersionId: published.versionId,
         document: published.document,
         entryStepId: diversion?.toStepId ?? start.id,
         values: submission.merged,

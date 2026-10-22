@@ -131,6 +131,18 @@ export function addBusinessDays(calendar: BusinessCalendar, date: string, count:
   return current;
 }
 
+/** The close of the last working day on or before a local date (a cutoff on a Sunday is due on Friday's close). */
+export function endOfWorkingDayOnOrBefore(calendar: BusinessCalendar, date: string): Date {
+  const compiled = CompiledCalendar.from(calendar);
+  let current = date;
+  for (let scanned = 0; scanned < MAX_SCAN_DAYS; scanned += 1) {
+    const intervals = compiled.intervalsOn(current);
+    if (intervals.length > 0) return new Date(intervals[intervals.length - 1]!.end);
+    current = addDaysToLocalDate(current, -1);
+  }
+  throw new InvalidDurationError('The calendar has no working time before the date');
+}
+
 /** The first instant with working time on or after the start of a local date. */
 export function firstWorkingInstantOnOrAfter(calendar: BusinessCalendar, date: string): Date {
   const compiled = CompiledCalendar.from(calendar);

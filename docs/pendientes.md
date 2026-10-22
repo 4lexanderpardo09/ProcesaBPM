@@ -13,7 +13,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - ~~probar quién aprueba~~ (hecho, §4.24).
   - **API y web:**
     - ~~«mismo responsable que el paso X»~~ (hecho, arquitectura §14.2);
-    - cortes por empresa y plazo por corte en el motor;
+    - ~~cortes por empresa y plazo por corte en el motor~~ (hecho, arquitectura §14.2); el vencimiento se calcula al llegar al paso y no se recalcula si el campo se llena después;
     - planos: ~~el motor (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte)~~ (hecho, arquitectura §21); falta la web; las definiciones y catálogos aún no se auditan;
     - procesar en lote;
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2);
@@ -71,7 +71,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Sigue:** ~~campos y participantes de cada bloque y topes de monto~~ (hecho, parte 3).
 - **Flujos en la web, parte 1 (2026-10-21, `feat/web-workflows`):** la lista, nuevo flujo, la ficha con versiones (nuevo borrador, eliminar) y observadores. La API de la lista ahora nombra la subcategoría y las versiones publicada y en borrador. Detalle en arquitectura.md §4.15.
   - **Decidido (con criterio, el usuario delegó):**
-    - Los cortes por empresa no se muestran: el motor aún no los usa.
+    - ~~Los cortes por empresa no se muestran: el motor aún no los usa.~~ Ya se usan y tienen su pestaña (arquitectura §14.2).
     - Un borrador nuevo copia por defecto la versión publicada.
   - **Sigue:** ~~el lienzo del constructor~~ (hecho, ver arriba); los campos y participantes de cada bloque.
 - **Campana de notificaciones y etiquetas en el ticket (2026-10-21, `feat/web-notifications-tags`):** la campana con el conteo sin leer, su panel y la página `/notifications`, y la tarjeta «Mis etiquetas» en el detalle del ticket. Detalle en arquitectura.md §4.14.
