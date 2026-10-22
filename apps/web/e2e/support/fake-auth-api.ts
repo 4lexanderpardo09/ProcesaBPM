@@ -300,7 +300,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
       const status = search.get('status');
       const count = (view: 'assigned' | 'created' | 'observed' | 'all') => (options.tickets?.[view] ?? []).filter((ticket) => status === null || ticket.status === status).length;
-      return json(route, 200, { assigned: count('assigned'), created: count('created'), observed: count('observed'), all: count('all') });
+      return json(route, 200, { assigned: count('assigned'), created: count('created'), observed: count('observed'), all: count('all'), history: 0, reopened: 0, errors_reported: 0, errors_received: 0 });
     },
     // The home: the counters and nothing pending.
     'GET /api/dashboard/stats': (route, _body, authorization) => {
