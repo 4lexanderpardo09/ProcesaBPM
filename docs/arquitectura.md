@@ -483,7 +483,28 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **Pruebas:**
   - **Unitarias:** cliente con `blob`; la pestaña (agregar documento, quitar uno en uso, subir un PDF propio con rechazo y reintento, crear formato, rol sin permiso); y el diseñador (tabla desde las columnas del campo, insertar dato, cuerpo completo guardado, campo solo del borrador, número de página solo en el pie, salir con cambios).
   - **En local contra el API real:** un formato con tabla, firmas y pie se guardó y la vista previa (texto extraído del PDF) trae título, campos, filas, firma y «Página 1».
-- **Siguiente:** ubicar los datos y las firmas sobre un PDF propio (`PUT …/mapping`), por coordenadas o en sus campos de formulario.
+- **Siguiente:** ~~ubicar los datos y las firmas sobre un PDF propio~~ hecho en §4.20.
+
+### 4.20 Documentos PDF: ubicar los datos sobre un PDF propio (hecho, 2026-10-21, `feat/web-pdf-mapping`)
+- **Pantalla `/workflows/:workflowId/templates/:templateId` (`PdfTemplatePage`):** se abre por el nombre del PDF propio en la pestaña «Documentos PDF». A la izquierda, los datos y las firmas en acordeón; a la derecha, la página del PDF dibujada.
+- **Dibujo del PDF con pdf.js (`pdfjs-dist` 6.4.299, `lib/pdf-pages`):**
+  - **Carga:** se importa solo en esta pantalla (un paquete aparte de ~430 KB y su worker). El archivo llega por `GET …/file/download-url` (enlace prefirmado), así que el bucket debe dejar leer desde el origen de la web: es el mismo CORS que ya necesitan las subidas.
+  - **Tamaños:** de cada página salen su tamaño tal como se ve (con rotación) y el `PageBox` (caja y rotación) con que se revisan las posiciones.
+- **Ubicar (`PageCanvas`):** «Ubicar con un clic en la página» y un clic convierte el punto a puntos PDF desde la esquina inferior izquierda de la página como se ve, redondeado a un decimal.
+  - **Dato:** el punto es el inicio del texto, sobre su línea base.
+  - **Firma:** el punto es la esquina inferior izquierda del recuadro (ancho y alto, 150 × 50 por defecto).
+  - **Marcas:** lo ubicado se ve sobre la página; un clic en una marca la selecciona. Página, posición y tamaños también se escriben a mano.
+- **Campos de formulario:** si el PDF los tiene, cada dato o firma puede ir en uno de ellos en vez de una posición. Las firmas solo ofrecen los de tipo firma; los datos, los demás (sin botones).
+- **Qué se escribe:** un campo del ticket (no las tablas) o un texto con datos (el mismo «Insertar dato» del diseñador). Para las firmas: el paso (los que atiende una persona), quién firma y un rótulo.
+- **Revisión en vivo (`lib/mapping-doc`):** las reglas del propio mapeo (`templateMappingSchema`) y `validateMapping` del paquete compartido. Se revisa contra la versión publicada y aparte contra el borrador, con el tamaño real de las páginas. Mensajes en español por dato o firma.
+- **Guardar:** el mapeo completo (`PUT …/mapping`), con aviso al salir con cambios. La vista previa (pestaña nueva) es de lo último guardado.
+- **Pruebas:**
+  - **Unitarias** (pdf.js simulado):
+    - Ubicar un dato con un clic: la posición y la marca.
+    - Un texto con datos en un campo de formulario, y el mapeo completo guardado.
+    - Las firmas solo ofrecen campos de firma.
+    - Posición fuera de la página y paso inexistente: no deja guardar.
+  - **En local contra el API real con SeaweedFS:** se subió un PDF con un campo de formulario. Se ubicaron un dato con un clic, un texto en el campo y una firma. Lo guardado tiene `x` 199,9 e `y` 619,9 donde se hizo clic, y el PDF generado trae los tres.
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |

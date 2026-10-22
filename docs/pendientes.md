@@ -3,6 +3,14 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Ubicar datos sobre un PDF propio (2026-10-21, `feat/web-pdf-mapping`):** la página del PDF dibujada con pdf.js; los datos y las firmas se ubican con un clic o van en los campos de formulario que el PDF ya tiene. Detalle en arquitectura.md §4.20. Con esto los documentos PDF quedan completos en la web.
+  - **Decidido (con criterio, el usuario delegó):**
+    - **pdf.js** (`pdfjs-dist` 6.4.299) solo en esta pantalla.
+    - **El clic marca** el inicio del texto o la esquina inferior izquierda de la firma.
+    - **Firma por defecto:** 150 × 50 puntos.
+  - **Por confirmar:**
+    - **CORS del bucket:** para dibujar el PDF, el bucket debe dejar leer (GET) desde el origen de la web. Se suma al CORS pendiente para publicar la web.
+    - **Auditoría:** cada vez que se abre la pantalla se pide el enlace de descarga, y eso queda en la auditoría (`pdf_template.download_url_issued`).
 - **Documentos PDF en la web (2026-10-21, `feat/web-pdf-documents`):** pestaña «Documentos PDF» en la ficha del flujo (documentos que se generan, formatos y PDF propios) y diseñador de formatos con revisión en vivo y vista previa. Detalle en arquitectura.md §4.19.
   - **Decidido (con criterio, el usuario delegó):**
     - **Vista previa:** muestra lo último guardado, porque el API dibuja el formato guardado.
@@ -12,7 +20,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Por confirmar:**
     - **Datos de ejemplo:** la vista previa los usa siempre; no se pueden escribir valores propios.
     - **Columnas de tabla:** el ancho solo se da en proporción; la API acepta también puntos.
-  - **Pendiente:** ubicar los datos sobre un PDF propio (mapeo por coordenadas o campos de formulario).
+  - ~~**Pendiente:** ubicar los datos sobre un PDF propio~~ Hecho (entrada de arriba).
 - **Datos de Excel en la web (2026-10-21, `feat/web-datasets`):** lista, detalle con las filas, carga en dos pasos (archivo y columna clave opcional), recarga, editar y eliminar. Detalle en arquitectura.md §4.18.
   - **Arreglado:**
     - El constructor ofrecía Excel limitados a otros flujos, que el API rechaza al publicar.

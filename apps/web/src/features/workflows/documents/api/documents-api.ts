@@ -1,9 +1,12 @@
 import {
+  ACROFORM_TYPES,
   type CreatePdfFormatRequest,
   type CreateWorkflowDocumentRequest,
   DOCUMENT_MOMENTS,
   pageResponseSchema,
   pdfDesignSchema,
+  type TemplateMapping,
+  templateMappingSchema,
   type RegisterPdfTemplateRequest,
   type UpdatePdfFormatRequest,
   type UpdatePdfTemplateRequest,
@@ -55,7 +58,7 @@ export const pdfTemplateSchema = z.object({
   name: z.string(),
   pageCount: z.number().int(),
   hasAcroform: z.boolean(),
-  acroformFields: z.array(z.object({ name: z.string(), type: z.string(), page: z.number().int().nullable() })),
+  acroformFields: z.array(z.object({ name: z.string(), type: z.enum(ACROFORM_TYPES), page: z.number().int().nullable() })),
   isActive: z.boolean(),
   updatedAt: z.string(),
 });
@@ -67,6 +70,8 @@ export const documentQueryKeys = {
   formats: (workflowId: string) => [...documentQueryKeys.all(workflowId), 'formats'] as const,
   format: (workflowId: string, formatId: string) => [...documentQueryKeys.all(workflowId), 'formats', formatId] as const,
   templates: (workflowId: string) => [...documentQueryKeys.all(workflowId), 'templates'] as const,
+  template: (workflowId: string, templateId: string) => [...documentQueryKeys.all(workflowId), 'templates', templateId] as const,
+  mapping: (workflowId: string, templateId: string) => [...documentQueryKeys.all(workflowId), 'templates', templateId, 'mapping'] as const,
 };
 
 const base = (workflowId: string) => `/workflows/${encodeURIComponent(workflowId)}`;
@@ -152,4 +157,30 @@ export function deletePdfTemplate(client: HttpClient, workflowId: string, templa
 
 export function previewPdfTemplate(client: HttpClient, workflowId: string, templateId: string, values: Record<string, unknown> = {}) {
   return client.request(`${item(workflowId, 'pdf-templates', templateId)}/preview`, { method: 'POST', body: { values }, responseType: 'blob' });
+}
+
+export function pdfTemplateQueryOptions(client: HttpClient, workflowId: string, templateId: string) {
+  return queryOptions({ queryKey: documentQueryKeys.template(workflowId, templateId), queryFn: ({ signal }) => client.request(item(workflowId, 'pdf-templates', templateId), { schema: pdfTemplateSchema, signal }) });
+}
+
+const mappingResponseSchema = z.object({ mapping: templateMappingSchema, warnings: z.array(problemSchema) });
+export type MappingResponse = { readonly mapping: TemplateMapping; readonly warnings: readonly SourceProblem[] };
+
+export function templateMappingQueryOptions(client: HttpClient, workflowId: string, templateId: string) {
+  return queryOptions({
+    queryKey: documentQueryKeys.mapping(workflowId, templateId),
+    queryFn: ({ signal }): Promise<MappingResponse> => client.request(`${item(workflowId, 'pdf-templates', templateId)}/mapping`, { schema: mappingResponseSchema, signal }),
+    // The mapper holds the person's unsaved work: it is never replaced behind their back.
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function saveTemplateMapping(client: HttpClient, workflowId: string, templateId: string, mapping: TemplateMapping): Promise<MappingResponse> {
+  return client.request(`${item(workflowId, 'pdf-templates', templateId)}/mapping`, { method: 'PUT', body: mapping, schema: mappingResponseSchema });
+}
+
+/** A short-lived link to the uploaded PDF itself, to draw its pages while placing the data. */
+export function templateFileUrl(client: HttpClient, workflowId: string, templateId: string) {
+  return client.request(`${item(workflowId, 'pdf-templates', templateId)}/file/download-url`, { schema: z.object({ url: z.string() }) });
 }
