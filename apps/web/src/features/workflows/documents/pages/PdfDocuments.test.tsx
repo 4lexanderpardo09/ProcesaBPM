@@ -1,4 +1,4 @@
-import { emptyDesign, type PdfDesign, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { type AnyPdfDesign, emptyCanvasDesign, emptyDesign, type PdfCanvasDesign, type PdfDesign, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,12 +38,12 @@ const publishedDoc = (): WorkflowVersionDocument => ({
 });
 const draftDoc = (): WorkflowVersionDocument => ({ ...publishedDoc(), fields: [...publishedDoc().fields, field(id(52), START, 'SUPPLIER', 'Proveedor', 'TEXT')] });
 
-const format = (design: PdfDesign = emptyDesign(), overrides: Record<string, unknown> = {}) => ({ id: FORMAT, workflowId: FLOW, name: 'Orden de compra', description: null, design, fileNamePattern: null, isActive: true, updatedAt: at, warnings: [], ...overrides });
+const format = (design: AnyPdfDesign = emptyDesign(), overrides: Record<string, unknown> = {}) => ({ id: FORMAT, workflowId: FLOW, name: 'Orden de compra', description: null, design, fileNamePattern: null, isActive: true, updatedAt: at, warnings: [], ...overrides });
 const template = { id: TEMPLATE, workflowId: FLOW, companyId: COMPANY, fileId: FILE_ID, name: 'Formulario del banco', pageCount: 2, hasAcroform: true, acroformFields: [{ name: 'nombre', type: 'TEXT', page: 1 }], isActive: true, updatedAt: at };
 
 /** A fake API with one workflow (published and draft), its format, template and generated document. */
-function api(overrides: Record<string, FakeHandler> = {}) {
-  let saved = format();
+function api(overrides: Record<string, FakeHandler> = {}, initial: AnyPdfDesign = emptyDesign()) {
+  let saved = format(initial);
   const handlers: Record<string, FakeHandler> = {
     [`/workflows/${FLOW}`]: () => ({ id: FLOW, subcategoryId: id(11), name: 'Compras', isActive: true, createdAt: at, versions: [version(DRAFT, 2, 'DRAFT'), version(PUBLISHED, 1, 'PUBLISHED')] }),
     [`/workflows/${FLOW}/versions/${PUBLISHED}`]: () => ({ workflow: { id: FLOW, name: 'Compras', subcategoryId: id(11) }, version: version(PUBLISHED, 1, 'PUBLISHED'), document: publishedDoc(), validation: null }),
@@ -147,17 +147,33 @@ describe('PDF documents', () => {
     expect(fake.calls.filter((call) => call.path === `/workflows/${FLOW}/pdf-templates` && call.options.method === 'POST').at(-1)?.options.body).toEqual({ fileId: FILE_ID, name: 'banco', companyId: COMPANY });
   });
 
-  it('creates a format that starts with the ticket number and every field, and opens the designer', async () => {
-    const { fake, router } = renderRoute(`/workflows/${FLOW}?tab=documents`, { handlers: api({ [`/workflows/${FLOW}/pdf-formats`]: (options) => (options.method === 'POST' ? format(emptyDesign(), { name: 'Acta' }) : page([])) }) });
+  it('creates a format on a free canvas by default and opens its designer', async () => {
+    const created = (options: { body?: unknown }) => format((options.body as { design: AnyPdfDesign }).design, { name: 'Acta' });
+    const { fake, router } = renderRoute(`/workflows/${FLOW}?tab=documents`, { handlers: api({ [`/workflows/${FLOW}/pdf-formats`]: (options) => (options.method === 'POST' ? created(options) : page([])) }, emptyCanvasDesign()) });
 
     await userEvent.click(await screen.findByRole('button', { name: 'Nuevo formato' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo formato' });
     await userEvent.type(within(dialog).getByRole('textbox', { name: /Nombre/ }), 'Acta');
+    expect(within(dialog).getByRole('combobox', { name: 'Cómo se diseña' })).toHaveValue('CANVAS');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Crear y diseñar' }));
 
     await vi.waitFor(() => expect(router.state.location.pathname).toBe(designerUrl));
-    expect(fake.calls.find((call) => call.options.method === 'POST' && call.path.endsWith('/pdf-formats'))?.options.body).toEqual({ name: 'Acta', design: emptyDesign() });
+    expect(fake.calls.find((call) => call.options.method === 'POST' && call.path.endsWith('/pdf-formats'))?.options.body).toEqual({ name: 'Acta', design: emptyCanvasDesign() });
+    expect(await screen.findByRole('button', { name: 'Elemento Título' })).toBeInTheDocument();
+  });
+
+  it('creates a format by blocks when asked', async () => {
+    const created = (options: { body?: unknown }) => format((options.body as { design: AnyPdfDesign }).design, { name: 'Acta' });
+    const { fake } = renderRoute(`/workflows/${FLOW}?tab=documents`, { handlers: api({ [`/workflows/${FLOW}/pdf-formats`]: (options) => (options.method === 'POST' ? created(options) : page([])) }) });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Nuevo formato' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo formato' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Nombre/ }), 'Acta');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Cómo se diseña' }), 'Por bloques');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Crear y diseñar' }));
+
     expect(await screen.findByRole('button', { name: /^1\. Título/ })).toBeInTheDocument();
+    expect(fake.calls.find((call) => call.options.method === 'POST' && call.path.endsWith('/pdf-formats'))?.options.body).toEqual({ name: 'Acta', design: emptyDesign() });
   });
 
   it('hides the documents tab from a role that cannot read PDF documents', async () => {
@@ -240,5 +256,76 @@ describe('PDF documents', () => {
       await userEvent.click(within(confirm).getByRole('button', { name: 'Salir sin guardar' }));
       await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/workflows/${FLOW}`));
     }, 15_000);
+  });
+
+  describe('canvas designer', () => {
+    const canvasPatch = (fake: { calls: ReadonlyArray<{ options: { method?: string; body?: unknown } }> }) => (fake.calls.filter((call) => call.options.method === 'PATCH').at(-1)?.options.body as { design: PdfCanvasDesign }).design;
+
+    it('adds a table of the form with its columns, a total and a calculation, and saves the whole canvas', async () => {
+      const { fake } = renderRoute(designerUrl, { handlers: api({}, emptyCanvasDesign()) });
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Orden de compra' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Elemento Número' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Tabla' }));
+      expect(screen.getByRole('combobox', { name: 'Campo tabla' })).toHaveValue('ITEMS');
+      expect(screen.getAllByRole('textbox', { name: 'Encabezado' }).map((box) => (box as HTMLInputElement).value)).toEqual(['Ítem', 'Cantidad']);
+      await userEvent.click(screen.getAllByRole('checkbox', { name: 'Sumar en el total' })[1]!);
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Fila de total' }));
+
+      // With nothing selected, the page: a calculation that names a field the flow does not have stops the save.
+      await userEvent.click(screen.getByRole('application', { name: 'Hoja del formato' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Agregar cálculo' }));
+      const formula = screen.getByRole('textbox', { name: 'Fórmula' });
+      await userEvent.clear(formula);
+      await userEvent.type(formula, 'NOPE * 2');
+      expect(await screen.findByText(/Una fórmula no es válida/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
+      await userEvent.clear(formula);
+      await userEvent.type(formula, 'AMOUNT * 2');
+      await userEvent.type(screen.getByRole('textbox', { name: 'Nombre' }), 'Doble');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+      await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
+      const saved = canvasPatch(fake);
+      expect(saved.calculations).toEqual([{ code: 'CALC_1', name: 'Doble', formula: 'AMOUNT * 2', decimals: 2 }]);
+      expect(saved.elements.map((element) => element.type)).toEqual(['text', 'text', 'table']);
+      expect(saved.elements[2]).toMatchObject({ fieldCode: 'ITEMS', showTotals: true, columns: [{ header: 'Ítem', value: '{{row.ITEM}}', sum: false }, { header: 'Cantidad', value: '{{row.QTY}}', sum: true }] });
+    }, 20_000);
+
+    it('adds a field as a text with its label and value, moves it with the arrows and undoes it', async () => {
+      renderRoute(designerUrl, { handlers: api({}, emptyCanvasDesign()) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Agregar «Monto»' }));
+      expect(screen.getByRole('textbox', { name: 'Contenido' })).toHaveValue('Monto: {{field.AMOUNT|currency}}');
+      const x = () => (screen.getByRole('textbox', { name: 'X (mm)' }) as HTMLInputElement).value;
+      const before = Number(x());
+
+      screen.getByRole('button', { name: 'Elemento Monto' }).focus();
+      await userEvent.keyboard('{ArrowRight}{Shift>}{ArrowRight}{/Shift}');
+      expect(Number(x())).toBeCloseTo(before + 6, 5);
+      await userEvent.keyboard('{Control>}z{/Control}');
+      expect(Number(x())).toBeCloseTo(before, 5);
+
+      await userEvent.keyboard('{Delete}');
+      expect(screen.queryByRole('button', { name: 'Elemento Monto' })).toBeNull();
+      await userEvent.keyboard('{Control>}z{/Control}');
+      expect(screen.getByRole('button', { name: 'Elemento Monto' })).toBeInTheDocument();
+    }, 20_000);
+
+    it('keeps elements on their sheet, and a repeated one on every sheet', async () => {
+      const design: PdfCanvasDesign = { ...emptyCanvasDesign(), elements: [{ ...emptyCanvasDesign().elements[0]!, repeat: true }] };
+      renderRoute(designerUrl, { handlers: api({}, design) });
+
+      await userEvent.click(await screen.findByRole('button', { name: '+ Hoja' }));
+      expect(screen.getByRole('tab', { name: 'Hoja 2' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('button', { name: 'Elemento Título' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Recuadro' }));
+      expect(screen.getByRole('button', { name: 'Elemento Recuadro' })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('tab', { name: 'Hoja 1' }));
+      expect(screen.queryByRole('button', { name: 'Elemento Recuadro' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Elemento Título' })).toBeInTheDocument();
+    });
   });
 });
