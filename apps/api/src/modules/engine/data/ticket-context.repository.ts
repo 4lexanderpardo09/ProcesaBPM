@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { BusinessCalendar } from '@procesabpm/shared';
+import type { BusinessCalendar, CutoffTerm } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { toBusinessCalendar } from '../../organization/domain/calendar-mapping.js';
 import { fullName, type PersonName } from '../../tickets/domain/person-name.js';
@@ -103,6 +103,14 @@ export class TicketContextRepository {
   async activeGroupIdsOf(tx: TenantTransaction, tenantId: string, userId: string): Promise<Set<string>> {
     const rows = await tx.groupMember.findMany({ where: { tenantId, userId, group: { isActive: true } }, select: { groupId: true } });
     return new Set(rows.map((row) => row.groupId));
+  }
+
+  /** The company's active cutoffs for the workflow of a version (the deadline and the wait by cutoff read them). */
+  async cutoffsOf(tx: TenantTransaction, tenantId: string, workflowVersionId: string, companyId: string): Promise<CutoffTerm[]> {
+    const version = await tx.workflowVersion.findFirst({ where: { tenantId, id: workflowVersionId }, select: { workflowId: true } });
+    if (version === null) return [];
+    const rows = await tx.companyCutoff.findMany({ where: { tenantId, workflowId: version.workflowId, companyId, isActive: true }, select: { cutoffDay: true, graceBusinessDays: true } });
+    return rows.map((row) => ({ day: row.cutoffDay, graceBusinessDays: row.graceBusinessDays }));
   }
 
   /** The site and all its ancestors, the site first. */

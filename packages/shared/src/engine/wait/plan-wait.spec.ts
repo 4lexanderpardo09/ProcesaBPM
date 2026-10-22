@@ -63,4 +63,14 @@ describe('planWait: UNTIL_FIELD_DATE', () => {
   });
 });
 
-it('refuses the company cutoff mode', () => expect(() => plan({ mode: 'COMPANY_CUTOFF' })).toThrow(InvalidCalendarError));
+describe('planWait: COMPANY_CUTOFF', () => {
+  const withCutoffs = (cutoffs: ReadonlyArray<{ day: number; graceBusinessDays: number }>, cal: BusinessCalendar | null = calendar) =>
+    planWait({ config: { mode: 'COMPANY_CUTOFF' }, values: {}, calendar: cal, timeZone: 'America/Bogota', at, cutoffs });
+
+  it('holds the ticket until the first working instant after the cutoff that closes the period', () => {
+    // Cutoff on Saturday 10 October: Sunday off, Monday a holiday, so Tuesday 08:00.
+    expect(iso(withCutoffs([{ day: 10, graceBusinessDays: 0 }]))).toBe('2026-10-13T13:00:00.000Z');
+  });
+  it('lets the ticket through when the company has no cutoffs for the workflow', () => expect(withCutoffs([])).toEqual({ kind: 'PASS', reason: 'NO_CUTOFFS' }));
+  it('needs a calendar', () => expect(() => withCutoffs([{ day: 10, graceBusinessDays: 0 }], null)).toThrow(InvalidCalendarError));
+});

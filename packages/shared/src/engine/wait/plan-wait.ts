@@ -2,6 +2,7 @@ import { InvalidCalendarError } from '../../errors/domain-error.js';
 import { addBusinessDays, calculateDueDate, firstWorkingInstantOnOrAfter } from '../business-time/business-time.js';
 import { localDateOf, localMinuteOfDay, zonedTimeToInstant } from '../business-time/time-zone.js';
 import type { BusinessCalendar, SlaUnit } from '../business-time/types.js';
+import { afterCurrentCutoff, type CutoffTerm } from '../cutoffs/cutoff-deadline.js';
 
 export type WaitConfig =
   | { readonly mode: 'DURATION'; readonly value: number; readonly unit: SlaUnit }
@@ -10,7 +11,7 @@ export type WaitConfig =
 
 export type WaitPlan =
   | { readonly kind: 'PARK'; readonly resumeAt: Date }
-  | { readonly kind: 'PASS'; readonly reason: 'ELAPSED' | 'FIELD_BLANK'; readonly waitedUntil?: Date };
+  | { readonly kind: 'PASS'; readonly reason: 'ELAPSED' | 'FIELD_BLANK' | 'NO_CUTOFFS'; readonly waitedUntil?: Date };
 
 export interface WaitInput {
   readonly config: WaitConfig;
@@ -19,6 +20,8 @@ export interface WaitInput {
   readonly calendar: BusinessCalendar | null;
   readonly timeZone: string;
   readonly at: Date;
+  /** The company's cutoffs for the workflow (COMPANY_CUTOFF). */
+  readonly cutoffs?: readonly CutoffTerm[];
 }
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,13 +50,17 @@ function untilFieldDate(config: Extract<WaitConfig, { mode: 'UNTIL_FIELD_DATE' }
  * When a ticket that reaches a WAIT block wakes up. Pure. A duration counts working time like an SLA does (a
  * business-days wait ends at the close of the Nth working day). A field date resumes at its working day, shifted by the
  * configured business days; a DATETIME field keeps its time of day. A blank field, or a moment already past, lets the
- * ticket straight through. `COMPANY_CUTOFF` is not available yet.
+ * ticket straight through. The company cutoff holds the ticket until the first working instant after the cutoff that
+ * closes the current period (and its grace days); a company without cutoffs for the workflow lets it through.
  */
 export function planWait(input: WaitInput): WaitPlan {
   const { config, at } = input;
-  if (config.mode === 'COMPANY_CUTOFF') throw new InvalidCalendarError('The company cutoff wait is not available yet');
   let resumeAt: Date | undefined;
-  if (config.mode === 'DURATION') resumeAt = calculateDueDate({ start: at, amount: config.value, unit: config.unit, calendar: requireCalendar(input.calendar) });
+  if (config.mode === 'COMPANY_CUTOFF') {
+    const calendar = requireCalendar(input.calendar);
+    resumeAt = afterCurrentCutoff(input.cutoffs ?? [], calendar, localDateOf(at.getTime(), calendar.timeZone));
+    if (resumeAt === undefined) return { kind: 'PASS', reason: 'NO_CUTOFFS' };
+  } else if (config.mode === 'DURATION') resumeAt = calculateDueDate({ start: at, amount: config.value, unit: config.unit, calendar: requireCalendar(input.calendar) });
   else {
     resumeAt = untilFieldDate(config, input);
     if (resumeAt === undefined) return { kind: 'PASS', reason: 'FIELD_BLANK' };

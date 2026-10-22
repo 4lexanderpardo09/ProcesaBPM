@@ -98,6 +98,7 @@ export class ReportTicketErrorService {
       const arrival = await this.planner.plan(tx, {
         tenantId,
         ticketId: ticket.id,
+        workflowVersionId: ticket.workflowVersionId,
         document,
         entryStepId: outcome.stepId,
         values: await this.loader.valuesOf(tx, tenantId, ticket.id, document),

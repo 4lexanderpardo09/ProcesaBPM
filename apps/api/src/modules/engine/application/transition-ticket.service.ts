@@ -84,6 +84,7 @@ export class TransitionTicketService {
       const arrival = await this.planner.plan(tx, {
         tenantId,
         ticketId: ticket.id,
+        workflowVersionId: ticket.workflowVersionId,
         document,
         entryStepId: exit.toStepId,
         values: submission.merged,
