@@ -12,6 +12,7 @@ export const CANVAS_PROBLEM_CODES = [
   'DOCUMENT_CALCULATION_UNKNOWN',
   'DOCUMENT_CALCULATION_CODE_TAKEN',
   'DOCUMENT_FORMULA_INVALID',
+  'DOCUMENT_IMAGE_UNKNOWN',
   'EXPRESSION_INVALID',
   'INCOMPLETE',
 ] as const;
@@ -35,9 +36,9 @@ const detailOf = (problem: PdfProblem) => (problem.code === 'DOCUMENT_FORMULA_IN
 /**
  * What stops the canvas from being saved, element by element: the format's own rules first (a table without its
  * field), then the shared validator against the version tickets run on, and against the draft for what the next
- * publication would break.
+ * publication would break. The workflow's images are checked once they are known.
  */
-export function canvasProblems(design: PdfCanvasDesign, current: WorkflowVersionDocument, draft: WorkflowVersionDocument | undefined): CanvasProblem[] {
+export function canvasProblems(design: PdfCanvasDesign, current: WorkflowVersionDocument, draft: WorkflowVersionDocument | undefined, imageIds?: ReadonlySet<string>): CanvasProblem[] {
   const parsed = pdfCanvasDesignSchema.safeParse(design);
   if (!parsed.success) {
     return parsed.error.issues.map((issue) => {
@@ -46,9 +47,10 @@ export function canvasProblems(design: PdfCanvasDesign, current: WorkflowVersion
     });
   }
   const from = (problem: PdfProblem, draftOnly: boolean): CanvasProblem => ({ code: codeOf(problem.code), detail: detailOf(problem), elementId: elementOfPath(design, problem.path), draftOnly });
-  const errors = validateDesign(design, current);
+  const context = imageIds === undefined ? {} : { imageIds };
+  const errors = validateDesign(design, current, context);
   const key = (problem: PdfProblem) => `${problem.code}|${problem.path}|${problem.detail ?? ''}`;
   const known = new Set(errors.map(key));
-  const warnings = draft === undefined ? [] : validateDesign(design, draft).filter((problem) => !known.has(key(problem)));
+  const warnings = draft === undefined ? [] : validateDesign(design, draft, context).filter((problem) => !known.has(key(problem)));
   return [...errors.map((problem) => from(problem, false)), ...warnings.map((problem) => from(problem, true))];
 }

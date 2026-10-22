@@ -82,7 +82,7 @@ export const profile = {
     uploading: 'Subiendo…',
     remove: 'Quitar firma',
     wrongType: 'La firma debe ser una imagen PNG o JPEG.',
-    tooLarge: 'La imagen pesa más de 2 MB. Recórtala o redúcela.',
+    tooLarge: 'La imagen pesa más de 1 MB. Recórtala o redúcela: los PDF no la incluirían.',
   },
   notifications: {
     title: 'Notificaciones',

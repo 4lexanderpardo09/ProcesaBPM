@@ -16,6 +16,7 @@ const TEMPLATE = id(61);
 const DOC = id(62);
 const COMPANY = id(70);
 const FILE_ID = id(90);
+const IMAGE = id(91);
 
 const version = (versionId: string, number: number, status: string) => ({ id: versionId, number, status, notes: null, revision: 0, publishedAt: status === 'DRAFT' ? null : at, publishedById: null, createdAt: at });
 
@@ -67,6 +68,8 @@ function api(overrides: Record<string, FakeHandler> = {}, initial: AnyPdfDesign 
     [`/workflows/${FLOW}/pdf-templates`]: (options) => (options.method === 'POST' ? template : page([template])),
     [`/workflows/${FLOW}/pdf-templates/${TEMPLATE}`]: () => undefined,
     '/companies': () => page([{ id: COMPANY, name: 'Electrocréditos', taxId: null, countryCode: 'CO', currencyCode: 'COP', timeZone: 'America/Bogota', calendarId: null, isDefault: true, isActive: true, createdAt: at }]),
+    '/settings/logo': () => ({ url: 'http://storage.test/logo.png', expiresAt: at }),
+    [`/workflows/${FLOW}/pdf-images`]: () => [],
     '/pdf-templates/uploads': () => ({ uploads: [{ fileId: FILE_ID, url: 'http://storage.test/key', method: 'PUT', headers: { 'content-type': 'application/pdf' }, expiresAt: at }], quota: { overLimit: false } }),
     [`/pdf-templates/uploads/${FILE_ID}/confirm`]: () => ({ id: FILE_ID, name: 'banco.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at }),
     ...overrides,
@@ -312,6 +315,43 @@ describe('PDF documents', () => {
       expect(screen.queryByRole('button', { name: 'Elemento Monto' })).toBeNull();
       await userEvent.keyboard('{Control>}z{/Control}');
       expect(screen.getByRole('button', { name: 'Elemento Monto' })).toBeInTheDocument();
+    }, 20_000);
+
+    it('draws the logo, uploads an image of the flow, picks it and saves it', async () => {
+      const put = vi.fn(() => Promise.resolve(new Response(null, { status: 200 })));
+      vi.stubGlobal('fetch', put);
+      const image = { id: IMAGE, workflowId: FLOW, name: 'sello', mimeType: 'image/png', sizeBytes: 4, createdAt: at, url: 'http://storage.test/sello.png', urlExpiresAt: at };
+      let images: unknown[] = [];
+      const { fake } = renderRoute(designerUrl, {
+        handlers: api(
+          {
+            [`/workflows/${FLOW}/pdf-images`]: (options) => {
+              if (options.method !== 'POST') return images;
+              images = [image];
+              return image;
+            },
+            '/pdf-images/uploads': () => ({ uploads: [{ fileId: FILE_ID, url: 'http://storage.test/key', method: 'PUT', headers: { 'content-type': 'image/png' }, expiresAt: at }], quota: { overLimit: false } }),
+            [`/pdf-images/uploads/${FILE_ID}/confirm`]: () => ({ id: FILE_ID, name: 'sello.png', kind: 'IMAGE', mimeType: 'image/png', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at }),
+          },
+          emptyCanvasDesign(),
+        ),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Imagen' }));
+      const sheet = screen.getByRole('application', { name: 'Hoja del formato' });
+      await vi.waitFor(() => expect(sheet.querySelector('img')).toHaveAttribute('src', 'http://storage.test/logo.png'));
+
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Imagen' }), 'UPLOADED');
+      expect(await screen.findByText(/El flujo aún no tiene imágenes/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Guardar' })).toBeDisabled();
+      await userEvent.upload(screen.getByLabelText('Imagen para el formato'), new File(['png'], 'sello.png', { type: 'image/png' }));
+      await vi.waitFor(() => expect(screen.getByRole('button', { name: 'sello' })).toHaveAttribute('aria-pressed', 'true'));
+      expect(fake.calls.find((call) => call.path === `/workflows/${FLOW}/pdf-images` && call.options.method === 'POST')?.options.body).toEqual({ fileId: FILE_ID, name: 'sello' });
+      await vi.waitFor(() => expect(sheet.querySelector('img')).toHaveAttribute('src', 'http://storage.test/sello.png'));
+
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+      await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
+      expect(canvasPatch(fake).elements.at(-1)).toMatchObject({ type: 'image', source: 'UPLOADED', imageId: IMAGE });
     }, 20_000);
 
     it('keeps elements on their sheet, and a repeated one on every sheet', async () => {

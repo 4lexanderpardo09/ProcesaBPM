@@ -15,7 +15,7 @@ import {
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
-import type { UploadRoutes } from '@/shared/files/upload-files';
+import { type UploadRoutes, uploadFiles } from '@/shared/files/upload-files';
 import { workflowQueryKeys } from '../../api/workflows-api';
 
 /** A workflow has a handful of each; the API's largest page holds them all. */
@@ -72,6 +72,7 @@ export const documentQueryKeys = {
   templates: (workflowId: string) => [...documentQueryKeys.all(workflowId), 'templates'] as const,
   template: (workflowId: string, templateId: string) => [...documentQueryKeys.all(workflowId), 'templates', templateId] as const,
   mapping: (workflowId: string, templateId: string) => [...documentQueryKeys.all(workflowId), 'templates', templateId, 'mapping'] as const,
+  images: (workflowId: string) => [...documentQueryKeys.all(workflowId), 'images'] as const,
 };
 
 const base = (workflowId: string) => `/workflows/${encodeURIComponent(workflowId)}`;
@@ -138,6 +139,32 @@ export function deletePdfFormat(client: HttpClient, workflowId: string, formatId
 /** The saved format drawn with sample values (or the ones given, by field code). */
 export function previewPdfFormat(client: HttpClient, workflowId: string, formatId: string, values: Record<string, unknown> = {}) {
   return client.request(`${item(workflowId, 'pdf-formats', formatId)}/preview`, { method: 'POST', body: { values }, responseType: 'blob' });
+}
+
+export const pdfImageSchema = z.object({ id: z.string(), workflowId: z.string(), name: z.string(), mimeType: z.string(), sizeBytes: z.number(), createdAt: z.string(), url: z.string(), urlExpiresAt: z.string() });
+export type PdfImage = z.infer<typeof pdfImageSchema>;
+
+/** The images the workflow's canvas formats can show, each with a short-lived link to draw it in the editor. */
+export function pdfImagesQueryOptions(client: HttpClient, workflowId: string) {
+  return queryOptions({
+    queryKey: documentQueryKeys.images(workflowId),
+    queryFn: ({ signal }) => client.request(`${base(workflowId)}/pdf-images`, { schema: z.array(pdfImageSchema), signal }),
+    // The links last 15 minutes.
+    staleTime: 10 * 60_000,
+  });
+}
+
+const IMAGE_UPLOAD_ROUTES: UploadRoutes = { request: '/pdf-images/uploads', confirm: (fileId) => `/pdf-images/uploads/${encodeURIComponent(fileId)}/confirm` };
+
+/** Uploads an image (PNG or JPEG) and registers it in the workflow, named after the file. */
+export async function uploadPdfImage(client: HttpClient, workflowId: string, file: File): Promise<PdfImage> {
+  const [stored] = await uploadFiles(client, [file], fetch, IMAGE_UPLOAD_ROUTES);
+  const name = file.name.replace(/\.[^.]+$/, '').trim().slice(0, 200) || file.name;
+  return client.request(`${base(workflowId)}/pdf-images`, { method: 'POST', body: { fileId: stored!.id, name }, schema: pdfImageSchema });
+}
+
+export function deletePdfImage(client: HttpClient, workflowId: string, imageId: string) {
+  return client.request(`${base(workflowId)}/pdf-images/${encodeURIComponent(imageId)}`, { method: 'DELETE' });
 }
 
 /** A template PDF is uploaded under the PDF permissions, not the ticket ones a designer may lack. */
