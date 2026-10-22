@@ -1,7 +1,8 @@
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFString, StandardFonts, degrees } from 'pdf-lib';
 import { extractText, getDocumentProxy } from 'unpdf';
 import { describe, expect, it } from 'vitest';
-import { PdfTemplateInvalidError } from '@procesabpm/shared';
+import { defaultCanvasStyle, PdfTemplateInvalidError } from '@procesabpm/shared';
+import type { ResolvedCanvasElement } from './canvas-document.js';
 import type { ResolvedBlock } from './resolved-document.js';
 import { FileFontProvider } from './font-provider.js';
 import { PdfLibInspector } from './pdf-lib-inspector.js';
@@ -215,5 +216,44 @@ describe('sanitizePdf', () => {
     const annotations = reloaded.getPages()[0]!.node.lookup(PDFName.of('Annots'), PDFArray);
     expect(annotations.size()).toBe(1);
     expect(annotations.lookup(0, PDFDict).get(PDFName.of('Subtype'))?.toString()).toBe('/Link');
+  });
+});
+
+describe('PdfLibRenderer.renderCanvas', () => {
+  const style = { ...defaultCanvasStyle(), padding: 1 };
+  const element = (id: string, y: number, extra: Record<string, unknown>) => ({ id, order: 0, x: 15, y, width: 150, height: 10, repeat: false, sheet: 0, style, ...extra }) as ResolvedCanvasElement;
+  const canvasJob = (elements: ResolvedCanvasElement[]) => ({ page: { width: 215.9, height: 279.4, marginBottom: 15 }, sheets: [0], elements, images: new Map(), deadlineAt: deadlineAt(), meta });
+
+  it('draws the standard fonts with Spanish text, styles, boxes, lines and a growing table', async () => {
+    const { bytes, pageCount } = await renderer.renderCanvas(
+      canvasJob([
+        element('title', 15, { type: 'text', grow: false, text: () => 'Arqueo de caja – Señor Muñoz ¿Cuánto? 1.500 €', style: { ...style, font: 'TIMES', bold: true, italic: true, underline: true, size: 14, background: '#EEF2FF', border: 1, radius: 2 } }),
+        element('body', 30, { type: 'text', grow: true, text: () => 'Texto justificado '.repeat(30), style: { ...style, font: 'COURIER', align: 'JUSTIFY', lineHeight: 2 } }),
+        element('line', 60, { type: 'line', orientation: 'HORIZONTAL', thickness: 1, color: '#9CA3AF', dash: 'DASHED' }),
+        element('table', 70, {
+          type: 'table',
+          showHeader: true,
+          headers: ['Concepto', 'Valor'],
+          headerStyle: { ...style, bold: true, background: '#E5E7EB', border: 0.5 },
+          columns: [
+            { align: 'LEFT', weight: 3 },
+            { align: 'RIGHT', weight: 1 },
+          ],
+          rows: Array.from({ length: 40 }, (_, index) => [`Fila ${index + 1}`, String(index)]),
+          totals: [null, '780'],
+          totalLabel: 'Total',
+          zebra: '#F9FAFB',
+          minRows: 0,
+          emptyMessage: '',
+        }),
+        element('emoji', 265, { type: 'text', grow: false, repeat: true, text: (frame?: { page: number; pages: number }) => `ok 😀 ${frame?.page ?? ''}/${frame?.pages ?? ''}` }),
+      ]),
+    );
+    expect(pageCount).toBe(2);
+    const text = await textOf(bytes);
+    expect(text).toContain('Arqueo de caja – Señor Muñoz ¿Cuánto? 1.500 €');
+    expect(text).toContain('Fila 40');
+    expect(text).toContain('Total');
+    expect(text).toContain('ok ? 2/2');
   });
 });

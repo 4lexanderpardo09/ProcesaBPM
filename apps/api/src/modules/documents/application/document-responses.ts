@@ -1,4 +1,4 @@
-import type { PdfFormatResponse, PdfTemplateResponse, PdfDesign, PdfProblem, WorkflowDocumentResponse } from '@procesabpm/shared';
+import type { PdfFormatResponse, PdfTemplateResponse, AnyPdfDesign, PdfProblem, WorkflowDocumentResponse } from '@procesabpm/shared';
 import type { PdfFormatRow } from '../data/pdf-format.repository.js';
 import type { PdfTemplateRow } from '../data/pdf-template.repository.js';
 import type { WorkflowDocumentRow } from '../data/workflow-document.repository.js';
@@ -10,7 +10,7 @@ export const toFormatResponse = (row: PdfFormatRow, warnings: readonly PdfProble
   workflowId: row.workflowId,
   name: row.name,
   description: row.description,
-  design: row.design as PdfDesign,
+  design: row.design as AnyPdfDesign,
   fileNamePattern: row.fileNamePattern,
   isActive: row.isActive,
   updatedAt: row.updatedAt.toISOString(),

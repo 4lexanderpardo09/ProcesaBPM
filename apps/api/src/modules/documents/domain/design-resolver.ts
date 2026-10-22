@@ -48,7 +48,11 @@ export class DesignResolver {
   private readonly fieldsByCode: ReadonlyMap<string, FieldDocument>;
   usesLogo = false;
 
-  constructor(private readonly facts: RenderFacts) {
+  /** `calculations`: the values of a canvas's calculations, read by `{{calc.CODE}}`. */
+  constructor(
+    private readonly facts: RenderFacts,
+    private readonly calculations: ReadonlyMap<string, PdfValue> = new Map(),
+  ) {
     this.fieldsByCode = new Map(facts.fields.map((field) => [field.code, field]));
   }
 
@@ -153,6 +157,11 @@ export class DesignResolver {
     return totals;
   }
 
+  /** The text of an expression of a canvas element: with the page it lands on once known, and the row inside a table. */
+  text(source: string, at: string, frame: { page?: number; pages?: number }, row?: Readonly<Record<string, unknown>>, tableField?: FieldDocument): string {
+    return evaluateExpression(parse(source, at), this.context(frame, row, tableField));
+  }
+
   /** The text of an expression for this ticket (a template mapping or a file name pattern). */
   evaluate(source: string, at: string): string {
     return evaluateExpression(parse(source, at), this.context({}));
@@ -202,6 +211,8 @@ export class DesignResolver {
         const value = label ?? raw;
         return value === undefined || value === null ? null : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : String(value);
       }
+      case 'calc':
+        return this.calculations.get(path.code) ?? null;
       case 'ticket':
         return this.ticketValue(path.name);
       case 'step': {

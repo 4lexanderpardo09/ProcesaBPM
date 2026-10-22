@@ -133,6 +133,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     const { plan } = prepared;
     try {
       if (plan.kind === 'DESIGN') return await this.renderer.renderDesign({ ...plan.job, images, deadlineAt, meta });
+      if (plan.kind === 'CANVAS') return await this.renderer.renderCanvas({ ...plan.job, images, deadlineAt, meta });
       const template = await this.storage.read(plan.templateStorageKey, TEMPLATE_MAX_BYTES);
       return await this.renderer.fillTemplate({ template, ...plan.job, images, deadlineAt, meta });
     } catch (error) {
