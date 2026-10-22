@@ -105,6 +105,10 @@ export class DocumentSourceRepository {
   }
 
   /** Time zone and currency previews use: the tenant's time zone and its default company's currency. */
+  async positionIds(tx: TenantTransaction, tenantId: string): Promise<Set<string>> {
+    return new Set((await tx.position.findMany({ where: { tenantId }, select: { id: true } })).map((position) => position.id));
+  }
+
   async tenantLocale(tx: TenantTransaction, tenantId: string): Promise<{ timeZone: string; currencyCode: string }> {
     const tenant = await tx.tenant.findFirst({ where: { id: tenantId }, select: { timeZone: true } });
     const company = await tx.company.findFirst({ where: { tenantId, isDefault: true }, select: { currencyCode: true } });

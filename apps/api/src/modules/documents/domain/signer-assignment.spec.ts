@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assignSigners, type SignatureSlot } from './signer-assignment.js';
 import type { SignerRecord } from './render-facts.js';
 
-const signer = (userId: string, minute: number): SignerRecord => ({ userId, name: userId, signedAt: new Date(Date.UTC(2026, 9, 2, 10, minute)), imageKey: null });
+const signer = (userId: string, minute: number): SignerRecord => ({ userId, name: userId, signedAt: new Date(Date.UTC(2026, 9, 2, 10, minute)), imageKey: null, positionId: null });
 const slot = (signerType: SignatureSlot['signerType']): SignatureSlot => ({ stepName: 'Firma', signerType });
 
 describe('assignSigners', () => {

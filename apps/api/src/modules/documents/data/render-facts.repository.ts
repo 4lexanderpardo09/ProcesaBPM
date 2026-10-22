@@ -120,7 +120,7 @@ export class RenderFactsRepository {
     const tasks = await tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId: { in: stepIds }, status: 'SIGNED' }, orderBy: [{ completedAt: 'asc' }, { id: 'asc' }], select: { stepId: true, loop: true, userId: true, completedAt: true, createdAt: true } });
     const events = await tx.ticketEvent.findMany({ where: { tenantId, ticketId, stepId: { in: stepIds }, type: { in: ['TRANSITIONED', 'CLOSED'] }, actorId: { not: null } }, orderBy: { seq: 'asc' }, select: { stepId: true, loop: true, actorId: true, createdAt: true } });
     const signatures = await tx.ticketSignature.findMany({ where: { tenantId, ticketId, stepId: { in: stepIds } }, orderBy: { signedAt: 'asc' }, select: { stepId: true, userId: true, fileId: true } });
-    const memberships = await tx.membership.findMany({ where: { tenantId, userId: { in: [...new Set([...tasks.map((task) => task.userId), ...events.flatMap((event) => (event.actorId === null ? [] : [event.actorId]))])] } }, select: { userId: true, signatureFileId: true, user: { select: { firstName: true, lastName: true } } } });
+    const memberships = await tx.membership.findMany({ where: { tenantId, userId: { in: [...new Set([...tasks.map((task) => task.userId), ...events.flatMap((event) => (event.actorId === null ? [] : [event.actorId]))])] } }, select: { userId: true, signatureFileId: true, positionId: true, user: { select: { firstName: true, lastName: true } } } });
     const people = new Map(memberships.map((membership) => [membership.userId, membership]));
 
     for (const step of steps) {
@@ -134,7 +134,7 @@ export class RenderFactsRepository {
         const person = people.get(userId);
         if (person === undefined) return [];
         const stamped = signatures.filter((signature) => signature.stepId === step.id && signature.userId === userId).at(-1)?.fileId;
-        return [{ userId, name: fullName(person.user), signedAt: at, imageFileId: stamped ?? person.signatureFileId }];
+        return [{ userId, name: fullName(person.user), signedAt: at, imageFileId: stamped ?? person.signatureFileId, positionId: person.positionId }];
       });
       if (records.length > 0) result.set(step.name, records);
     }

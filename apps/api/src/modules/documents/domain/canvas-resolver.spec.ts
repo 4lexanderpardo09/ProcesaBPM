@@ -18,7 +18,9 @@ const field = (code: string, type: FieldDocument['type'], config: Record<string,
   dataSource: null,
 });
 
-const signer = (userId: string, name: string, at: string, imageKey: string | null = null): SignerRecord => ({ userId, name, signedAt: new Date(at), imageKey });
+const CARTERA = '018f3c1e-7b2a-7c3d-9e4f-00000000000a';
+const SISTEMAS = '018f3c1e-7b2a-7c3d-9e4f-00000000000b';
+const signer = (userId: string, name: string, at: string, imageKey: string | null = null, positionId: string | null = null): SignerRecord => ({ userId, name, signedAt: new Date(at), imageKey, positionId });
 
 const facts = (values: Record<string, unknown> = {}): RenderFacts => ({
   ticket: { number: '1045', title: 'Arqueo', status: 'OPEN', createdAt: new Date('2026-10-01T13:00:00Z'), closedAt: null, companyName: 'Acme', creatorId: 'u-creator', creatorName: 'Pedro Pérez', currentStepName: 'Revisión' },
@@ -28,7 +30,7 @@ const facts = (values: Record<string, unknown> = {}): RenderFacts => ({
   values: { CASH: 1000, KIND: 'int', ITEMS: [{ NAME: 'Billetes', AMOUNT: 700.5 }, { NAME: 'Monedas', AMOUNT: 250.25 }], ...values },
   names: { users: new Map(), sites: new Map(), files: new Map() },
   signers: new Map([
-    ['Revisión', [signer('u-ana', 'Ana', '2026-10-01T15:00:00Z', 'sig:u-ana'), signer('u-luis', 'Luis', '2026-10-01T16:30:00Z')]],
+    ['Revisión', [signer('u-ana', 'Ana', '2026-10-01T15:00:00Z', 'sig:u-ana', CARTERA), signer('u-luis', 'Luis', '2026-10-01T16:30:00Z', null, SISTEMAS)]],
     ['Solicitud', [signer('u-creator', 'Pedro Pérez', '2026-10-01T13:00:00Z', 'sig:u-creator')]],
   ]),
   now: new Date('2026-10-02T15:00:00Z'),
@@ -99,6 +101,19 @@ describe('CanvasResolver', () => {
       ],
       totals: [null, '$ 950,75'],
     });
+  });
+
+  it('puts each area in its own box: a box keeps only the signatures of the positions it names', () => {
+    const resolved = resolve({
+      elements: [
+        signature('cartera', { positionIds: [CARTERA] }),
+        signature('sistemas', { positionIds: [SISTEMAS] }),
+        signature('both', { signers: 'ALL', positionIds: [SISTEMAS, CARTERA] }),
+        signature('nobody', { positionIds: ['018f3c1e-7b2a-7c3d-9e4f-00000000000c'] }),
+      ],
+    });
+    const names = Object.fromEntries(resolved.content.elements.map((element) => [element.id, element.type === 'signature' ? element.signers.map((one) => one?.name ?? null) : undefined]));
+    expect(names).toEqual({ cartera: ['Ana'], sistemas: ['Luis'], both: ['Ana', 'Luis'], nobody: [null] });
   });
 
   it('fills signature boxes with the last, every or the n-th signer of a step, the requester, or nobody', () => {

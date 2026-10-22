@@ -165,7 +165,10 @@ export class CanvasResolver {
         return [{ name: this.facts.ticket.creatorName, date: null, imageKey: signed?.imageKey ?? null }];
       }
       case 'STEP': {
-        const records = this.facts.signers.get(element.stepName ?? '') ?? [];
+        const all = this.facts.signers.get(element.stepName ?? '') ?? [];
+        const kept = element.positionIds ?? [];
+        // A box of one area keeps only the signatures of people in it, whatever the order they signed in.
+        const records = kept.length === 0 ? all : all.filter((record) => record.anyPosition === true || (record.positionId !== null && kept.includes(record.positionId)));
         if (element.signers === 'ALL') return records.length === 0 ? [null] : records.map(signer);
         const chosen = element.signers === 'POSITION' ? records[element.position - 1] : records[records.length - 1];
         return [chosen === undefined ? null : signer(chosen)];
