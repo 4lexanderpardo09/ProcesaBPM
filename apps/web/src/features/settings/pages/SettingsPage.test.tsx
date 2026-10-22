@@ -147,7 +147,7 @@ describe('SettingsPage', () => {
       },
     });
 
-    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad', 'Calculadoras']);
+    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad', 'Organización', 'Calculadoras']);
     await userEvent.click(await screen.findByRole('checkbox', { name: /Exigir verificación en dos pasos/ }));
     expect(await screen.findByText('Tu rol no puede hacer este cambio.')).toBeInTheDocument();
   });

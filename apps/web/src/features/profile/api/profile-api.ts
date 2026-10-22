@@ -62,7 +62,8 @@ export function regenerateBackupCodes(client: HttpClient, code: string) {
 export function signatureQueryOptions(client: HttpClient) {
   return queryOptions({
     queryKey: profileQueryKeys.signature,
-    queryFn: ({ signal }) => client.request('/auth/me/signature', { schema: signatureResponseSchema.nullable(), signal }),
+    // "None" comes back as an empty body, which the client reads as `undefined`.
+    queryFn: ({ signal }) => client.request('/auth/me/signature', { schema: signatureResponseSchema.nullish().transform((signature) => signature ?? null), signal }),
   });
 }
 

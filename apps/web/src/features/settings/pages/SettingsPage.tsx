@@ -5,6 +5,7 @@ import { usePermissions } from '@/shared/session';
 import { PageHeader, Tabs } from '@/shared/ui';
 import { AuditTab } from '../components/AuditTab';
 import { CalculatorsTab } from '../components/CalculatorsTab';
+import { OrganizationTab } from '../components/OrganizationTab';
 import { SecurityTab } from '../components/SecurityTab';
 import styles from '../components/Settings.module.css';
 import { StorageTab } from '../components/StorageTab';
@@ -12,6 +13,7 @@ import { SupportAccessTab } from '../components/SupportAccessTab';
 
 const TABS = [
   { value: 'security', action: 'update', subject: 'Setting' },
+  { value: 'organization', action: 'update', subject: 'Setting' },
   { value: 'calculators', action: 'update', subject: 'Setting' },
   { value: 'support', action: 'manage', subject: 'SupportAccess' },
   { value: 'storage', action: 'read', subject: 'Storage' },
@@ -35,6 +37,7 @@ export function SettingsPage() {
       <div className={styles.tabs}>
         <Tabs label={t('tabsLabel')} items={tabs.map((candidate) => ({ value: candidate.value, label: t(`tabs.${candidate.value}`) }))} value={current} onChange={(next) => void navigate(`${paths.settings}/${next}`, { replace: true })} />
       </div>
+      {current === 'organization' && <OrganizationTab />}
       {current === 'security' && <SecurityTab />}
       {current === 'calculators' && <CalculatorsTab />}
       {current === 'support' && <SupportAccessTab />}

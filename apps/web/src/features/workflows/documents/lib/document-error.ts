@@ -14,6 +14,7 @@ export type DocumentErrorKey =
   | `documents.errors.template.${TemplateRejection}`
   | 'documents.errors.sourceInUse'
   | 'documents.errors.documentInUse'
+  | 'documents.errors.imageInUse'
   | 'documents.errors.designInvalid'
   | 'documents.errors.mappingInvalid'
   | 'documents.errors.nameTaken'
@@ -35,6 +36,7 @@ export function documentErrorMessage(error: unknown, context: DocumentErrorConte
       if (reason !== undefined) return { namespace: 'workflows', key: `documents.errors.template.${reason}` };
     }
     if (error.code === 'DOCUMENT_SOURCE_IN_USE') return { namespace: 'workflows', key: context === 'document' ? 'documents.errors.documentInUse' : 'documents.errors.sourceInUse' };
+    if (error.code === 'PDF_IMAGE_IN_USE') return { namespace: 'workflows', key: 'documents.errors.imageInUse' };
     if (error.code === 'PDF_DESIGN_INVALID') return { namespace: 'workflows', key: 'documents.errors.designInvalid' };
     if (error.code === 'PDF_MAPPING_INVALID') return { namespace: 'workflows', key: 'documents.errors.mappingInvalid' };
     if (error.code === 'DUPLICATE') return { namespace: 'workflows', key: 'documents.errors.nameTaken' };

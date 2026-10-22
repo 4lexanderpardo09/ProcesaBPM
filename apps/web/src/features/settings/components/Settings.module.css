@@ -133,3 +133,14 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+.logo {
+  max-width: 240px;
+  max-height: 120px;
+  object-fit: contain;
+  align-self: flex-start;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}

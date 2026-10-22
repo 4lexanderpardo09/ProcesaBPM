@@ -9,8 +9,8 @@ import { ProfileError } from './ProfileError';
 import styles from './Profile.module.css';
 
 const ACCEPTED = ['image/png', 'image/jpeg'];
-/** A signature is a small image; anything larger is almost surely a photo of the whole page. */
-const MAX_BYTES = 2 * 1024 * 1024;
+/** What a PDF draws: a heavier signature would be left out of the documents (and is almost surely a photo of the whole page). */
+const MAX_BYTES = 1024 * 1024;
 
 /** The image of the person's signature, which goes on the PDF documents they sign. PNG or JPEG. */
 export function SignatureCard() {

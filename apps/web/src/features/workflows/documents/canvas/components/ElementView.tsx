@@ -3,9 +3,12 @@ import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cssOf } from '../lib/canvas-css';
 import { PX_PER_PT } from '../lib/canvas-doc';
+import { imageUrlOf, useCanvasImages } from '../lib/canvas-images';
 import styles from './Canvas.module.css';
 
 const PLACEHOLDER = /(\{\{[^}]*\}\})/g;
+/** How the PDF fits an image in its box, in CSS. */
+const OBJECT_FIT = { CONTAIN: 'contain', COVER: 'cover', STRETCH: 'fill' } as const;
 
 /** A text with its placeholders marked, so the person sees where the ticket's data goes. */
 function Marked({ text }: { readonly text: string }) {
@@ -27,6 +30,7 @@ function Marked({ text }: { readonly text: string }) {
 /** How an element looks on the sheet of the editor: its box with its style, and a sketch of what it prints. */
 export function ElementView({ element, zoom }: { readonly element: CanvasElement; readonly zoom: number }) {
   const { t } = useTranslation('workflows');
+  const images = useCanvasImages();
   const css = cssOf(element.style, zoom);
   switch (element.type) {
     case 'text':
@@ -37,12 +41,18 @@ export function ElementView({ element, zoom }: { readonly element: CanvasElement
       );
     case 'rectangle':
       return <div className={styles.fill} style={css} />;
-    case 'image':
-      return (
+    case 'image': {
+      const url = imageUrlOf(element, images);
+      return url === null ? (
         <div className={`${styles.fill} ${styles.imageBox}`} style={css}>
-          <span className={styles.ghost}>{t('documents.canvas.logo')}</span>
+          <span className={styles.ghost}>{element.source === 'TENANT_LOGO' ? t('documents.canvas.logo') : t('documents.canvas.images.pick')}</span>
+        </div>
+      ) : (
+        <div className={styles.fill} style={css}>
+          <img className={styles.imageFill} src={url} alt="" draggable={false} style={{ objectFit: OBJECT_FIT[element.fit] }} />
         </div>
       );
+    }
     case 'line': {
       const thickness = Math.max(1, element.thickness * PX_PER_PT * zoom);
       const border = `${thickness}px ${element.dash === 'DASHED' ? 'dashed' : element.dash === 'DOTTED' ? 'dotted' : 'solid'} ${element.color}`;
