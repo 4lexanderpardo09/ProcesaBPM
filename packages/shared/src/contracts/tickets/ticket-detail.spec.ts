@@ -45,7 +45,7 @@ const detail = {
   department: null,
   site: { id: id(14), name: 'Bogotá' },
   valueNames: { users: { [id(15)]: 'Luis Gómez' }, sites: {}, companies: {}, departments: {}, positions: {} },
-  actions: { advance: true, take: false, reassign: false, close: true, openIncident: true, resolveIncident: false, reopen: false, signParallelTask: false, comment: true },
+  actions: { advance: true, take: false, reassign: false, close: true, openIncident: true, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false },
 };
 
 describe('ticketDetailResponseSchema', () => {
