@@ -1,6 +1,6 @@
 import type { CanvasElement, PdfCanvasDesign, WorkflowVersionDocument } from '@procesabpm/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBlocker } from 'react-router';
 import { useApiClient, usePermissions } from '@/shared/session';
@@ -10,7 +10,7 @@ import { DocumentError } from '../../components/DocumentError';
 import { FormatSettingsDialog } from '../../components/designer/FormatSettingsDialog';
 import { PreviewPane } from '../../components/designer/PreviewPane';
 import { fieldPlaceholder } from '../../lib/data-choices';
-import { addSheet, type Alignment, alignElements, createElement, duplicateElements, isOnSheet, moveLayer, removeElements, roundMm, sheetSizeOf, updateElements } from '../lib/canvas-doc';
+import { addSheet, type Alignment, alignElements, createElement, duplicateElements, isOnSheet, moveLayer, PX_PER_MM, removeElements, roundMm, sheetSizeOf, updateElements } from '../lib/canvas-doc';
 import { type CanvasProblem, canvasProblems } from '../lib/canvas-problems';
 import { useHistory } from '../lib/use-history';
 import { CanvasPalette } from './CanvasPalette';
@@ -21,7 +21,9 @@ import { PageProperties } from './PageProperties';
 import { SheetTabs } from './SheetTabs';
 import styles from './Canvas.module.css';
 
-const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+const ZOOMS = [0.5, 0.6, 0.75, 0.9, 1, 1.25, 1.5, 2] as const;
+/** The scroller's padding on both sides, so a fitting sheet shows no scroll bar. */
+const SCROLLER_PADDING_PX = 40;
 const GRIDS = ['0', '1', '2', '5', '10'] as const;
 const NUDGE_MM = 1;
 const NUDGE_FAR_MM = 5;
@@ -60,6 +62,7 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
   const [grid, setGrid] = useState<number | null>(2);
   const [showGrid, setShowGrid] = useState(true);
   const [settings, setSettings] = useState(false);
+  const scroller = useRef<HTMLDivElement>(null);
   const dirty = design !== savedDesign;
   const problems = canvasProblems(design, current, upcoming);
   const blocking = problems.filter((problem) => !problem.draftOnly);
@@ -86,8 +89,16 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
   const canSave = canEdit && dirty && blocking.length === 0 && !save.isPending;
 
   const selectedSet = new Set(selection);
-  const single = selection.length === 1 ? design.elements.find((element) => element.id === selection[0]) : undefined;
   const size = sheetSizeOf(design);
+  // The sheet opens at the largest zoom that fits the width of the space it has (the person can change it).
+  useLayoutEffect(() => {
+    const width = scroller.current?.clientWidth ?? 0;
+    if (width === 0) return;
+    const fitting = ZOOMS.filter((value) => size.width * PX_PER_MM * value <= width - SCROLLER_PADDING_PX);
+    setZoom(fitting.at(-1) ?? ZOOMS[0]);
+    // Only when the designer opens: later the person chooses.
+  }, []);
+  const single = selection.length === 1 ? design.elements.find((element) => element.id === selection[0]) : undefined;
 
   const add = useCallback(
     (droppable: Droppable, x = size.width / 2, y = size.height / 3) => {
@@ -256,7 +267,7 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
               </div>
             )}
           </div>
-          <div className={styles.scroller}>
+          <div ref={scroller} className={styles.scroller}>
             <CanvasSheet
               design={design}
               sheet={sheet}
