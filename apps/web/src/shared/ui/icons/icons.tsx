@@ -94,3 +94,11 @@ export const BellIcon = createIcon('BellIcon', (
     <path d="M10 19a2 2 0 0 0 4 0" />
   </>
 ));
+
+export const HomeIcon = createIcon('HomeIcon', (
+  <>
+    <path d="m3 10 9-7 9 7" />
+    <path d="M5 9v11h14V9" />
+    <path d="M10 20v-6h4v6" />
+  </>
+));

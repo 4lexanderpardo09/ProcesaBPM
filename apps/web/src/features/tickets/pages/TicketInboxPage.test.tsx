@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import { renderRoute } from '@/test/render-route';
 
@@ -48,8 +48,15 @@ function ticketsApi(byView: Partial<Record<View, readonly FakeTicket[]>>) {
     }));
     return { items, page, pageSize, total: matching.length };
   };
-  const listQueries = () => queries.filter((search) => search.get('pageSize') !== '1');
-  return { handler, listQueries };
+  const counts = (_options: unknown, path: string) => {
+    const search = new URLSearchParams(path.split('?')[1]);
+    queries.push(search);
+    const status = search.get('status');
+    const count = (view: View) => (byView[view] ?? []).filter((item) => status === null || item.status === status).length;
+    return { assigned: count('assigned'), created: count('created'), observed: count('observed'), all: count('all') };
+  };
+  const listQueries = () => queries.filter((search) => search.has('pageSize'));
+  return { handler, handlers: { '/tickets': handler, '/tickets/counts': counts }, listQueries, queries };
 }
 
 const table = () => screen.findByRole('table', { name: 'Tickets de la bandeja' });
@@ -58,7 +65,7 @@ const rowTitles = async () => within(await table()).queryAllByRole('link').map((
 describe('TicketInboxPage', () => {
   it('opens on the assigned tickets with the count of every tab', async () => {
     const api = ticketsApi({ assigned: [ticket(1, { title: 'Pago de crédito' }), ticket(2, { status: 'PAUSED' })], created: [ticket(3)], all: many(5) });
-    renderRoute('/tickets', { handlers: { '/tickets': api.handler } });
+    renderRoute('/tickets', { handlers: api.handlers });
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Tickets' })).toBeInTheDocument();
     expect(await screen.findByText('2 tickets')).toBeInTheDocument();
@@ -73,9 +80,34 @@ describe('TicketInboxPage', () => {
     expect(within(rows[1]!).getByText('Pausado')).toBeInTheDocument();
   });
 
+  it('searches and filters by priority and category, sends the same filters to the counts, and clears them', async () => {
+    const PRIORITY = ticketId(500);
+    const CATEGORY = ticketId(501);
+    const api = ticketsApi({ assigned: [ticket(1)] });
+    const { router } = renderRoute('/tickets', {
+      handlers: {
+        ...api.handlers,
+        '/priorities': () => ({ items: [{ id: PRIORITY, name: 'Alta', color: '#be123c', sortOrder: 1, isActive: true, isDefault: false, createdAt: '2026-10-17T15:00:00.000Z' }], page: 1, pageSize: 100, total: 1 }),
+        '/categories': () => ({ items: [{ id: CATEGORY, name: 'Cartera', description: null, isActive: true, createdAt: '2026-10-17T15:00:00.000Z' }], page: 1, pageSize: 100, total: 1 }),
+      },
+    });
+
+    await userEvent.type(await screen.findByRole('searchbox', { name: 'Buscar' }), 'crédito');
+    await vi.waitFor(() => expect(router.state.location.search).toBe('?q=cr%C3%A9dito'));
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Prioridad' }), 'Alta');
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Categoría' }), 'Cartera');
+
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&categoryId=${CATEGORY}&view=assigned&page=1&pageSize=25`));
+    expect(api.queries.filter((search) => !search.has('pageSize')).at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&categoryId=${CATEGORY}`);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Quitar filtros' }));
+    expect(router.state.location.search).toBe('');
+    expect(screen.getByRole('searchbox', { name: 'Buscar' })).toHaveValue('');
+  });
+
   it('keeps the tab in the URL and asks the API for that view', async () => {
     const api = ticketsApi({ assigned: [ticket(1)], observed: [ticket(7, { title: 'Compra de papelería' })] });
-    const { router } = renderRoute('/tickets', { handlers: { '/tickets': api.handler } });
+    const { router } = renderRoute('/tickets', { handlers: api.handlers });
 
     await userEvent.click(await screen.findByRole('tab', { name: /^Observados/ }));
 
@@ -86,7 +118,7 @@ describe('TicketInboxPage', () => {
 
   it('filters by status, counts the tabs with the same filter and says when nothing matches', async () => {
     const api = ticketsApi({ assigned: [ticket(1), ticket(2, { status: 'CLOSED', title: 'Cerrada' })], all: [ticket(1), ticket(2, { status: 'CLOSED' }), ticket(3, { status: 'CLOSED' })] });
-    const { router } = renderRoute('/tickets', { handlers: { '/tickets': api.handler } });
+    const { router } = renderRoute('/tickets', { handlers: api.handlers });
 
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Estado' }), 'Cerrado');
 
@@ -100,7 +132,7 @@ describe('TicketInboxPage', () => {
 
   it('pages through the tickets and goes back to the first page on another tab', async () => {
     const api = ticketsApi({ assigned: many(30), created: [ticket(99)] });
-    const { router } = renderRoute('/tickets', { handlers: { '/tickets': api.handler } });
+    const { router } = renderRoute('/tickets', { handlers: api.handlers });
 
     expect(await screen.findByText('Mostrando 1–25 de 30')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));

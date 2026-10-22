@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router';
+import { paths } from '@/shared/lib/paths';
 import { cx } from '@/shared/lib/cx';
 import { usePermissions } from '@/shared/session';
 import { Logo } from '@/shared/ui';
@@ -28,7 +29,7 @@ export function Sidebar() {
               <ul className={styles.list}>
                 {items.map(({ key, path, icon: Icon }) => (
                   <li key={key}>
-                    <NavLink to={path} className={cx(styles.link)}>
+                    <NavLink to={path} end={path === paths.home} className={cx(styles.link)}>
                       <Icon size={17} />
                       {t(`items.${key}`)}
                     </NavLink>

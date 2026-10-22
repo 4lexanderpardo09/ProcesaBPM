@@ -22,6 +22,8 @@ const DESCRIPTION_MAX = 20_000;
 export interface RequestFormProps {
   readonly subcategoryId: string;
   readonly companyId: string;
+  /** The person the ticket is for, when it is not the caller (`create_for_others`). */
+  readonly requesterId?: string | undefined;
   /** `undefined` keeps the subcategory's default priority. */
   readonly priorityId: string | undefined;
   readonly start: CreationFormStart;
@@ -39,7 +41,7 @@ interface CreateArgs {
  * Step 2: the subject, the fields of the START block, a description and loose attachments; "Crear y enviar" creates the
  * ticket and opens it. When the first step needs its assignee chosen, the API says so and the form asks for that person.
  */
-export function RequestForm({ subcategoryId, companyId, priorityId, start }: RequestFormProps) {
+export function RequestForm({ subcategoryId, companyId, requesterId, priorityId, start }: RequestFormProps) {
   const { t } = useTranslation('tickets');
   const navigate = useNavigate();
   const fields = typedFields(start.fields);
@@ -54,6 +56,7 @@ export function RequestForm({ subcategoryId, companyId, priorityId, start }: Req
       subcategoryId,
       startStepId: start.stepId,
       companyId,
+      ...(requesterId === undefined ? {} : { requesterId }),
       ...(priorityId === undefined ? {} : { priorityId }),
       title: args.title,
       description: args.description.trim() === '' ? '' : plainTextToHtml(args.description),

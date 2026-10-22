@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react';
-import { BuildingIcon, ChartIcon, GridIcon, type IconProps, InboxIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
+import { BuildingIcon, ChartIcon, GridIcon, HomeIcon, type IconProps, InboxIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
 import { paths } from '@/shared/lib/paths';
 import type { PermissionCheck } from '@/shared/session';
 
-export type NavigationItemKey = 'tickets' | 'workflows' | 'reports' | 'catalog' | 'organization' | 'people';
+export type NavigationItemKey = 'home' | 'tickets' | 'workflows' | 'reports' | 'catalog' | 'organization' | 'people';
 
 export interface NavigationItem {
   readonly key: NavigationItemKey;
@@ -40,6 +40,7 @@ export const navigationSections: readonly NavigationSection[] = [
   {
     key: 'operation',
     items: [
+      { key: 'home', path: paths.home, icon: HomeIcon },
       { key: 'tickets', path: paths.tickets, icon: InboxIcon },
       { key: 'workflows', path: paths.workflows, icon: WorkflowIcon, requires: [['read', 'Workflow']] },
       { key: 'reports', path: paths.reports, icon: ChartIcon, requires: [['read', 'Report']] },

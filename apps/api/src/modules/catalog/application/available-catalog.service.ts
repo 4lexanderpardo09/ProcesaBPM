@@ -30,18 +30,29 @@ export class AvailableCatalogService {
     @Inject(CreationGate) private readonly gate: CreationGate,
   ) {}
 
-  /** With `companyId`, the view for that company (one of the user's); without it, for all the user's companies. */
-  available(viewer: CatalogViewer, companyId?: string): Promise<AvailableCatalogResponse> {
+  /**
+   * With `companyId`, the view for that company (one of the user's); without it, for all the user's companies. With
+   * `requesterId`, the view of that member (the caller is authorized to create for others by the controller).
+   */
+  available(caller: CatalogViewer, companyId?: string, requesterId?: string): Promise<AvailableCatalogResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.context.require().tenantId;
+      const viewer = await this.viewerOf(tx, tenantId, caller, requesterId);
       const ownCompanyIds = await this.memberships.companyIdsOf(tx, tenantId, viewer.userId);
       if (companyId !== undefined && !ownCompanyIds.includes(companyId)) {
         throw new InvalidReferenceError('The company is not one of the user\'s companies');
       }
       const companyIds = companyId === undefined ? ownCompanyIds : [companyId];
       const visible = await this.categories.findVisible(tx, tenantId, { companyIds, departmentId: viewer.departmentId });
-      return { categories: await this.startable(tx, tenantId, viewer.userId, companyIds, visible) };
+      return { categories: await this.startable(tx, tenantId, viewer.userId, companyIds, visible), companies: await this.memberships.activeCompaniesOf(tx, tenantId, viewer.userId) };
     });
+  }
+
+  private async viewerOf(tx: TenantTransaction, tenantId: string, caller: CatalogViewer, requesterId: string | undefined): Promise<CatalogViewer> {
+    if (requesterId === undefined || requesterId === caller.userId) return caller;
+    const requester = await this.gate.requesterOf(tx, tenantId, requesterId);
+    if (requester === null) throw new InvalidReferenceError('The requester is not an active member');
+    return { userId: requester.userId, departmentId: requester.departmentId };
   }
 
   private async startable(tx: TenantTransaction, tenantId: string, userId: string, companyIds: readonly string[], categories: Categories): Promise<Categories> {

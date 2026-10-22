@@ -1,5 +1,16 @@
 .filters {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: var(--space-3);
-  width: 200px;
+  align-items: end;
+}
+
+.search {
+  grid-column: span 2;
+}
+
+@media (max-width: 600px) {
+  .search {
+    grid-column: auto;
+  }
 }

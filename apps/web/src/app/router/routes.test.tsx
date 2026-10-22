@@ -5,10 +5,10 @@ import { fakeProfile as fakeMe } from '@/test/fake-profile';
 import { renderRoute } from '@/test/render-route';
 
 describe('appRoutes', () => {
-  it('sends the root to the inboxes when signed in', async () => {
+  it('opens the home at the root when signed in', async () => {
     const { router } = renderRoute('/');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Tickets' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/tickets');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Hola, Ana' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/');
   });
 
   it('shows the not found page inside the layout for an unknown address', async () => {
@@ -33,8 +33,8 @@ describe('appRoutes', () => {
 
   it('never follows a returnTo to another site', async () => {
     const { router } = renderRoute('/login?returnTo=https%3A%2F%2Fevil.com');
-    await screen.findByRole('heading', { level: 1, name: 'Tickets' });
-    expect(router.state.location.pathname).toBe('/tickets');
+    await screen.findByRole('heading', { level: 1, name: 'Hola, Ana' });
+    expect(router.state.location.pathname).toBe('/');
   });
 
   it('offers the forgot-password page with or without a session', async () => {
