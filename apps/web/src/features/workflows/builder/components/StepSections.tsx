@@ -2,6 +2,7 @@ import {
   type AssignmentMode,
   ASSIGNMENT_MODES,
   CLOSE_RULES,
+  PEOPLE_STEP_TYPES,
   effectiveFieldType,
   type FieldDocument,
   listCalculators,
@@ -25,6 +26,8 @@ import styles from './Builder.module.css';
 
 export interface SectionProps {
   readonly step: StepDocument;
+  /** Every block of the version, for settings that point to another one. */
+  readonly steps: readonly StepDocument[];
   readonly fields: readonly FieldDocument[];
   readonly readOnly: boolean;
   readonly onChange: (patch: Partial<StepDocument>) => void;
@@ -52,7 +55,7 @@ function Section({ title, children }: { readonly title: string; readonly childre
 }
 
 /** Who takes the step: the mode and what that mode needs (a position, an approval type and level, an interval…). */
-export function AssignmentSection({ step, readOnly, onChange }: SectionProps) {
+export function AssignmentSection({ step, steps, readOnly, onChange }: SectionProps) {
   const { t } = useTranslation('workflows');
   const client = useApiClient();
   const positions = useQuery({ ...positionsQueryOptions(client), enabled: POSITION_MODES.has(step.assignmentMode) });
@@ -67,7 +70,10 @@ export function AssignmentSection({ step, readOnly, onChange }: SectionProps) {
       approvalLevel: next === 'APPROVER' ? (step.approvalLevel ?? 1) : next === 'PARALLEL' ? step.approvalLevel : null,
       dispatchIntervalMin: next === 'RANDOM_DISPATCH' ? step.dispatchIntervalMin : null,
       manualSelection: MANUAL_MODES.has(next) ? step.manualSelection : false,
+      sameAssigneeStepId: next === 'SAME_AS_STEP' ? step.sameAssigneeStepId : null,
     });
+  // A step one person delivers: the source of SAME_AS_STEP (the validator also checks it comes before).
+  const sources = steps.filter((candidate) => candidate.id !== step.id && PEOPLE_STEP_TYPES.has(candidate.type) && candidate.assignmentMode !== 'PARALLEL');
 
   return (
     <Section title={t('builder.assignment.title')}>
@@ -107,6 +113,17 @@ export function AssignmentSection({ step, readOnly, onChange }: SectionProps) {
             onChange={(event) => onChange({ approvalLevel: event.target.value === '' ? null : Number(event.target.value) })}
           />
         </div>
+      )}
+      {mode === 'SAME_AS_STEP' && (
+        <Select
+          label={t('builder.assignment.sameStep')}
+          hint={t('builder.assignment.sameStepHint')}
+          disabled={readOnly}
+          placeholder={t('builder.assignment.sameStepPlaceholder')}
+          options={sources.map((source) => ({ value: source.id, label: source.name }))}
+          value={step.sameAssigneeStepId ?? ''}
+          onChange={(event) => onChange({ sameAssigneeStepId: event.target.value === '' ? null : event.target.value })}
+        />
       )}
       {mode === 'RANDOM_DISPATCH' && (
         <WholeNumberField label={t('builder.assignment.dispatchInterval')} min={1} max={10_080} disabled={readOnly} value={step.dispatchIntervalMin} onChange={(value) => onChange({ dispatchIntervalMin: value })} />

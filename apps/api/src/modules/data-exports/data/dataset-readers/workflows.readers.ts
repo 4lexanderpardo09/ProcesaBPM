@@ -31,7 +31,7 @@ export const WORKFLOWS_READERS = {
     page: (tenantId, [id], limit) => Prisma.sql`
       SELECT tenant_id, id, version_id, type, name, description,
              assignment_mode, manual_selection, site_scope,
-             position_id, approval_group_type_id, approval_level, close_rule, sla_value,
+             position_id, approval_group_type_id, approval_level, same_assignee_step_id, close_rule, sla_value,
              sla_unit, deadline_type, deadline_field_code,
              deadline_business_days, max_loops, dispatch_interval_min, allows_batch, config, ui_x, ui_y
       FROM steps WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid

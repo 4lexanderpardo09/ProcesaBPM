@@ -56,6 +56,7 @@ export function addStep(doc: WorkflowVersionDocument, type: StepType, name: stri
     positionId: null,
     approvalGroupTypeId: null,
     approvalLevel: assignmentMode === 'APPROVER' ? 1 : null,
+    sameAssigneeStepId: null,
     closeRule: 'NOT_ALLOWED',
     slaValue: null,
     slaUnit: null,
@@ -94,11 +95,11 @@ export function updateStep(doc: WorkflowVersionDocument, id: string, patch: Part
   return { ...doc, steps: doc.steps.map((step) => (step.id === id ? { ...step, ...patch } : step)) };
 }
 
-/** The block goes with every connection that touches it. */
+/** The block goes with every connection that touches it; a block that took its assignee is left asking for another step. */
 export function removeStep(doc: WorkflowVersionDocument, id: string): WorkflowVersionDocument {
   return {
     ...doc,
-    steps: doc.steps.filter((step) => step.id !== id),
+    steps: doc.steps.filter((step) => step.id !== id).map((step) => (step.sameAssigneeStepId === id ? { ...step, sameAssigneeStepId: null } : step)),
     transitions: doc.transitions.filter((transition) => transition.fromStepId !== id && transition.toStepId !== id),
   };
 }
