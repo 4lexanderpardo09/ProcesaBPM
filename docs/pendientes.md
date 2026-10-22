@@ -12,9 +12,9 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - visibilidad de categorías (las «reglas de mapeo» de la mesa);
     - ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría);
     - avisos;
-    - búsqueda por clave de un Excel en el formulario;
+    - ~~búsqueda por clave de un Excel en el formulario~~ (hecho, §4.24);
     - calculadoras;
-    - probar quién aprueba.
+    - ~~probar quién aprueba~~ (hecho, §4.24).
   - **API y web:**
     - «mismo responsable que el paso X»;
     - cortes por empresa y plazo por corte en el motor;

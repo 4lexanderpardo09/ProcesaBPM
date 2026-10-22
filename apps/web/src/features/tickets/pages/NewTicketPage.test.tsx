@@ -127,6 +127,32 @@ describe('NewTicketPage', () => {
     expect(fake.callsTo(`/subcategories/${PAGOS}/creation-form`)[0]?.path).toBe(`/subcategories/${PAGOS}/creation-form?companyId=${MAIN}`);
   });
 
+  it('fills a field from the Excel row of the key typed in another one', async () => {
+    const withLookup = {
+      ...creationForm,
+      starts: [
+        {
+          ...creationForm.starts[0]!,
+          fields: [
+            field(1, 'CEDULA', 'Cédula', 'TEXT'),
+            field(2, 'NOMBRE', 'Nombre del cliente', 'TEXT', { dataSource: { kind: 'DATASET', datasetId: id(80), column: 'NOMBRE', lookupFieldCode: 'CEDULA' } }),
+          ],
+        },
+      ],
+    };
+    const { fake } = renderRoute('/tickets/new', {
+      handlers: handlers({
+        [`/subcategories/${PAGOS}/creation-form`]: () => withLookup,
+        [`/fields/${id(102)}/dataset-lookup`]: (_options, path) => ({ value: path.endsWith('key=1010') ? 'Ana Ruiz' : null }),
+      }),
+    });
+
+    await chooseRequest();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Cédula' }), '1010');
+    await vi.waitFor(() => expect(screen.getByRole('combobox', { name: 'Nombre del cliente' })).toHaveValue('Ana Ruiz'));
+    expect(fake.callsTo(`/fields/${id(102)}/dataset-lookup`)).toHaveLength(1);
+  });
+
   it('sends the priority the person picks, and the company they choose when they are in several', async () => {
     const { fake } = renderRoute('/tickets/new', {
       handlers: handlers({ '/auth/me': profile([{ id: MAIN, name: 'Electrocréditos', isDefault: false }, { id: BRANCH, name: 'Finansueños', isDefault: true }]), [`/subcategories/${PAGOS}/creation-form`]: () => ({ ...creationForm, companyId: BRANCH }) }),

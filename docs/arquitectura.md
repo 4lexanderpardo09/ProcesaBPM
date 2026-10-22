@@ -524,6 +524,11 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Integración del API:** la lista y el 401.
   - **Límite de las pruebas:** de la web, sube a 15 s por prueba (`vite.config.ts`), porque las páginas completas en jsdom con todos los núcleos ocupados pasaban de 5 s.
 
+### 4.24 Búsqueda por clave en un Excel y probar quién aprueba (hecho, 2026-10-21, `feat/web-form-extras`)
+- **Búsqueda por clave (`useDatasetLookups`):** un campo con Excel y `lookupFieldCode` se llena solo cuando se escribe la clave en el otro campo del mismo formulario, por ejemplo la cédula llena el nombre. Espera 400 ms y llama `GET /fields/:fieldId/dataset-lookup?key=`. Pregunta una vez por cada clave nueva; si ninguna fila la tiene, deja el campo como está, y el API revisa al enviar.
+- **Probar quién aprueba:** una tarjeta en Personas › Aprobaciones. Con una persona, un tipo, una empresa y un nivel, usa `GET /approvals/resolve`, la misma búsqueda del motor. Muestra quién aprueba (o por delegación de quién), o por qué nadie, y la traza: grupos revisados por nivel y a quién descartó y por qué.
+- **Pruebas:** unitarias del llenado desde el Excel en el nuevo ticket y de la prueba de aprobador.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

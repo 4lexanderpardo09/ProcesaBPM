@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cellIssuesOf, type FieldIssueKey, fieldIssuesOf } from '../lib/field-issues';
 import { columnsOf, initialInput, type InputValue, isBlankInput, requestValue, type TableRow } from '../lib/step-values';
+import { useDatasetLookups } from './use-dataset-lookups';
 
 export type CollectedValues = { readonly ok: true; readonly values: Record<string, unknown> } | { readonly ok: false };
 
@@ -16,6 +17,7 @@ export function useStepFields(fields: readonly FormFieldResponse[], initialValue
   const [inputs, setInputs] = useState<Record<string, InputValue>>(() => Object.fromEntries(fields.map((field) => [field.code, initialInput(field, initialValues[field.code])])));
   const [localIssues, setLocalIssues] = useState<ReadonlyMap<string, FieldIssueKey>>(new Map());
   const [uploading, setUploading] = useState<ReadonlySet<string>>(new Set());
+  useDatasetLookups(fields, inputs, (code, value) => setInputs((current) => ({ ...current, [code]: value })));
   const serverIssues = fieldIssuesOf(error);
   const cellIssues = cellIssuesOf(error);
 
