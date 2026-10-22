@@ -9,7 +9,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - ~~inicio con resumen y pendientes; bandeja con filtros y conteos; crear para otra persona~~ (hecho, §4.22);
     - ~~visibilidad de categorías; ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría); avisos; copia de los datos en eliminación~~ (hecho, §4.23);
     - ~~búsqueda por clave de un Excel en el formulario~~ (hecho, §4.24);
-    - calculadoras;
+    - ~~calculadoras~~ (hecho, arquitectura §4.23);
     - ~~probar quién aprueba~~ (hecho, §4.24).
   - **API y web:**
     - «mismo responsable que el paso X»;

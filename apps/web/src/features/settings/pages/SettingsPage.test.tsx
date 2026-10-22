@@ -39,6 +39,52 @@ describe('SettingsPage', () => {
     expect(await screen.findByText('3 personas activas todavía no la tienen configurada.')).toBeInTheDocument();
   });
 
+  it('configures the meal allowance calculator, checking each meal first, and turns it off', async () => {
+    let config: Record<string, unknown> | null = { meals: [{ code: 'DESAYUNO', from: '06:00', to: '09:00', amount: '15000' }] };
+    const calculator = () => ({ code: 'MEAL_ALLOWANCE', parameters: [{ name: 'departure', type: 'DATETIME', required: true }, { name: 'return', type: 'DATETIME', required: true }], output: 'CURRENCY', configured: config !== null, config });
+    const { fake } = renderRoute('/settings/calculators', {
+      handlers: {
+        '/calculators': () => [calculator()],
+        '/calculators/MEAL_ALLOWANCE/config': (options) => {
+          config = options.method === 'DELETE' ? null : (options.body as Record<string, unknown>);
+          return calculator();
+        },
+      },
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Viáticos de alimentación' })).toBeInTheDocument();
+    expect(screen.getByText('Activa')).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Comida 1' })).getByRole('textbox', { name: 'Código' })).toHaveValue('DESAYUNO');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar comida' }));
+    const lunch = screen.getByRole('group', { name: 'Comida 2' });
+    await userEvent.type(within(lunch).getByRole('textbox', { name: 'Código' }), 'DESAYUNO');
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(within(lunch).getByRole('textbox', { name: 'Código' })).toHaveAccessibleDescription('Ese código ya está en otra comida.');
+    expect(fake.calls.filter((call) => call.options.method === 'PUT')).toHaveLength(0);
+
+    await userEvent.clear(within(lunch).getByRole('textbox', { name: 'Código' }));
+    await userEvent.type(within(lunch).getByRole('textbox', { name: 'Código' }), 'ALMUERZO');
+    await userEvent.type(within(lunch).getByLabelText('Desde'), '12:00');
+    await userEvent.type(within(lunch).getByLabelText('Hasta'), '14:00');
+    await userEvent.type(within(lunch).getByRole('textbox', { name: 'Valor' }), '25000.50');
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    await vi.waitFor(() =>
+      expect(fake.calls.find((call) => call.options.method === 'PUT')?.options.body).toEqual({
+        meals: [
+          { code: 'DESAYUNO', from: '06:00', to: '09:00', amount: '15000' },
+          { code: 'ALMUERZO', from: '12:00', to: '14:00', amount: '25000.50' },
+        ],
+      }),
+    );
+    expect(await screen.findByText('Configuración guardada.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Apagar' }));
+    expect(await screen.findByText('Apagada')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Activar' })).toBeInTheDocument();
+  });
+
   it('gives support access for some hours with a reason, and ends it', async () => {
     let active: ReturnType<typeof grant> | null = null;
     const { fake } = renderRoute('/settings/support', {
@@ -101,7 +147,7 @@ describe('SettingsPage', () => {
       },
     });
 
-    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad']);
+    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad', 'Calculadoras']);
     await userEvent.click(await screen.findByRole('checkbox', { name: /Exigir verificación en dos pasos/ }));
     expect(await screen.findByText('Tu rol no puede hacer este cambio.')).toBeInTheDocument();
   });
