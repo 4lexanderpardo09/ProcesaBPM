@@ -20,6 +20,7 @@ export const paths = {
   people: '/people',
   profile: '/profile',
   notifications: '/notifications',
+  settings: '/settings',
 } as const;
 
 export function ticketPath(ticketId: string): string {
