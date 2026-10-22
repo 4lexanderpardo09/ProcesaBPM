@@ -15,7 +15,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - «mismo responsable que el paso X»;
     - cortes por empresa y plazo por corte en el motor;
     - planos (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte);
-    - procesar en lote;
+    - ~~procesar en lote~~ (hecho, arquitectura §14.2; sin agrupar por persona ni por corte de plano, sin montos por persona ni adjuntos en lote);
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2);
     - registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»;
     - filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, valor de un campo, fechas).

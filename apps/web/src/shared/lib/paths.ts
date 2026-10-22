@@ -6,6 +6,7 @@ export const paths = {
   acceptInvitation: '/accept-invitation',
   tickets: '/tickets',
   newTicket: '/tickets/new',
+  ticketBatches: '/tickets/batch',
   ticket: '/tickets/:ticketId',
   workflows: '/workflows',
   workflow: '/workflows/:workflowId',

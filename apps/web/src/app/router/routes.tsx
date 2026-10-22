@@ -8,7 +8,7 @@ import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
 import { ProfilePage } from '@/features/profile';
 import { SettingsPage } from '@/features/settings';
-import { NewTicketPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
+import { NewTicketPage, TicketBatchPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
 import { DatasetPage, DatasetsPage, PdfFormatPage, PdfTemplatePage, WorkflowBuilderPage, WorkflowPage, WorkflowsPage } from '@/features/workflows';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
@@ -29,6 +29,7 @@ const builtSections: ReadonlySet<NavigationItemKey> = new Set(['home', 'tickets'
 const ticketRoutes: RouteObject[] = [
   { path: paths.tickets, element: <TicketInboxPage /> },
   { path: paths.newTicket, element: <NewTicketPage /> },
+  { path: paths.ticketBatches, element: <TicketBatchPage /> },
   { path: paths.ticket, element: <TicketDetailPage /> },
 ];
 
