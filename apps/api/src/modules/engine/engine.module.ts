@@ -15,6 +15,7 @@ import { CreateTicketService } from './application/create-ticket.service.js';
 import { ParallelTaskService } from './application/parallel-task.service.js';
 import { ResumeWaitService } from './application/resume-wait.service.js';
 import { ReopenTicketService } from './application/reopen-ticket.service.js';
+import { ReportTicketErrorService } from './application/report-ticket-error.service.js';
 import { OpenIncidentService } from './application/open-incident.service.js';
 import { ResolveIncidentService } from './application/resolve-incident.service.js';
 import { LockedTicketLoader } from './application/locked-ticket.js';
@@ -63,12 +64,13 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     OpenIncidentService,
     ResolveIncidentService,
     ReopenTicketService,
+    ReportTicketErrorService,
     ParallelTaskService,
     ResumeWaitService,
     TicketActionStateReader,
     TicketCandidatesService,
     FieldOptionsService,
   ],
-  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, EditTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository, TicketActionStateReader, TicketCandidatesService, FieldOptionsService],
+  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ReportTicketErrorService, EditTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository, TicketActionStateReader, TicketCandidatesService, FieldOptionsService],
 })
 export class EngineModule {}

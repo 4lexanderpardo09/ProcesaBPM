@@ -92,6 +92,14 @@ export class TicketContextRepository {
     return type;
   }
 
+  /** An active error type that can be reported on an open ticket (the reopening ones are for reopening), with its subtype. */
+  async findReportableErrorType(tx: TenantTransaction, tenantId: string, errorTypeId: string, errorSubtypeId: string | undefined): Promise<{ isProcessError: boolean; forcesClose: boolean } | null> {
+    const type = await tx.errorType.findFirst({ where: { tenantId, id: errorTypeId, isActive: true, isReopening: false }, select: { isProcessError: true, forcesClose: true } });
+    if (type === null) return null;
+    if (errorSubtypeId !== undefined && (await tx.errorSubtype.count({ where: { tenantId, id: errorSubtypeId, errorTypeId, isActive: true } })) === 0) return null;
+    return type;
+  }
+
   async activeGroupIdsOf(tx: TenantTransaction, tenantId: string, userId: string): Promise<Set<string>> {
     const rows = await tx.groupMember.findMany({ where: { tenantId, userId, group: { isActive: true } }, select: { groupId: true } });
     return new Set(rows.map((row) => row.groupId));
