@@ -18,7 +18,7 @@ const STEP = id(101);
 const FILE = id(102);
 const at = '2026-10-17T15:00:00.000Z';
 
-const noActions = { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true };
+const noActions = { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false };
 
 const detail = (overrides: Record<string, unknown> = {}) => ({
   id: TICKET,
@@ -500,6 +500,25 @@ describe('TicketDetailPage', () => {
       await userEvent.click(within(dialog).getByRole('button', { name: 'Rechazar' }));
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/parallel-tasks/reject`)[0]?.options.body).toEqual({ visitId: VISIT, comment: '<p>El monto no cuadra</p>' }));
+    });
+
+    it('reports an error on the open step, saying first what the type will do', async () => {
+      const errorType = (index: number, name: string, overrides: Record<string, unknown> = {}) => ({ id: id(720 + index), name, description: null, isProcessError: false, forcesClose: false, isReopening: false, isActive: true, ...overrides });
+      const types = { items: [errorType(1, 'Monto mal digitado'), errorType(2, 'Soporte equivocado', { isProcessError: true }), errorType(3, 'Reapertura', { isReopening: true })], page: 1, pageSize: 100, total: 3 };
+      const { fake } = renderRoute(base, {
+        handlers: ticketHandlers({ [base]: () => detail({ actions: allowed('reportError') }), '/error-types': () => types, [`/error-types/${id(722)}/subtypes`]: () => ({ items: [], page: 1, pageSize: 100, total: 0 }), [`${base}/errors`]: () => mutation }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Reportar error' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Reportar un error' });
+      const type = within(dialog).getByRole('combobox', { name: /Tipo de error/ });
+      expect(within(type).getAllByRole('option').map((option) => option.textContent)).toEqual(['Elige una opción', 'Monto mal digitado', 'Soporte equivocado']);
+      await userEvent.selectOptions(type, 'Soporte equivocado');
+      expect(within(dialog).getByText(/vuelve al paso anterior/)).toBeInTheDocument();
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /Qué pasó/ }), 'El soporte es de otro cliente');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reportar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/errors`)[0]?.options.body).toEqual({ visitId: VISIT, errorTypeId: id(722), description: '<p>El soporte es de otro cliente</p>' }));
     });
 
     it('reopens a closed ticket under a reopening error type, with its subtype', async () => {

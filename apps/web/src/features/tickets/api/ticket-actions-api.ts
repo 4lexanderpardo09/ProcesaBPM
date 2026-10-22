@@ -4,6 +4,7 @@ import {
   incidentMutationResponseSchema,
   pageResponseSchema,
   type ReopenTicketRequest,
+  type ReportTicketErrorRequest,
   type TicketCandidatesQuery,
   ticketCandidatesResponseSchema,
   ticketMutationResponseSchema,
@@ -63,6 +64,19 @@ export function answerParallelTask(client: HttpClient, ticketId: string, answer:
 /** Reopens a closed ticket on its last step, with whoever held it, filing an error of a reopening type. */
 export function reopenTicket(client: HttpClient, ticketId: string, body: ReopenTicketRequest) {
   return client.request(`${ticketUrl(ticketId)}/reopen`, { method: 'POST', body, schema: ticketMutationResponseSchema });
+}
+
+export function reportTicketError(client: HttpClient, ticketId: string, body: ReportTicketErrorRequest) {
+  return client.request(`${ticketUrl(ticketId)}/errors`, { method: 'POST', body, schema: ticketMutationResponseSchema });
+}
+
+/** The active error types that can be reported on an open ticket (the reopening ones are for reopening). */
+export function reportableErrorTypesQueryOptions(client: HttpClient) {
+  return queryOptions({
+    queryKey: errorTypeQueryKeys.all,
+    queryFn: ({ signal }) => client.request(`/error-types?pageSize=${CATALOG_PAGE_SIZE}`, { schema: pageResponseSchema(errorTypeResponseSchema), signal }),
+    select: (page) => page.items.filter((type) => !type.isReopening && type.isActive),
+  });
 }
 
 /** The active error types a reopening can be filed under. */

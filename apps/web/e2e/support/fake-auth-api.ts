@@ -166,7 +166,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     department: null,
     site: null,
     valueNames: { users: {}, sites: {}, companies: {}, departments: {}, positions: {} },
-    actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, ...ticket.actions },
+    actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false, ...ticket.actions },
   });
 
   const event = (id: string, type: string, commentHtml: string | null, createdAt: string) => ({
