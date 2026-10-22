@@ -12,12 +12,13 @@ import { TicketFlowRepository } from './data/ticket-flow.repository.js';
 import { CreationFormController } from './http/creation-form.controller.js';
 import { FieldOptionsController } from './http/field-options.controller.js';
 import { TicketFlowController } from './http/ticket-flow.controller.js';
+import { TicketBatchesController } from './http/ticket-batches.controller.js';
 import { TicketsController } from './http/tickets.controller.js';
 
 /** What people do with tickets: create, advance, reassign, close, read (with per-record authorization) and the timeline. */
 @Module({
   imports: [EngineModule, WorkflowsModule, AuthorizationModule, FilesModule, TicketAccessModule],
-  controllers: [TicketsController, CreationFormController, TicketFlowController, FieldOptionsController],
+  controllers: [TicketsController, TicketBatchesController, CreationFormController, TicketFlowController, FieldOptionsController],
   providers: [TicketQueriesService, TicketDocumentsService, TicketFormService, TicketFlowService, TicketFlowRepository],
 })
 export class TicketsModule {}
