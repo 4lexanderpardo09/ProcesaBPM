@@ -18,7 +18,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - procesar en lote;
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2);
     - ~~registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»~~ (hecho, arquitectura §14.2);
-    - filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, valor de un campo, fechas).
+    - ~~filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, fechas)~~ (hecho, arquitectura §4.22); falta filtrar por el valor de un campo.
   - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ProcesaBPM es por bloques.
   - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
   - **Fuera del alcance:** ventas, listas de precios y la parte propia de viáticos.

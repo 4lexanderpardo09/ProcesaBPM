@@ -526,6 +526,9 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 
 ### 4.22 Inicio, filtros de la bandeja y crear para otra persona (hecho, 2026-10-21, `feat/web-home-inbox`)
 - **Inicio (`/`, `features/home`):** la raíz ya no redirige a la bandeja.
+- **Filtros avanzados (2026-10-22, `feat/inbox-advanced-filters`):**
+  - **API:** `ticketFiltersQuerySchema` suma `subcategoryId`, `siteId`, `creatorId`, `assigneeId` (quien tiene el ticket ahora), `tagId` (solo las etiquetas propias de quien llama: una ajena no encuentra nada) y `createdFrom`/`createdTo` (instantes; el fin se excluye y un rango al revés da 400). Valen igual en la lista y en los conteos.
+  - **Web:** botón «Más filtros» con subcategoría (de la categoría elegida), sede, mi etiqueta, fechas de creación y solicitante y «Lo tiene» buscados en el directorio. Las fechas viajan en la URL como días locales (`from`, `to`, ambos incluidos) y al API como el inicio de esos días en la zona del navegador. Un enlace con alguno de estos filtros abre el panel.
   - **Contadores** de `GET /dashboard/stats`: asignados, vencidos, vencen en 24 horas, mis solicitudes abiertas, cerré en 7 días. Los que tienen bandeja llevan a ella.
   - **Pendientes** de `GET /dashboard/pending`, el más urgente primero, con su vencimiento y la marca de vencido.
   - **Menú y claves:** «Inicio» encabeza el menú (`end`, para que no quede marcado en otras páginas). Las claves van bajo `tickets`, así que cualquier cambio de un ticket las refresca.

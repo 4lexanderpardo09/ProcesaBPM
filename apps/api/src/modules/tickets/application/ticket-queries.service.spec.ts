@@ -50,7 +50,7 @@ function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null)
   return { service, tickets, runner, tx, inTenant, actionStates };
 }
 
-const expectedFilters = (view: TicketView): Where[] => [viewFilter(view, principal), ...ticketFilters(query), readableTickets(ability)];
+const expectedFilters = (view: TicketView): Where[] => [viewFilter(view, principal), ...ticketFilters(query, USER), readableTickets(ability)];
 
 describe('TicketQueriesService', () => {
   describe('counts', () => {
