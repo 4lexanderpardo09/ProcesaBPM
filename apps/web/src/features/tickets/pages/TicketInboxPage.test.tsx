@@ -137,6 +137,34 @@ describe('TicketInboxPage', () => {
     expect(router.state.location.search).toBe(`?requester=${OLGA}&tag=${TAG}&from=2026-10-01&to=2026-10-31`);
   });
 
+  it('filters by the value of a field: a condition fit for its type, typed values applied on Enter', async () => {
+    const api = ticketsApi({ assigned: [ticket(1)] });
+    const { router } = renderRoute('/tickets', {
+      handlers: {
+        ...api.handlers,
+        '/tickets/filter-fields': () => [
+          { code: 'DUE_ON', label: 'Fecha límite de pago', type: 'DATE', options: null },
+          { code: 'REFERENCE', label: 'Referencia', type: 'TEXT', options: null },
+        ],
+      },
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Más filtros' }));
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Campo del formulario' }), 'Referencia');
+    const condition = screen.getByRole('combobox', { name: 'Condición' });
+    expect(within(condition).getAllByRole('option').map((option) => option.textContent)).toEqual(['Elige una condición', 'Contiene', 'Es igual a', 'Tiene valor', 'Sin valor']);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Valor' }), 'FAC-1{Enter}');
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('fieldValue')).toBe('FAC-1'));
+    expect(api.listQueries().at(-1)?.get('fieldOperator')).toBe('contains');
+
+    // A date field starts on the overdue ones: before the person's today.
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Campo del formulario' }), 'Fecha límite de pago');
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('fieldCode')).toBe('DUE_ON'));
+    expect(api.listQueries().at(-1)?.get('fieldOperator')).toBe('between');
+    expect(api.listQueries().at(-1)?.get('fieldValue')).toBeNull();
+    expect(router.state.location.search).toBe('?field=DUE_ON&op=overdue');
+  });
+
   it('opens the folded filters when the link carries one of them', async () => {
     const api = ticketsApi({ assigned: [ticket(1)] });
     renderRoute('/tickets?from=2026-10-01', { handlers: api.handlers });
