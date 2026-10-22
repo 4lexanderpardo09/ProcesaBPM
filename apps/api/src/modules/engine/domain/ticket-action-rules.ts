@@ -23,7 +23,7 @@ import type { ParallelStatus } from './parallel-policy.js';
 export type TicketStatus = 'OPEN' | 'PAUSED' | 'CLOSED';
 export type AssigneeType = 'PRIMARY' | 'POOL' | 'PARALLEL' | 'INCIDENT';
 /** The ticket permissions an action is checked against, always on the concrete ticket (stored conditions apply). */
-export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen' | 'comment';
+export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen' | 'comment' | 'report_error';
 
 export interface Assignment {
   readonly userId: string;
@@ -115,6 +115,11 @@ export function resolveIncidentRefusal({ actorId, incident, ticketStatus, hasOpe
 export function reopenRefusal(mayReopen: boolean, status: TicketStatus): DomainError | null {
   if (!mayReopen) return new PermissionDeniedError('Not allowed to reopen this ticket');
   return status === 'CLOSED' ? null : new TicketNotClosedError(status);
+}
+
+/** Reporting an error: the permission on this very ticket (it must be on an open visit, checked apart). */
+export function reportErrorRefusal(mayReport: boolean): DomainError | null {
+  return mayReport ? null : new PermissionDeniedError('Not allowed to report errors on this ticket');
 }
 
 /** Signing or rejecting: the current step is a parallel one and the caller's own signature on it is still pending. */

@@ -547,8 +547,8 @@ export class InvalidReopenStepError extends DomainError {
 
 /** The error type is not an active reopening type (or the subtype does not belong to it). */
 export class InvalidErrorTypeError extends DomainError {
-  constructor() {
-    super(ERROR_CODES.invalidErrorType, 'Choose an active error type meant for reopening');
+  constructor(message = 'Choose an active error type meant for reopening') {
+    super(ERROR_CODES.invalidErrorType, message);
   }
 }
 

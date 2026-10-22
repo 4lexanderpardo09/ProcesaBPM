@@ -5,8 +5,8 @@ import { mayReceiveIncident, mayReceiveStep, type TicketActionState, ticketActio
 
 const ME = 'me';
 const COMPANY = 'c1';
-const NONE: Record<TicketAction, boolean> = { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: false };
-const ALL: Record<TicketAction, boolean> = { transition: true, reassign: true, close: true, open_incident: true, reopen: true, comment: true };
+const NONE: Record<TicketAction, boolean> = { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: false, report_error: false };
+const ALL: Record<TicketAction, boolean> = { transition: true, reassign: true, close: true, open_incident: true, reopen: true, comment: true, report_error: true };
 const WORKER: Record<TicketAction, boolean> = { ...NONE, transition: true, close: true, open_incident: true, comment: true };
 
 const step = (overrides: Partial<StepDocument> = {}) => ({ id: 's1', assignmentMode: 'USERS', closeRule: 'ALLOWED', ...overrides }) as StepDocument;

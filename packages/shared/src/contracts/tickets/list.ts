@@ -35,4 +35,8 @@ export const ticketCountsResponseSchema = z.object({
   created: countSchema,
   observed: countSchema,
   all: countSchema,
+  history: countSchema,
+  reopened: countSchema,
+  errors_reported: countSchema,
+  errors_received: countSchema,
 }) satisfies z.ZodType<TicketCountsResponse>;

@@ -28,7 +28,7 @@ const PICKED_SITE = '0199a000-0000-7000-8000-000000000006';
 /** A closed ticket the caller may only comment on. */
 const closedState: TicketActionState = {
   actorId: USER, status: 'CLOSED', companyId: CATEGORY, visit: null, step: undefined, hasDecisionExit: false, assignees: [], signatures: [], openIncident: null, hasReopenTarget: true,
-  grants: { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: true },
+  grants: { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: true, report_error: false },
 };
 
 function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null) {

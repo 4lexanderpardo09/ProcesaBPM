@@ -357,8 +357,9 @@ export class TicketWriteRepository {
   }
 
   /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
-  async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string | null, stepId: string | null): Promise<void> {
-    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, ...(stepId === null ? {} : { currentStepId: stepId }) } });
+  /** `forced`: an error type that forces the close ended it (the reports tell it from a normal close). */
+  async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string | null, stepId: string | null, forced = false): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, ...(forced ? { forcedClose: true } : {}), ...(stepId === null ? {} : { currentStepId: stepId }) } });
   }
 
   /** Inserts the event and its outbox work in order; returns the event id. */
