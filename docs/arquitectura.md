@@ -838,6 +838,17 @@ Durante los 30 días de `PENDING_DELETION` el dueño o un administrador puede ll
   - **Cortes y archivos:** `GET/POST /exports/:id/cutoffs` («Generar ahora», que no mueve la programación), `GET /export-cutoffs/:id/download-url`.
   - **«Mis planos»** (cualquier miembro, solo los archivos de los que es responsable): `GET /export-cutoffs/mine` y `GET /export-cutoffs/mine/:id/download-url`.
   - **Catálogos:** `GET /export-catalogs`, `GET/PUT /export-catalogs/:catalog`.
+- **Web (`features/workflows/exports`, 2026-10-22, `feat/web-exports`):**
+  - **Planos** (`/workflows/exports`, botón en Flujos para quien tiene `read Export`): lista con el momento en que se escribe la línea, la programación en palabras, las líneas pendientes y el próximo corte.
+  - **Ficha** (`/workflows/exports/:id`, `new` para uno nuevo), con pestañas:
+    - **Definición:** editor completo. Las decisiones, los campos y los pasos salen de la versión publicada del flujo (o del borrador). Revisa lo mismo que el contrato antes de enviar.
+    - **Archivos:** «Generar ahora» y descarga por enlace firmado.
+    - **Líneas pendientes.**
+    - **Vista previa:** solo con `update`.
+    - Para eliminar, pide confirmación en un diálogo.
+  - **Catálogos** (`/workflows/exports/catalogs`): abrir uno existente o uno nuevo por nombre, y editar sus filas.
+  - **«Mis planos»** (`/my-exports`): enlace en Inicio cuando la persona tiene archivos.
+  - **Constructor:** el bloque Exportar ya está en la paleta (elige el plano del flujo) y los pasos TASK y APPROVAL tienen «Exige el corte del plano».
 - **Pruebas:**
   - unitarias de la lógica pura: formatos, proyección, filtro, separación, unión, CSV y periodicidad;
   - integración `exports.e2e`: línea y filtro, generar ahora con unión, corte programado una sola vez, archivos por responsable y «Mis planos», paso que exige el corte y validación de la separación y catálogos.

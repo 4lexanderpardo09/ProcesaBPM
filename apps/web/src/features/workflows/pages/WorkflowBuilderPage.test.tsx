@@ -8,6 +8,26 @@ import { renderRoute } from '@/test/render-route';
 import { at, DRAFT, END, FLOW, id, link, START, startingDoc, step, versionOf, versionUrl } from '../test/builder-fixtures';
 
 const CHECK = id(32);
+/** An export as `GET /exports` lists it; the tests only change its id, workflow and name. */
+const fullExport = {
+  workflowName: 'Confirmación de pagos',
+  companyId: null,
+  format: 'CSV',
+  sheetName: 'Export',
+  delimiter: ';',
+  trigger: 'CLOSING',
+  transitionLabel: null,
+  filter: [],
+  mergeBy: null,
+  separateBy: null,
+  schedule: { cutoffTime: '17:00', frequency: 'DAILY', weekdays: [], monthDay: null, intervalDays: null },
+  isActive: true,
+  columns: [{ header: 'A', sourceType: 'CONSTANT', sourceRef: 'x', format: null }],
+  pendingLines: 0,
+  lastAutoCutoffAt: null,
+  nextCutoffAt: null,
+  createdAt: at,
+};
 const url = versionUrl;
 
 /** A fake API that keeps the version in memory: saving replaces it (giving ids to new rows) and publishing changes its status. */
@@ -98,6 +118,30 @@ describe('workflow builder', () => {
     await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
     const body = fake.callsTo(`${url}/graph`)[0]?.options.body as { steps: Array<{ id: string; assignmentMode: string; sameAssigneeStepId: string | null }> };
     expect(body.steps.find((saved) => saved.id === SETTLE)).toMatchObject({ assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: REVIEW });
+  }, 15_000);
+
+  it('makes a step wait for the file of one of the workflow\'s exports', async () => {
+    const REVIEW = id(42);
+    const doc: WorkflowVersionDocument = {
+      ...startingDoc(),
+      steps: [step(START, 'START', 'Inicio'), step(REVIEW, 'TASK', 'Confirmar pago'), step(END, 'END', 'Fin')],
+      transitions: [link(id(50), START, REVIEW), link(id(51), REVIEW, END, { type: 'DECISION' })],
+    };
+    const exportOf = (exportId: string, name: string, workflowId: string) => ({ id: exportId, workflowId, name });
+    const { fake } = renderRoute(url, {
+      handlers: { ...api(doc), '/exports': () => [exportOf(id(90), 'Contabilización', FLOW), exportOf(id(91), 'De otro flujo', id(99))].map((row) => ({ ...fullExport, ...row })) },
+    });
+
+    await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
+    await userEvent.click(within(outline()).getByRole('button', { name: /Confirmar pago/ }));
+    const inspector = screen.getByRole('complementary', { name: 'Propiedades' });
+    const required = await within(inspector).findByRole('combobox', { name: /Exige el corte del plano/ });
+    await within(required).findByRole('option', { name: 'Contabilización' });
+    expect(within(required).getAllByRole('option').map((option) => option.textContent)).toEqual(['No exige', 'Contabilización']);
+    await userEvent.selectOptions(required, 'Contabilización');
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+    await vi.waitFor(() => expect((fake.callsTo(`${url}/graph`)[0]?.options.body as { steps: Array<{ id: string; config: Record<string, unknown> }> }).steps.find((saved) => saved.id === REVIEW)?.config).toEqual({ requiredExportId: id(90) }));
   }, 15_000);
 
   // A long walk through the inspector: on a loaded machine it can pass the default 5 s.

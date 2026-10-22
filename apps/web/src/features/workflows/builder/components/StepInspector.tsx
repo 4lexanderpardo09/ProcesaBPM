@@ -10,7 +10,7 @@ import type { ElementProblems } from '../lib/problems';
 import { FieldsSection } from './fields/FieldsSection';
 import { ParticipantsSection } from './participants/ParticipantsSection';
 import { ProblemList } from './ProblemList';
-import { AssignmentSection, CalculatorSection, DocumentSection, NotificationSection, PeopleSection, Section, WaitSection } from './StepSections';
+import { AssignmentSection, CalculatorSection, DocumentSection, ExportSection, NotificationSection, PeopleSection, Section, WaitSection } from './StepSections';
 import styles from './Builder.module.css';
 
 export interface StepInspectorProps {
@@ -39,7 +39,7 @@ export function StepInspector({ step, doc, workflowId, readOnly, problems, onCha
   const fieldsHere = doc.fields.filter((field) => field.stepId === step.id).length;
   const exits = doc.transitions.filter((transition) => transition.fromStepId === step.id);
   const nameOf = (id: string) => doc.steps.find((candidate) => candidate.id === id)?.name ?? '';
-  const section = { step, steps: doc.steps, fields: doc.fields, readOnly, onChange };
+  const section = { step, steps: doc.steps, fields: doc.fields, readOnly, onChange, workflowId };
 
   return (
     <div className={styles.inspectorBody}>
@@ -79,6 +79,7 @@ export function StepInspector({ step, doc, workflowId, readOnly, problems, onCha
       {step.type === 'NOTIFICATION' && <NotificationSection {...section} />}
       {step.type === 'WAIT' && <WaitSection {...section} />}
       {step.type === 'DOCUMENT' && <DocumentSection {...section} workflowId={workflowId} />}
+      {step.type === 'EXPORT' && <ExportSection {...section} />}
       {step.type === 'CALCULATOR' && <CalculatorSection {...section} />}
 
       {(step.type === 'START' || isPeopleStep(step.type)) &&

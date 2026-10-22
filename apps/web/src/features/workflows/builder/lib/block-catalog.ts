@@ -18,17 +18,17 @@ export const BLOCK_COLOR: Readonly<Record<StepType, string>> = {
 };
 
 /**
- * The palette, as in the prototype. WEBHOOK and EXPORT are left out: the engine does not run them yet, so a version with
- * one can never be published (`NOT_IMPLEMENTED_*`); one copied from an older version still shows and explains itself.
+ * The palette, as in the prototype. WEBHOOK is left out: the engine does not run it yet, so a version with one can never
+ * be published (`NOT_IMPLEMENTED_*`); one copied from an older version still shows and explains itself.
  */
 export const PALETTE_GROUPS: ReadonlyArray<{ readonly key: 'edges' | 'people' | 'automatic' | 'effects'; readonly types: readonly StepType[] }> = [
   { key: 'edges', types: ['START', 'END'] },
   { key: 'people', types: ['TASK', 'APPROVAL', 'DECISION', 'SIGNATURE'] },
   { key: 'automatic', types: ['CONDITION', 'CALCULATOR', 'WAIT'] },
-  { key: 'effects', types: ['DOCUMENT', 'NOTIFICATION'] },
+  { key: 'effects', types: ['DOCUMENT', 'NOTIFICATION', 'EXPORT'] },
 ];
 
-export const NOT_AVAILABLE_TYPES: ReadonlySet<StepType> = new Set(['WEBHOOK', 'EXPORT']);
+export const NOT_AVAILABLE_TYPES: ReadonlySet<StepType> = new Set(['WEBHOOK']);
 
 export const isPeopleStep = (type: StepType): boolean => PEOPLE_STEP_TYPES.has(type);
 
