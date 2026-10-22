@@ -15,13 +15,12 @@ import {
   uuidSchema,
 } from '@procesabpm/shared';
 import { z } from 'zod';
-import { NotAudited } from '../../../common/audit/audited.decorator.js';
+import { Audited } from '../../../common/audit/audited.decorator.js';
 import { AuthenticatedOnly, RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
 import { ExportsService } from '../application/exports.service.js';
 
 const uuid = new ParseUUIDPipe();
-const NOT_AUDITED = 'Export definitions and catalogs are not audited yet (pending in docs/pendientes.md)';
 const linesQuerySchema = z.object({ pending: z.enum(['true', 'false']).optional(), cutoffId: uuidSchema.optional() });
 
 /** Scheduled exports ("planos"): definitions, their files and lines, and "generate now". */
@@ -43,21 +42,21 @@ export class ExportsController {
 
   @RequirePermission('update', 'Export')
   @Post()
-  @NotAudited(NOT_AUDITED)
+  @Audited('export.created')
   create(@Body(new ZodValidationPipe(saveExportDefinitionRequestSchema)) body: SaveExportDefinitionRequest): Promise<ExportDefinitionResponse> {
     return this.exports.create(body);
   }
 
   @RequirePermission('update', 'Export')
   @Put(':id')
-  @NotAudited(NOT_AUDITED)
+  @Audited('export.updated')
   update(@Param('id', uuid) id: string, @Body(new ZodValidationPipe(saveExportDefinitionRequestSchema)) body: SaveExportDefinitionRequest): Promise<ExportDefinitionResponse> {
     return this.exports.update(id, body);
   }
 
   @RequirePermission('update', 'Export')
   @Delete(':id')
-  @NotAudited(NOT_AUDITED)
+  @Audited('export.deleted')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', uuid) id: string): Promise<void> {
     return this.exports.remove(id);
@@ -79,7 +78,7 @@ export class ExportsController {
   @RequirePermission('generate', 'Export')
   @Post(':id/cutoffs')
   @HttpCode(HttpStatus.OK)
-  @NotAudited(NOT_AUDITED)
+  @Audited('export.generated')
   generate(@Param('id', uuid) id: string): Promise<GenerateExportCutoffResponse> {
     return this.exports.generateNow(id);
   }
@@ -104,12 +103,14 @@ export class ExportCutoffsController {
 
   @AuthenticatedOnly()
   @Get('mine/:cutoffId/download-url')
+  @Audited('export.download_url_issued')
   myDownloadUrl(@Param('cutoffId', uuid) cutoffId: string): Promise<DownloadUrlResponse> {
     return this.exports.downloadUrl(cutoffId, true);
   }
 
   @RequirePermission('read', 'Export')
   @Get(':cutoffId/download-url')
+  @Audited('export.download_url_issued')
   downloadUrl(@Param('cutoffId', uuid) cutoffId: string): Promise<DownloadUrlResponse> {
     return this.exports.downloadUrl(cutoffId, false);
   }
@@ -134,7 +135,7 @@ export class ExportCatalogsController {
 
   @RequirePermission('update', 'Export')
   @Put(':catalog')
-  @NotAudited(NOT_AUDITED)
+  @Audited('export_catalog.updated')
   save(@Param('catalog', new ZodValidationPipe(exportCatalogNameSchema)) catalog: string, @Body(new ZodValidationPipe(saveExportCatalogRequestSchema)) body: SaveExportCatalogRequest): Promise<ExportCatalogResponse> {
     return this.exports.saveCatalog(catalog, body);
   }
