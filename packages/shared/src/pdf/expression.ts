@@ -8,6 +8,8 @@ import { PDF_LIMITS } from './limits.js';
 export type Path =
   | { readonly kind: 'field'; readonly code: string }
   | { readonly kind: 'row'; readonly code: string }
+  /** A calculation of a canvas design (version 2), by its code. */
+  | { readonly kind: 'calc'; readonly code: string }
   | { readonly kind: 'ticket'; readonly name: (typeof TICKET_PROPERTIES)[number] }
   | { readonly kind: 'step'; readonly stepName: string; readonly property: 'completedBy' | 'completedAt' }
   | { readonly kind: 'now' }
@@ -39,7 +41,7 @@ const STEP_NAME = /^[^.|{}]{1,100}$/;
 function parsePath(text: string): Path | undefined {
   if (text === 'now' || text === 'page' || text === 'pages') return { kind: text };
   const [head, ...rest] = text.split('.');
-  if ((head === 'field' || head === 'row') && rest.length === 1 && FIELD_CODE_PATTERN.test(rest[0]!)) return { kind: head, code: rest[0]! };
+  if ((head === 'field' || head === 'row' || head === 'calc') && rest.length === 1 && FIELD_CODE_PATTERN.test(rest[0]!)) return { kind: head, code: rest[0]! };
   if (head === 'ticket' && rest.length === 1 && (TICKET_PROPERTIES as readonly string[]).includes(rest[0]!)) return { kind: 'ticket', name: rest[0] as (typeof TICKET_PROPERTIES)[number] };
   if (head === 'step' && rest.length >= 2) {
     const property = rest[rest.length - 1];

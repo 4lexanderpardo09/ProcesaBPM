@@ -727,6 +727,7 @@ export const workflows = {
     designer: {
       subtitle: 'Arma el documento por bloques. Los datos entre llaves dobles se llenan con los de cada ticket.',
       notFound: 'Este formato no existe o ya se eliminó.',
+      canvasSoon: 'Este formato usa el lienzo libre. Su editor llega en la próxima versión; mientras, se genera igual.',
       saved: 'Todo guardado',
       inactive: 'Este formato está inactivo: no se generan PDF con él.',
       cannotSave_one: 'Hay {{count}} problema que impide guardar. Está marcado en su bloque.',

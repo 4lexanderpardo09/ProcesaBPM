@@ -1,7 +1,8 @@
-import { pdfDesignSchema, PdfDesignInvalidError } from '@procesabpm/shared';
-import type { DesignJob, TemplateJob } from '../../../infrastructure/pdf/pdf-renderer.js';
+import { anyPdfDesignSchema, PdfDesignInvalidError } from '@procesabpm/shared';
+import type { CanvasJob, DesignJob, TemplateJob } from '../../../infrastructure/pdf/pdf-renderer.js';
 import type { WorkflowDocumentSource } from '../data/document-source.repository.js';
 import { documentsEs as es } from '../i18n/es.js';
+import { CanvasResolver } from './canvas-resolver.js';
 import { DesignResolver } from './design-resolver.js';
 import { generatedFileName } from './generated-file-name.js';
 import type { RenderFacts } from './render-facts.js';
@@ -14,6 +15,7 @@ export type RenderPlan = {
   readonly imageKeys: ReadonlySet<string>;
 } & (
   | { readonly kind: 'DESIGN'; readonly job: Omit<DesignJob, 'images' | 'deadlineAt' | 'meta'> }
+  | { readonly kind: 'CANVAS'; readonly job: Omit<CanvasJob, 'images' | 'deadlineAt' | 'meta'> }
   | { readonly kind: 'TEMPLATE'; readonly templateStorageKey: string; readonly job: Pick<TemplateJob, 'fields' | 'signatures'> }
 );
 
@@ -21,8 +23,12 @@ export type RenderPlan = {
 export function planRender(source: WorkflowDocumentSource, facts: RenderFacts): RenderPlan {
   const resolver = new DesignResolver(facts);
   if (source.kind === 'DESIGNED' && source.format !== null) {
-    const design = pdfDesignSchema.safeParse(source.format.design);
+    const design = anyPdfDesignSchema.safeParse(source.format.design);
     if (!design.success) throw new PdfDesignInvalidError(design.error.issues.map((issue) => ({ code: 'DESIGN_SCHEMA', path: issue.path.join('.'), detail: issue.message })));
+    if (design.data.version === 2) {
+      const canvas = new CanvasResolver(facts).resolve(design.data);
+      return { kind: 'CANVAS', fileName: fileNameOf(source.format.fileNamePattern, source.format.name, canvas.texts, facts), imageKeys: imageKeysOf(facts, canvas.usesLogo), job: canvas.content };
+    }
     const resolved = resolver.resolve(design.data);
     const fileName = fileNameOf(source.format.fileNamePattern, source.format.name, resolver, facts);
     return {

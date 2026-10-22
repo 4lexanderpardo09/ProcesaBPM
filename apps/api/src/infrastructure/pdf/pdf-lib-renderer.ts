@@ -1,6 +1,8 @@
 import { PdfTemplateInvalidError, PDF_LIMITS } from '@procesabpm/shared';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFCheckBox, PDFDropdown, PDFFont, PDFPage, PDFRadioGroup, PDFTextField, degrees, rgb } from 'pdf-lib';
+import { CanvasFonts, drawCanvasOps, PT_PER_MM } from './canvas-drawing.js';
+import { layoutCanvas } from './layout/canvas-layout.js';
 import { layoutDocument, RenderLimitError } from './layout/flow-layout.js';
 import { alignedX, clampLines, wrapText } from './layout/text-wrap.js';
 import type { DrawCommand, TextMeasurer } from './resolved-document.js';
@@ -9,7 +11,7 @@ import { isSafeImage, readImageInfo } from './image-size.js';
 import { toUserSpace } from './page-geometry.js';
 import { LOAD_OPTIONS } from './pdf-lib-inspector.js';
 import { sanitizePdf } from './pdf-sanitizer.js';
-import { type DesignJob, type FilledField, type FilledSignature, type ImageBytes, type PdfMeta, PdfRenderer, type RenderedPdf, type TemplateJob } from './pdf-renderer.js';
+import { type CanvasJob, type DesignJob, type FilledField, type FilledSignature, type ImageBytes, type PdfMeta, PdfRenderer, type RenderedPdf, type TemplateJob } from './pdf-renderer.js';
 
 type EmbeddedImage = Awaited<ReturnType<PDFDocument['embedPng']>>;
 
@@ -108,6 +110,18 @@ export class PdfLibRenderer extends PdfRenderer {
     const laid = layoutDocument({ page: job.page, defaultFontSize: job.defaultFontSize, body: job.body, header: job.header, footer: job.footer, measurer: typography.measurer, deadlineAt: job.deadlineAt });
     const pages = Array.from({ length: laid.pageCount }, () => document.addPage([job.page.width, job.page.height]));
     for (const command of laid.commands) drawCommand(command, pages[command.page - 1]!, typography, images);
+    return { bytes: await document.save(), pageCount: laid.pageCount };
+  }
+
+  async renderCanvas(job: CanvasJob): Promise<RenderedPdf> {
+    const document = await PDFDocument.create();
+    setMetadata(document, job.meta);
+    const fonts = await CanvasFonts.embedAll(document);
+    const images = await embedImages(document, job.images);
+    const laid = layoutCanvas(job, fonts.measurer, job.deadlineAt);
+    const size: [number, number] = [job.page.width * PT_PER_MM, job.page.height * PT_PER_MM];
+    const pages = Array.from({ length: laid.pageCount }, () => document.addPage(size));
+    drawCanvasOps(pages, laid.ops, fonts, images);
     return { bytes: await document.save(), pageCount: laid.pageCount };
   }
 

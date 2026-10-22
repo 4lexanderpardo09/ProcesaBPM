@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
-import type { PageQuery, PdfDesign } from '@procesabpm/shared';
+import type { PageQuery, AnyPdfDesign } from '@procesabpm/shared';
 import { nameFilter, pageWindow } from '../../../common/crud/pagination.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
@@ -18,7 +18,7 @@ export interface PdfFormatRow {
 export interface PdfFormatWrite {
   readonly name?: string;
   readonly description?: string | null;
-  readonly design?: PdfDesign;
+  readonly design?: AnyPdfDesign;
   readonly fileNamePattern?: string | null;
   readonly isActive?: boolean;
 }

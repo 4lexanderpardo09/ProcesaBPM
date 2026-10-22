@@ -87,7 +87,9 @@ export class PdfPreviewService {
       const rendered =
         plan.kind === 'DESIGN'
           ? await this.renderer.renderDesign({ ...plan.job, images, deadlineAt, meta })
-          : await this.renderer.fillTemplate({ template: await this.storage.read(plan.templateStorageKey, TEMPLATE_MAX_BYTES), ...plan.job, images, deadlineAt, meta });
+          : plan.kind === 'CANVAS'
+            ? await this.renderer.renderCanvas({ ...plan.job, images, deadlineAt, meta })
+            : await this.renderer.fillTemplate({ template: await this.storage.read(plan.templateStorageKey, TEMPLATE_MAX_BYTES), ...plan.job, images, deadlineAt, meta });
       return { bytes: rendered.bytes, fileName: plan.fileName };
     } catch (error) {
       throw new PdfRenderFailedError({ cause: error });

@@ -1,5 +1,5 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
-import { type PdfDesign, type PdfProblem, type WorkflowProblem, type WorkflowVersionDocument, validateDesign, validateMapping, parseBlockConfig } from '@procesabpm/shared';
+import { type AnyPdfDesign, type PdfProblem, type WorkflowProblem, type WorkflowVersionDocument, validateDesign, validateMapping, parseBlockConfig } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type PublicationCheck, PublicationCheckRegistry } from '../../workflows/application/publication-check.registry.js';
 import { DocumentSourceRepository } from '../data/document-source.repository.js';
@@ -40,7 +40,7 @@ export class DocumentSourcesPublicationCheck implements PublicationCheck, OnModu
       }
       if (!source.isActive && stepId !== undefined) problems.push({ code: 'DOCUMENT_SOURCE_INACTIVE', severity: 'error', stepId, params: { workflowDocumentId } });
       if (!source.isActive) return;
-      if (source.format !== null) problems.push(...validateDesign(source.format.design as PdfDesign, document).map((problem) => asProblem(problem, stepId)));
+      if (source.format !== null) problems.push(...validateDesign(source.format.design as AnyPdfDesign, document).map((problem) => asProblem(problem, stepId)));
       if (source.template !== null) {
         const template = await this.sources.templateShape(tx, tenantId, source.template.id);
         const mapping = { fields: source.template.fields.map(toMappedField), signatures: source.template.signatures.map(toMappedSignature) };

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { NotFoundError, type PdfDesign, type PdfProblem, type TemplateMapping, validateDesign, validateMapping, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { NotFoundError, type AnyPdfDesign, type PdfProblem, type TemplateMapping, validateDesign, validateMapping, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { WorkflowVersionQuery } from '../../workflows/application/workflow-version-query.js';
 
@@ -12,7 +12,7 @@ export interface CheckResult {
 
 export interface SourceChecker {
   readonly document: WorkflowVersionDocument;
-  design(design: PdfDesign): CheckResult;
+  design(design: AnyPdfDesign): CheckResult;
   mapping(mapping: TemplateMapping, template: Parameters<typeof validateMapping>[1]): CheckResult;
 }
 

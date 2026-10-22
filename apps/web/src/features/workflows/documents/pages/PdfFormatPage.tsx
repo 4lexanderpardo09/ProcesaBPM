@@ -61,12 +61,24 @@ export function PdfFormatPage() {
   // Tickets run on the published version; while there is none, the draft is all there is.
   const current = publishedDoc.data?.document ?? draftDoc.data?.document ?? EMPTY_DOCUMENT;
   const upcoming = publishedDoc.data === undefined ? undefined : draftDoc.data?.document;
-  return <Designer key={format.data.id} workflowId={workflowId} format={format.data} current={current} upcoming={upcoming} breadcrumb={breadcrumb} />;
+  const loaded = format.data;
+  if (loaded.design.version === 2) {
+    return (
+      <>
+        {breadcrumb(loaded.name)}
+        <Alert tone="info">{t('documents.designer.canvasSoon')}</Alert>
+      </>
+    );
+  }
+  return <Designer key={loaded.id} workflowId={workflowId} format={{ ...loaded, design: loaded.design }} current={current} upcoming={upcoming} breadcrumb={breadcrumb} />;
 }
+
+/** A format of the block designer (version 1). */
+type BlockFormat = PdfFormat & { readonly design: PdfDesign };
 
 interface DesignerProps {
   readonly workflowId: string;
-  readonly format: PdfFormat;
+  readonly format: BlockFormat;
   readonly current: WorkflowVersionDocument;
   readonly upcoming: WorkflowVersionDocument | undefined;
   readonly breadcrumb: (name: string) => ReactNode;
@@ -77,7 +89,7 @@ function Designer({ workflowId, format, current, upcoming, breadcrumb }: Designe
   const client = useApiClient();
   const queryClient = useQueryClient();
   const canEdit = usePermissions().can('update', 'PdfDocument');
-  const [saved, setSaved] = useState(format);
+  const [saved, setSaved] = useState<PdfFormat>(format);
   const [design, setDesign] = useState<PdfDesign>(format.design);
   const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState<BlockRef>();

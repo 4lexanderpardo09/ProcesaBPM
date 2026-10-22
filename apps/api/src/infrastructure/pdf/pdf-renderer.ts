@@ -1,4 +1,5 @@
 import type { AcroFieldInfo, PageBox } from '@procesabpm/shared';
+import type { CanvasContent } from './canvas-document.js';
 import type { Align, ResolvedBlock } from './resolved-document.js';
 
 export interface PdfMeta {
@@ -21,6 +22,13 @@ export interface DesignJob {
   readonly body: readonly ResolvedBlock[];
   readonly header?: { readonly height: number; readonly resolve: (page: number, pages: number) => readonly ResolvedBlock[] } | undefined;
   readonly footer?: { readonly height: number; readonly resolve: (page: number, pages: number) => readonly ResolvedBlock[] } | undefined;
+  readonly images: ReadonlyMap<string, ImageBytes>;
+  readonly deadlineAt: number;
+  readonly meta: PdfMeta;
+}
+
+/** A canvas (designer format version 2), already evaluated against a ticket. */
+export interface CanvasJob extends CanvasContent {
   readonly images: ReadonlyMap<string, ImageBytes>;
   readonly deadlineAt: number;
   readonly meta: PdfMeta;
@@ -49,6 +57,7 @@ export interface TemplateJob {
 /** Port of the PDF engine: draws designer documents and fills uploaded templates. */
 export abstract class PdfRenderer {
   abstract renderDesign(job: DesignJob): Promise<RenderedPdf>;
+  abstract renderCanvas(job: CanvasJob): Promise<RenderedPdf>;
   abstract fillTemplate(job: TemplateJob): Promise<RenderedPdf>;
 }
 

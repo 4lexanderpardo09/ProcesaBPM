@@ -2,17 +2,17 @@ import { z } from 'zod';
 import { nameSchema, pageQuerySchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 import { requestUploadsSchema } from '../files/schemas.js';
-import { pdfDesignSchema } from '../../pdf/design-schema.js';
+import { anyPdfDesignSchema } from '../../pdf/canvas-schema.js';
 import { expressionSchema } from '../../pdf/design-schema.js';
 import { templateMappingSchema } from '../../pdf/mapping-schema.js';
 
 export const createPdfFormatRequestSchema = z
-  .object({ name: nameSchema, description: z.string().trim().max(1000).optional(), design: pdfDesignSchema, fileNamePattern: expressionSchema.max(200).optional() })
+  .object({ name: nameSchema, description: z.string().trim().max(1000).optional(), design: anyPdfDesignSchema, fileNamePattern: expressionSchema.max(200).optional() })
   .strict();
 export type CreatePdfFormatRequest = z.infer<typeof createPdfFormatRequestSchema>;
 
 export const updatePdfFormatRequestSchema = z
-  .object({ name: nameSchema, description: z.string().trim().max(1000).nullable(), design: pdfDesignSchema, fileNamePattern: expressionSchema.max(200).nullable(), isActive: z.boolean() })
+  .object({ name: nameSchema, description: z.string().trim().max(1000).nullable(), design: anyPdfDesignSchema, fileNamePattern: expressionSchema.max(200).nullable(), isActive: z.boolean() })
   .partial()
   .strict()
   .refine((body) => Object.keys(body).length > 0, 'Nothing to change');
@@ -60,7 +60,7 @@ export interface PdfFormatResponse {
   readonly workflowId: string;
   readonly name: string;
   readonly description: string | null;
-  readonly design: z.infer<typeof pdfDesignSchema>;
+  readonly design: z.infer<typeof anyPdfDesignSchema>;
   readonly fileNamePattern: string | null;
   readonly isActive: boolean;
   readonly updatedAt: string;

@@ -1,5 +1,7 @@
 import type { FieldDocument, StepDocument, WorkflowVersionDocument } from '../workflow/document.js';
 import { type Path, type ParsedExpression, parseExpression, pathsOf } from './expression.js';
+import { compileCanvasFormulas } from './canvas-formulas.js';
+import type { AnyPdfDesign, CanvasElement, PdfCanvasDesign } from './canvas-schema.js';
 import type { PdfBlock, PdfDesign } from './design-schema.js';
 import { type AcroFieldInfo, displayedSize, type PageBox, type TemplateMapping } from './mapping-schema.js';
 
@@ -12,6 +14,9 @@ export interface PdfProblem {
     | 'DOCUMENT_SIGNATURE_STEP_UNKNOWN'
     | 'DOCUMENT_SIGNATURE_STEP_NOT_PEOPLE'
     | 'DOCUMENT_STEP_UNKNOWN'
+    | 'DOCUMENT_CALCULATION_UNKNOWN'
+    | 'DOCUMENT_CALCULATION_CODE_TAKEN'
+    | 'DOCUMENT_FORMULA_INVALID'
     | 'PAGE_AND_PAGES_OUTSIDE_BAND'
     | 'ACROFORM_FIELD_UNKNOWN'
     | 'COORDINATE_OUT_OF_PAGE'
@@ -26,10 +31,12 @@ const PEOPLE_STEP_TYPES: ReadonlySet<string> = new Set(['TASK', 'APPROVAL', 'DEC
 interface Scope {
   readonly fields: ReadonlyMap<string, FieldDocument>;
   readonly steps: ReadonlyMap<string, StepDocument>;
+  /** Codes of the canvas calculations; a block document has none. */
+  readonly calculations: ReadonlySet<string>;
 }
 
-function scopeOf(doc: WorkflowVersionDocument): Scope {
-  return { fields: new Map(doc.fields.map((field) => [field.code, field])), steps: new Map(doc.steps.map((step) => [step.name, step])) };
+function scopeOf(doc: WorkflowVersionDocument, calculations: readonly string[] = []): Scope {
+  return { fields: new Map(doc.fields.map((field) => [field.code, field])), steps: new Map(doc.steps.map((step) => [step.name, step])), calculations: new Set(calculations) };
 }
 
 const tableColumns = (field: FieldDocument): string[] => (Array.isArray(field.config.columns) ? (field.config.columns as Array<{ code?: unknown }>).flatMap((column) => (typeof column.code === 'string' ? [column.code] : [])) : []);
@@ -42,6 +49,8 @@ function checkPath(path: Path, at: string, scope: Scope, row: FieldDocument | un
   } else if (path.kind === 'row') {
     if (row === undefined) problems.push({ code: 'DOCUMENT_ROW_OUTSIDE_TABLE', path: at, detail: path.code });
     else if (!tableColumns(row).includes(path.code)) problems.push({ code: 'DOCUMENT_TABLE_COLUMN_UNKNOWN', path: at, detail: path.code });
+  } else if (path.kind === 'calc') {
+    if (!scope.calculations.has(path.code)) problems.push({ code: 'DOCUMENT_CALCULATION_UNKNOWN', path: at, detail: path.code });
   } else if (path.kind === 'step') {
     if (!scope.steps.has(path.stepName)) problems.push({ code: 'DOCUMENT_STEP_UNKNOWN', path: at, detail: path.stepName });
   } else if ((path.kind === 'page' || path.kind === 'pages') && !inFrame) {
@@ -105,13 +114,42 @@ export function validateExpressionText(text: string, at: string, doc: WorkflowVe
   return problems;
 }
 
-/** Checks a designer format against a workflow version: every field, table column and step it names must exist. */
-export function validateDesign(design: PdfDesign, doc: WorkflowVersionDocument): PdfProblem[] {
+/** Checks a designer format against a workflow version: every field, table column, step and calculation it names must exist. */
+export function validateDesign(design: AnyPdfDesign, doc: WorkflowVersionDocument): PdfProblem[] {
+  if (design.version === 2) return validateCanvasDesign(design, doc);
   const scope = scopeOf(doc);
   const problems: PdfProblem[] = [];
   for (const [index, block] of design.body.entries()) checkBlock(block, `body[${index}]`, scope, false, problems);
   for (const band of ['header', 'footer'] as const) for (const [index, block] of (design[band]?.blocks ?? []).entries()) checkBlock(block, `${band}.blocks[${index}]`, scope, true, problems);
   return problems;
+}
+
+function validateCanvasDesign(design: PdfCanvasDesign, doc: WorkflowVersionDocument): PdfProblem[] {
+  const problems: PdfProblem[] = [...compileCanvasFormulas(design, doc.fields).problems];
+  const scope = scopeOf(doc, design.calculations.map((calculation) => calculation.code));
+  // Page numbers make sense anywhere on a canvas: every element knows the page it lands on.
+  design.elements.forEach((element, index) => checkElement(element, `elements[${index}]`, scope, problems));
+  return problems;
+}
+
+function checkElement(element: CanvasElement, at: string, scope: Scope, problems: PdfProblem[]): void {
+  switch (element.type) {
+    case 'text':
+      checkExpression(element.content, `${at}.content`, scope, undefined, true, problems);
+      break;
+    case 'table': {
+      const field = scope.fields.get(element.fieldCode);
+      if (field === undefined) problems.push({ code: 'DOCUMENT_FIELD_UNKNOWN', path: `${at}.fieldCode`, detail: element.fieldCode });
+      else if (field.type !== 'TABLE') problems.push({ code: 'DOCUMENT_FIELD_TYPE_MISMATCH', path: `${at}.fieldCode`, detail: `${element.fieldCode} is not a table` });
+      for (const [index, column] of element.columns.entries()) checkExpression(column.value, `${at}.columns[${index}].value`, scope, field?.type === 'TABLE' ? field : undefined, true, problems);
+      break;
+    }
+    case 'signature':
+      if (element.source === 'STEP' && element.stepName !== null) checkSlot({ stepName: element.stepName }, `${at}.stepName`, scope, problems);
+      break;
+    default:
+      break;
+  }
 }
 
 /** Checks the mapping of an uploaded PDF: fields and steps exist, AcroForm names are in the PDF, coordinates are on the page. */

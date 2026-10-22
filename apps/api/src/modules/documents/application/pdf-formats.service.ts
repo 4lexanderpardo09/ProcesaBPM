@@ -16,7 +16,7 @@ import { type TenantTransaction, TenantTransactionRunner } from '../../../infras
 import { PdfFormatRepository, type PdfFormatRow } from '../data/pdf-format.repository.js';
 import { DocumentSourceValidator } from './document-source.validator.js';
 import { toFormatResponse } from './document-responses.js';
-import type { PdfDesign } from '@procesabpm/shared';
+import type { AnyPdfDesign } from '@procesabpm/shared';
 
 /** Admin of the designer formats of a workflow. A design is checked against the workflow's versions every time it is saved. */
 @Injectable()
@@ -33,7 +33,7 @@ export class PdfFormatsService {
       const checker = await this.validator.forWorkflow(tx, this.tenantId, workflowId);
       const { rows, total } = await this.formats.list(tx, this.tenantId, workflowId, query);
       return toPage(rows, total, query, (row) => {
-        const checked = checker.design(row.design as PdfDesign);
+        const checked = checker.design(row.design as AnyPdfDesign);
         return toFormatResponse(row, [...checked.errors, ...checked.warnings]);
       });
     });
@@ -82,7 +82,7 @@ export class PdfFormatsService {
 
   private async respond(tx: TenantTransaction, workflowId: string, id: string): Promise<PdfFormatResponse> {
     const row = await this.require(tx, workflowId, id);
-    const checked = (await this.validator.forWorkflow(tx, this.tenantId, workflowId)).design(row.design as PdfDesign);
+    const checked = (await this.validator.forWorkflow(tx, this.tenantId, workflowId)).design(row.design as AnyPdfDesign);
     return toFormatResponse(row, [...checked.errors, ...checked.warnings]);
   }
 

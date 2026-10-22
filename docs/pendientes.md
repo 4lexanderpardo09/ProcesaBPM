@@ -19,7 +19,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2; la actividad muestra qué cambió);
     - ~~registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»~~ (hecho, arquitectura §14.2);
     - ~~filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, fechas)~~ (hecho, arquitectura §4.22); falta filtrar por el valor de un campo.
-  - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ProcesaBPM es por bloques.
+  - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ~~El motor del lienzo (esquema, cálculos, condiciones, maquetado y dibujo)~~ (hecho, arquitectura §15); falta el editor en la web; imágenes subidas al formato (hoy solo el logo) y firmas filtradas por cargo.
   - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
   - **Fuera del alcance:** ventas, listas de precios y la parte propia de viáticos.
 - **Acceso a la cuenta en la web (2026-10-21, `feat/web-account-access`):** recuperar contraseña, aceptar invitaciones, cambiar de organización y enlaces de correo con `?tenant=`. Detalle en arquitectura.md §4.21.
