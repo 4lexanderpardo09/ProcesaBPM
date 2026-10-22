@@ -8,6 +8,7 @@ import { activePrioritiesQueryOptions } from '../../api/priorities-api';
 import { AdminList } from '@/shared/admin/AdminList';
 import { CategoryDialog } from './CategoryDialog';
 import { SubcategoryDialog } from './SubcategoryDialog';
+import { VisibilityDialog } from './VisibilityDialog';
 import styles from '../Catalog.module.css';
 import { CATALOG_DEPENDENTS } from '../../lib/catalog-dependents';
 
@@ -19,6 +20,7 @@ export function CategoriesTab() {
   const { can } = usePermissions();
   const [category, setCategory] = useState<Editing<CategoryResponse>>(null);
   const [selected, setSelected] = useState<CategoryResponse>();
+  const [visibility, setVisibility] = useState<CategoryResponse>();
   return (
     <div className={styles.stack}>
       <AdminList
@@ -32,14 +34,24 @@ export function CategoriesTab() {
         {...(can('update', 'Category') ? { onEdit: (record: CategoryResponse) => setCategory({ mode: 'edit', record }) } : {})}
         canToggle={can('update', 'Category') && can('delete', 'Category')}
         rowAction={(row) =>
-          can('read', 'Subcategory') ? (
-            <Button variant="ghost" aria-pressed={selected?.id === row.id} aria-label={t('categories.subcategoriesOf', { name: row.name })} onClick={() => setSelected(selected?.id === row.id ? undefined : row)}>
-              {t('categories.subcategories')}
-            </Button>
+          can('update', 'Category') || can('read', 'Subcategory') ? (
+            <>
+              {can('update', 'Category') && (
+                <Button variant="ghost" aria-label={t('catalog:visibility.open', { name: row.name })} onClick={() => setVisibility(row)}>
+                  {t('catalog:visibility.button')}
+                </Button>
+              )}
+              {can('read', 'Subcategory') && (
+                <Button variant="ghost" aria-pressed={selected?.id === row.id} aria-label={t('categories.subcategoriesOf', { name: row.name })} onClick={() => setSelected(selected?.id === row.id ? undefined : row)}>
+                  {t('categories.subcategories')}
+                </Button>
+              )}
+            </>
           ) : null
         }
       />
       {selected !== undefined && <SubcategoriesPanel key={selected.id} category={selected} />}
+      {visibility !== undefined && <VisibilityDialog category={visibility} onClose={() => setVisibility(undefined)} />}
       {category !== null && <CategoryDialog record={category.mode === 'edit' ? category.record : undefined} onClose={() => setCategory(null)} />}
     </div>
   );

@@ -524,6 +524,28 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Integración del API:** la lista y el 401.
   - **Límite de las pruebas:** de la web, sube a 15 s por prueba (`vite.config.ts`), porque las páginas completas en jsdom con todos los núcleos ocupados pasaban de 5 s.
 
+### 4.23 Ajustes de la organización, visibilidad de categorías, avisos y copia de los datos (hecho, 2026-10-21, `feat/web-settings`)
+- **Ajustes (`/settings/:tab`, `features/settings`):** en el menú si el rol tiene alguno de `update Setting`, `manage SupportAccess`, `read Storage` o `read AuditLog`. Una pestaña por permiso, con la pestaña en la ruta (el correo de almacenamiento enlaza `/settings/storage`):
+  - **Seguridad (`/settings/security`):** exigir la verificación en dos pasos a todos, con cuántas personas activas aún no la tienen.
+  - **Acceso de soporte (`/settings/support-access`):** dar acceso de solo lectura por 1 a 72 horas con un motivo, ver el vigente (hasta cuándo, quién lo dio, visitas), terminarlo, y la historia con visitas y consultas.
+  - **Almacenamiento (`/storage/usage`):** usado frente al plan con un medidor, reservado por subidas en curso, personas activas, y avisos cuando pasa el límite o se bloquea. Los bytes llegan como texto y se convierten para mostrarlos.
+  - **Auditoría (`/audit-logs`):** el más reciente primero, por defecto 30 días. Filtra por fechas y por acción (exacta o prefijo `role.`) y pagina por cursor («Cargar más»).
+    - **Nombres en español:** las acciones del API tienen el suyo, leído como un objeto porque llevan punto; las que no lo tienen muestran «sujeto · verbo».
+    - **Detalle:** cada registro abre el antes y el después, la IP y la petición.
+- **Visibilidad de categorías:** el botón «Visibilidad» de cada categoría (`update Category`) elige las empresas y los departamentos que la ven al crear un ticket (`PUT /categories/:id/visibility`). Vacío significa todos; es lo que en la mesa hacían las reglas de mapeo, junto con quién inicia en el bloque Inicio.
+- **Avisos (`GET /announcements`):** los de la plataforma vigentes van arriba de cada página (mantenimiento en amarillo) y cada uno se cierra para la sesión (`sessionStorage`).
+- **Copia de los datos:** en una organización en eliminación, el dueño o un administrador pide la copia con su contraseña (con o sin archivos), ve su estado (se actualiza cada 15 s mientras se arma) y la descarga con la contraseña otra vez. Antes la pantalla decía que «llegaría pronto».
+- **Pruebas:**
+  - **Unitarias:**
+    - Seguridad, incluido el 403 con su mensaje.
+    - Acceso de soporte: dar, terminar y la historia.
+    - Almacenamiento desde el enlace del correo.
+    - Auditoría: nombres, detalle y «Cargar más».
+    - Pestañas según el rol.
+    - Avisos.
+    - Visibilidad de una categoría.
+    - Nombres de las acciones.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

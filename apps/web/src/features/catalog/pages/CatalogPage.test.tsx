@@ -102,6 +102,29 @@ describe('CatalogPage', () => {
     );
   });
 
+  it('limits who sees a category to some companies, all departments staying open', async () => {
+    const MAIN = id(60);
+    const BRANCH = id(61);
+    const company = (companyId: string, name: string) => ({ id: companyId, name, taxId: null, countryCode: 'CO', currencyCode: 'COP', timeZone: 'America/Bogota', calendarId: null, isDefault: false, isActive: true, createdAt: at });
+    const { fake } = renderRoute('/catalog', {
+      handlers: handlers({
+        [`/categories/${CARTERA}/visibility`]: (options) => (options.method === 'PUT' ? options.body : { companyIds: [], departmentIds: [] }),
+        '/companies': () => page([company(MAIN, 'Electrocréditos'), company(BRANCH, 'Finansueños')]),
+        '/departments': () => page([{ id: id(62), name: 'Cartera', isActive: true, createdAt: at }]),
+      }),
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Quién ve «Cartera»' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Quién ve «Cartera»' });
+    expect(await within(dialog).findByText('La ven todas las empresas.')).toBeInTheDocument();
+    await userEvent.click(await within(dialog).findByRole('checkbox', { name: 'Finansueños' }));
+    expect(within(dialog).getByText('Solo la ve 1 empresa.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+
+    await vi.waitFor(() => expect(fake.calls.find((call) => call.options.method === 'PUT')?.options.body).toEqual({ companyIds: [BRANCH], departmentIds: [] }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Quién ve «Cartera»' })).toBeNull());
+  });
+
   it('keeps a reopening type from also closing the ticket', async () => {
     const { fake } = renderRoute('/catalog?tab=error-types', { handlers: handlers({ [`/error-types/${id(40)}`]: (options) => ({ id: id(40), name: 'Cierre prematuro', description: null, isProcessError: false, forcesClose: true, isReopening: false, isActive: true, ...((options.body as object) ?? {}) }) }) });
 

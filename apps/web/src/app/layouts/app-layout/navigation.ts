@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react';
-import { BuildingIcon, ChartIcon, GridIcon, type IconProps, InboxIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
+import { BuildingIcon, ChartIcon, GridIcon, type IconProps, InboxIcon, SettingsIcon, UserIcon, WorkflowIcon } from '@/shared/ui';
 import { paths } from '@/shared/lib/paths';
 import type { PermissionCheck } from '@/shared/session';
 
-export type NavigationItemKey = 'tickets' | 'workflows' | 'reports' | 'catalog' | 'organization' | 'people';
+export type NavigationItemKey = 'tickets' | 'workflows' | 'reports' | 'catalog' | 'organization' | 'people' | 'settings';
 
 export interface NavigationItem {
   readonly key: NavigationItemKey;
@@ -51,6 +51,7 @@ export const navigationSections: readonly NavigationSection[] = [
       { key: 'catalog', path: paths.catalog, icon: GridIcon, requires: CATALOG_SCREENS },
       { key: 'organization', path: paths.organization, icon: BuildingIcon, requires: ORGANIZATION_SCREENS },
       { key: 'people', path: paths.people, icon: UserIcon, requires: [['read', 'Membership'], ['read', 'Role'], ['read', 'Group'], ['read', 'ApprovalGroup'], ['manage', 'Delegation']] },
+      { key: 'settings', path: paths.settings, icon: SettingsIcon, requires: [['update', 'Setting'], ['manage', 'SupportAccess'], ['read', 'Storage'], ['read', 'AuditLog']] },
     ],
   },
 ];
