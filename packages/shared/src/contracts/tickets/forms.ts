@@ -22,7 +22,8 @@ export interface FormFieldResponse {
   readonly dataSource: Readonly<Record<string, unknown>> | null;
 }
 
-export const creationFormQuerySchema = z.object({ companyId: uuidSchema.optional() });
+/** `requesterId`: the form for the person a ticket is created for (needs `create_for_others`); the caller's by default. */
+export const creationFormQuerySchema = z.object({ companyId: uuidSchema.optional(), requesterId: uuidSchema.optional() });
 export type CreationFormQuery = z.infer<typeof creationFormQuerySchema>;
 
 export interface CreationFormStart {

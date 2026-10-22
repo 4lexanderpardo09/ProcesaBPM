@@ -69,6 +69,22 @@ describe('ticket forms', () => {
       expect(created.body.error.code).toBe('INITIATOR_NOT_ALLOWED');
     });
 
+    it('draws the form and the catalog of someone else for whoever creates for others, and only for them', async () => {
+      const desk = await world.member([grant('create_for_others'), grant('read_all')]);
+      const restricted = await publishFlow(world.admin, formFlow([user(colleague)]));
+      // The desk is not an initiator of the restricted flow, the colleague is: the form and the catalog are the colleague's.
+      const form = (await desk.client.get(`/subcategories/${restricted.subcategoryId}/creation-form?requesterId=${colleague.userId}`).expect(200)).body;
+      expect(form.starts).toHaveLength(1);
+      const catalog = (await desk.client.get(`/catalog/available?requesterId=${colleague.userId}`).expect(200)).body;
+      expect(catalog.categories.flatMap((category: { subcategories: Array<{ id: string }> }) => category.subcategories.map((subcategory) => subcategory.id))).toContain(restricted.subcategoryId);
+      expect(catalog.companies.length).toBeGreaterThan(0);
+      const created = await desk.client.post('/tickets', { subcategoryId: restricted.subcategoryId, requesterId: colleague.userId, title: unique('T'), values: { AMOUNT: 1 } }).expect(201);
+      expect(created.body.ticket ?? created.body).toBeTruthy();
+
+      await member.client.get(`/subcategories/${flow.subcategoryId}/creation-form?requesterId=${colleague.userId}`).expect(403);
+      await member.client.get(`/catalog/available?requesterId=${colleague.userId}`).expect(403);
+    });
+
     it('needs the create permission and an existing subcategory', async () => {
       await reader.client.get(`/subcategories/${flow.subcategoryId}/creation-form`).expect(403);
       await member.client.get('/subcategories/0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f90/creation-form').expect(404);

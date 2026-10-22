@@ -1,0 +1,26 @@
+export const home = {
+  title: 'Inicio',
+  greeting: 'Hola, {{name}}',
+  subtitle: 'Lo que tienes a cargo y lo que espera por ti.',
+  newTicket: 'Nuevo ticket',
+  loading: 'Cargando…',
+  loadFailed: 'No se pudo cargar. Recarga la página.',
+  stats: {
+    label: 'Resumen',
+    myOpen: 'Asignados a mí',
+    myOverdue: 'Vencidos',
+    myDueSoon: 'Vencen en 24 horas',
+    createdByMeOpen: 'Mis solicitudes abiertas',
+    closedByMeWeek: 'Cerré en los últimos 7 días',
+  },
+  pending: {
+    heading: 'Pendientes',
+    number: 'N.º',
+    title: 'Asunto',
+    status: 'Estado',
+    due: 'Vence',
+    noDue: 'Sin plazo',
+    overdue: 'Vencido',
+    empty: 'No tienes tickets pendientes.',
+  },
+} as const;

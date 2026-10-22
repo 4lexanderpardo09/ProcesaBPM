@@ -8,17 +8,18 @@ import { InboxFilters } from '../components/InboxFilters';
 import { LoadError } from '../components/LoadError';
 import { TicketTable } from '../components/TicketTable';
 import { useTicketInbox } from '../hooks/use-ticket-inbox';
-import { INBOX_VIEWS, type InboxParams, readInboxParams, writeInboxParams } from '../lib/inbox-params';
+import { filtersOf, hasFilters, INBOX_VIEWS, type InboxParams, readInboxParams, writeInboxParams } from '../lib/inbox-params';
 import styles from './TicketInboxPage.module.css';
 
-/** The tickets of the person in tabs (assigned, created, observed, all), filtered by status and paginated; the URL keeps it all. */
+/** The tickets of the person in tabs (assigned, created, observed, all) with how many each holds, filtered and paginated; the URL keeps it all. */
 export function TicketInboxPage() {
   const { t } = useTranslation('tickets');
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readInboxParams(searchParams);
   const { list, countOf } = useTicketInbox(params);
   const timeZone = useCurrentUser().data?.user.timeZone ?? undefined;
-  const show = (next: Partial<InboxParams>) => setSearchParams(writeInboxParams({ ...params, page: 1, ...next }));
+  // Merged into the URL as it is when it applies: a filter and a settling search close together both stay.
+  const show = (next: Partial<InboxParams>) => setSearchParams((current) => writeInboxParams({ ...readInboxParams(current), page: 1, ...next }));
   const page = list.data;
 
   return (
@@ -39,7 +40,7 @@ export function TicketInboxPage() {
           value={params.view}
           onChange={(view) => show({ view })}
         />
-        <InboxFilters status={params.status} onStatusChange={(status) => show({ status })} />
+        <InboxFilters filters={filtersOf(params)} onChange={(filters) => show(filters)} />
       </div>
       {list.isError ? (
         <LoadError error={list.error} onRetry={() => void list.refetch()} />
@@ -47,7 +48,7 @@ export function TicketInboxPage() {
         <TicketTable
           tickets={page?.items ?? []}
           loading={page === undefined}
-          empty={params.status === undefined ? t(`inbox.empty.${params.view}`) : t('inbox.empty.filtered')}
+          empty={hasFilters(filtersOf(params)) ? t('inbox.empty.filtered') : t(`inbox.empty.${params.view}`)}
           timeZone={timeZone}
           footer={page === undefined || page.total === 0 ? undefined : <Pagination page={params.page} pageSize={INBOX_PAGE_SIZE} total={page.total} onChange={(next) => show({ page: next })} />}
         />

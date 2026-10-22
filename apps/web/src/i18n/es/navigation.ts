@@ -5,6 +5,7 @@ export const navigation = {
     configuration: 'Configuración',
   },
   items: {
+    home: 'Inicio',
     tickets: 'Bandejas',
     workflows: 'Flujos',
     reports: 'Reportes',

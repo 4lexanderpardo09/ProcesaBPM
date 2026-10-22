@@ -160,3 +160,17 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.requester {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.requester > button {
+  align-self: flex-start;
+}
+
+.requesterRow {
+  margin-bottom: var(--space-4);
+}

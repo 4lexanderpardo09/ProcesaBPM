@@ -95,6 +95,14 @@ export const BellIcon = createIcon('BellIcon', (
   </>
 ));
 
+export const HomeIcon = createIcon('HomeIcon', (
+  <>
+    <path d="m3 10 9-7 9 7" />
+    <path d="M5 9v11h14V9" />
+    <path d="M10 20v-6h4v6" />
+  </>
+));
+
 export const SettingsIcon = createIcon('SettingsIcon', (
   <>
     <circle cx="12" cy="12" r="3" />

@@ -39,6 +39,10 @@ export function createTestSession({ signedIn = true, handlers = {} }: TestSessio
     // The organization switcher: only the session's one unless a test says otherwise.
     '/auth/me/organizations': () => ({ organizations: [] }),
     '/tickets': () => ({ items: [], page: 1, pageSize: 25, total: 0 }),
+    '/tickets/counts': () => ({ assigned: 0, created: 0, observed: 0, all: 0 }),
+    // The home: nothing pending unless a test says otherwise.
+    '/dashboard/stats': () => ({ myOpen: 0, myOverdue: 0, myDueSoon: 0, createdByMeOpen: 0, closedByMeWeek: 0 }),
+    '/dashboard/pending': () => [],
     // The comment form offers the person's templates: none unless a test says otherwise.
     '/text-templates': () => [],
     // The bell in the top bar: nothing unread unless a test says otherwise.
