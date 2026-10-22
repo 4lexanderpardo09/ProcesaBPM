@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { searchFilter, ticketFilters, ticketNumberOf, viewFilter } from './ticket-list-filters.js';
+import { fieldFilter, searchFilter, ticketFilters, ticketNumberOf, viewFilter } from './ticket-list-filters.js';
 import { createdBy, observedBy } from './ticket-subject.js';
 
 const ID = '0199a000-0000-7000-8000-000000000001';
@@ -73,6 +73,40 @@ describe('ticketFilters', () => {
       { createdAt: { gte: new Date(from) } },
       { createdAt: { lt: new Date(to) } },
     ]);
+  });
+});
+
+describe('fieldFilter', () => {
+  const code = 'DUE_ON';
+  const withValue = (value: unknown) => ({ fieldValues: { some: { field: { code }, value } } });
+
+  it('contains: the text anywhere, ignoring case', () => {
+    expect(fieldFilter({ code, operator: 'contains', value: 'fac' })).toEqual(withValue({ path: [], string_contains: 'fac', mode: 'insensitive' }));
+  });
+
+  it('equals: the text, or the number it reads as', () => {
+    expect(fieldFilter({ code, operator: 'equals', value: '77' })).toEqual({ OR: [withValue({ equals: '77' }), withValue({ equals: 77 })] });
+    expect(fieldFilter({ code, operator: 'equals', value: 'abc' })).toEqual({ OR: [withValue({ equals: 'abc' })] });
+  });
+
+  it('between dates: both ends are strings, the last day included', () => {
+    expect(fieldFilter({ code, operator: 'between', value: '2026-03-01', valueTo: '2026-03-31' })).toEqual(withValue({ gte: '2026-03-01', lt: '2026-04-01' }));
+    expect(fieldFilter({ code, operator: 'between', valueTo: '2026-12-31' })).toEqual(withValue({ gte: '0000-01-01', lt: '2027-01-01' }));
+    expect(fieldFilter({ code, operator: 'between', value: '2026-03-01' })).toEqual(withValue({ gte: '2026-03-01', lt: '9999-12-31' }));
+  });
+
+  it('between numbers: both ends are numbers', () => {
+    expect(fieldFilter({ code, operator: 'between', value: '10', valueTo: '20.5' })).toEqual(withValue({ gte: 10, lte: 20.5 }));
+    expect(fieldFilter({ code, operator: 'between', valueTo: '20' })).toEqual(withValue({ gte: -1e18, lte: 20 }));
+  });
+
+  it('filled or empty: whether the ticket has a value for that code', () => {
+    expect(fieldFilter({ code, operator: 'filled' })).toEqual({ fieldValues: { some: { field: { code } } } });
+    expect(fieldFilter({ code, operator: 'empty' })).toEqual({ fieldValues: { none: { field: { code } } } });
+  });
+
+  it('is one more term of the inbox filters', () => {
+    expect(ticketFilters({ fieldCode: code, fieldOperator: 'filled' }, ME)).toEqual([{ fieldValues: { some: { field: { code } } } }]);
   });
 });
 

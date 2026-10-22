@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
-import { ticketCountsResponseSchema } from '@procesabpm/shared';
+import { ticketCountsResponseSchema, ticketFilterFieldsResponseSchema } from '@procesabpm/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
@@ -201,6 +201,96 @@ describe('GET /tickets filters and GET /tickets/counts', () => {
       expect((await counts(reader, 'search=printer')).all).toBe(2);
       expect((await world.admin.get('/tickets?view=all&search=printer').expect(200)).body.total).toBe(2);
       expect((await foreign.admin.get('/tickets/counts?search=printer').expect(200)).body.all).toBe(1);
+    });
+  });
+
+  describe('by the value of a field', () => {
+    const field = {} as Record<'early' | 'late' | 'datetime' | 'other' | 'none', CreatedTicket>;
+    let filler: Member;
+    const byField = (query: string) => ids(reader, `view=all&${query}`);
+    const fieldIds = (...names: Array<keyof typeof field>) => names.map((name) => field[name].id).sort();
+
+    beforeAll(async () => {
+      filler = await world.member([grant('create'), ...READS]);
+      // The same codes in two workflows with other types: one filter covers both, and a range never mixes types.
+      const dated = await publishFlow(world.admin, {
+        ...simpleFlow(),
+        fields: [
+          { step: 'start', code: 'DUE_ON', type: 'DATE', capture: 'CREATION' },
+          { step: 'start', code: 'REFERENCE', type: 'TEXT', capture: 'CREATION' },
+          { step: 'start', code: 'AMOUNT', type: 'CURRENCY', capture: 'CREATION', config: { currencyCode: 'COP' } },
+        ],
+      });
+      const other = await publishFlow(world.admin, {
+        ...simpleFlow(),
+        fields: [
+          { step: 'start', code: 'DUE_ON', type: 'DATETIME', capture: 'CREATION' },
+          { step: 'start', code: 'REFERENCE', type: 'NUMBER', capture: 'CREATION' },
+          { step: 'start', code: 'AMOUNT', type: 'TEXT', capture: 'CREATION' },
+        ],
+      });
+      field.early = await create(filler, dated, 'Field early', { values: { DUE_ON: '2026-03-01', REFERENCE: 'Factura FAC-001', AMOUNT: 1500 } });
+      field.late = await create(filler, dated, 'Field late', { values: { DUE_ON: '2026-03-20', REFERENCE: 'Recibo 77', AMOUNT: 250000.5 } });
+      field.datetime = await create(filler, other, 'Field datetime', { values: { DUE_ON: '2026-03-20T22:30:00.000Z', REFERENCE: 77, AMOUNT: 'N-9000' } });
+      field.other = await create(filler, other, 'Field other', { values: { DUE_ON: '2026-04-02T10:00:00.000Z', AMOUNT: 'abc' } });
+      field.none = await create(filler, dated, 'Field none', { values: {} });
+    });
+
+    it('contains a text, ignoring case and only in that field', async () => {
+      expect(await byField('fieldCode=REFERENCE&fieldOperator=contains&fieldValue=fac-0')).toEqual(fieldIds('early'));
+      expect(await byField('fieldCode=AMOUNT&fieldOperator=contains&fieldValue=AB')).toEqual(fieldIds('other'));
+    });
+
+    it('equals a text or a number', async () => {
+      expect(await byField('fieldCode=REFERENCE&fieldOperator=equals&fieldValue=77')).toEqual(fieldIds('datetime'));
+      expect(await byField('fieldCode=AMOUNT&fieldOperator=equals&fieldValue=n-9000')).toEqual([]);
+      expect(await byField('fieldCode=AMOUNT&fieldOperator=equals&fieldValue=N-9000')).toEqual(fieldIds('datetime'));
+      expect(await byField('fieldCode=AMOUNT&fieldOperator=equals&fieldValue=1500')).toEqual(fieldIds('early'));
+    });
+
+    it('between two dates, both included, dates and date-times alike, never a number or a text', async () => {
+      expect(await byField('fieldCode=DUE_ON&fieldOperator=between&fieldValue=2026-03-02&fieldValueTo=2026-03-20')).toEqual(fieldIds('late', 'datetime'));
+      expect(await byField('fieldCode=DUE_ON&fieldOperator=between&fieldValueTo=2026-03-19')).toEqual(fieldIds('early'));
+      expect(await byField('fieldCode=DUE_ON&fieldOperator=between&fieldValue=2026-04-01')).toEqual(fieldIds('other'));
+      expect(await byField('fieldCode=AMOUNT&fieldOperator=between&fieldValue=2026-01-01')).toEqual([]);
+    });
+
+    it('between two numbers, never a text', async () => {
+      expect(await byField('fieldCode=AMOUNT&fieldOperator=between&fieldValue=1000&fieldValueTo=250000.5')).toEqual(fieldIds('early', 'late'));
+      expect(await byField('fieldCode=AMOUNT&fieldOperator=between&fieldValueTo=2000')).toEqual(fieldIds('early'));
+      expect(await byField('fieldCode=REFERENCE&fieldOperator=between&fieldValue=0')).toEqual(fieldIds('datetime'));
+    });
+
+    it('with or without a value', async () => {
+      expect(await byField('fieldCode=REFERENCE&fieldOperator=filled')).toEqual(fieldIds('early', 'late', 'datetime'));
+      expect(await byField(`fieldCode=REFERENCE&fieldOperator=empty&creatorId=${filler.userId}`)).toEqual(fieldIds('other', 'none'));
+    });
+
+    it('never widens what the caller can read', async () => {
+      expect((await list(stranger, 'view=all&fieldCode=REFERENCE&fieldOperator=filled')).total).toBe(0);
+    });
+
+    it('lists the codes to filter by, with the label and type of the newest published version', async () => {
+      const fields = ticketFilterFieldsResponseSchema.parse((await reader.client.get('/tickets/filter-fields').expect(200)).body);
+      expect(fields.filter((entry) => ['DUE_ON', 'REFERENCE', 'AMOUNT'].includes(entry.code))).toEqual([
+        { code: 'AMOUNT', label: 'AMOUNT', type: 'TEXT', options: null },
+        { code: 'DUE_ON', label: 'DUE_ON', type: 'DATETIME', options: null },
+        { code: 'REFERENCE', label: 'REFERENCE', type: 'NUMBER', options: null },
+      ]);
+      expect((await (await world.member([grant('create')])).client.get('/tickets/filter-fields')).status).toBe(403);
+    });
+
+    it.each([
+      ['a code without operator', 'fieldCode=REFERENCE'],
+      ['an operator without code', 'fieldOperator=filled'],
+      ['contains without a value', 'fieldCode=REFERENCE&fieldOperator=contains'],
+      ['a code that is not one', 'fieldCode=reference&fieldOperator=filled'],
+      ['a range of a date and a number', 'fieldCode=DUE_ON&fieldOperator=between&fieldValue=2026-01-01&fieldValueTo=5'],
+      ['a range that ends before it starts', 'fieldCode=AMOUNT&fieldOperator=between&fieldValue=10&fieldValueTo=5'],
+      ['a value for filled', 'fieldCode=REFERENCE&fieldOperator=filled&fieldValue=x'],
+    ])('rejects %s (400), on the listing and on the counts', async (_, query) => {
+      expect((await reader.client.get(`/tickets?${query}`)).status).toBe(400);
+      expect((await reader.client.get(`/tickets/counts?${query}`)).status).toBe(400);
     });
   });
 

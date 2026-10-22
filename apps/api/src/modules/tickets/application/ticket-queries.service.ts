@@ -1,11 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  FILTERABLE_FIELD_TYPES,
   type ListTicketsQuery,
   NotFoundError,
   type Page,
   type TicketCountsResponse,
   type TicketDetailResponse,
   type TicketEventResponse,
+  type TicketFilterFieldResponse,
   type TicketFiltersQuery,
   type TicketSummaryResponse,
   TICKET_VIEWS,
@@ -18,6 +20,7 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { TicketQueryRepository, type Where } from '../data/ticket-query.repository.js';
+import { type FilterableFieldRow, filterFieldsOf } from '../domain/filter-fields.js';
 import { ticketFilters, viewFilter } from '../domain/ticket-list-filters.js';
 import { valueNamesOf, valueReferences } from '../domain/value-references.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -76,6 +79,14 @@ export class TicketQueriesService {
       const counts: Record<TicketView, number> = { assigned: 0, created: 0, observed: 0, all: 0, history: 0, reopened: 0, errors_reported: 0, errors_received: 0 };
       for (const view of TICKET_VIEWS) counts[view] = await count(view);
       return counts;
+    });
+  }
+
+  /** The field codes the inbox can filter by. Only codes and labels of forms: no ticket is read. */
+  filterFields(): Promise<TicketFilterFieldResponse[]> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      const rows = await this.tickets.filterableFields(tx, this.context.require().tenantId, FILTERABLE_FIELD_TYPES);
+      return filterFieldsOf(rows as FilterableFieldRow[]);
     });
   }
 

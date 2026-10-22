@@ -529,6 +529,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **Filtros avanzados (2026-10-22, `feat/inbox-advanced-filters`):**
   - **API:** `ticketFiltersQuerySchema` suma `subcategoryId`, `siteId`, `creatorId`, `assigneeId` (quien tiene el ticket ahora), `tagId` (solo las etiquetas propias de quien llama: una ajena no encuentra nada) y `createdFrom`/`createdTo` (instantes; el fin se excluye y un rango al revés da 400). Valen igual en la lista y en los conteos.
   - **Web:** botón «Más filtros» con subcategoría (de la categoría elegida), sede, mi etiqueta, fechas de creación y solicitante y «Lo tiene» buscados en el directorio. Las fechas viajan en la URL como días locales (`from`, `to`, ambos incluidos) y al API como el inicio de esos días en la zona del navegador. Un enlace con alguno de estos filtros abre el panel.
+  - **Valor de un campo (2026-10-22):** `fieldCode` (el código del campo, en todos los flujos que lo tengan, como en la mesa de ayuda) con `fieldOperator`: `contains` (texto, sin distinguir mayúsculas), `equals` (el texto, o el número que representa), `between` (`fieldValue` y `fieldValueTo`, incluidos y uno de los dos opcional; ambos fechas `YYYY-MM-DD` o ambos números), `filled` o `empty`. Un filtro incompleto o un rango mezclado o al revés da 400. Los valores son JSON (fechas y fechas con hora como texto, números como número) y Postgres ordena por tipo, así que cada rango lleva sus dos extremos del mismo tipo: un rango de fechas no toma números ni uno de números toma textos; el último día de un rango de fechas se incluye (`lt` el día siguiente) para que una fecha con hora de ese día entre. `GET /tickets/filter-fields` (con cualquier permiso de leer tickets) lista un código por campo de las versiones publicadas de los flujos activos, con la etiqueta y el tipo de la versión publicada más reciente y las opciones fijas de un `SELECT`; solo tipos de un valor (texto, número, moneda, días, fórmula, fecha, fecha y hora, selección). Web: en «Más filtros», campo, condición según su tipo (texto: contiene, igual, con o sin valor; selección: igual con sus opciones; número: igual o entre; fecha: vencido, próximos N días, entre, con o sin valor) y valores; el texto se aplica al salir de la caja o con Enter. «Vencido» y «próximos días» viajan en la URL tal cual (`field`, `op`, `fv`, `fv2`) y al API como un `between` de los días locales de la persona.
   - **Contadores** de `GET /dashboard/stats`: asignados, vencidos, vencen en 24 horas, mis solicitudes abiertas, cerré en 7 días. Los que tienen bandeja llevan a ella.
   - **Pendientes** de `GET /dashboard/pending`, el más urgente primero, con su vencimiento y la marca de vencido.
   - **Menú y claves:** «Inicio» encabeza el menú (`end`, para que no quede marcado en otras páginas). Las claves van bajo `tickets`, así que cualquier cambio de un ticket las refresca.
@@ -846,6 +847,17 @@ Durante los 30 días de `PENDING_DELETION` el dueño o un administrador puede ll
   - **Cortes y archivos:** `GET/POST /exports/:id/cutoffs` («Generar ahora», que no mueve la programación), `GET /export-cutoffs/:id/download-url`.
   - **«Mis planos»** (cualquier miembro, solo los archivos de los que es responsable): `GET /export-cutoffs/mine` y `GET /export-cutoffs/mine/:id/download-url`.
   - **Catálogos:** `GET /export-catalogs`, `GET/PUT /export-catalogs/:catalog`.
+- **Web (`features/workflows/exports`, 2026-10-22, `feat/web-exports`):**
+  - **Planos** (`/workflows/exports`, botón en Flujos para quien tiene `read Export`): lista con el momento en que se escribe la línea, la programación en palabras, las líneas pendientes y el próximo corte.
+  - **Ficha** (`/workflows/exports/:id`, `new` para uno nuevo), con pestañas:
+    - **Definición:** editor completo. Las decisiones, los campos y los pasos salen de la versión publicada del flujo (o del borrador). Revisa lo mismo que el contrato antes de enviar.
+    - **Archivos:** «Generar ahora» y descarga por enlace firmado.
+    - **Líneas pendientes.**
+    - **Vista previa:** solo con `update`.
+    - Para eliminar, pide confirmación en un diálogo.
+  - **Catálogos** (`/workflows/exports/catalogs`): abrir uno existente o uno nuevo por nombre, y editar sus filas.
+  - **«Mis planos»** (`/my-exports`): enlace en Inicio cuando la persona tiene archivos.
+  - **Constructor:** el bloque Exportar ya está en la paleta (elige el plano del flujo) y los pasos TASK y APPROVAL tienen «Exige el corte del plano».
 - **Pruebas:**
   - unitarias de la lógica pura: formatos, proyección, filtro, separación, unión, CSV y periodicidad;
   - integración `exports.e2e`: línea y filtro, generar ahora con unión, corte programado una sola vez, archivos por responsable y «Mis planos», paso que exige el corte y validación de la separación y catálogos.
