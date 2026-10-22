@@ -3,6 +3,32 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Paridad con la mesa de ayuda (inventario, 2026-10-21):** se revisó `main` de la mesa (front y back) contra ProcesaBPM. Lo que falta:
+  - **Solo en la web (el API ya lo tiene):**
+    - ~~recuperar contraseña e invitaciones; cambiar de organización y enlaces con `?tenant=`~~ (hecho, §4.21);
+    - inicio con resumen y pendientes;
+    - bandeja con filtros de prioridad, categoría y empresa, y conteos;
+    - crear para otra persona;
+    - visibilidad de categorías (las «reglas de mapeo» de la mesa);
+    - ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría);
+    - avisos;
+    - búsqueda por clave de un Excel en el formulario;
+    - calculadoras;
+    - probar quién aprueba.
+  - **API y web:**
+    - «mismo responsable que el paso X»;
+    - cortes por empresa y plazo por corte en el motor;
+    - planos (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte);
+    - procesar en lote;
+    - editar el ticket (asunto, descripción, prioridad);
+    - registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»;
+    - filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, valor de un campo, fechas).
+  - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ProcesaBPM es por bloques.
+  - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
+  - **Fuera del alcance:** ventas, listas de precios y la parte propia de viáticos.
+- **Acceso a la cuenta en la web (2026-10-21, `feat/web-account-access`):** recuperar contraseña, aceptar invitaciones, cambiar de organización y enlaces de correo con `?tenant=`. Detalle en arquitectura.md §4.21.
+  - **API nueva:** `GET /auth/me/organizations`.
+  - **Decidido (con criterio, el usuario delegó):** la invitación se acepta primero sin contraseña y solo se pide si el API la exige; después de aceptar se inicia sesión (el API no abre la sesión al aceptar).
 - **Ubicar datos sobre un PDF propio (2026-10-21, `feat/web-pdf-mapping`):** la página del PDF dibujada con pdf.js; los datos y las firmas se ubican con un clic o van en los campos de formulario que el PDF ya tiene. Detalle en arquitectura.md §4.20. Con esto los documentos PDF quedan completos en la web.
   - **Decidido (con criterio, el usuario delegó):**
     - **pdf.js** (`pdfjs-dist` 6.4.299) solo en esta pantalla.

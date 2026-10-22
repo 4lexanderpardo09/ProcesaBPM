@@ -43,3 +43,8 @@ export function confirmMfaEnrollment(transport: HttpClient, challengeToken: stri
 export function selectTenant(transport: HttpClient, selectionToken: string, tenantId: string): Promise<AccessTokenResponse> {
   return transport.request('/auth/select-tenant', { method: 'POST', body: { tenantId }, headers: bearer(selectionToken), schema: accessTokenResponseSchema });
 }
+
+/** Moves the session to another organization of the same person, with the refresh cookie (no new sign-in). */
+export function switchTenant(transport: HttpClient, tenantId: string): Promise<AccessTokenResponse> {
+  return transport.request('/auth/switch-tenant', { method: 'POST', body: { tenantId }, schema: accessTokenResponseSchema });
+}

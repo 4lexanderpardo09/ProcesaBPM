@@ -506,6 +506,24 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
     - Posición fuera de la página y paso inexistente: no deja guardar.
   - **En local contra el API real con SeaweedFS:** se subió un PDF con un campo de formulario. Se ubicaron un dato con un clic, un texto en el campo y una firma. Lo guardado tiene `x` 199,9 e `y` 619,9 donde se hizo clic, y el PDF generado trae los tres.
 
+### 4.21 Acceso a la cuenta: recuperar contraseña, invitaciones y cambiar de organización (hecho, 2026-10-21, `feat/web-account-access`)
+- **Enlaces de los correos:** el token llega en el fragmento (`#token=…`, `WebLinks` del worker). `useLinkToken` (`features/auth/lib/link-token`) lo lee una vez de la ubicación del router y lo saca de la barra de direcciones.
+- **Recuperar contraseña (`/forgot-password`):** pide el correo y siempre dice «revisa tu correo», igual que el API (202 con o sin cuenta).
+- **Elegir contraseña (`/reset-password`):** la contraseña nueva escrita dos veces (`NewPasswordFields`, mínimo `PASSWORD_MIN_LENGTH`). Avisa que se cierran todas las sesiones y lleva al login con el aviso `passwordChanged`. Con `INVALID_TOKEN` (vencido o usado) ofrece pedir otro enlace.
+- **Aceptar invitación (`/accept-invitation`):** primero acepta sin contraseña, así que quien ya tiene cuenta queda unido de una vez. A alguien nuevo el API le responde `INVALID_STATE` (el enlace sigue sirviendo), y entonces elige su contraseña. Termina en el login con el aviso `invitationAccepted`.
+- **Cambiar de organización:**
+  - **API:** `GET /auth/me/organizations` nuevo (`AuthenticatedOnly`), la misma lista del login con los avisos de mantenimiento. Bajo una visita de soporte devuelve una lista vacía.
+  - **Web:** en la barra superior, `OrganizationSwitcher` muestra el nombre y, si hay otras que se pueden abrir (membresía activa, organización activa, sin mantenimiento), una lista. El cambio usa `POST /auth/switch-tenant` con la cookie (`manager.establish`, que antes borra la caché de la organización anterior).
+- **Enlaces con `?tenant=`** (tickets, exportación, almacenamiento): `useTenantFromLink` en el layout cambia a esa organización si la sesión está en otra y abre la misma página sin el parámetro. Si es la misma, solo quita el parámetro. Si el cambio se rechaza, la página responde como siempre.
+- **Pruebas:**
+  - **Unitarias:**
+    - Recuperar contraseña.
+    - Contraseña nueva: no coinciden, se guarda, enlace vencido.
+    - Invitación: con cuenta, sin cuenta (pide contraseña y la manda con el mismo enlace), vencida.
+    - Selector de organización y enlace con `?tenant=` (un solo cambio).
+  - **Integración del API:** la lista y el 401.
+  - **Límite de las pruebas:** de la web, sube a 15 s por prueba (`vite.config.ts`), porque las páginas completas en jsdom con todos los núcleos ocupados pasaban de 5 s.
+
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |
 |---|---|---|

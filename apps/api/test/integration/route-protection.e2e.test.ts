@@ -34,6 +34,7 @@ const PUBLIC_ROUTES = [
 const AUTHENTICATED_ONLY_ROUTES = [
   'POST /auth/password',
   'GET /auth/me',
+  'GET /auth/me/organizations',
   'PATCH /auth/me',
   'GET /auth/me/signature',
   'PUT /auth/me/signature',

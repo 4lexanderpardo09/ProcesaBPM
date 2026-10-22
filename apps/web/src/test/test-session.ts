@@ -35,6 +35,9 @@ export function createTestSession({ signedIn = true, handlers = {} }: TestSessio
     // An administrator by default: a test about permissions replaces it.
     '/auth/me/permissions': () => ({ permissions: [{ action: 'manage', subject: 'all', conditional: false }] }),
     '/auth/select-tenant': (options) => server.issue((options.body as { tenantId: string }).tenantId),
+    '/auth/switch-tenant': (options) => server.issue((options.body as { tenantId: string }).tenantId),
+    // The organization switcher: only the session's one unless a test says otherwise.
+    '/auth/me/organizations': () => ({ organizations: [] }),
     '/tickets': () => ({ items: [], page: 1, pageSize: 25, total: 0 }),
     // The comment form offers the person's templates: none unless a test says otherwise.
     '/text-templates': () => [],

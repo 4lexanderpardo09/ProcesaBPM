@@ -1,7 +1,11 @@
 export { BackupCodesPanel } from './components/BackupCodesPanel';
 export { CopyButton } from './components/CopyButton';
 export { MaintenanceNotice } from './components/MaintenanceNotice';
+export { OrganizationSwitcher } from './components/OrganizationSwitcher';
+export { useTenantFromLink } from './hooks/use-tenant-from-link';
 export { UserMenu } from './components/UserMenu';
+export { AcceptInvitationPage } from './pages/AcceptInvitationPage';
 export { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 export { LoginPage } from './pages/LoginPage';
+export { ResetPasswordPage } from './pages/ResetPasswordPage';
 export { groupSecret } from './components/MfaEnrollmentPanel';

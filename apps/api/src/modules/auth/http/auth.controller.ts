@@ -8,6 +8,7 @@ import {
   type LoginResponse,
   loginRequestSchema,
   type MeResponse,
+  type MyOrganizationsResponse,
   type PasswordResetConfirm,
   passwordResetConfirmSchema,
   type PasswordResetRequest,
@@ -47,6 +48,7 @@ import { type ClientInfo, type OpenedSession, SessionService, SupersededRefreshE
 import { MfaLoginService } from '../application/mfa-login.service.js';
 import { Audited } from '../../../common/audit/audited.decorator.js';
 import { ChangePasswordService } from '../application/change-password.service.js';
+import { SelectionIssuer } from '../application/selection-issuer.js';
 import { TenantSelectionService } from '../application/tenant-selection.service.js';
 import { RATE_LIMITS } from '../domain/auth-policy.js';
 import { bearerToken } from '../../../common/auth/bearer-token.js';
@@ -71,6 +73,7 @@ export class AuthController {
     @Inject(ChangePasswordService) private readonly passwordChange: ChangePasswordService,
     @Inject(BackgroundTasks) private readonly background: BackgroundTasks,
     @Inject(PlatformSessionService) private readonly platformSessions: PlatformSessionService,
+    @Inject(SelectionIssuer) private readonly selection: SelectionIssuer,
   ) {}
 
   @Public()
@@ -241,6 +244,17 @@ export class AuthController {
   @Get('me')
   me(@CurrentPrincipal() principal: Principal): Promise<MeResponse> {
     return this.profiles.me(principal);
+  }
+
+  /**
+   * The caller's organizations, to switch without signing in again. A platform administrator under a support grant is
+   * not a member of anything: they get an empty list.
+   */
+  @AuthenticatedOnly()
+  @Get('me/organizations')
+  organizations(@CurrentPrincipal() principal: Principal): Promise<MyOrganizationsResponse> {
+    if (principal.support !== undefined) return Promise.resolve({ organizations: [] });
+    return this.selection.organizations(principal.userId);
   }
 
   /** Edits the caller's own name, language and time zone; the e-mail has its own confirmation flow. */

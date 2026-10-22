@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Navigate, type RouteObject } from 'react-router';
-import { ForgotPasswordPage, LoginPage } from '@/features/auth';
+import { AcceptInvitationPage, ForgotPasswordPage, LoginPage, ResetPasswordPage } from '@/features/auth';
 import { CatalogPage } from '@/features/catalog';
 import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
@@ -58,6 +58,8 @@ export const appRoutes: RouteObject[] = [
     children: [
       { element: <RedirectIfSignedIn />, children: [{ path: paths.login, element: <LoginPage /> }] },
       { path: paths.forgotPassword, element: <ForgotPasswordPage /> },
+      { path: paths.resetPassword, element: <ResetPasswordPage /> },
+      { path: paths.acceptInvitation, element: <AcceptInvitationPage /> },
     ],
   },
   {

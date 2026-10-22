@@ -65,6 +65,14 @@ describe('POST /auth/switch-tenant', () => {
     await db.close();
   });
 
+  it('GET /auth/me/organizations lists the organizations of the signed-in user, the current one among them', async () => {
+    const { session } = await memberOfBoth();
+    const response = await http().get('/auth/me/organizations').set(bearer(session.accessToken)).expect(200);
+    const ids = (response.body.organizations as Array<{ tenantId: string; membershipStatus: string; tenantStatus: string }>).map((organization) => organization.tenantId);
+    expect(ids.sort()).toEqual([home.tenantId, other.tenantId].sort());
+    await http().get('/auth/me/organizations').expect(401);
+  });
+
   describe('a member of both organizations', () => {
     let user: TestUser;
     let before: SignedIn;
