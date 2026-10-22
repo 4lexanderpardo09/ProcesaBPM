@@ -4,6 +4,7 @@ import {
   actRefusal,
   type Assignment,
   commentRefusal,
+  editRefusal,
   hasPendingSignature,
   type IncidentState,
   isEligibleAssignee,
@@ -16,9 +17,9 @@ import {
   resolveIncidentRefusal,
   type Signature,
   signatureRefusal,
+  takeRefusal,
   type TicketAction,
   type TicketStatus,
-  takeRefusal,
 } from './ticket-action-rules.js';
 
 /** Everything the action rules look at, read in one transaction for one caller. */
@@ -72,6 +73,7 @@ export function ticketActionRefusals(state: TicketActionState): TicketActionRefu
     reopen: reopenRefusal(grants.reopen, state.status) ?? (state.hasReopenTarget ? null : new InvalidReopenStepError()),
     signParallelTask: onOpenVisit ?? signatureRefusal(parallel, state.signatures, state.actorId),
     comment: commentRefusal(grants.comment),
+    edit: editRefusal(grants.update, state.status),
   };
 }
 
@@ -88,6 +90,7 @@ export function ticketActionsOf(state: TicketActionState): TicketActionsResponse
     reopen: refused.reopen === null,
     signParallelTask: refused.signParallelTask === null,
     comment: refused.comment === null,
+    edit: refused.edit === null,
   };
 }
 

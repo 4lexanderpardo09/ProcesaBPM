@@ -4,6 +4,13 @@ import type { TenantTransaction } from '../../../infrastructure/database/tenant-
 import type { IncidentPeriod } from '../../sla/domain/pause-math.js';
 import type { AssigneePlan, ClockPlan, ClosedClock, ClosedVisit, EventPlan, FieldWrite, VisitPlan } from '../domain/plan.js';
 
+/** The part of a ticket its people may edit. */
+export interface TicketHeader {
+  readonly title: string;
+  readonly descriptionHtml: string;
+  readonly priorityId: string | null;
+}
+
 export interface LockedTicket {
   readonly id: string;
   readonly number: bigint;
@@ -359,6 +366,19 @@ export class TicketWriteRepository {
   /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
   async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string | null, stepId: string | null): Promise<void> {
     await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, ...(stepId === null ? {} : { currentStepId: stepId }) } });
+  }
+
+  /** What a person may edit of a ticket: its subject, description and priority. */
+  async findTicketHeader(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<TicketHeader> {
+    return tx.ticket.findFirstOrThrow({ where: { tenantId, id: ticketId }, select: { title: true, descriptionHtml: true, priorityId: true } });
+  }
+
+  async updateTicketHeader(tx: TenantTransaction, tenantId: string, ticketId: string, changes: Partial<TicketHeader>): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: changes });
+  }
+
+  async isActivePriority(tx: TenantTransaction, tenantId: string, priorityId: string): Promise<boolean> {
+    return (await tx.priority.count({ where: { tenantId, id: priorityId, isActive: true } })) > 0;
   }
 
   /** Inserts the event and its outbox work in order; returns the event id. */

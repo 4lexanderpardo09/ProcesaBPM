@@ -280,6 +280,18 @@ export const tickets = {
         submit: 'Rechazar',
       },
     },
+    edit: {
+      open: 'Editar',
+      title: 'Editar ticket',
+      body: 'Corrige el asunto, la descripción o la prioridad. El cambio queda en la actividad con los valores de antes.',
+      subject: 'Asunto',
+      subjectRequired: 'Escribe el asunto.',
+      priority: 'Prioridad',
+      noPriority: 'Sin prioridad',
+      prioritiesFailed: 'No se pudo cargar la lista',
+      description: 'Descripción',
+      submit: 'Guardar cambios',
+    },
     reopen: {
       open: 'Reabrir ticket',
       title: 'Reabrir ticket',

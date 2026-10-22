@@ -7,6 +7,7 @@ import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { AdvanceDialog } from '../advance/AdvanceDialog';
 import { ActionError } from './ActionError';
 import { CloseDialog } from './CloseDialog';
+import { EditTicketDialog } from './EditTicketDialog';
 import { OpenIncidentDialog } from './OpenIncidentDialog';
 import { type ParallelAnswer, ParallelTaskDialog } from './ParallelTaskDialog';
 import { ReassignDialog } from './ReassignDialog';
@@ -14,7 +15,7 @@ import { ReopenDialog } from './ReopenDialog';
 import { ResolveIncidentDialog } from './ResolveIncidentDialog';
 import styles from './TicketActions.module.css';
 
-type OpenDialog = 'reassign' | 'close' | 'incident' | 'resolve' | 'reopen' | { readonly parallel: ParallelAnswer } | { readonly decision: FormDecisionResponse };
+type OpenDialog = 'edit' | 'reassign' | 'close' | 'incident' | 'resolve' | 'reopen' | { readonly parallel: ParallelAnswer } | { readonly decision: FormDecisionResponse };
 
 export interface TicketActionsProps {
   readonly ticket: TicketDetailResponse;
@@ -59,6 +60,7 @@ export function TicketActions({ ticket, form }: TicketActionsProps) {
     actions.openIncident && onVisit && <Button key="incident" onClick={() => setDialog('incident')}>{t('actions.incident.open')}</Button>,
     actions.close && onVisit && <Button key="close" onClick={() => setDialog('close')}>{t('actions.close.open')}</Button>,
     actions.reopen && <Button key="reopen" variant="primary" onClick={() => setDialog('reopen')}>{t('actions.reopen.open')}</Button>,
+    actions.edit && <Button key="edit" onClick={() => setDialog('edit')}>{t('actions.edit.open')}</Button>,
   ].filter(Boolean);
   if (buttons.length === 0) return null;
 
@@ -74,6 +76,7 @@ export function TicketActions({ ticket, form }: TicketActionsProps) {
       {typeof dialog === 'object' && dialog !== null && 'parallel' in dialog && visitId !== undefined && (
         <ParallelTaskDialog ticketId={ticket.id} visitId={visitId} answer={dialog.parallel} onClose={closeDialog} />
       )}
+      {dialog === 'edit' && <EditTicketDialog ticket={ticket} onClose={closeDialog} />}
       {dialog === 'reopen' && <ReopenDialog ticketId={ticket.id} onClose={closeDialog} />}
       {typeof dialog === 'object' && dialog !== null && 'decision' in dialog && form !== undefined && visitId !== undefined && (
         <AdvanceDialog ticket={ticket} form={form} visitId={visitId} decision={dialog.decision} onClose={closeDialog} />
