@@ -4,7 +4,7 @@ const FORBIDDEN = 403;
 const NOT_FOUND = 404;
 
 /** What was being done: the same API code means a different thing in each. */
-export type WorkflowErrorContext = 'createWorkflow' | 'updateWorkflow' | 'createVersion' | 'deleteDraft' | 'observer' | 'field' | 'content';
+export type WorkflowErrorContext = 'createWorkflow' | 'updateWorkflow' | 'createVersion' | 'deleteDraft' | 'observer' | 'cutoff' | 'field' | 'content';
 
 export type WorkflowErrorMessage = { readonly namespace: 'workflows'; readonly key: string } | ({ readonly namespace: 'common' } & GenericErrorMessage);
 
@@ -12,6 +12,7 @@ const DUPLICATE_KEY: Readonly<Partial<Record<WorkflowErrorContext, string>>> = {
   createWorkflow: 'errors.subcategoryTaken',
   createVersion: 'errors.draftExists',
   observer: 'errors.observerExists',
+  cutoff: 'errors.cutoffExists',
   field: 'errors.fieldCodeTaken',
   content: 'errors.contentDuplicate',
 };
