@@ -169,5 +169,86 @@ export interface UserDetailReport {
   readonly clocks: { readonly items: readonly UserClockRow[]; readonly page: number; readonly pageSize: number; readonly total: number };
 }
 
+export interface SiteRow {
+  /** `null`: the tickets without a site. */
+  readonly siteId: string | null;
+  readonly siteName: string | null;
+  /** Tickets created in the period. */
+  readonly tickets: number;
+  /** People whose clocks ended in the period. */
+  readonly responsibles: number;
+  readonly delivered: number;
+  readonly onTime: number;
+  readonly late: number;
+  readonly compliancePct: number | null;
+  /** Errors registered in the period: of the process (serious) and the rest (minor). */
+  readonly processErrors: number;
+  readonly otherErrors: number;
+  /** Errors per hundred deliveries. */
+  readonly errorPct: number | null;
+  readonly avgMin: Minutes;
+}
+
+export interface SiteReport {
+  readonly level: number;
+  /** The compliance the chart draws as a reference line. */
+  readonly targetPct: number;
+  readonly rows: readonly SiteRow[];
+}
+
+export interface HeatmapUserRow {
+  readonly userId: string;
+  readonly name: string | null;
+  readonly delivered: number;
+  readonly processErrors: number;
+  readonly otherErrors: number;
+  readonly avgMin: Minutes;
+  /** How much slower (positive) or faster (negative) than the average of the site, in percent. */
+  readonly vsPeersPct: number | null;
+}
+
+export interface HeatmapSite {
+  readonly siteId: string | null;
+  readonly siteName: string | null;
+  readonly avgMin: Minutes;
+  readonly users: readonly HeatmapUserRow[];
+}
+
+export interface HeatmapReport {
+  readonly level: number;
+  readonly sites: readonly HeatmapSite[];
+}
+
+/** A ticket behind a number of a report. */
+export interface ReportTicketRow {
+  readonly id: string;
+  readonly number: string;
+  readonly title: string;
+  readonly status: 'OPEN' | 'PAUSED' | 'CLOSED';
+  readonly workflowName: string;
+  readonly categoryName: string | null;
+  readonly subcategoryName: string | null;
+  readonly currentStepName: string | null;
+  readonly siteName: string | null;
+  readonly creatorName: string | null;
+  readonly createdAt: string;
+  readonly closedAt: string | null;
+}
+
+/** An open ticket at a step, with how long it has been there. */
+export interface BacklogTicketRow {
+  readonly id: string;
+  readonly number: string;
+  readonly title: string;
+  readonly status: 'OPEN' | 'PAUSED';
+  readonly assigneeNames: readonly string[];
+  readonly siteName: string | null;
+  readonly createdAt: string;
+  /** When the ticket reached the step it is at. */
+  readonly enteredStepAt: string | null;
+  readonly ageDays: number;
+  readonly overdue: boolean;
+}
+
 /** Every sheet-able report, to export. */
 export type ReportData = SummaryReport | readonly ResponsibleSlaRow[] | readonly StepSlaRow[] | RankingReport | TimeDistributionReport | IncidentsReport | readonly CategoryRow[] | BacklogReport | UserDetailReport;

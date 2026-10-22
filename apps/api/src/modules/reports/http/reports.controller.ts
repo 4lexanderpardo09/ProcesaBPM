@@ -1,5 +1,15 @@
 import { Controller, Get, Inject, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import {
+  type BacklogTicketRow,
+  type BacklogTicketsFilters,
+  backlogTicketsFiltersSchema,
+  type HeatmapReport,
+  type ReportTicketRow,
+  type ReportTicketsFilters,
+  reportTicketsFiltersSchema,
+  type SiteReport,
+  type SiteReportFilters,
+  siteReportFiltersSchema,
   type BacklogFilters,
   backlogFiltersSchema,
   type BacklogReport,
@@ -25,9 +35,11 @@ import { CurrentAbility } from '../../authorization/http/current-ability.decorat
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { BreakdownReportsService } from '../application/breakdown-reports.service.js';
 import { PerformanceReportsService } from '../application/performance-reports.service.js';
+import { SiteReportsService } from '../application/site-reports.service.js';
 
 const filters = new ZodValidationPipe(reportFiltersSchema);
 const paged = new ZodValidationPipe(pagedReportFiltersSchema);
+const bySite = new ZodValidationPipe(siteReportFiltersSchema);
 
 /** Live reports over the tenant's tickets. What each one shows is limited by the scope of the caller's `read Report` permission. */
 @Controller('reports')
@@ -35,6 +47,7 @@ export class ReportsController {
   constructor(
     @Inject(PerformanceReportsService) private readonly performance: PerformanceReportsService,
     @Inject(BreakdownReportsService) private readonly breakdown: BreakdownReportsService,
+    @Inject(SiteReportsService) private readonly sites: SiteReportsService,
   ) {}
 
   @RequirePermission('read', 'Report')
@@ -83,6 +96,31 @@ export class ReportsController {
   @Get('backlog')
   backlog(@CurrentAbility() ability: AppAbility, @Query(new ZodValidationPipe(backlogFiltersSchema)) query: BacklogFilters): Promise<BacklogReport> {
     return this.breakdown.backlog(ability, query);
+  }
+
+  @RequirePermission('read', 'Report')
+  @Get('backlog/tickets')
+  backlogTickets(@CurrentAbility() ability: AppAbility, @Query(new ZodValidationPipe(backlogTicketsFiltersSchema)) query: BacklogTicketsFilters): Promise<Page<BacklogTicketRow>> {
+    return this.sites.backlogTickets(ability, query);
+  }
+
+  @RequirePermission('read', 'Report')
+  @Get('sites')
+  bySite(@CurrentAbility() ability: AppAbility, @Query(bySite) query: SiteReportFilters): Promise<SiteReport> {
+    return this.sites.sites(ability, query);
+  }
+
+  @RequirePermission('read', 'Report')
+  @Get('heatmap')
+  heatmap(@CurrentAbility() ability: AppAbility, @Query(bySite) query: SiteReportFilters): Promise<HeatmapReport> {
+    return this.sites.heatmap(ability, query);
+  }
+
+  /** The tickets behind a number of another report, in the same scope. */
+  @RequirePermission('read', 'Report')
+  @Get('tickets')
+  tickets(@CurrentAbility() ability: AppAbility, @Query(new ZodValidationPipe(reportTicketsFiltersSchema)) query: ReportTicketsFilters): Promise<Page<ReportTicketRow>> {
+    return this.sites.ticketList(ability, query);
   }
 
   @RequirePermission('read', 'Report')

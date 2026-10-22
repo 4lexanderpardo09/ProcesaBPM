@@ -27,6 +27,18 @@ const bogota = (date: string, time: string) => new Date(`${date}T${time}:00-05:0
 const REPORT_TIME = bogota('2026-09-08', '09:00');
 const PERIOD = 'from=2026-09-07&to=2026-09-08';
 
+/** A workbook's bytes as they came. */
+const downloadBody = (client: ApiClient, path: string, status = 200) =>
+  client
+    .get(`/reports/${path}`)
+    .buffer(true)
+    .parse((res, done) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => done(null, Buffer.concat(chunks)));
+    })
+    .expect(status);
+
 describe('reports: numbers computed by hand from tickets the real engine moved', () => {
   let db: TestDatabase;
   let app: INestApplication;
@@ -172,6 +184,75 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
     });
   });
 
+  describe('by site, heat map and the tickets behind the numbers', () => {
+    const A = () => `${PERIOD}&companyId=${world.tenant.companyId}`;
+    let region: string;
+    let branch: string;
+    const numbersOf = (page: { items: Array<{ id: string }> }) => page.items.map((row) => row.id).sort();
+
+    beforeAll(async () => {
+      region = await insertReturningId(db.platform, `INSERT INTO sites (tenant_id, level, name) VALUES ($1, 1, $2) RETURNING id`, [world.tenant.tenantId, unique('Regional')]);
+      branch = await insertReturningId(db.platform, `INSERT INTO sites (tenant_id, parent_id, level, name) VALUES ($1, $2, 2, $3) RETURNING id`, [world.tenant.tenantId, region, unique('Sede')]);
+      // T5 (reopened, an error of U1) at the branch, T6 (open) at the region itself: both count under the region.
+      await db.platform.query('UPDATE tickets SET site_id = $1 WHERE id = $2', [branch, reopenedTicketId]);
+      await db.platform.query('UPDATE tickets SET site_id = $1 WHERE id = $2', [region, openTicketId]);
+    });
+
+    // The scope tests below count tickets with and without a site.
+    afterAll(() => db.platform.query('UPDATE tickets SET site_id = NULL WHERE id = ANY($1::uuid[])', [[reopenedTicketId, openTicketId]]));
+
+    it('sites: the tickets of a branch count under its region, the rest under "no site"', async () => {
+      const report = await get(reader, 'sites', A());
+      expect(report).toMatchObject({ level: 1, targetPct: 85 });
+      const regionRow = report.rows.find((row: { siteId: string | null }) => row.siteId === region);
+      expect(regionRow).toMatchObject({ tickets: 2, responsibles: 1, delivered: 1, onTime: 2, late: 0, compliancePct: 100, processErrors: 0, otherErrors: 1, errorPct: 100, avgMin: 45 });
+      expect(report.rows.find((row: { siteId: string | null }) => row.siteId === null)).toMatchObject({ tickets: 4, responsibles: 2 });
+      // At level 2 the branch has its own row.
+      const deeper = await get(reader, 'sites', `${A()}&level=2`);
+      expect(deeper.rows.find((row: { siteId: string | null }) => row.siteId === branch)).toMatchObject({ tickets: 1, otherErrors: 1 });
+      expect(deeper.rows.find((row: { siteId: string | null }) => row.siteId === region)).toMatchObject({ tickets: 1 });
+    });
+
+    it('heat map: each person of a site with their errors and their time against the site', async () => {
+      const { sites } = await get(reader, 'heatmap', A());
+      const regionSite = sites.find((site: { siteId: string | null }) => site.siteId === region);
+      expect(regionSite).toMatchObject({ avgMin: 45, users: [expect.objectContaining({ userId: u1.userId, delivered: 1, processErrors: 0, otherErrors: 1, avgMin: 45, vsPeersPct: 0 })] });
+      const noSite = sites.find((site: { siteId: string | null }) => site.siteId === null);
+      expect(noSite.users.map((user: { userId: string }) => user.userId).sort()).toEqual([u1.userId, u2.userId].sort());
+    });
+
+    it('the tickets behind a number: by site, without one, by step and by person', async () => {
+      expect(numbersOf(await get(reader, 'tickets', `${A()}&underSiteId=${region}`))).toEqual([openTicketId, reopenedTicketId].sort());
+      expect((await get(reader, 'tickets', `${A()}&noSite=true`)).total).toBe(4);
+      expect((await get(reader, 'tickets', `${A()}&workflowId=${flow.workflowId}&stepName=task`)).total).toBe(5);
+      const byU2 = await get(reader, 'tickets', `${A()}&responsibleId=${u2.userId}`);
+      expect(byU2.total).toBe(1);
+      expect(byU2.items[0]).toMatchObject({ status: 'CLOSED', workflowName: expect.any(String), currentStepName: 'end' });
+      await reader.get(`/reports/tickets?${A()}&stepName=task`).expect(400);
+    });
+
+    it('the open tickets at a step, with their age and whether they are overdue', async () => {
+      const page = await get(reader, 'backlog/tickets', `companyId=${world.tenant.companyId}&workflowId=${flow.workflowId}&stepName=task`);
+      expect(page.total).toBe(1);
+      expect(page.items[0]).toMatchObject({ id: openTicketId, status: 'OPEN', ageDays: 1, overdue: true, assigneeNames: [expect.any(String)] });
+    });
+
+    it('exports them, the comments, the use of the workflows and the complete workbook', async () => {
+      const book = async (path: string) => (await readXlsxFile((await downloadBody(reader, path)).body as never)) as unknown as Array<{ sheet: string; data: unknown[][] }>;
+      expect((await book(`sites/export?${A()}`)).map((entry) => entry.sheet)).toEqual(['Por sede', 'Filtros']);
+      expect((await book(`heatmap/export?${A()}`))[0]!.sheet).toBe('Mapa de calor');
+      const tickets = await book(`tickets/export?${A()}`);
+      expect(tickets[0]!.data).toHaveLength(7);
+      const comments = await book(`comments/export?${A()}`);
+      expect(comments[0]!.data.slice(1).map((row) => row[5])).toEqual(expect.arrayContaining(['Paused', 'Wrong']));
+      const usage = await book(`workflow-usage/export?${PERIOD}`);
+      expect(usage[0]!.data.find((row) => row[2] === 7)?.[6]).toBe('En uso');
+      expect((await book(`complete/export?${A()}`)).map((entry) => entry.sheet)).toEqual(
+        expect.arrayContaining(['Resumen', 'Ranking', 'Por sede', 'Mapa de calor', 'Categorías', 'SLA por paso', 'Tiempos por paso', 'Novedades por paso', 'Filtros']),
+      );
+    });
+  });
+
   describe('time zones and filters', () => {
     it('the period is in the company\'s zone: a ticket created Friday 23:30 in Bogotá belongs to Friday, not to Saturday UTC', async () => {
       const late = await create(bogota('2026-09-11', '23:30'));
@@ -243,12 +324,7 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
 
   describe('Excel export', () => {
     const download = async (client: ApiClient, path: string, status = 200) => {
-      const response = await client.get(`/reports/${path}`).buffer(true).parse((res, done) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () => done(null, Buffer.concat(chunks)));
-      }).expect(status);
-      return response;
+      return downloadBody(client, path, status);
     };
     const sheets = async (body: Buffer) => (await readXlsxFile(body as never)) as unknown as Array<{ sheet: string; data: unknown[][] }>;
 
