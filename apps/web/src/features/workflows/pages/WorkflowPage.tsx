@@ -8,12 +8,13 @@ import { useApiClient, usePermissions } from '@/shared/session';
 import { Alert, Breadcrumb, Button, PageHeader, Tabs } from '@/shared/ui';
 import { allWorkflowsQueryOptions, workflowQueryOptions } from '../api/workflows-api';
 import { EditWorkflowDialog } from '../components/EditWorkflowDialog';
+import { CutoffsCard } from '../components/CutoffsCard';
 import { ObserversCard } from '../components/ObserversCard';
 import { DocumentsTab } from '../documents/components/DocumentsTab';
 import { VersionsCard } from '../components/VersionsCard';
 import styles from '../components/Workflows.module.css';
 
-const TABS = ['versions', 'observers', 'documents'] as const;
+const TABS = ['versions', 'observers', 'cutoffs', 'documents'] as const;
 type WorkflowTab = (typeof TABS)[number];
 const NOT_FOUND = 404;
 
@@ -62,6 +63,7 @@ export function WorkflowPage() {
           </div>
           {current === 'versions' && <VersionsCard workflow={data} canEdit={canEdit} />}
           {current === 'observers' && <ObserversCard workflowId={data.id} canEdit={canEdit} />}
+          {current === 'cutoffs' && <CutoffsCard workflowId={data.id} canEdit={canEdit} />}
           {current === 'documents' && <DocumentsTab workflowId={data.id} />}
         </div>
       </div>

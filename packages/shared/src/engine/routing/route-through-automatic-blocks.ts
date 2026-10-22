@@ -4,6 +4,7 @@ import { PEOPLE_STEP_TYPES, type StepType } from '../../workflow/constants.js';
 import type { StepDocument, TransitionDocument, WorkflowVersionDocument } from '../../workflow/document.js';
 import { parseBlockConfig } from '../../workflow/block-config.js';
 import type { BusinessCalendar } from '../business-time/types.js';
+import type { CutoffTerm } from '../cutoffs/cutoff-deadline.js';
 import { planWait, type WaitConfig } from '../wait/plan-wait.js';
 import { evaluateConditions } from '../conditions/evaluate-conditions.js';
 import { computeFieldValues, storableNumber, type ComputeContext, type FormulaFailure } from '../formulas/compute-field-values.js';
@@ -27,6 +28,8 @@ export interface RouteHop {
 export interface RouteContext extends ComputeContext {
   readonly calendar?: BusinessCalendar | null;
   readonly at?: Date;
+  /** The company's cutoffs for this workflow, for a WAIT on the company cutoff. */
+  readonly cutoffs?: readonly CutoffTerm[];
 }
 
 export type RouteArrival =
@@ -93,9 +96,9 @@ export function routeThroughAutomaticBlocks(doc: WorkflowVersionDocument, entryS
     if (step.type === 'CALCULATOR') recalculateAfter(doc, step, current, context!, failures);
     let data: RouteHop['data'];
     if (step.type === 'WAIT') {
-      const wait = planWait({ config: waitConfigOf(step), values: current, calendar: context!.calendar ?? null, timeZone: context!.timeZone ?? 'UTC', at: context!.at ?? new Date() });
+      const wait = planWait({ config: waitConfigOf(step), values: current, calendar: context!.calendar ?? null, timeZone: context!.timeZone ?? 'UTC', at: context!.at ?? new Date(), cutoffs: context!.cutoffs ?? [] });
       if (wait.kind === 'PARK') return result({ stepId: step.id, kind: 'WAIT', resumeAt: wait.resumeAt });
-      data = wait.reason === 'FIELD_BLANK' ? { skipped: 'FIELD_BLANK' } : { elapsed: true, waitedUntil: wait.waitedUntil!.toISOString() };
+      data = wait.reason === 'FIELD_BLANK' || wait.reason === 'NO_CUTOFFS' ? { skipped: wait.reason } : { elapsed: true, waitedUntil: wait.waitedUntil!.toISOString() };
     }
     const exit = pickExit(doc, step, current);
     hops.push({ stepId: step.id, blockType: step.type, transitionId: exit.id, toStepId: exit.toStepId, ...(data === undefined ? {} : { data }) });

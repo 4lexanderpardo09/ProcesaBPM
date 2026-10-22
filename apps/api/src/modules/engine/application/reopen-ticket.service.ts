@@ -75,6 +75,7 @@ export class ReopenTicketService {
       const arrival = await this.planner.plan(tx, {
         tenantId,
         ticketId: ticket.id,
+        workflowVersionId: ticket.workflowVersionId,
         document,
         entryStepId: stepId,
         values: await this.loader.valuesOf(tx, tenantId, ticket.id, document),

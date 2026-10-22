@@ -1,4 +1,4 @@
-import { type AddObserverRequest, categoryResponseSchema, type CreateVersionRequest, pageResponseSchema, subcategoryResponseSchema, versionStatusSchema } from '@procesabpm/shared';
+import { type AddObserverRequest, categoryResponseSchema, companyResponseSchema, type CreateCutoffRequest, type UpdateCutoffRequest, type CreateVersionRequest, pageResponseSchema, subcategoryResponseSchema, versionStatusSchema } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
@@ -53,6 +53,7 @@ export const workflowQueryKeys = {
   everything: ['workflows', 'everything'] as const,
   detail: (workflowId: string) => ['workflows', 'detail', workflowId] as const,
   observers: (workflowId: string) => ['workflows', 'detail', workflowId, 'observers'] as const,
+  cutoffs: (workflowId: string) => ['workflows', 'detail', workflowId, 'cutoffs'] as const,
 };
 
 const workflowUrl = (workflowId: string) => `/workflows/${encodeURIComponent(workflowId)}`;
@@ -131,5 +132,36 @@ export function subcategoryChoicesQueryOptions(client: HttpClient) {
         .map((subcategory) => ({ id: subcategory.id, name: subcategory.name, categoryName: categoryName.get(subcategory.categoryId) ?? '' }))
         .sort((a, b) => a.categoryName.localeCompare(b.categoryName, 'es') || a.name.localeCompare(b.name, 'es'));
     },
+  });
+}
+
+const cutoffSchema = z.object({ id: z.string(), companyId: z.string(), cutoffDay: z.number().int(), graceBusinessDays: z.number().int(), description: z.string().nullable(), isActive: z.boolean() });
+export type Cutoff = z.infer<typeof cutoffSchema>;
+
+/** The monthly cutoff days of each company for this workflow (CUTOFF deadlines and waits read them). */
+export function cutoffsQueryOptions(client: HttpClient, workflowId: string) {
+  return queryOptions({ queryKey: workflowQueryKeys.cutoffs(workflowId), queryFn: ({ signal }) => client.request(`${workflowUrl(workflowId)}/cutoffs`, { schema: z.array(cutoffSchema), signal }) });
+}
+
+export function createCutoff(client: HttpClient, workflowId: string, body: CreateCutoffRequest) {
+  return client.request(`${workflowUrl(workflowId)}/cutoffs`, { method: 'POST', body, schema: cutoffSchema });
+}
+
+/** The API takes a partial change here (`PATCH`), the one exception to `PUT` in the workflows screens. */
+export function updateCutoff(client: HttpClient, workflowId: string, cutoffId: string, body: UpdateCutoffRequest) {
+  return client.request(`${workflowUrl(workflowId)}/cutoffs/${encodeURIComponent(cutoffId)}`, { method: 'PATCH', body, schema: cutoffSchema });
+}
+
+export function removeCutoff(client: HttpClient, workflowId: string, cutoffId: string) {
+  return client.request(`${workflowUrl(workflowId)}/cutoffs/${encodeURIComponent(cutoffId)}`, { method: 'DELETE' });
+}
+
+/** Every company of the organization, for naming the cutoffs and choosing one. */
+export function companiesQueryOptions(client: HttpClient) {
+  return queryOptions({
+    queryKey: ['workflows', 'companies'] as const,
+    queryFn: ({ signal }) => client.request('/companies?pageSize=100&includeInactive=true', { schema: pageResponseSchema(companyResponseSchema), signal }),
+    select: (page) => page.items,
+    staleTime: 5 * 60_000,
   });
 }
