@@ -1,16 +1,18 @@
 import type { CanvasElement, PdfCanvasDesign, WorkflowVersionDocument } from '@procesabpm/shared';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBlocker } from 'react-router';
+import { tenantLogoQueryOptions } from '@/shared/organization/logo-api';
 import { useApiClient, usePermissions } from '@/shared/session';
 import { Alert, Button, Checkbox, Dialog, PageHeader, Select } from '@/shared/ui';
-import { documentQueryKeys, type PdfFormat, updatePdfFormat } from '../../api/documents-api';
+import { documentQueryKeys, type PdfFormat, pdfImagesQueryOptions, updatePdfFormat } from '../../api/documents-api';
 import { DocumentError } from '../../components/DocumentError';
 import { FormatSettingsDialog } from '../../components/designer/FormatSettingsDialog';
 import { PreviewPane } from '../../components/designer/PreviewPane';
 import { fieldPlaceholder } from '../../lib/data-choices';
 import { addSheet, type Alignment, alignElements, createElement, duplicateElements, isOnSheet, moveLayer, PX_PER_MM, removeElements, roundMm, sheetSizeOf, updateElements } from '../lib/canvas-doc';
+import { type CanvasImages, CanvasImagesContext } from '../lib/canvas-images';
 import { type CanvasProblem, canvasProblems } from '../lib/canvas-problems';
 import { useHistory } from '../lib/use-history';
 import { CanvasPalette } from './CanvasPalette';
@@ -64,7 +66,11 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
   const [settings, setSettings] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const dirty = design !== savedDesign;
-  const problems = canvasProblems(design, current, upcoming);
+  const logo = useQuery(tenantLogoQueryOptions(client));
+  const images = useQuery(pdfImagesQueryOptions(client, workflowId));
+  const canvasImages = useMemo<CanvasImages>(() => ({ workflowId, logoUrl: logo.isError ? null : logo.data === undefined ? undefined : (logo.data?.url ?? null), images: images.data }), [workflowId, logo.data, logo.isError, images.data]);
+  const imageIds = useMemo(() => (images.data === undefined ? undefined : new Set(images.data.map((image) => image.id))), [images.data]);
+  const problems = canvasProblems(design, current, upcoming, imageIds);
   const blocking = problems.filter((problem) => !problem.draftOnly);
   const readOnly = !canEdit;
 
@@ -193,7 +199,7 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
   const pageProblems = problemsOf(undefined);
 
   return (
-    <>
+    <CanvasImagesContext.Provider value={canvasImages}>
       {breadcrumb(saved.name)}
       <PageHeader
         title={saved.name}
@@ -325,6 +331,6 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
           <p className={styles.note}>{t('documents.designer.leave')}</p>
         </Dialog>
       )}
-    </>
+    </CanvasImagesContext.Provider>
   );
 }

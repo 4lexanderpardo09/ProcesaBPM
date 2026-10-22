@@ -5,6 +5,7 @@ import { DecimalField } from '../../../builder/components/DecimalField';
 import { WholeNumberField } from '../../../builder/components/WholeNumberField';
 import { signingSteps, tableColumnsOf } from '../../lib/data-choices';
 import { ExpressionField } from '../../components/designer/ExpressionField';
+import { ImagePicker } from './ImagePicker';
 import { ColorField, StyleEditor } from './StyleEditor';
 import styles from './Canvas.module.css';
 
@@ -21,6 +22,12 @@ export interface ElementPropertiesProps {
   readonly onChange: (element: CanvasElement, key?: string) => void;
   readonly onDuplicate: () => void;
   readonly onRemove: () => void;
+}
+
+/** The logo needs no image of the workflow: the id goes, so the saved design says only what it uses. */
+function withoutImage(element: Of<'image'>): Of<'image'> {
+  const { imageId: _unused, ...rest } = element;
+  return rest;
 }
 
 /** A measure in millimetres: only a number in range is applied. */
@@ -61,12 +68,24 @@ export function ElementProperties({ element, design, document, problems, disable
       )}
       {element.type === 'table' && <TableProperties element={element} document={document} calculations={calculations} onChange={(next, key) => onChange(next, key)} />}
       {element.type === 'image' && (
-        <Select
-          label={t('documents.canvas.props.fit')}
-          options={(['CONTAIN', 'COVER', 'STRETCH'] as const).map((fit) => ({ value: fit, label: t(`documents.canvas.props.fits.${fit}`) }))}
-          value={element.fit}
-          onChange={(event) => set({ fit: event.target.value as Of<'image'>['fit'] })}
-        />
+        <>
+          <Select
+            label={t('documents.canvas.props.imageSource')}
+            options={(['TENANT_LOGO', 'UPLOADED'] as const).map((source) => ({ value: source, label: t(`documents.canvas.props.imageSources.${source}`) }))}
+            value={element.source}
+            onChange={(event) => {
+              const source = event.target.value as Of<'image'>['source'];
+              onChange(source === 'TENANT_LOGO' ? { ...withoutImage(element), source } : { ...element, source });
+            }}
+          />
+          {element.source === 'TENANT_LOGO' ? <p className={styles.note}>{t('documents.canvas.props.logoHint')}</p> : <ImagePicker selected={element.imageId} onPick={(imageId) => set({ imageId })} />}
+          <Select
+            label={t('documents.canvas.props.fit')}
+            options={(['CONTAIN', 'COVER', 'STRETCH'] as const).map((fit) => ({ value: fit, label: t(`documents.canvas.props.fits.${fit}`) }))}
+            value={element.fit}
+            onChange={(event) => set({ fit: event.target.value as Of<'image'>['fit'] })}
+          />
+        </>
       )}
       {element.type === 'line' && (
         <>
