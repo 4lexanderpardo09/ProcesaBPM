@@ -1,5 +1,6 @@
 import { datasetOptionsResponseSchema, fieldOptionsResponseSchema } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
+import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
 import type { ChoiceSource, Option } from '../lib/step-values';
 
@@ -25,4 +26,11 @@ export function fieldChoicesQueryOptions(client: HttpClient, fieldId: string, so
     placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
+}
+
+const lookupSchema = z.object({ value: z.string().nullable() });
+
+/** The value of the field's dataset column in the row whose key is `key`; `null` when no row has it. */
+export function lookupDatasetValue(client: HttpClient, fieldId: string, key: string, signal?: AbortSignal) {
+  return client.request(`/fields/${encodeURIComponent(fieldId)}/dataset-lookup?key=${encodeURIComponent(key)}`, { schema: lookupSchema, ...(signal === undefined ? {} : { signal }) });
 }

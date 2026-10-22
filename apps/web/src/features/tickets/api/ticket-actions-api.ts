@@ -1,4 +1,6 @@
 import {
+  editTicketResponseSchema,
+  type EditTicketRequest,
   errorSubtypeResponseSchema,
   errorTypeResponseSchema,
   incidentMutationResponseSchema,
@@ -28,6 +30,11 @@ export function ticketCandidatesQueryOptions(client: HttpClient, ticketId: strin
     queryKey: [...ticketQueryKeys.detail(ticketId), 'candidates', purpose] as const,
     queryFn: ({ signal }) => client.request(`${ticketUrl(ticketId)}/candidates?for=${purpose}`, { schema: ticketCandidatesResponseSchema, signal }),
   });
+}
+
+/** Corrects the subject, description or priority; only the fields sent change. */
+export function editTicket(client: HttpClient, ticketId: string, body: EditTicketRequest) {
+  return client.request(ticketUrl(ticketId), { method: 'PATCH', body, schema: editTicketResponseSchema });
 }
 
 export function takeTicket(client: HttpClient, ticketId: string, visitId: string) {

@@ -111,6 +111,36 @@ describe('approval groups', () => {
     expect(await within(dialog).findByText(/ya es miembro de otro grupo de este tipo y empresa/)).toBeInTheDocument();
   });
 
+  it('checks who would approve a person, with how it searched', async () => {
+    const { fake } = open('/people?tab=approvals', {
+      '/members/directory': () => [
+        { userId: NORA, firstName: 'Nora', lastName: 'Pérez' },
+        { userId: OLGA, firstName: 'Olga', lastName: 'Pérez' },
+      ],
+      '/approvals/resolve': () => ({
+        found: true,
+        approverId: OLGA,
+        onBehalfOfId: null,
+        level: 1,
+        groupId: GROUP,
+        scope: 'GENERAL',
+        chain: [{ level: 1, subjectId: NORA, groupsTried: [{ groupId: GROUP, scope: 'GENERAL', skipped: [] }], resolved: { approverId: OLGA, onBehalfOfId: null, groupId: GROUP, scope: 'GENERAL' } }],
+      }),
+    });
+
+    const card = await screen.findByRole('heading', { name: 'Probar quién aprueba' });
+    const region = card.closest('section')!;
+    await userEvent.type(within(region).getByRole('searchbox', { name: /Persona que hace la solicitud/ }), 'nora');
+    await userEvent.click(await within(region).findByRole('button', { name: 'Probar con Nora Pérez' }));
+    await userEvent.selectOptions(within(region).getByRole('combobox', { name: 'Tipo' }), 'Jefe inmediato');
+    await userEvent.selectOptions(within(region).getByRole('combobox', { name: 'Empresa' }), 'Electrocréditos');
+    await userEvent.click(within(region).getByRole('button', { name: 'Probar' }));
+
+    expect(await within(region).findByText('Aprueba Olga Pérez.')).toBeInTheDocument();
+    expect(within(region).getByText('Nivel 1: el aprobador de Nora Pérez')).toBeInTheDocument();
+    expect(fake.callsTo('/approvals/resolve')[0]?.path).toBe(`/approvals/resolve?userId=${NORA}&typeId=${BOSS}&companyId=${MAIN}&level=1`);
+  });
+
   it('refuses to delete a type still in use', async () => {
     open('/people?tab=approvals', {
       [`/approval-group-types/${MANAGEMENT}`]: () => {

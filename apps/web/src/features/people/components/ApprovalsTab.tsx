@@ -11,6 +11,7 @@ import { Button, Select, TextField } from '@/shared/ui';
 import { approvalTypesQueryOptions, companiesQueryOptions } from '../api/people-api';
 import { ApprovalGroupPeopleDialog } from './ApprovalGroupPeopleDialog';
 import { ApprovalTypesCard } from './ApprovalTypesCard';
+import { ApproverCheckCard } from './ApproverCheckCard';
 import styles from './People.module.css';
 
 const NAME_MAX = 200;
@@ -61,6 +62,7 @@ export function ApprovalsTab() {
       {dialog?.kind === 'create' && <ApprovalGroupDialog record={undefined} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'edit' && <ApprovalGroupDialog record={dialog.group} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'people' && <ApprovalGroupPeopleDialog group={dialog.group} typeName={typeName(dialog.group.typeId)} companyName={companyName(dialog.group.companyId)} canEdit={can('update', 'ApprovalGroup')} onClose={() => setDialog(null)} />}
+      <ApproverCheckCard />
     </div>
   );
 }

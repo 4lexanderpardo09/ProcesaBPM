@@ -18,7 +18,7 @@ const STEP = id(101);
 const FILE = id(102);
 const at = '2026-10-17T15:00:00.000Z';
 
-const noActions = { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true };
+const noActions = { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, edit: false };
 
 const detail = (overrides: Record<string, unknown> = {}) => ({
   id: TICKET,
@@ -531,6 +531,34 @@ describe('TicketDetailPage', () => {
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/reopen`)[0]?.options.body).toEqual({ errorTypeId: id(701), errorSubtypeId: id(710), description: '<p>Faltaba el extracto</p>' }));
       expect(fake.callsTo('/error-types')[0]?.path).toBe('/error-types?pageSize=100');
+    });
+
+    it('edits the subject and the priority, sending only what changed and keeping the rich description untouched', async () => {
+      const priorities = { items: [{ id: id(730), name: 'Alta', sortOrder: 1, color: null, isActive: true }, { id: id(731), name: 'Retirada', sortOrder: 2, color: null, isActive: false }], page: 1, pageSize: 100, total: 2 };
+      const { fake } = renderRoute(base, {
+        handlers: ticketHandlers({
+          '/priorities': () => priorities,
+          [base]: (options) => (options.method === 'PATCH' ? { eventId: id(740) } : detail({ actions: allowed('edit') })),
+        }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Editar ticket' });
+      expect(within(dialog).getByRole('textbox', { name: /Descripción/ })).toHaveValue('Adjunto el comprobante del pago del 1 de octubre.');
+      const subject = within(dialog).getByRole('textbox', { name: /Asunto/ });
+      await userEvent.clear(subject);
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+      expect(subject).toHaveAccessibleDescription('Escribe el asunto.');
+
+      await userEvent.type(subject, 'Pago de crédito de octubre');
+      const priority = within(dialog).getByRole('combobox', { name: 'Prioridad' });
+      await within(dialog).findByRole('option', { name: 'Alta' });
+      expect(within(priority).getAllByRole('option').map((option) => option.textContent)).toEqual(['Sin prioridad', 'Alta']);
+      await userEvent.selectOptions(priority, 'Alta');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(base).find((call) => call.options.method === 'PATCH')?.options.body).toEqual({ title: 'Pago de crédito de octubre', priorityId: id(730) }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar ticket' })).toBeNull());
     });
   });
 
