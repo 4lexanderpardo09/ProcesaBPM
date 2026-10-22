@@ -7,9 +7,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Solo en la web (el API ya lo tiene):**
     - ~~recuperar contraseña e invitaciones; cambiar de organización y enlaces con `?tenant=`~~ (hecho, §4.21);
     - ~~inicio con resumen y pendientes; bandeja con filtros y conteos; crear para otra persona~~ (hecho, §4.22);
-    - visibilidad de categorías (las «reglas de mapeo» de la mesa);
-    - ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría);
-    - avisos;
+    - ~~visibilidad de categorías; ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría); avisos; copia de los datos en eliminación~~ (hecho, §4.23);
     - búsqueda por clave de un Excel en el formulario;
     - calculadoras;
     - probar quién aprueba.

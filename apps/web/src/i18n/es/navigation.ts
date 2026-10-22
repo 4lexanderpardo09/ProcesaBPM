@@ -12,5 +12,6 @@ export const navigation = {
     catalog: 'Catálogo',
     organization: 'Organización',
     people: 'Personas',
+    settings: 'Ajustes',
   },
 } as const;

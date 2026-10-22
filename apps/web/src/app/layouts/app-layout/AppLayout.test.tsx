@@ -13,7 +13,7 @@ describe('AppLayout', () => {
     const operation = within(nav).getByRole('region', { name: 'Operación' });
     const configuration = within(nav).getByRole('region', { name: 'Configuración' });
     expect(within(operation).getAllByRole('link').map((link) => link.textContent)).toEqual(['Inicio', 'Bandejas', 'Flujos', 'Reportes']);
-    expect(within(configuration).getAllByRole('link').map((link) => link.textContent)).toEqual(['Catálogo', 'Organización', 'Personas']);
+    expect(within(configuration).getAllByRole('link').map((link) => link.textContent)).toEqual(['Catálogo', 'Organización', 'Personas', 'Ajustes']);
   });
 
   it('shows only the sections the role can use', async () => {

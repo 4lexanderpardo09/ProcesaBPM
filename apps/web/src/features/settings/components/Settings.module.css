@@ -1,0 +1,112 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.tabs {
+  margin-bottom: var(--space-4);
+}
+
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.strong {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.small {
+  margin: 0 0 var(--space-1);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 13px;
+}
+
+.meter {
+  height: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.meter[data-state='OVER_LIMIT'] > span {
+  background: var(--warn);
+}
+
+.meter[data-state='BLOCKED'] > span {
+  background: var(--danger);
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.detail {
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-md);
+}
+
+.diff {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.diff pre {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.announcements {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.announcement {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.announcementBody {
+  margin: var(--space-1) 0 0;
+  white-space: pre-line;
+}
