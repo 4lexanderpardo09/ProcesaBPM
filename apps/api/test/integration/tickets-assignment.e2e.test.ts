@@ -309,7 +309,7 @@ describe('assignment, pool, reassignment', () => {
   });
 
   describe('features the engine does not run yet', () => {
-    it('refuses to publish a workflow with a WAIT block that waits for the company cutoff', async () => {
+    it('refuses to publish a workflow with a block the engine does not run', async () => {
       const refusals = async (spec: FlowSpec) => {
         const category = (await world.admin.post('/categories', { name: unique('Cat') }).expect(201)).body.id;
         const subcategoryId = (await world.admin.post('/subcategories', { categoryId: category, name: unique('Sub') }).expect(201)).body.id;
@@ -325,8 +325,6 @@ describe('assignment, pool, reassignment', () => {
         const published = await world.admin.post(`${base}/publish`, {}).expect(422);
         return (published.body.error.details.errors as Array<{ code: string }>).map((problem) => problem.code);
       };
-      const wait = { steps: [{ key: 'start', type: 'START' as const }, { key: 'w', type: 'WAIT' as const, extra: { config: { mode: 'COMPANY_CUTOFF' } } }, { key: 'end', type: 'END' as const }], transitions: [{ from: 'start', to: 'w', type: 'DEFAULT' as const }, { from: 'w', to: 'end', type: 'DEFAULT' as const }] };
-      expect(await refusals(wait)).toContain('NOT_IMPLEMENTED_WAIT_COMPANY_CUTOFF');
       const ID = '0199a000-0000-7000-8000-0000000000bb';
       const blocks: Array<[StepType, Record<string, unknown>, string]> = [
         ['WEBHOOK', { webhookId: ID }, 'NOT_IMPLEMENTED_WEBHOOK_BLOCK'],
@@ -340,10 +338,13 @@ describe('assignment, pool, reassignment', () => {
 
     it('a version published before the engine refused them is not started', async () => {
       const flow = await flowWith({});
-      // Published versions are immutable: simulate an old one by flipping a step the way an earlier engine allowed it.
+      // Published versions are immutable: simulate an old one by adding a block the way an earlier engine allowed it.
       await db.owner.query(`ALTER TABLE steps DISABLE TRIGGER USER`);
       try {
-        await db.owner.query(`UPDATE steps SET deadline_type = 'CUTOFF', deadline_field_code = 'DUE', deadline_business_days = 2 WHERE id = $1`, [flow.step.task]);
+        await db.owner.query(
+          `INSERT INTO steps (tenant_id, version_id, type, name, assignment_mode, config) SELECT tenant_id, version_id, 'WEBHOOK', 'Old hook', 'NONE', '{"webhookId": "0199a000-0000-7000-8000-0000000000bb"}'::jsonb FROM steps WHERE id = $1`,
+          [flow.step.task],
+        );
       } finally {
         await db.owner.query(`ALTER TABLE steps ENABLE TRIGGER USER`);
       }
