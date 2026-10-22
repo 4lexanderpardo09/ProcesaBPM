@@ -8,6 +8,7 @@ export * from './dashboard/index.js';
 export * from './datasets/index.js';
 export * from './data-exports/index.js';
 export * from './documents/index.js';
+export * from './exports/index.js';
 export * from './files/index.js';
 export * from './http-paths.js';
 export * from './ids.js';

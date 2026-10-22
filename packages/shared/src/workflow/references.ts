@@ -26,6 +26,7 @@ export function collectReferences(doc: WorkflowVersionDocument): DocumentReferen
     const at = { stepId: step.id };
     if (step.type === 'DOCUMENT') add('WORKFLOW_DOCUMENT', step.config.workflowDocumentId, at);
     if (step.type === 'EXPORT') add('EXPORT_DEFINITION', step.config.exportDefinitionId, at);
+    if (step.config.requiredExportId !== undefined) add('EXPORT_DEFINITION', step.config.requiredExportId, at);
     if (step.type === 'WEBHOOK') add('WEBHOOK', step.config.webhookId, at);
     if (step.type === 'NOTIFICATION' && Array.isArray(step.config.recipients)) {
       for (const recipient of step.config.recipients as Array<{ kind?: unknown; id?: unknown }>) {

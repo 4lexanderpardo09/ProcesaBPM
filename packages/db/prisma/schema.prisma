@@ -400,6 +400,7 @@ enum ExportColumnSource {
   SEQUENCE
   CUTOFF_DATE
   TICKET_DATE
+  FORMULA
 
   @@map("export_column_source")
 }
@@ -2443,9 +2444,13 @@ model ExportDefinition {
   groupBy         String?         @map("group_by")
   cutoffTime      DateTime        @map("cutoff_time") @db.Time(0)
   frequency       ExportFrequency @default(DAILY)
-  weekday         Int?            @db.SmallInt
+  /// WEEKLY: 1 = Monday … 7 = Sunday.
+  weekdays        Int[]           @db.SmallInt
   monthDay        Int?            @map("month_day") @db.SmallInt
   intervalDays    Int?            @map("interval_days")
+  /// One file per responsible of a step or per value of a column; NULL = one file.
+  separateBy      Json?           @map("separate_by")
+  lastAutoCutoffAt DateTime?      @map("last_auto_cutoff_at") @db.Timestamptz(3)
   isActive        Boolean         @default(true) @map("is_active")
   createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -2504,6 +2509,10 @@ model ExportCutoff {
   fileId        String?  @map("file_id") @db.Uuid
   lineCount     Int      @default(0) @map("line_count")
   isManual      Boolean  @default(false) @map("is_manual")
+  /// The file's group when the definition separates them ('' = the only file).
+  groupKey      String   @default("") @map("group_key")
+  groupLabel    String?  @map("group_label")
+  responsibleId String?  @map("responsible_id") @db.Uuid
 
   tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   definition  ExportDefinition @relation(fields: [tenantId, definitionId], references: [tenantId, id], onDelete: Cascade)
