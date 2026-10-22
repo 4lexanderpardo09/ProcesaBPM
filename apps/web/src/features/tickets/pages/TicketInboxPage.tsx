@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { paths } from '@/shared/lib/paths';
-import { useCurrentUser } from '@/shared/session';
+import { useCurrentUser, usePermissions } from '@/shared/session';
 import { ButtonLink, PageHeader, Pagination, PlusIcon, Tabs } from '@/shared/ui';
 import { INBOX_PAGE_SIZE } from '../api/tickets-api';
 import { InboxFilters } from '../components/InboxFilters';
@@ -21,6 +21,7 @@ export function TicketInboxPage() {
   // Merged into the URL as it is when it applies: a filter and a settling search close together both stay.
   const show = (next: Partial<InboxParams>) => setSearchParams((current) => writeInboxParams({ ...readInboxParams(current), page: 1, ...next }));
   const page = list.data;
+  const { can } = usePermissions();
 
   return (
     <>
@@ -28,9 +29,12 @@ export function TicketInboxPage() {
         title={t('inbox.title')}
         subtitle={page === undefined ? undefined : t('inbox.count', { count: page.total })}
         actions={
-          <ButtonLink to={paths.newTicket} variant="primary" icon={<PlusIcon size={15} />}>
-            {t('inbox.newTicket')}
-          </ButtonLink>
+          <>
+            {can('transition', 'Ticket') && <ButtonLink to={paths.ticketBatches}>{t('inbox.batch')}</ButtonLink>}
+            <ButtonLink to={paths.newTicket} variant="primary" icon={<PlusIcon size={15} />}>
+              {t('inbox.newTicket')}
+            </ButtonLink>
+          </>
         }
       />
       <div className={styles.toolbar}>

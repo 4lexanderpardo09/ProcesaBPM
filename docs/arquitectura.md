@@ -713,6 +713,15 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
 - **Pruebas** (`apps/api/test/integration`): `tickets-incidents` (reglas, resolución, carreras, aislamiento), `tickets-incidents-sla` (pausa que cruza noches, fines de semana y festivo; pausa después del vencimiento; dos novedades; pool; reapertura), `tickets-reopen`, `tickets-parallel` (incluidas 10 rondas de las dos últimas firmas a la vez y firma contra rechazo), `tickets-dispatch` (turnos, intervalo, pausados, dos workers a la vez, dos tenants), `tickets-close-rules`; y en `packages/db/test`: `engine-part2.test.ts`.
 
 ### 14.2 Acciones del llamador y candidatos (2026-10-20)
+- **Procesar en lote (2026-10-22, `feat/batch-processing`, `TicketBatchService`, `TicketBatchesController`):**
+  - **Listado (`GET /ticket-batches`):** los tickets abiertos que quien llama tiene (`PRIMARY` o `POOL`) en pasos con `allowsBatch`, hasta 500 y los más antiguos primero. Van en un grupo por paso y versión (las decisiones cambian entre versiones), con su visita abierta, el solicitante, la empresa, el vencimiento, las decisiones del paso y el límite (`config.batch.maxTickets`, como mucho 100).
+  - **Ejecución (`POST /ticket-batches/transition`):** la misma decisión, los mismos valores del paso y la misma nota para hasta 100 tickets.
+    - Primero, sin bloquear, `batchRefusal` descarta los que no están abiertos en un paso de lote, los que quien llama no tiene (un supervisor responde de a uno) y los que exceden el límite del paso.
+    - Después cada ticket pasa por `TransitionTicketService` en su propia transacción. El que falla no detiene a los demás, y la respuesta dice ticket por ticket qué pasó (código de error del dominio).
+    - Ambas rutas piden `transition Ticket`.
+  - **Web (`/tickets/batch`, «Procesar en lote» en la bandeja):**
+    - Una tarjeta por paso con casillas, «Elegir todos», el conteo frente al límite y las decisiones.
+    - El diálogo usa el formulario del primer ticket (`useStepFields`, sin los campos de archivo, que son de un solo ticket) y muestra el resultado con el motivo de cada ticket que se quedó.
 - **Cortes por empresa en el motor (2026-10-22, `feat/company-cutoffs`):**
   - **Cálculo puro** (`shared/engine/cutoffs/cutoff-deadline.ts`): `cutoffPeriodEnd`, `cutoffDeadline` y `afterCurrentCutoff`, más `endOfWorkingDayOnOrBefore` en business-time.
   - **Plazo `CUTOFF`**, la misma regla de la mesa de ayuda: fecha del campo + N días hábiles, sin pasar del fin del periodo de corte (el primer corte del mes con día ≥ al de la fecha, o el primero del mes siguiente; un día 31 cae en el último día de un mes corto). Si cae en un corte con gracia, se corre esos días **hábiles**. Vence al cierre de ese día hábil (o del último día hábil antes de él). Con el campo vacío no tiene vencimiento.
