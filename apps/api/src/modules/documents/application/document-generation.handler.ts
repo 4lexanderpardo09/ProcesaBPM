@@ -19,6 +19,8 @@ import { DocumentSourceRepository } from '../data/document-source.repository.js'
 import { deriveGeneratedFileId } from '../domain/derive-file-id.js';
 import { planRender, type RenderPlan } from '../domain/render-plan.js';
 import { type DocumentGeneratePayload, DOCUMENT_GENERATE_EVENT, documentGeneratePayloadSchema } from './document-generate.payload.js';
+import { PdfImageRepository } from '../data/pdf-image.repository.js';
+import { uploadedImageIds, uploadedImageKey } from '../domain/canvas-resolver.js';
 import { ImageLoader } from './image-loader.js';
 import { RenderFactsLoader } from './render-facts.loader.js';
 
@@ -63,6 +65,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     @Inject(DocumentSourceRepository) private readonly sources: DocumentSourceRepository,
     @Inject(RenderFactsLoader) private readonly factsLoader: RenderFactsLoader,
     @Inject(ImageLoader) private readonly imageLoader: ImageLoader,
+    @Inject(PdfImageRepository) private readonly images: PdfImageRepository,
     @Inject(TicketDocumentRepository) private readonly ticketDocuments: TicketDocumentRepository,
     @Inject(SystemFileService) private readonly systemFiles: SystemFileService,
     @Inject(RealtimeSignalPublisher) private readonly realtime: RealtimeSignalPublisher,
@@ -82,7 +85,10 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     const loaded = await this.factsLoader.load(tx, tenantId, payload.ticketId, this.clock.now());
     if (source === null || loaded === null) return this.skip(event, 'the document or the ticket no longer exists');
     if (!isUsable(source, loaded.workflowId, loaded.companyId)) return this.skip(event, 'the document is switched off or does not apply to this ticket');
-    return { plan: planOrFail(source, loaded.facts), fileId, storageKey: buildStorageKey(tenantId, fileId, event.createdAt), imageStorageKeys: loaded.imageStorageKeys };
+    const plan = planOrFail(source, loaded.facts);
+    const uploaded = await this.images.storageKeys(tx, tenantId, loaded.workflowId, uploadedImageIds(plan.imageKeys));
+    const imageStorageKeys = new Map([...loaded.imageStorageKeys, ...[...uploaded].map(([id, key]) => [uploadedImageKey(id), key] as const)]);
+    return { plan, fileId, storageKey: buildStorageKey(tenantId, fileId, event.createdAt), imageStorageKeys };
   }
 
   async perform(prepared: PreparedDocument, event: ClaimedEvent<DocumentGeneratePayload>): Promise<GeneratedPdf> {

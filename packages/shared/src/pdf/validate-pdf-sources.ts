@@ -17,6 +17,7 @@ export interface PdfProblem {
     | 'DOCUMENT_CALCULATION_UNKNOWN'
     | 'DOCUMENT_CALCULATION_CODE_TAKEN'
     | 'DOCUMENT_FORMULA_INVALID'
+    | 'DOCUMENT_IMAGE_UNKNOWN'
     | 'PAGE_AND_PAGES_OUTSIDE_BAND'
     | 'ACROFORM_FIELD_UNKNOWN'
     | 'COORDINATE_OUT_OF_PAGE'
@@ -114,9 +115,17 @@ export function validateExpressionText(text: string, at: string, doc: WorkflowVe
   return problems;
 }
 
-/** Checks a designer format against a workflow version: every field, table column, step and calculation it names must exist. */
-export function validateDesign(design: AnyPdfDesign, doc: WorkflowVersionDocument): PdfProblem[] {
-  if (design.version === 2) return validateCanvasDesign(design, doc);
+export interface DesignContext {
+  /** The workflow's uploaded images; without it, which image a canvas shows is not checked. */
+  readonly imageIds?: ReadonlySet<string>;
+}
+
+/**
+ * Checks a designer format against a workflow version: every field, table column, step and calculation it names must
+ * exist, and every uploaded image it shows must still be one of the workflow's.
+ */
+export function validateDesign(design: AnyPdfDesign, doc: WorkflowVersionDocument, context: DesignContext = {}): PdfProblem[] {
+  if (design.version === 2) return validateCanvasDesign(design, doc, context);
   const scope = scopeOf(doc);
   const problems: PdfProblem[] = [];
   for (const [index, block] of design.body.entries()) checkBlock(block, `body[${index}]`, scope, false, problems);
@@ -124,11 +133,18 @@ export function validateDesign(design: AnyPdfDesign, doc: WorkflowVersionDocumen
   return problems;
 }
 
-function validateCanvasDesign(design: PdfCanvasDesign, doc: WorkflowVersionDocument): PdfProblem[] {
+function validateCanvasDesign(design: PdfCanvasDesign, doc: WorkflowVersionDocument, context: DesignContext): PdfProblem[] {
   const problems: PdfProblem[] = [...compileCanvasFormulas(design, doc.fields).problems];
   const scope = scopeOf(doc, design.calculations.map((calculation) => calculation.code));
   // Page numbers make sense anywhere on a canvas: every element knows the page it lands on.
   design.elements.forEach((element, index) => checkElement(element, `elements[${index}]`, scope, problems));
+  if (context.imageIds !== undefined) {
+    for (const [index, element] of design.elements.entries()) {
+      if (element.type === 'image' && element.source === 'UPLOADED' && element.imageId !== undefined && !context.imageIds.has(element.imageId)) {
+        problems.push({ code: 'DOCUMENT_IMAGE_UNKNOWN', path: `elements[${index}].imageId`, detail: element.imageId });
+      }
+    }
+  }
   return problems;
 }
 

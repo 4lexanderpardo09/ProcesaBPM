@@ -20,12 +20,19 @@ import { sumColumn } from './field-display.js';
 import type { RenderFacts, SignerRecord } from './render-facts.js';
 
 const LOGO_KEY = 'logo';
+const UPLOADED_PREFIX = 'img:';
+
+/** The image key of one of the workflow's uploaded images. */
+export const uploadedImageKey = (imageId: string): string => `${UPLOADED_PREFIX}${imageId}`;
+
+/** The uploaded images a plan draws, by id, for the caller to look up their files. */
+export const uploadedImageIds = (keys: Iterable<string>): string[] => [...keys].flatMap((key) => (key.startsWith(UPLOADED_PREFIX) ? [key.slice(UPLOADED_PREFIX.length)] : []));
 const SIGNED_AT_PATTERN = 'dd/MM/yyyy HH:mm';
 
 export interface ResolvedCanvas {
   readonly content: CanvasContent;
-  /** Whether an element shows the organization's logo, so the caller loads the image. */
-  readonly usesLogo: boolean;
+  /** The images the printed elements show (`logo`, `img:<image id>`), so the caller loads them. */
+  readonly imageKeys: ReadonlySet<string>;
   /** The evaluator of texts with the calculations of this canvas (the file name pattern uses it too). */
   readonly texts: DesignResolver;
 }
@@ -64,11 +71,12 @@ export class CanvasResolver {
     const holds = (formula: CompiledFormula | undefined) => formula === undefined || this.run(formula, values, today) === true;
     const texts = new DesignResolver(this.facts, calculations);
 
-    let usesLogo = false;
+    const imageKeys = new Set<string>();
     const elements = design.elements.flatMap((element, order): ResolvedCanvasElement[] => {
       if (!holds(compiled.elementConditions.get(element.id))) return [];
-      if (element.type === 'image') usesLogo = true;
-      return [this.element(element, order, texts)];
+      const resolved = this.element(element, order, texts);
+      if (resolved.type === 'image' && resolved.imageKey !== null) imageKeys.add(resolved.imageKey);
+      return [resolved];
     });
     const size = canvasSheetSize(design.page);
     return {
@@ -77,7 +85,7 @@ export class CanvasResolver {
         sheets: design.sheets.flatMap((_, index) => (holds(compiled.sheetConditions.get(index)) ? [index] : [])),
         elements,
       },
-      usesLogo,
+      imageKeys,
       texts,
     };
   }
@@ -119,7 +127,7 @@ export class CanvasResolver {
         };
       }
       case 'image':
-        return { ...base, type: 'image', imageKey: LOGO_KEY, fit: element.fit };
+        return { ...base, type: 'image', imageKey: element.source === 'UPLOADED' && element.imageId !== undefined ? uploadedImageKey(element.imageId) : LOGO_KEY, fit: element.fit };
       case 'line':
         return { ...base, type: 'line', orientation: element.orientation, thickness: element.thickness, color: element.color, dash: element.dash };
       case 'rectangle':

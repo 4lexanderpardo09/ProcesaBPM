@@ -181,6 +181,7 @@ erDiagram
 | `ticket_documents` | Rol del archivo en el ticket y versiones (un solo documento vigente por paso). |
 | `pdf_formats` | Diseños del constructor de PDF. |
 | `pdf_templates`, `pdf_template_fields`, `pdf_template_signatures` | PDF subido por el cliente: campos y firmas por coordenadas o por nombre AcroForm. |
+| `pdf_images` | Imágenes que muestran los formatos de lienzo de un flujo (sello, membrete): referencian una subida, que la purga libera al borrar la fila. |
 | `workflow_documents` | Qué documento produce el flujo, para qué empresa y cuándo. |
 | `export_definitions`, `export_columns`, `export_catalog_entries`, `export_cutoffs`, `export_lines` | Exportaciones programadas (antes "planos"): definición con columnas, filtro, unión de filas (`group_by`), separación en archivos (`separate_by`) y programación (`weekdays`, `month_day`, `interval_days`, `last_auto_cutoff_at`); cada archivo de un corte dice su grupo y su responsable. Detalle en arquitectura.md §21. |
 | `tenant_data_exports` | Exportación de **todos** los datos de la organización durante el periodo de eliminación: una fila por solicitud, el estado del trabajo del worker y el zip bajo `tenants/{tenant}/exports/{id}.zip` (§8.31). |

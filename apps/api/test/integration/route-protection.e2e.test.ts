@@ -45,6 +45,7 @@ const AUTHENTICATED_ONLY_ROUTES = [
   'POST /auth/mfa/disable',
   'POST /auth/mfa/backup-codes',
   'GET /auth/me/permissions',
+  'GET /settings/logo',
   'GET /delegations',
   'POST /delegations',
   'POST /delegations/:id/cancel',

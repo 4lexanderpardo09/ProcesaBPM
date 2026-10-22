@@ -1,7 +1,7 @@
 import { type CanvasElement, defaultCanvasStyle, emptyCanvasDesign, type FieldDocument, type PdfCanvasDesign } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
 import type { ResolvedCanvasElement } from '../../../infrastructure/pdf/canvas-document.js';
-import { CanvasResolver } from './canvas-resolver.js';
+import { CanvasResolver, uploadedImageIds } from './canvas-resolver.js';
 import type { RenderFacts, SignerRecord } from './render-facts.js';
 
 const field = (code: string, type: FieldDocument['type'], config: Record<string, unknown> = {}): FieldDocument => ({
@@ -131,8 +131,17 @@ describe('CanvasResolver', () => {
   it('says when the logo is used and keeps the sheet size in millimetres', () => {
     const logo: CanvasElement = { ...at, id: 'logo', name: 'logo', type: 'image', source: 'TENANT_LOGO', fit: 'CONTAIN' };
     const resolved = resolve({ elements: [logo], page: { size: 'A4', orientation: 'LANDSCAPE', marginBottom: 12 } });
-    expect(resolved.usesLogo).toBe(true);
+    expect(resolved.imageKeys).toEqual(new Set(['logo']));
     expect(resolved.content.page).toEqual({ width: 297, height: 210, marginBottom: 12 });
     expect(resolved.content.elements[0]).toMatchObject({ type: 'image', imageKey: 'logo' });
+  });
+
+  it('names each uploaded image it shows, and leaves out the images of elements that do not print', () => {
+    const seal: CanvasElement = { ...at, id: 'seal', name: 'seal', type: 'image', source: 'UPLOADED', imageId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ab', fit: 'COVER' };
+    const hidden: CanvasElement = { ...at, id: 'hidden', name: 'hidden', type: 'image', source: 'UPLOADED', imageId: '018f3c1e-7b2a-7c3d-9e4f-0123456789ac', fit: 'COVER', condition: '1 > 2' };
+    const resolved = resolve({ elements: [seal, hidden] });
+    expect(resolved.imageKeys).toEqual(new Set(['img:018f3c1e-7b2a-7c3d-9e4f-0123456789ab']));
+    expect(resolved.content.elements).toEqual([expect.objectContaining({ id: 'seal', imageKey: 'img:018f3c1e-7b2a-7c3d-9e4f-0123456789ab' })]);
+    expect(uploadedImageIds(resolved.imageKeys)).toEqual(['018f3c1e-7b2a-7c3d-9e4f-0123456789ab']);
   });
 });

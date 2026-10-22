@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { NotFoundError, type AnyPdfDesign, type PdfProblem, type TemplateMapping, validateDesign, validateMapping, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { WorkflowVersionQuery } from '../../workflows/application/workflow-version-query.js';
+import { PdfImageRepository } from '../data/pdf-image.repository.js';
 
 export interface CheckResult {
   /** Against the published version: tickets run on it, so these block the change. */
@@ -18,15 +19,19 @@ export interface SourceChecker {
 
 const sameProblem = (a: PdfProblem, b: PdfProblem): boolean => a.code === b.code && a.path === b.path && a.detail === b.detail;
 
-/** Checks formats and mappings against a workflow's versions: published first, the draft as a heads-up. */
+/** Checks formats and mappings against a workflow's versions (published first, the draft as a heads-up) and its images. */
 @Injectable()
 export class DocumentSourceValidator {
-  constructor(@Inject(WorkflowVersionQuery) private readonly versions: WorkflowVersionQuery) {}
+  constructor(
+    @Inject(WorkflowVersionQuery) private readonly versions: WorkflowVersionQuery,
+    @Inject(PdfImageRepository) private readonly images: PdfImageRepository,
+  ) {}
 
   async forWorkflow(tx: TenantTransaction, tenantId: string, workflowId: string): Promise<SourceChecker> {
     const current = await this.versions.current(tx, tenantId, workflowId);
     if (current === null) throw new NotFoundError();
     const { published, draft } = current;
+    const imageIds = await this.images.ids(tx, tenantId, workflowId);
     const run = (check: (document: WorkflowVersionDocument) => PdfProblem[]): CheckResult => {
       if (published === null) return { errors: draft === null ? [] : check(draft), warnings: [] };
       const errors = check(published);
@@ -34,7 +39,7 @@ export class DocumentSourceValidator {
     };
     return {
       document: published ?? draft ?? { steps: [], transitions: [], fields: [], amountRules: [] },
-      design: (design) => run((document) => validateDesign(design, document)),
+      design: (design) => run((document) => validateDesign(design, document, { imageIds })),
       mapping: (mapping, template) => run((document) => validateMapping(mapping, template, document)),
     };
   }

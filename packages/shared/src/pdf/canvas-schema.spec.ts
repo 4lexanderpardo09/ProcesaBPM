@@ -130,6 +130,18 @@ describe('validateDesign of a canvas', () => {
     ]);
   });
 
+  it('an uploaded image says which one, and must be one of the workflow’s when the caller knows them', () => {
+    const image = (extra: Record<string, unknown>) => ({ ...at, id: 'img', name: 'img', type: 'image', fit: 'CONTAIN', ...extra }) as CanvasElement;
+    const known = '018f3c1e-7b2a-7c3d-9e4f-0123456789ab';
+    const other = '018f3c1e-7b2a-7c3d-9e4f-0123456789ac';
+    expect(pdfCanvasDesignSchema.safeParse(canvas([image({ source: 'UPLOADED' })])).success).toBe(false);
+    expect(pdfCanvasDesignSchema.safeParse(canvas([image({ source: 'TENANT_LOGO' })])).success).toBe(true);
+    const design = canvas([image({ source: 'UPLOADED', imageId: known }), image({ id: 'img2', name: 'img2', source: 'UPLOADED', imageId: other })]);
+    expect(pdfCanvasDesignSchema.safeParse(design).success).toBe(true);
+    expect(codes(validateDesign(design, doc, { imageIds: new Set([known]) }))).toEqual(['DOCUMENT_IMAGE_UNKNOWN@elements[1].imageId']);
+    expect(validateDesign(design, doc)).toEqual([]);
+  });
+
   it('a block document cannot read a calculation', () => {
     expect(codes(validateDesign({ ...emptyDesign(), body: [{ type: 'text', text: '{{calc.TOTAL}}' }] }, doc))).toEqual(['DOCUMENT_CALCULATION_UNKNOWN@body[0].text']);
   });
