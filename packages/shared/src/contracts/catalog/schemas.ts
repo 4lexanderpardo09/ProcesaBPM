@@ -81,7 +81,8 @@ export const subcategoryResponseSchema = z.object({
 export type SubcategoryResponse = z.infer<typeof subcategoryResponseSchema>;
 
 // ---- What the user creating a ticket can pick ----
-export const availableCatalogQuerySchema = z.object({ companyId: uuidSchema.optional() });
+/** `requesterId`: the catalog of the person a ticket is created for (needs `create_for_others`); the caller's by default. */
+export const availableCatalogQuerySchema = z.object({ companyId: uuidSchema.optional(), requesterId: uuidSchema.optional() });
 export type AvailableCatalogQuery = z.infer<typeof availableCatalogQuerySchema>;
 
 export interface AvailableCategory {
@@ -96,6 +97,8 @@ export interface AvailableCategory {
 }
 export interface AvailableCatalogResponse {
   readonly categories: readonly AvailableCategory[];
+  /** The active companies of the person the catalog is for: a ticket names one of them (needed when there are several). */
+  readonly companies: ReadonlyArray<{ readonly id: string; readonly name: string }>;
 }
 
 /** Parses `AvailableCatalogResponse` (for the web client). */
@@ -107,6 +110,7 @@ export const availableCatalogResponseSchema = z.object({
       subcategories: z.array(z.object({ id: uuidSchema, name: z.string(), description: z.string().nullable(), defaultPriorityId: uuidSchema.nullable() })),
     }),
   ),
+  companies: z.array(z.object({ id: uuidSchema, name: z.string() })),
 }) satisfies z.ZodType<AvailableCatalogResponse>;
 
 // ---- Error types (what a reopening or an error report is filed under) ----

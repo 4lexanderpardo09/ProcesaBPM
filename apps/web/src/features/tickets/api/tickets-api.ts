@@ -1,21 +1,14 @@
-import { ticketPageResponseSchema } from '@procesabpm/shared';
+import { ticketCountsResponseSchema, ticketPageResponseSchema } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { HttpClient } from '@/shared/api';
-import type { InboxParams, TicketStatus, TicketView } from '../lib/inbox-params';
+import { filterQuery, filtersOf, type InboxFilters, type InboxParams } from '../lib/inbox-params';
 
 export const INBOX_PAGE_SIZE = 25;
-
-interface ListQuery {
-  readonly view: TicketView;
-  readonly status: TicketStatus | undefined;
-  readonly page: number;
-  readonly pageSize: number;
-}
 
 export const ticketQueryKeys = {
   all: ['tickets'] as const,
   list: (params: InboxParams) => [...ticketQueryKeys.all, 'list', params] as const,
-  count: (view: TicketView, status: TicketStatus | undefined) => [...ticketQueryKeys.all, 'count', { view, status }] as const,
+  counts: (filters: InboxFilters) => [...ticketQueryKeys.all, 'counts', filters] as const,
   detail: (ticketId: string) => [...ticketQueryKeys.all, 'detail', ticketId] as const,
   form: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'form'] as const,
   timeline: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'timeline'] as const,
@@ -23,26 +16,25 @@ export const ticketQueryKeys = {
   flow: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'flow'] as const,
 };
 
-function listTickets(client: HttpClient, { view, status, page, pageSize }: ListQuery, signal: AbortSignal) {
-  const query = new URLSearchParams({ view, page: String(page), pageSize: String(pageSize) });
-  if (status !== undefined) query.set('status', status);
-  return client.request(`/tickets?${query.toString()}`, { schema: ticketPageResponseSchema, signal });
-}
-
 /** One page of the inbox; the previous page stays on screen while the next one loads. */
 export function ticketListQueryOptions(client: HttpClient, params: InboxParams) {
+  const query = filterQuery(filtersOf(params));
+  query.set('view', params.view);
+  query.set('page', String(params.page));
+  query.set('pageSize', String(INBOX_PAGE_SIZE));
   return queryOptions({
     queryKey: ticketQueryKeys.list(params),
-    queryFn: ({ signal }) => listTickets(client, { ...params, pageSize: INBOX_PAGE_SIZE }, signal),
+    queryFn: ({ signal }) => client.request(`/tickets?${query.toString()}`, { schema: ticketPageResponseSchema, signal }),
     placeholderData: keepPreviousData,
   });
 }
 
-/** How many tickets a tab holds: the total of a one-item page, until the API has a count endpoint. */
-export function ticketCountQueryOptions(client: HttpClient, view: TicketView, status: TicketStatus | undefined) {
+/** How many tickets each tab holds under the same filters, in one request. */
+export function ticketCountsQueryOptions(client: HttpClient, filters: InboxFilters) {
+  const query = filterQuery(filters).toString();
   return queryOptions({
-    queryKey: ticketQueryKeys.count(view, status),
-    queryFn: ({ signal }) => listTickets(client, { view, status, page: 1, pageSize: 1 }, signal),
-    select: (page) => page.total,
+    queryKey: ticketQueryKeys.counts(filters),
+    queryFn: ({ signal }) => client.request(`/tickets/counts${query === '' ? '' : `?${query}`}`, { schema: ticketCountsResponseSchema, signal }),
+    placeholderData: keepPreviousData,
   });
 }

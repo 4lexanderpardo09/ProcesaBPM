@@ -524,6 +524,27 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Integración del API:** la lista y el 401.
   - **Límite de las pruebas:** de la web, sube a 15 s por prueba (`vite.config.ts`), porque las páginas completas en jsdom con todos los núcleos ocupados pasaban de 5 s.
 
+### 4.22 Inicio, filtros de la bandeja y crear para otra persona (hecho, 2026-10-21, `feat/web-home-inbox`)
+- **Inicio (`/`, `features/home`):** la raíz ya no redirige a la bandeja.
+  - **Contadores** de `GET /dashboard/stats`: asignados, vencidos, vencen en 24 horas, mis solicitudes abiertas, cerré en 7 días. Los que tienen bandeja llevan a ella.
+  - **Pendientes** de `GET /dashboard/pending`, el más urgente primero, con su vencimiento y la marca de vencido.
+  - **Menú y claves:** «Inicio» encabeza el menú (`end`, para que no quede marcado en otras páginas). Las claves van bajo `tickets`, así que cualquier cambio de un ticket las refresca.
+- **Bandeja:**
+  - **Filtros:** búsqueda (número, asunto o solicitante; espera 300 ms), estado, prioridad, categoría y empresa, con «Quitar filtros». La URL los guarda (`q`, `status`, `priority`, `category`, `company`).
+  - **Cuándo aparece cada filtro:** prioridad y categoría solo si el rol puede leerlas; la empresa solo si la persona está en varias.
+  - **Conteos:** de las pestañas salen de `GET /tickets/counts`, con los mismos filtros y en una sola petición (antes eran cuatro listas de un elemento).
+- **Crear para otra persona** (`create_for_others`):
+  - **API:** `requesterId` en `GET /catalog/available` y en `GET /subcategories/:id/creation-form`, que entonces responden con lo de esa persona: su departamento, sus empresas y si es iniciadora. El catálogo exige `create_for_others` cuando no es uno mismo; si puede para ese ticket en particular se decide al crear. El catálogo ahora también lista las empresas activas de la persona (`companies`).
+  - **Web:** la tarjeta «¿Para quién es?» busca a la persona en el directorio. Sin `create`, hay que elegirla. El resumen la muestra y la creación envía `requesterId`.
+- **Pruebas:**
+  - **Unitarias:**
+    - Inicio con contadores y pendientes; vacío y sin botón para quien no crea.
+    - Filtros y conteos de la bandeja; parámetros de la URL.
+    - Crear para otra persona: su catálogo, sus empresas, `requesterId`.
+    - Lo que cambió al caer en el inicio después del login.
+  - **Integración del API:** catálogo y formulario de otra persona, que crea el ticket; 403 sin `create_for_others`.
+  - **En local contra el API real:** inicio, bandeja con búsqueda y crear para otra persona.
+
 ### 4.23 Ajustes de la organización, visibilidad de categorías, avisos y copia de los datos (hecho, 2026-10-21, `feat/web-settings`)
 - **Ajustes (`/settings/:tab`, `features/settings`):** en el menú si el rol tiene alguno de `update Setting`, `manage SupportAccess`, `read Storage` o `read AuditLog`. Una pestaña por permiso, con la pestaña en la ruta (el correo de almacenamiento enlaza `/settings/storage`):
   - **Seguridad (`/settings/security`):** exigir la verificación en dos pasos a todos, con cuántas personas activas aún no la tienen.
@@ -545,6 +566,11 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
     - Avisos.
     - Visibilidad de una categoría.
     - Nombres de las acciones.
+
+### 4.24 Búsqueda por clave en un Excel y probar quién aprueba (hecho, 2026-10-21, `feat/web-form-extras`)
+- **Búsqueda por clave (`useDatasetLookups`):** un campo con Excel y `lookupFieldCode` se llena solo cuando se escribe la clave en el otro campo del mismo formulario, por ejemplo la cédula llena el nombre. Espera 400 ms y llama `GET /fields/:fieldId/dataset-lookup?key=`. Pregunta una vez por cada clave nueva; si ninguna fila la tiene, deja el campo como está, y el API revisa al enviar.
+- **Probar quién aprueba:** una tarjeta en Personas › Aprobaciones. Con una persona, un tipo, una empresa y un nivel, usa `GET /approvals/resolve`, la misma búsqueda del motor. Muestra quién aprueba (o por delegación de quién), o por qué nadie, y la traza: grupos revisados por nivel y a quién descartó y por qué.
+- **Pruebas:** unitarias del llenado desde el Excel en el nuevo ticket y de la prueba de aprobador.
 
 ## 5. Pruebas por capa
 | Capa | Herramienta | Dónde |

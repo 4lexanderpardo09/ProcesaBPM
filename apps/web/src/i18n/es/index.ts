@@ -2,6 +2,7 @@ import { admin } from './admin';
 import { auth } from './auth';
 import { catalog } from './catalog';
 import { common } from './common';
+import { home } from './home';
 import { navigation } from './navigation';
 import { notifications } from './notifications';
 import { organization } from './organization';
@@ -12,4 +13,4 @@ import { tickets } from './tickets';
 import { workflowProblems } from './workflow-problems';
 import { workflows } from './workflows';
 
-export const es = { admin, auth, catalog, common, navigation, notifications, organization, people, profile, settings, tickets, workflowProblems, workflows } as const;
+export const es = { admin, auth, catalog, common, home, navigation, notifications, organization, people, profile, settings, tickets, workflowProblems, workflows } as const;

@@ -22,10 +22,11 @@ export class CreationFormService {
     @Inject(CreationGate) private readonly gate: CreationGate,
   ) {}
 
-  form(actor: TicketCreator, subcategoryId: string, companyId: string | undefined): Promise<CreationFormResponse> {
+  /** `requesterId`: the person the ticket is for (the caller by default); for someone else the caller needs `create_for_others`. */
+  form(actor: TicketCreator, subcategoryId: string, companyId: string | undefined, requesterId: string = actor.userId): Promise<CreationFormResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const { tenantId } = this.context.require();
-      const requester = await this.people.findActiveMember(tx, tenantId, actor.userId);
+      const requester = await this.people.findActiveMember(tx, tenantId, requesterId);
       if (requester === null) throw new InvalidReferenceError('The requester is not an active member');
       const company = await this.gate.companyOf(tx, tenantId, requester, companyId);
       const subcategory = await this.people.findAvailableSubcategory(tx, tenantId, subcategoryId, company.id, requester.departmentId);
@@ -34,7 +35,7 @@ export class CreationFormService {
       if (published === null) throw new WorkflowNotAvailableError();
       assertRunnable(published.document);
       const record = { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId, workflowId: published.workflowId, priorityId: subcategory.defaultPriorityId, creatorId: requester.userId };
-      if (!actor.mayCreate('create', record)) throw new PermissionDeniedError('Not allowed to create tickets for this person');
+      if (!actor.mayCreate(requesterId === actor.userId ? 'create' : 'create_for_others', record)) throw new PermissionDeniedError('Not allowed to create tickets for this person');
       const starts = await this.gate.allowedStarts(tx, tenantId, published.document.steps.filter((step) => step.type === 'START'), requester, company);
       if (starts.length === 0) throw new InitiatorNotAllowedError();
       return {

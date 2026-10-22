@@ -23,8 +23,16 @@ export const tickets = {
     all: 'Todos',
   },
   filters: {
+    label: 'Filtros de la bandeja',
+    search: 'Buscar',
+    searchPlaceholder: 'Número, asunto o solicitante',
     status: 'Estado',
     anyStatus: 'Todos',
+    priority: 'Prioridad',
+    category: 'Categoría',
+    company: 'Empresa',
+    any: 'Todas',
+    clear: 'Quitar filtros',
   },
   status: {
     OPEN: 'Abierto',
@@ -39,6 +47,17 @@ export const tickets = {
     tags: 'Etiquetas',
   },
   new: {
+    requester: {
+      title: '¿Para quién es?',
+      self: 'Para ti. Si la solicitud es de otra persona, búscala por su nombre.',
+      other: 'Para {{name}}. Las categorías y el formulario son los suyos.',
+      pick: 'Busca a la persona para quien es la solicitud.',
+      backToSelf: 'Es para mí',
+      search: 'Buscar a otra persona',
+      choose: 'Elegir',
+      chooseNamed: 'Crear para {{name}}',
+      noCompany: 'Esa persona no pertenece a ninguna empresa activa. Pide que la asignen a una.',
+    },
     title: 'Nuevo ticket',
     subtitle: 'Elige el tipo de solicitud; los campos cambian según el flujo asociado.',
     noCompany: 'No perteneces a ninguna empresa de la organización, así que no puedes crear tickets. Pídele a quien administra que te asigne una.',
@@ -69,6 +88,7 @@ export const tickets = {
       attachments: 'Adjuntos',
     },
     summary: {
+      requester: 'Para',
       title: 'Resumen',
       company: 'Empresa',
       category: 'Categoría',

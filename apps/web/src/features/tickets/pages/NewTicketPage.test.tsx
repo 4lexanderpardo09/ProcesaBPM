@@ -35,6 +35,7 @@ const catalog = {
       ],
     },
   ],
+  companies: [{ id: MAIN, name: 'Electrocréditos' }],
 };
 
 const priorities = {
@@ -125,6 +126,62 @@ describe('NewTicketPage', () => {
     });
     expect(fake.callsTo('/tickets')[0]?.options.body).not.toHaveProperty('priorityId');
     expect(fake.callsTo(`/subcategories/${PAGOS}/creation-form`)[0]?.path).toBe(`/subcategories/${PAGOS}/creation-form?companyId=${MAIN}`);
+  });
+
+  it('fills a field from the Excel row of the key typed in another one', async () => {
+    const withLookup = {
+      ...creationForm,
+      starts: [
+        {
+          ...creationForm.starts[0]!,
+          fields: [
+            field(1, 'CEDULA', 'Cédula', 'TEXT'),
+            field(2, 'NOMBRE', 'Nombre del cliente', 'TEXT', { dataSource: { kind: 'DATASET', datasetId: id(80), column: 'NOMBRE', lookupFieldCode: 'CEDULA' } }),
+          ],
+        },
+      ],
+    };
+    const { fake } = renderRoute('/tickets/new', {
+      handlers: handlers({
+        [`/subcategories/${PAGOS}/creation-form`]: () => withLookup,
+        [`/fields/${id(102)}/dataset-lookup`]: (_options, path) => ({ value: path.endsWith('key=1010') ? 'Ana Ruiz' : null }),
+      }),
+    });
+
+    await chooseRequest();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Cédula' }), '1010');
+    await vi.waitFor(() => expect(screen.getByRole('combobox', { name: 'Nombre del cliente' })).toHaveValue('Ana Ruiz'));
+    expect(fake.callsTo(`/fields/${id(102)}/dataset-lookup`)).toHaveLength(1);
+  });
+
+  it('creates a ticket for someone else: their catalog and their companies, and the requester in the request', async () => {
+    const OLGA = id(70);
+    const OTHER_COMPANY = id(71);
+    const desk = { permissions: [{ action: 'create_for_others', subject: 'Ticket', conditional: false }, { action: 'read', subject: 'Priority', conditional: false }] };
+    const { fake, router } = renderRoute('/tickets/new', {
+      handlers: handlers({
+        '/auth/me/permissions': () => desk,
+        '/members/directory': () => [{ userId: OLGA, firstName: 'Olga', lastName: 'Pérez' }],
+        '/catalog/available': () => ({ ...catalog, companies: [{ id: OTHER_COMPANY, name: 'Finansueños' }] }),
+        [`/subcategories/${PAGOS}/creation-form`]: () => ({ ...creationForm, companyId: OTHER_COMPANY }),
+      }),
+    });
+
+    expect(await screen.findByText('Busca a la persona para quien es la solicitud.')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /Categoría/ })).toBeNull();
+    await userEvent.type(screen.getByRole('searchbox', { name: /Buscar a otra persona/ }), 'olga');
+    await userEvent.click(await screen.findByRole('button', { name: 'Crear para Olga Pérez' }));
+    expect(screen.getByText('Para Olga Pérez. Las categorías y el formulario son los suyos.')).toBeInTheDocument();
+
+    await chooseRequest();
+    await userEvent.type(screen.getByRole('textbox', { name: /Asunto/ }), 'Pago de Olga');
+    await userEvent.type(screen.getByRole('textbox', { name: /Monto/ }), '100');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear y enviar' }));
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/tickets/${NEW_TICKET}`));
+    expect(fake.callsTo('/tickets')[0]?.options.body).toMatchObject({ requesterId: OLGA, companyId: OTHER_COMPANY, title: 'Pago de Olga' });
+    expect(fake.callsTo('/catalog/available').map((call) => call.path)).toContain(`/catalog/available?companyId=${OTHER_COMPANY}&requesterId=${OLGA}`);
+    expect(fake.callsTo(`/subcategories/${PAGOS}/creation-form`).at(-1)?.path).toBe(`/subcategories/${PAGOS}/creation-form?companyId=${OTHER_COMPANY}&requesterId=${OLGA}`);
   });
 
   it('sends the priority the person picks, and the company they choose when they are in several', async () => {

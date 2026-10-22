@@ -8,5 +8,6 @@ export { createBroadcastSessionChannel, type SessionChannel } from './session-ch
 export { currentUserQueryKey, myPermissionsQueryKey } from './session-api';
 export { type MaintenanceDetails, type SessionBlock, type SignOutReason } from './session-errors';
 export { createSessionManager, type SessionManager } from './session-manager';
+export { setSwitchDestination, takeSwitchDestination } from './switch-destination';
 export { type SessionState } from './session-state';
 export { createTokenStore, type TokenStore } from './token-store';

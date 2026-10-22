@@ -91,7 +91,8 @@ test.describe('sign-in', () => {
     await installFakeAuthApi(context, { organizations: [acme] });
     await page.goto('/login?returnTo=https%3A%2F%2Fevil.example');
     await submitCredentials(page);
-    await expect(page).toHaveURL(/\/tickets$/);
+    await expect(page.getByRole('heading', { level: 1, name: /^Hola, / })).toBeVisible();
+    expect(new URL(page.url()).origin).not.toBe('https://evil.example');
   });
 });
 
