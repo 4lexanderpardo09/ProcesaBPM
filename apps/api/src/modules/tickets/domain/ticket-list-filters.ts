@@ -1,4 +1,4 @@
-import type { TicketFiltersQuery, TicketView } from '@procesabpm/shared';
+import { type FieldFilterOperator, fieldRangeKind, type TicketFiltersQuery, type TicketView } from '@procesabpm/shared';
 import { escapeLike } from '../../../common/crud/like-pattern.js';
 import type { Condition, SubjectContext } from '../../authorization/domain/subject-registry.js';
 import { createdBy, observedBy } from './ticket-subject.js';
@@ -45,7 +45,42 @@ export function ticketFilters(query: TicketFiltersQuery, callerId: string): Cond
     ...(query.createdFrom === undefined ? [] : [{ createdAt: { gte: new Date(query.createdFrom) } }]),
     ...(query.createdTo === undefined ? [] : [{ createdAt: { lt: new Date(query.createdTo) } }]),
     ...(query.search === undefined ? [] : [searchFilter(query.search)]),
+    ...(query.fieldCode === undefined || query.fieldOperator === undefined
+      ? []
+      : [fieldFilter({ code: query.fieldCode, operator: query.fieldOperator, value: query.fieldValue, valueTo: query.fieldValueTo })]),
   ];
+}
+
+/** Beyond any number a field holds (they are safe integers or have few decimals). */
+const NUMBER_LIMIT = 1e18;
+
+/** The day after a `YYYY-MM-DD`, so a date-time on the last day of a range still falls inside it. */
+const nextDay = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * A field of the form, by code, so one filter covers every workflow with that field. Values are JSON: dates and
+ * date-times are strings (`YYYY-MM-DD`, ISO instants) and numbers are numbers. Postgres orders JSON values of
+ * different types by type (strings below numbers below booleans), so each range has both ends of its own type:
+ * a date range never matches a number, nor a number range a text.
+ */
+export function fieldFilter({ code, operator, value, valueTo }: { code: string; operator: FieldFilterOperator; value?: string | undefined; valueTo?: string | undefined }): Condition {
+  const withValue = (filter: Condition): Condition => ({ fieldValues: { some: { field: { code }, value: filter } } });
+  switch (operator) {
+    case 'contains':
+      return withValue({ path: [], string_contains: value, mode: 'insensitive' });
+    case 'equals': {
+      const number = Number(value);
+      return { OR: [withValue({ equals: value }), ...(value === undefined || Number.isNaN(number) ? [] : [withValue({ equals: number })])] };
+    }
+    case 'between': {
+      if (fieldRangeKind(value, valueTo) === 'date') return withValue({ gte: value ?? '0000-01-01', lt: valueTo === undefined ? '9999-12-31' : nextDay(valueTo) });
+      return withValue({ gte: value === undefined ? -NUMBER_LIMIT : Number(value), lte: valueTo === undefined ? NUMBER_LIMIT : Number(valueTo) });
+    }
+    case 'filled':
+      return { fieldValues: { some: { field: { code } } } };
+    case 'empty':
+      return { fieldValues: { none: { field: { code } } } };
+  }
 }
 
 /** What the caller asked to look at; the access filter narrows it further, never widens it. */

@@ -14,11 +14,11 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **API y web:**
     - ~~«mismo responsable que el paso X»~~ (hecho, arquitectura §14.2);
     - ~~cortes por empresa y plazo por corte en el motor~~ (hecho, arquitectura §14.2); el vencimiento se calcula al llegar al paso y no se recalcula si el campo se llena después;
-    - planos: ~~el motor (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte)~~ (hecho, arquitectura §21); falta la web; las definiciones y catálogos aún no se auditan;
+    - ~~planos: el motor (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte) y la web~~ (hecho, arquitectura §21); las definiciones y catálogos aún no se auditan;
     - ~~procesar en lote~~ (hecho, arquitectura §14.2; sin agrupar por persona ni por corte de plano, sin montos por persona ni adjuntos en lote);
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2; la actividad muestra qué cambió);
     - ~~registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»~~ (hecho, arquitectura §14.2);
-    - ~~filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, fechas)~~ (hecho, arquitectura §4.22); falta filtrar por el valor de un campo.
+    - ~~filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, fechas)~~ (hecho, arquitectura §4.22); ~~filtrar por el valor de un campo~~ (hecho; `equals` distingue mayúsculas y un texto que empieza como una fecha entra en un rango de fechas).
   - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ~~El motor del lienzo (esquema, cálculos, condiciones, maquetado y dibujo)~~ y su editor en la web (hecho, arquitectura §15); faltan las imágenes subidas al formato (hoy solo el logo) y firmas filtradas por cargo.
   - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
   - **Fuera del alcance:** ventas, listas de precios y la parte propia de viáticos.

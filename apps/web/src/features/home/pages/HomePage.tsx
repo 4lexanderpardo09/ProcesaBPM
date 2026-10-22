@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { TicketStatusBadge } from '@/features/tickets';
+import { myCutoffsQueryOptions } from '@/features/workflows';
 import { formatDateTime } from '@/shared/lib/format-date-time';
 import { paths, ticketPath } from '@/shared/lib/paths';
 import { useApiClient, useCurrentUser, usePermissions } from '@/shared/session';
@@ -21,6 +22,8 @@ export function HomePage() {
   const me = useCurrentUser().data;
   const stats = useQuery(homeStatsQueryOptions(client));
   const pending = useQuery(pendingTicketsQueryOptions(client));
+  // "Mis planos" only shows to whoever has files of their own.
+  const myExports = useQuery(myCutoffsQueryOptions(client));
   const timeZone = me?.user.timeZone ?? undefined;
   const value = (pick: (data: NonNullable<typeof stats.data>) => number) => (stats.data === undefined ? undefined : pick(stats.data));
 
@@ -58,11 +61,14 @@ export function HomePage() {
         title={me === undefined ? t('title') : t('greeting', { name: me.user.firstName })}
         subtitle={t('subtitle')}
         actions={
-          can('create', 'Ticket') || can('create_for_others', 'Ticket') ? (
-            <ButtonLink to={paths.newTicket} variant="primary" icon={<PlusIcon size={15} />}>
-              {t('newTicket')}
-            </ButtonLink>
-          ) : undefined
+          <>
+            {(myExports.data?.length ?? 0) > 0 && <ButtonLink to={paths.myExports}>{t('myExports')}</ButtonLink>}
+            {(can('create', 'Ticket') || can('create_for_others', 'Ticket')) && (
+              <ButtonLink to={paths.newTicket} variant="primary" icon={<PlusIcon size={15} />}>
+                {t('newTicket')}
+              </ButtonLink>
+            )}
+          </>
         }
       />
       <section className={styles.tiles} aria-label={t('stats.label')}>

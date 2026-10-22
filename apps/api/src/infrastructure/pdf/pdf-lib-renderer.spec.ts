@@ -221,7 +221,7 @@ describe('sanitizePdf', () => {
 
 describe('PdfLibRenderer.renderCanvas', () => {
   const style = { ...defaultCanvasStyle(), padding: 1 };
-  const element = (id: string, y: number, extra: Record<string, unknown>) => ({ id, order: 0, x: 15, y, width: 150, height: 10, repeat: false, sheet: 0, style, ...extra });
+  const element = (id: string, y: number, extra: Record<string, unknown>) => ({ id, order: 0, x: 15, y, width: 150, height: 10, repeat: false, sheet: 0, style, ...extra }) as ResolvedCanvasElement;
   const canvasJob = (elements: ResolvedCanvasElement[]) => ({ page: { width: 215.9, height: 279.4, marginBottom: 15 }, sheets: [0], elements, images: new Map(), deadlineAt: deadlineAt(), meta });
 
   it('draws the standard fonts with Spanish text, styles, boxes, lines and a growing table', async () => {

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { FilterableFieldType } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { fullName } from '../domain/person-name.js';
 
@@ -133,6 +134,15 @@ export class TicketQueryRepository {
   }
 
   /** Full names of the tenant's members among the given user ids, by user id; an id without membership here is left out. */
+  /** The fields of the published versions of the active workflows of the given types, the latest published first. */
+  filterableFields(tx: TenantTransaction, tenantId: string, types: readonly FilterableFieldType[]) {
+    return tx.field.findMany({
+      where: { tenantId, type: { in: [...types] }, version: { status: 'PUBLISHED', workflow: { isActive: true } } },
+      select: { code: true, label: true, type: true, config: true, dataSource: true },
+      orderBy: [{ version: { publishedAt: 'desc' } }, { code: 'asc' }],
+    });
+  }
+
   async memberNames(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, string>> {
     if (userIds.length === 0) return new Map();
     const rows = await tx.membership.findMany({ where: { tenantId, userId: { in: [...userIds] } }, select: { userId: true, ...PERSON_NAME } });
