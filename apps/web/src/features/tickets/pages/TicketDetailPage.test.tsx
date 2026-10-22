@@ -210,6 +210,33 @@ describe('TicketDetailPage', () => {
     expect(screen.queryByText('version-vieja.pdf')).toBeNull();
   }, 15_000);
 
+  it('says what an edit and a submitted form changed', async () => {
+    const priority = { id: id(700), name: 'Alta', color: '#be123c', sortOrder: 1, isActive: true, isDefault: false, createdAt: at };
+    const edited = {
+      ...event(4, 'FIELDS_UPDATED', ME),
+      data: {
+        source: 'EDIT',
+        changes: [
+          { code: 'title', before: 'Pago', after: 'Confirmación de pago de crédito' },
+          { code: 'descriptionHtml', before: '', after: '<p>Adjunto</p>' },
+          { code: 'priorityId', before: null, after: priority.id },
+        ],
+      },
+    };
+    const submitted = { ...event(5, 'FIELDS_UPDATED', OTHER), data: { changes: [{ code: 'paidOn', before: null, after: '2026-10-01' }] } };
+    renderRoute(base, {
+      handlers: ticketHandlers({
+        [`${base}/timeline`]: () => [...timeline, edited, submitted],
+        '/priorities': () => ({ items: [priority], page: 1, pageSize: 100, total: 1 }),
+      }),
+    });
+
+    expect(await screen.findByText('Asunto: Pago → Confirmación de pago de crédito')).toBeInTheDocument();
+    expect(screen.getByText('Cambió la descripción')).toBeInTheDocument();
+    expect(await screen.findByText('Prioridad: (vacío) → Alta')).toBeInTheDocument();
+    expect(await screen.findByText('Fecha del pago: (vacío) → 1 de oct de 2026')).toBeInTheDocument();
+  });
+
   it('adds a comment as escaped HTML and shows it in the activity', async () => {
     const comments: string[] = [];
     const { fake } = renderRoute(base, {

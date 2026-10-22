@@ -307,6 +307,11 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
       if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
       return json(route, 200, { myOpen: 0, myOverdue: 0, myDueSoon: 0, createdByMeOpen: 0, closedByMeWeek: 0 });
     },
+    // "Mis planos": nobody in these tests has files of their own.
+    'GET /api/export-cutoffs/mine': (route, _body, authorization) => {
+      if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
+      return json(route, 200, []);
+    },
     'GET /api/dashboard/pending': (route, _body, authorization) => {
       if (validToken === undefined || authorization !== `Bearer ${validToken}`) return error(route, 401, 'UNAUTHENTICATED');
       return json(route, 200, []);

@@ -35,6 +35,7 @@ import {
   ticketCandidatesQuerySchema,
   type TicketCountsResponse,
   type TicketDetailResponse,
+  type TicketFilterFieldResponse,
   type TicketFiltersQuery,
   ticketFiltersQuerySchema,
   type TicketEventResponse,
@@ -107,6 +108,13 @@ export class TicketsController {
   @Get('counts')
   counts(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Query(new ZodValidationPipe(ticketFiltersQuerySchema)) query: TicketFiltersQuery): Promise<TicketCountsResponse> {
     return this.queries.counts(principal, ability, query);
+  }
+
+  /** The fields the inbox can filter by. Declared before `:id`, like `counts`. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Get('filter-fields')
+  filterFields(): Promise<TicketFilterFieldResponse[]> {
+    return this.queries.filterFields();
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)

@@ -3,6 +3,7 @@ export const home = {
   greeting: 'Hola, {{name}}',
   subtitle: 'Lo que tienes a cargo y lo que espera por ti.',
   newTicket: 'Nuevo ticket',
+  myExports: 'Mis planos',
   loading: 'Cargando…',
   loadFailed: 'No se pudo cargar. Recarga la página.',
   stats: {

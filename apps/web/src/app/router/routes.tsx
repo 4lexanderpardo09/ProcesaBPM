@@ -9,7 +9,7 @@ import { PeoplePage } from '@/features/people';
 import { ProfilePage } from '@/features/profile';
 import { SettingsPage } from '@/features/settings';
 import { NewTicketPage, TicketBatchPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
-import { DatasetPage, DatasetsPage, PdfFormatPage, PdfTemplatePage, WorkflowBuilderPage, WorkflowPage, WorkflowsPage } from '@/features/workflows';
+import { DatasetPage, DatasetsPage, ExportCatalogsPage, ExportPage, ExportsPage, MyExportsPage, PdfFormatPage, PdfTemplatePage, WorkflowBuilderPage, WorkflowPage, WorkflowsPage } from '@/features/workflows';
 import { paths } from '@/shared/lib/paths';
 import { AppLayout } from '../layouts/app-layout/AppLayout';
 import { type NavigationItemKey, navigationSections } from '../layouts/app-layout/navigation';
@@ -41,6 +41,11 @@ const workflowRoutes: RouteObject[] = [
   { path: paths.pdfTemplate, element: <PdfTemplatePage /> },
   { path: paths.datasets, element: <DatasetsPage /> },
   { path: paths.dataset, element: <DatasetPage /> },
+  { path: paths.exports, element: <ExportsPage /> },
+  { path: paths.newExport, element: <ExportPage /> },
+  { path: paths.exportCatalogs, element: <ExportCatalogsPage /> },
+  { path: paths.export, element: <ExportPage /> },
+  { path: paths.myExports, element: <MyExportsPage /> },
 ];
 
 const configurationRoutes: RouteObject[] = [
