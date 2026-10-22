@@ -33,7 +33,8 @@ export class ExportLinesRepository {
   }
 
   async pending(tx: TenantTransaction, tenantId: string, definitionId: string): Promise<PendingLine[]> {
-    const rows = await tx.exportLine.findMany({ where: { tenantId, definitionId, cutoffId: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true, ticketId: true, data: true, createdAt: true } });
+    // In ticket order, not in the order the events were handled: the file (and which row a merge keeps first) is the same however the worker ran.
+    const rows = await tx.exportLine.findMany({ where: { tenantId, definitionId, cutoffId: null }, orderBy: [{ ticket: { number: 'asc' } }, { id: 'asc' }], select: { id: true, ticketId: true, data: true, createdAt: true } });
     return rows.map((row) => ({ ...row, data: rowOf(row.data) }));
   }
 
