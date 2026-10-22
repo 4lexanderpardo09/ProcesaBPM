@@ -8,7 +8,7 @@ import { decisionExits, type TicketAction } from '../domain/ticket-action-rules.
 import type { TicketActionState } from '../domain/ticket-actions.js';
 import type { TicketActor } from './locked-ticket.js';
 
-const ACTIONS: readonly TicketAction[] = ['transition', 'reassign', 'close', 'open_incident', 'reopen', 'comment', 'update'];
+const ACTIONS: readonly TicketAction[] = ['transition', 'reassign', 'close', 'open_incident', 'reopen', 'comment', 'report_error', 'update'];
 
 /**
  * Reads, without locking, what the action rules need to judge a ticket for one caller: the same rows the engine
@@ -30,7 +30,7 @@ export class TicketActionStateReader {
     const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
     const step = visit === null ? undefined : document.steps.find((candidate) => candidate.id === visit.stepId);
     const peopleSteps = new Set(document.steps.filter((candidate) => PEOPLE_STEP_TYPES.has(candidate.type)).map((candidate) => candidate.id));
-    const grants: Record<TicketAction, boolean> = { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: false, update: false };
+    const grants: Record<TicketAction, boolean> = { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: false, report_error: false, update: false };
     for (const action of ACTIONS) grants[action] = await actor.can(tx, ticket.id, action);
     return {
       actorId: actor.userId,

@@ -5,7 +5,7 @@ export type TicketView = (typeof TICKET_VIEWS)[number];
 export type TicketStatus = z.infer<typeof ticketStatusSchema>;
 
 /** The tabs in their order; the first one is where the inbox opens. */
-export const INBOX_VIEWS: readonly TicketView[] = ['assigned', 'created', 'observed', 'all'];
+export const INBOX_VIEWS: readonly TicketView[] = ['assigned', 'created', 'observed', 'all', 'history', 'reopened', 'errors_reported', 'errors_received'];
 export const TICKET_STATUSES: readonly TicketStatus[] = ticketStatusSchema.options;
 
 const DEFAULT_VIEW: TicketView = 'assigned';

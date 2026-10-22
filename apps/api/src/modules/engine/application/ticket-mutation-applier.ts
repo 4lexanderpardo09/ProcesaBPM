@@ -42,7 +42,7 @@ export class TicketMutationApplier {
     }
     if (mutation.ticket.kind === 'current') await this.writes.moveTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
     else if (mutation.ticket.kind === 'reopened') await this.writes.reopenTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
-    else await this.writes.closeTicket(tx, tenantId, ticket.id, at, mutation.actorId, mutation.ticket.stepId);
+    else if (mutation.ticket.kind === 'closed') await this.writes.closeTicket(tx, tenantId, ticket.id, at, mutation.actorId, mutation.ticket.stepId, mutation.ticket.forced);
     for (const event of mutation.events) {
       const eventId = await this.writes.insertEvent(tx, tenantId, ticket.id, at, event);
       if (event.attachments !== undefined) await this.files.link(tx, tenantId, { ...event.attachments, ticketId: ticket.id, companyId: ticket.companyId, eventId, at, attachmentRole: event.attachments.role });

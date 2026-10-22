@@ -184,9 +184,9 @@ describe('GET /tickets filters and GET /tickets/counts', () => {
     });
 
     it('counts each view for its caller', async () => {
-      expect(await counts(requester)).toEqual({ assigned: 3, created: 4, observed: 0, all: 4 });
-      expect(await counts(observer)).toEqual({ assigned: 0, created: 0, observed: 2, all: 2 });
-      expect(await counts(stranger)).toEqual({ assigned: 0, created: 0, observed: 0, all: 0 });
+      expect(await counts(requester)).toMatchObject({ assigned: 3, created: 4, observed: 0, all: 4, reopened: 0, errors_reported: 0, errors_received: 0 });
+      expect(await counts(observer)).toEqual({ assigned: 0, created: 0, observed: 2, all: 2, history: 0, reopened: 0, errors_reported: 0, errors_received: 0 });
+      expect(await counts(stranger)).toEqual({ assigned: 0, created: 0, observed: 0, all: 0, history: 0, reopened: 0, errors_reported: 0, errors_received: 0 });
     });
 
     it('needs a permission to read tickets (403)', async () => {

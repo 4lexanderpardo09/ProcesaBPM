@@ -7,6 +7,7 @@ export const settingsQueryKeys = {
   security: ['settings', 'security'] as const,
   support: ['settings', 'support-access'] as const,
   storage: ['settings', 'storage'] as const,
+  calculators: ['settings', 'calculators'] as const,
   audit: (filters: AuditFilters) => ['settings', 'audit', filters] as const,
   announcements: ['announcements'] as const,
 };
@@ -78,4 +79,26 @@ export type Announcement = z.infer<typeof announcementSchema>;
 
 export function announcementsQueryOptions(client: HttpClient) {
   return queryOptions({ queryKey: settingsQueryKeys.announcements, queryFn: ({ signal }) => client.request('/announcements', { schema: z.array(announcementSchema), signal }), staleTime: 10 * 60_000 });
+}
+
+const calculatorSchema = z.object({
+  code: z.string(),
+  parameters: z.array(z.object({ name: z.string(), type: z.string(), required: z.boolean() })),
+  output: z.enum(['CURRENCY', 'NUMBER']),
+  configured: z.boolean(),
+  config: z.record(z.string(), z.unknown()).nullable(),
+});
+
+/** The built-in calculations and whether the organization switched each one on (with its configuration). */
+export function calculatorsQueryOptions(client: HttpClient) {
+  return queryOptions({ queryKey: settingsQueryKeys.calculators, queryFn: ({ signal }) => client.request('/calculators', { schema: z.array(calculatorSchema), signal }) });
+}
+
+/** Switches a calculation on, or replaces its configuration; the API checks it against the calculation's own rules. */
+export function configureCalculator(client: HttpClient, code: string, config: Record<string, unknown>) {
+  return client.request(`/calculators/${encodeURIComponent(code)}/config`, { method: 'PUT', body: config, schema: calculatorSchema });
+}
+
+export function disableCalculator(client: HttpClient, code: string) {
+  return client.request(`/calculators/${encodeURIComponent(code)}/config`, { method: 'DELETE', schema: calculatorSchema });
 }

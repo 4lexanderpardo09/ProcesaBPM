@@ -9,7 +9,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - ~~inicio con resumen y pendientes; bandeja con filtros y conteos; crear para otra persona~~ (hecho, §4.22);
     - ~~visibilidad de categorías; ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría); avisos; copia de los datos en eliminación~~ (hecho, §4.23);
     - ~~búsqueda por clave de un Excel en el formulario~~ (hecho, §4.24);
-    - calculadoras;
+    - ~~calculadoras~~ (hecho, arquitectura §4.23);
     - ~~probar quién aprueba~~ (hecho, §4.24).
   - **API y web:**
     - «mismo responsable que el paso X»;
@@ -17,7 +17,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - planos (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte);
     - procesar en lote;
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2);
-    - registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»;
+    - ~~registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»~~ (hecho, arquitectura §14.2);
     - ~~filtros avanzados (subcategoría, etiqueta, creador, asignado, sede, fechas)~~ (hecho, arquitectura §4.22); falta filtrar por el valor de un campo.
   - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ProcesaBPM es por bloques.
   - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
