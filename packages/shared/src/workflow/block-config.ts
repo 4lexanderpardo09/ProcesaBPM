@@ -5,6 +5,8 @@ const instructions = z.string().max(5000).optional();
 const uuid = z.uuid();
 const fieldCode = z.string().regex(FIELD_CODE_PATTERN);
 const batch = z.object({ maxTickets: z.number().int().min(1).max(500) }).strict().optional();
+/** The ticket cannot leave the step while its line in this export has not come out in a file ("exige corte del plano"). */
+const requiredExportId = uuid.optional();
 
 const recipient = z.discriminatedUnion('kind', [
   z.object({ kind: z.enum(['CREATOR', 'ASSIGNEES', 'OBSERVERS']) }).strict(),
@@ -24,8 +26,8 @@ const wait = z.discriminatedUnion('mode', [
  */
 export const BLOCK_CONFIG_SCHEMAS: Readonly<Record<StepType, z.ZodType<Record<string, unknown>>>> = {
   START: z.object({}).strict(),
-  TASK: z.object({ instructions, batch }).strict(),
-  APPROVAL: z.object({ instructions, batch, rejectRequiresComment: z.boolean().default(true) }).strict(),
+  TASK: z.object({ instructions, batch, requiredExportId }).strict(),
+  APPROVAL: z.object({ instructions, batch, requiredExportId, rejectRequiresComment: z.boolean().default(true) }).strict(),
   DECISION: z.object({ instructions }).strict(),
   SIGNATURE: z.object({ instructions, document: z.enum(['MAIN_DOCUMENT', 'STEP_DOCUMENT']) }).strict(),
   CONDITION: z.object({}).strict(),

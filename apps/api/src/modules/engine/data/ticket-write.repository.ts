@@ -208,6 +208,12 @@ export class TicketWriteRepository {
     await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { userId: toUserId } });
   }
 
+  /** The export's name when the ticket has a line in it that has not come out in a file yet (a step may wait for it). */
+  async pendingExportLine(tx: TenantTransaction, tenantId: string, ticketId: string, definitionId: string): Promise<string | undefined> {
+    const line = await tx.exportLine.findFirst({ where: { tenantId, ticketId, definitionId, cutoffId: null }, select: { definition: { select: { name: true } } } });
+    return line?.definition.name;
+  }
+
   /** Who delivered the step last in this ticket (SAME_AS_STEP): the person on the newest clock that ended by leaving it. */
   async lastDelivererOf(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<string | undefined> {
     const clock = await tx.ticketSlaClock.findFirst({

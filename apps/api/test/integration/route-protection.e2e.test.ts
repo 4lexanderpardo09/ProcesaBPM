@@ -71,6 +71,8 @@ const AUTHENTICATED_ONLY_ROUTES = [
   'GET /data-exports',
   'GET /data-exports/:id',
   'POST /data-exports/:id/download-url',
+  'GET /export-cutoffs/mine',
+  'GET /export-cutoffs/mine/:cutoffId/download-url',
 ];
 
 /** Routes of the platform administrators: they need a platform token, never a tenant one. */

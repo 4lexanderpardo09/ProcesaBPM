@@ -13,7 +13,6 @@ export function findEngineSupportProblems(doc: WorkflowVersionDocument): Workflo
   for (const step of doc.steps) {
     const at = { stepId: step.id };
     if (step.type === 'WEBHOOK') error('NOT_IMPLEMENTED_WEBHOOK_BLOCK', at);
-    if (step.type === 'EXPORT') error('NOT_IMPLEMENTED_EXPORT_BLOCK', at);
   }
   for (const rule of doc.amountRules.filter((candidate) => candidate.isActive)) {
     const at = { amountRuleId: rule.id };

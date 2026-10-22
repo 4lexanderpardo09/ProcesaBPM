@@ -2,11 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { TicketDocumentRole } from '@procesabpm/db';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
-import { StoredFileRepository } from '../data/stored-file.repository.js';
+import { type SystemFileInsert, StoredFileRepository } from '../data/stored-file.repository.js';
 import { TenantUsageRepository } from '../data/tenant-usage.repository.js';
 import { TicketDocumentRepository } from '../data/ticket-document.repository.js';
 import { quotaLimits, storageState } from '../domain/quota-policy.js';
 import { QuotaWarningService } from './quota-warning.service.js';
+
 
 export interface GeneratedDocument {
   readonly fileId: string;
@@ -54,6 +55,19 @@ export class SystemFileService {
     await this.warnIfOverQuota(tx, tenantId, before.usedBytes + before.reservedBytes + BigInt(document.sizeBytes));
     await this.warnings.sync(tx, tenantId, before, before.usedBytes + BigInt(document.sizeBytes));
     return 'recorded';
+  }
+
+  /**
+   * Registers a file the system made that belongs to no ticket (the files of an export cutoff). Counted for the quota
+   * like any other, never refused for it. Idempotent by file id.
+   */
+  async recordSystemFile(tx: TenantTransaction, tenantId: string, file: SystemFileInsert): Promise<void> {
+    if (await this.files.exists(tx, tenantId, file.fileId)) return;
+    await this.files.insertSystemFile(tx, tenantId, file);
+    const before = await this.usage.lock(tx, tenantId);
+    await this.usage.adjust(tx, tenantId, { usedBytes: BigInt(file.sizeBytes) });
+    await this.warnIfOverQuota(tx, tenantId, before.usedBytes + before.reservedBytes + BigInt(file.sizeBytes));
+    await this.warnings.sync(tx, tenantId, before, before.usedBytes + BigInt(file.sizeBytes));
   }
 
   private async warnIfOverQuota(tx: TenantTransaction, tenantId: string, committedBytes: bigint): Promise<void> {

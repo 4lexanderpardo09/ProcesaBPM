@@ -14,7 +14,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **API y web:**
     - ~~«mismo responsable que el paso X»~~ (hecho, arquitectura §14.2);
     - ~~cortes por empresa y plazo por corte en el motor~~ (hecho, arquitectura §14.2); el vencimiento se calcula al llegar al paso y no se recalcula si el campo se llena después;
-    - planos (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte);
+    - planos: ~~el motor (definiciones, líneas, cortes, «Mis planos» y el paso que exige el corte)~~ (hecho, arquitectura §21); falta la web; las definiciones y catálogos aún no se auditan;
     - ~~procesar en lote~~ (hecho, arquitectura §14.2; sin agrupar por persona ni por corte de plano, sin montos por persona ni adjuntos en lote);
     - ~~editar el ticket (asunto, descripción, prioridad)~~ (hecho, arquitectura §14.2);
     - ~~registrar errores en el ticket y las bandejas «Errores que reporté», «Errores asignados a mí», «Reabiertos» e «Historial»~~ (hecho, arquitectura §14.2);

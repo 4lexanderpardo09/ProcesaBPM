@@ -53,6 +53,7 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.assigneeSelectionRequired]: { status: 422, message: 'Choose who the step is assigned to' },
   [ERROR_CODES.invalidAssignee]: { status: 422, message: 'The chosen user cannot be assigned to this step' },
   [ERROR_CODES.invalidTransition]: { status: 422, message: 'The transition does not leave the current step' },
+  [ERROR_CODES.exportCutoffPending]: { status: 422, message: 'The ticket waits for the next file of an export' },
   [ERROR_CODES.noMatchingBranch]: { status: 422, message: 'No branch of the condition block matches' },
   [ERROR_CODES.maxLoopsReached]: { status: 422, message: 'The step cannot be visited again' },
   [ERROR_CODES.ticketNotOpen]: { status: 422, message: 'The ticket is not open' },

@@ -49,6 +49,7 @@ export const ERROR_CODES = {
   assigneeSelectionRequired: 'ASSIGNEE_SELECTION_REQUIRED',
   invalidAssignee: 'INVALID_ASSIGNEE',
   invalidTransition: 'INVALID_TRANSITION',
+  exportCutoffPending: 'EXPORT_CUTOFF_PENDING',
   noMatchingBranch: 'NO_MATCHING_BRANCH',
   maxLoopsReached: 'MAX_LOOPS_REACHED',
   ticketNotOpen: 'TICKET_NOT_OPEN',
@@ -457,6 +458,13 @@ export class AssigneeSelectionRequiredError extends DomainError {
 export class InvalidAssigneeError extends DomainError {
   constructor() {
     super(ERROR_CODES.invalidAssignee, 'The chosen user cannot be assigned to this step');
+  }
+}
+
+/** The step waits for the ticket's line to come out in an export file before the ticket can leave it. */
+export class ExportCutoffPendingError extends DomainError {
+  constructor(exportName: string) {
+    super(ERROR_CODES.exportCutoffPending, 'The ticket waits for the next file of an export', { details: { exportName } });
   }
 }
 

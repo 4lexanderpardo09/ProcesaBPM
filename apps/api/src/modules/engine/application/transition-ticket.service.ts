@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionTicketRequest } from '@procesabpm/shared';
+import { ExportCutoffPendingError, InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionTicketRequest } from '@procesabpm/shared';
 import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -54,6 +54,11 @@ export class TransitionTicketService {
       if (chosen === undefined || step === undefined) throw new InvalidTransitionError();
 
       assertMayLeaveByDecision(step);
+      const requiredExportId = step.config.requiredExportId;
+      if (typeof requiredExportId === 'string') {
+        const waitingFor = await this.writes.pendingExportLine(tx, tenantId, ticket.id, requiredExportId);
+        if (waitingFor !== undefined) throw new ExportCutoffPendingError(waitingFor);
+      }
 
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const actorMember = await this.people.findActiveMember(tx, tenantId, actor.userId);

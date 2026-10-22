@@ -182,7 +182,7 @@ erDiagram
 | `pdf_formats` | Diseños del constructor de PDF. |
 | `pdf_templates`, `pdf_template_fields`, `pdf_template_signatures` | PDF subido por el cliente: campos y firmas por coordenadas o por nombre AcroForm. |
 | `workflow_documents` | Qué documento produce el flujo, para qué empresa y cuándo. |
-| `export_definitions`, `export_columns`, `export_catalog_entries`, `export_cutoffs`, `export_lines` | Exportaciones programadas (antes "planos"). |
+| `export_definitions`, `export_columns`, `export_catalog_entries`, `export_cutoffs`, `export_lines` | Exportaciones programadas (antes "planos"): definición con columnas, filtro, unión de filas (`group_by`), separación en archivos (`separate_by`) y programación (`weekdays`, `month_day`, `interval_days`, `last_auto_cutoff_at`); cada archivo de un corte dice su grupo y su responsable. Detalle en arquitectura.md §21. |
 | `tenant_data_exports` | Exportación de **todos** los datos de la organización durante el periodo de eliminación: una fila por solicitud, el estado del trabajo del worker y el zip bajo `tenants/{tenant}/exports/{id}.zip` (§8.31). |
 | `notifications`, `notification_preferences` | Notificaciones in-app y preferencias por tipo y canal. |
 | `outbox_events` | Outbox transaccional (PDF, correo, websocket, webhooks, exportaciones). El worker lo despacha (§8.17). |

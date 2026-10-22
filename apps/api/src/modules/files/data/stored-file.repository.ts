@@ -106,6 +106,10 @@ export class StoredFileRepository {
   }
 
   /** A file the system produced: confirmed and linked from the start, with no uploader. The derived id makes a repeat a no-op. */
+  async exists(tx: TenantTransaction, tenantId: string, fileId: string): Promise<boolean> {
+    return (await tx.storedFile.count({ where: { tenantId, id: fileId } })) > 0;
+  }
+
   async insertSystemFile(tx: TenantTransaction, tenantId: string, file: SystemFileInsert): Promise<void> {
     await tx.$executeRaw`
       INSERT INTO stored_files (tenant_id, id, company_id, storage_key, original_name, mime_type, size_bytes, sha256, origin, status, uploaded_by_id, created_at, confirmed_at, linked_at)

@@ -806,3 +806,38 @@ Durante los 30 días de `PENDING_DELETION` el dueño o un administrador puede ll
   - **Correo `email.data_export_ready`:** payload estricto `{tenantId, exportId, userId}`; el manejador vuelve a leer todo con `worker_data_export_notice` y no envía nada si no hay fila (un evento falsificado por quien tenga el login de `app_platform` no llega a nadie). Texto en español con el vencimiento en la zona de la persona y un enlace a la página `/data-exports` de la aplicación, nunca al objeto.
   - **Vencimiento:** paso `expire_tenant_exports` de la retención nocturna (§17): las exportaciones `READY` vencidas pasan a `EXPIRED` en una transacción, después se borra cada zip del almacenamiento y se marca; un borrado fallido vuelve en la siguiente corrida y un lote con solo fallos termina el paso. La consola de plataforma muestra el estado de la última exportación (`dataExport: {status, errorCode}` en `GET /platform/tenants/:id`).
 - **Pruebas:** unitarias de la política, de los dos servicios (orden de las comprobaciones, carrera → 409, tope de enlaces) y del guard; de la parte 2: declaraciones de conjuntos, CSV/JSONL, nombres de archivo (incluido el escape de carpeta), manifiesto, zip (ida y vuelta con yauzl), subida multiparte con un cliente falso, latido, armado del zip y orquestación del job con dobles (latido perdido aborta la subida, fin rechazado borra el objeto, topes de tamaño y tiempo, archivo ausente listado, filas que cambian durante la exportación, renovación que falla antes de completar, fin que falla después), el planificador (una corrida a la vez, apagado), el correo, el paso de retención; BD (`tenant-data-exports.test.ts`); cobertura del esquema (`data-export-coverage.test.ts`); `data-export-worker.e2e.test.ts` (zip real armado por el worker y descargado con la URL firmada desde SeaweedFS: contenido, sin secretos, sin filas de otra organización, filas de auditoría agregadas y borradas mientras corre y aun así `READY`, correo, evento falsificado, vencimiento y purga); integración (`data-exports.e2e.test.ts`: solicitud, contraseña incorrecta contada, en curso, tope, tarde, carrera, descarga real desde SeaweedFS con nombre de archivo, 409/410/404, quién no puede, fuga entre tenants, la purga borra el zip) y `deletion-period-session.e2e.test.ts` (dueño y administrador dentro y confinados, agente fuera, refresh, sin tiempo real).
+
+## 21. Exportaciones programadas, «planos» (`modules/exports`, hecho el motor, 2026-10-22)
+- **Qué son:** archivos tabulares (CSV o XLSX) que consumen otros sistemas (el ERP, el banco), alimentados por los tickets de un flujo. Un plano no se programa: se describe con una definición y sus columnas, igual que en la mesa de ayuda.
+- **Definición** (`export_definitions` + `export_columns`, migración `20261022000000_export_engine`):
+  - **Cuándo se escribe la línea:**
+    - al tomar la transición de `transitionLabel` (por etiqueta, que es la misma entre versiones);
+    - al cerrar el ticket (`CLOSING`);
+    - o al pasar por un bloque `EXPORT` que la nombre.
+  - **Qué filtra:** el filtro por valor de campo (todas las reglas, sin mayúsculas ni espacios) y, si se indica, solo una empresa.
+  - **Columnas:** campo, derivado, constante, empresa, solicitante (nombre, apellido, completo, correo, documento), suma de una columna de tabla, catálogo de traducción, fórmula (el lenguaje de los campos calculados), fecha del ticket, número de fila y fecha del corte.
+  - **Formatos de valor:** recortar, mayúsculas, entero, entero o vacío, 2 decimales y dd/mm/aaaa. Los números se leen como se escriben aquí (`1.234.567,89`).
+- **Líneas** (`export_lines`, una por definición y ticket):
+  - Las escriben los handlers transaccionales del outbox (`ExportLineHandlers`: `ticket.transitioned`, `ticket.closed`, `block.export`), así que son idempotentes.
+  - Un ticket que deja de cumplir el filtro sale de las pendientes. Una línea que ya está en un archivo no se reescribe nunca.
+- **Corte** (`ExportCutoffService`):
+  - Bloquea la definición (`FOR UPDATE SKIP LOCKED`) y junta las líneas pendientes.
+  - **Separación en archivos:**
+    - **por responsable** de un paso (por nombre, para cubrir todas las versiones): un ticket en ese paso sin titular espera al corte siguiente, y uno que ya salió del paso va en «Sin responsable»;
+    - **por el valor de una columna;**
+    - sin separación, sale un solo archivo.
+  - **Unión de filas:** con `group_by`, las filas con la misma clave (sin espacios, puntos ni guiones) se juntan: las columnas numéricas se suman y las demás toman el primer valor no vacío.
+  - **Archivo:** numera las filas, escribe la fecha del corte y lo guarda como archivo del sistema (cuenta para la cuota). El nombre es `nombre-fecha[-grupo].csv|xlsx`.
+- **Programación:**
+  - Frecuencias en la zona de la empresa del plano (o la predeterminada): diaria, semanal (varios días, 1 = lunes … 7 = domingo), mensual (el día 31 cae en el último día de un mes corto) o cada N días desde el último corte automático.
+  - El worker (`ExportCutoffJob`, cada 5 minutos) recorre los tenants de `find_tenants_with_active_exports` (definer, solo `app_worker`; no incluye a los que están por eliminarse).
+  - Un corte automático deja `last_auto_cutoff_at` aunque no tenga líneas, así el periodo queda cerrado. Un corte perdido (reinicio) corre una vez cuando el worker vuelve.
+- **Paso que exige el corte:** `config.requiredExportId` en TASK y APPROVAL (es una referencia de publicación `EXPORT_DEFINITION`). Mientras la línea del ticket en ese plano no salga en un archivo, la transición responde 422 `EXPORT_CUTOFF_PENDING` con el nombre del plano.
+- **API** (permisos `read`, `update` y `generate Export`):
+  - **Definiciones:** `GET/POST /exports`, `GET/PUT/DELETE /exports/:id`, `GET /exports/:id/preview` (la fila del ticket más reciente; solo con `update`), `GET /exports/:id/lines?pending=&cutoffId=`.
+  - **Cortes y archivos:** `GET/POST /exports/:id/cutoffs` («Generar ahora», que no mueve la programación), `GET /export-cutoffs/:id/download-url`.
+  - **«Mis planos»** (cualquier miembro, solo los archivos de los que es responsable): `GET /export-cutoffs/mine` y `GET /export-cutoffs/mine/:id/download-url`.
+  - **Catálogos:** `GET /export-catalogs`, `GET/PUT /export-catalogs/:catalog`.
+- **Pruebas:**
+  - unitarias de la lógica pura: formatos, proyección, filtro, separación, unión, CSV y periodicidad;
+  - integración `exports.e2e`: línea y filtro, generar ahora con unión, corte programado una sola vez, archivos por responsable y «Mis planos», paso que exige el corte y validación de la separación y catálogos.

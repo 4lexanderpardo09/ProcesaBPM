@@ -90,7 +90,6 @@ export const workflowProblems = {
   AMOUNT_RULE_EXTRA_APPROVAL_NEEDS_STEP: 'Un tope con aprobación extra debe ser de un paso.',
   AMOUNT_RULE_EXTRA_APPROVAL_NOT_WIRED: 'Falta la conexión del sistema del paso del tope a su aprobación extra.',
   NOT_IMPLEMENTED_WEBHOOK_BLOCK: 'El bloque Webhook aún no funciona: quítalo para poder publicar.',
-  NOT_IMPLEMENTED_EXPORT_BLOCK: 'El bloque Exportar aún no funciona: quítalo para poder publicar.',
   BLOCK_REFERENCE_UNKNOWN: 'El bloque apunta a algo que ya no existe o no es de este flujo.',
   DOCUMENT_SOURCE_NOT_FOUND: 'El documento que genera este bloque ya no existe.',
   DOCUMENT_SOURCE_INACTIVE: 'El documento que genera este bloque está inactivo.',
