@@ -30,7 +30,8 @@ describe('ticketFiltersQuerySchema', () => {
 
 describe('ticketCountsResponseSchema', () => {
   it('accepts a total per view', () => {
-    expect(ticketCountsResponseSchema.parse({ assigned: 1, created: 2, observed: 0, all: 3 })).toEqual({ assigned: 1, created: 2, observed: 0, all: 3 });
+    const counts = { assigned: 1, created: 2, observed: 0, all: 3, history: 4, reopened: 1, errors_reported: 0, errors_received: 2 };
+    expect(ticketCountsResponseSchema.parse(counts)).toEqual(counts);
   });
 
   it('rejects a missing view or a negative total', () => {
