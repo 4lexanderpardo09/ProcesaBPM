@@ -16,6 +16,7 @@ import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
+import { AuditTrail } from '../../audit/application/audit-trail.js';
 import { ExportCatalogsRepository } from '../data/export-catalogs.repository.js';
 import { type CutoffRow, ExportCutoffsRepository } from '../data/export-cutoffs.repository.js';
 import { type ExportDefinitionRow, ExportDefinitionsRepository } from '../data/export-definitions.repository.js';
@@ -48,6 +49,7 @@ export class ExportsService {
   constructor(
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(TenantContext) private readonly context: TenantContext,
+    @Inject(AuditTrail) private readonly audit: AuditTrail,
     @Inject(Clock) private readonly clock: Clock,
     @Inject(ObjectStorage) private readonly storage: ObjectStorage,
     @Inject(ExportDefinitionsRepository) private readonly definitions: ExportDefinitionsRepository,
@@ -74,15 +76,18 @@ export class ExportsService {
   create(request: SaveExportDefinitionRequest): Promise<ExportDefinitionResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       await this.checkReferences(tx, request);
-      return this.response(tx, await this.definitions.create(tx, this.tenantId, request));
+      const id = await this.definitions.create(tx, this.tenantId, request);
+      await this.audit.record(tx, { action: 'export.created', subjectType: 'Export', subjectId: id, after: definitionAudit(request) });
+      return this.response(tx, id);
     });
   }
 
   update(id: string, request: SaveExportDefinitionRequest): Promise<ExportDefinitionResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.require(tx, id);
+      const before = await this.require(tx, id);
       await this.checkReferences(tx, request);
       await this.definitions.update(tx, this.tenantId, id, request);
+      await this.audit.record(tx, { action: 'export.updated', subjectType: 'Export', subjectId: id, before: definitionAudit(before), after: definitionAudit(request) });
       return this.response(tx, id);
     });
   }
@@ -90,8 +95,9 @@ export class ExportsService {
   /** Its lines and files go with it; the files stay in storage until the organization is purged. */
   remove(id: string): Promise<void> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.require(tx, id);
+      const before = await this.require(tx, id);
       await this.definitions.remove(tx, this.tenantId, id);
+      await this.audit.record(tx, { action: 'export.deleted', subjectType: 'Export', subjectId: id, before: definitionAudit(before) });
     });
   }
 
@@ -112,6 +118,7 @@ export class ExportsService {
       await this.require(tx, id);
       const outcome = await this.cutoffService.generate(tx, this.tenantId, id, { manual: true, actorId: this.userId, at: this.clock.now() });
       const created = await Promise.all(outcome.cutoffIds.map((cutoffId) => this.cutoffs.find(tx, this.tenantId, cutoffId)));
+      await this.audit.record(tx, { action: 'export.generated', subjectType: 'Export', subjectId: id, after: { cutoffIds: outcome.cutoffIds, waitingLines: outcome.waitingLines } });
       return { cutoffs: created.flatMap((row) => (row === undefined ? [] : [toCutoff(row)])), waitingLines: outcome.waitingLines };
     });
   }
@@ -143,6 +150,7 @@ export class ExportsService {
       const file = await this.cutoffs.fileOf(tx, this.tenantId, cutoff.fileId);
       if (file === undefined) throw new NotFoundError();
       const signed = await this.storage.presignDownload({ key: file.storageKey, fileName: file.name, contentType: file.mimeType, disposition: 'attachment', expiresInSeconds: DOWNLOAD_TTL_SECONDS, now: this.clock.now() });
+      await this.audit.record(tx, { action: 'export.download_url_issued', subjectType: 'Export', subjectId: cutoff.definitionId, after: { cutoffId, fileId: cutoff.fileId, fileName: file.name, ownFile: ownOnly } });
       return { url: signed.url, expiresAt: signed.expiresAt.toISOString() };
     });
   }
@@ -157,7 +165,10 @@ export class ExportsService {
 
   saveCatalog(name: string, request: SaveExportCatalogRequest): Promise<ExportCatalogResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
+      const before = await this.catalogs.entries(tx, this.tenantId, name);
       await this.catalogs.replace(tx, this.tenantId, name, request.entries);
+      // The entries are codes of the organization's own systems (accounts, banks): no personal data.
+      await this.audit.record(tx, { action: 'export_catalog.updated', subjectType: 'Export', subjectId: null, before: { catalog: name, entries: before }, after: { catalog: name, entries: request.entries } });
       return { catalog: name, entries: await this.catalogs.entries(tx, this.tenantId, name) };
     });
   }
@@ -217,4 +228,10 @@ export class ExportsService {
   private get userId(): string {
     return this.context.require().userId!;
   }
+}
+
+/** What the audit keeps of a definition: its whole configuration, with the columns by header (no ticket data). */
+function definitionAudit(definition: SaveExportDefinitionRequest | ExportDefinitionRow) {
+  const { workflowId, companyId, name, format, trigger, transitionLabel, filter, mergeBy, separateBy, schedule, isActive, columns } = definition;
+  return { workflowId, companyId, name, format, trigger, transitionLabel, filter, mergeBy, separateBy, schedule, isActive, columns: columns.map((column) => column.header) };
 }
