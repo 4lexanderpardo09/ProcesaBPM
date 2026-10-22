@@ -108,6 +108,42 @@ describe('TicketInboxPage', () => {
     expect(screen.getByRole('searchbox', { name: 'Buscar' })).toHaveValue('');
   });
 
+  it('filters by one of my tags, the requester and the creation dates from the folded filters, and opens them from a link', async () => {
+    const TAG = ticketId(510);
+    const OLGA = ticketId(511);
+    const api = ticketsApi({ assigned: [ticket(1)] });
+    const { router } = renderRoute('/tickets', {
+      handlers: {
+        ...api.handlers,
+        '/tags': () => [{ id: TAG, name: 'Seguimiento', color: '#4F46E5' }],
+        '/members/directory': () => [{ userId: OLGA, firstName: 'Olga', lastName: 'Pérez' }],
+      },
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Más filtros' }));
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Mi etiqueta' }), 'Seguimiento');
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('tagId')).toBe(TAG));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Solicitante' }), 'olga');
+    await userEvent.click(await screen.findByRole('button', { name: 'Filtrar por Solicitante: Olga Pérez' }));
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('creatorId')).toBe(OLGA));
+    expect(await screen.findByRole('button', { name: 'Quitar Solicitante: Olga Pérez' })).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Creado desde'), '2026-10-01');
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('createdFrom')).toBe(new Date(2026, 9, 1).toISOString()));
+    await userEvent.type(screen.getByLabelText('Creado hasta'), '2026-10-31');
+
+    // The end date is included: the API gets the start of the next day.
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('createdTo')).toBe(new Date(2026, 10, 1).toISOString()));
+    expect(router.state.location.search).toBe(`?requester=${OLGA}&tag=${TAG}&from=2026-10-01&to=2026-10-31`);
+  });
+
+  it('opens the folded filters when the link carries one of them', async () => {
+    const api = ticketsApi({ assigned: [ticket(1)] });
+    renderRoute('/tickets?from=2026-10-01', { handlers: api.handlers });
+
+    expect(await screen.findByLabelText('Creado desde')).toHaveValue('2026-10-01');
+    expect(screen.getByRole('button', { name: 'Menos filtros' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('keeps what is typed slowly: a search the URL took halfway does not overwrite the box', async () => {
     const api = ticketsApi({ assigned: [ticket(1)] });
     const { router } = renderRoute('/tickets', { handlers: api.handlers });

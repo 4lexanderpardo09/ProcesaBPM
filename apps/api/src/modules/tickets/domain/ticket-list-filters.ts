@@ -30,12 +30,20 @@ export function searchFilter(search: string): Condition {
  * The filters of the inbox. Each one is its own term of an `AND` with the view and the access filter,
  * so they can only narrow what the caller sees.
  */
-export function ticketFilters(query: TicketFiltersQuery): Condition[] {
+export function ticketFilters(query: TicketFiltersQuery, callerId: string): Condition[] {
   return [
     ...(query.status === undefined ? [] : [{ status: query.status }]),
     ...(query.priorityId === undefined ? [] : [{ priorityId: query.priorityId }]),
     ...(query.companyId === undefined ? [] : [{ companyId: query.companyId }]),
     ...(query.categoryId === undefined ? [] : [{ subcategory: { categoryId: query.categoryId } }]),
+    ...(query.subcategoryId === undefined ? [] : [{ subcategoryId: query.subcategoryId }]),
+    ...(query.siteId === undefined ? [] : [{ siteId: query.siteId }]),
+    ...(query.creatorId === undefined ? [] : [{ creatorId: query.creatorId }]),
+    ...(query.assigneeId === undefined ? [] : [{ assignees: { some: { userId: query.assigneeId } } }]),
+    // Somebody else's tag never matches: a person filters by the tags they put themselves.
+    ...(query.tagId === undefined ? [] : [{ tags: { some: { tagId: query.tagId, userId: callerId } } }]),
+    ...(query.createdFrom === undefined ? [] : [{ createdAt: { gte: new Date(query.createdFrom) } }]),
+    ...(query.createdTo === undefined ? [] : [{ createdAt: { lt: new Date(query.createdTo) } }]),
     ...(query.search === undefined ? [] : [searchFilter(query.search)]),
   ];
 }

@@ -3,6 +3,7 @@ import { searchFilter, ticketFilters, ticketNumberOf, viewFilter } from './ticke
 import { createdBy, observedBy } from './ticket-subject.js';
 
 const ID = '0199a000-0000-7000-8000-000000000001';
+const ME = '0199a000-0000-7000-8000-000000000002';
 const caller = { userId: '0199a000-0000-7000-8000-000000000002', membership: { departmentId: null, siteId: null, positionId: null } };
 const like = (text: string) => ({ contains: text, mode: 'insensitive' });
 
@@ -47,16 +48,30 @@ describe('searchFilter', () => {
 
 describe('ticketFilters', () => {
   it('is empty without filters', () => {
-    expect(ticketFilters({})).toEqual([]);
+    expect(ticketFilters({}, ME)).toEqual([]);
   });
 
   it('turns every filter into its own term', () => {
-    expect(ticketFilters({ status: 'OPEN', priorityId: ID, companyId: ID, categoryId: ID, search: 'x' })).toEqual([
+    expect(ticketFilters({ status: 'OPEN', priorityId: ID, companyId: ID, categoryId: ID, search: 'x' }, ME)).toEqual([
       { status: 'OPEN' },
       { priorityId: ID },
       { companyId: ID },
       { subcategory: { categoryId: ID } },
       searchFilter('x'),
+    ]);
+  });
+
+  it('narrows by subcategory, site, requester, current holder, own tag and creation dates (the end excluded)', () => {
+    const from = '2026-10-01T05:00:00.000Z';
+    const to = '2026-11-01T05:00:00.000Z';
+    expect(ticketFilters({ subcategoryId: ID, siteId: ID, creatorId: ID, assigneeId: ID, tagId: ID, createdFrom: from, createdTo: to }, ME)).toEqual([
+      { subcategoryId: ID },
+      { siteId: ID },
+      { creatorId: ID },
+      { assignees: { some: { userId: ID } } },
+      { tags: { some: { tagId: ID, userId: ME } } },
+      { createdAt: { gte: new Date(from) } },
+      { createdAt: { lt: new Date(to) } },
     ]);
   });
 });
