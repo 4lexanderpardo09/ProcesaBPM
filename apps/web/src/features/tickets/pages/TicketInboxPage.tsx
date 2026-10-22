@@ -18,7 +18,8 @@ export function TicketInboxPage() {
   const params = readInboxParams(searchParams);
   const { list, countOf } = useTicketInbox(params);
   const timeZone = useCurrentUser().data?.user.timeZone ?? undefined;
-  const show = (next: Partial<InboxParams>) => setSearchParams(writeInboxParams({ ...params, page: 1, ...next }));
+  // Merged into the URL as it is when it applies: a filter and a settling search close together both stay.
+  const show = (next: Partial<InboxParams>) => setSearchParams((current) => writeInboxParams({ ...readInboxParams(current), page: 1, ...next }));
   const page = list.data;
 
   return (

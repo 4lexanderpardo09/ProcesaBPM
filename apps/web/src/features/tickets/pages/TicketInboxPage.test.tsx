@@ -94,7 +94,10 @@ describe('TicketInboxPage', () => {
 
     await userEvent.type(await screen.findByRole('searchbox', { name: 'Buscar' }), 'crédito');
     await vi.waitFor(() => expect(router.state.location.search).toBe('?q=cr%C3%A9dito'));
+    // The router applies a new URL in a transition: the page has it once it asked for the list with it.
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('search')).toBe('crédito'));
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Prioridad' }), 'Alta');
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('priorityId')).toBe(PRIORITY));
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Categoría' }), 'Cartera');
 
     await vi.waitFor(() => expect(api.listQueries().at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&categoryId=${CATEGORY}&view=assigned&page=1&pageSize=25`));
@@ -103,6 +106,17 @@ describe('TicketInboxPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Quitar filtros' }));
     expect(router.state.location.search).toBe('');
     expect(screen.getByRole('searchbox', { name: 'Buscar' })).toHaveValue('');
+  });
+
+  it('keeps what is typed slowly: a search the URL took halfway does not overwrite the box', async () => {
+    const api = ticketsApi({ assigned: [ticket(1)] });
+    const { router } = renderRoute('/tickets', { handlers: api.handlers });
+    const slow = userEvent.setup({ delay: 350 });
+
+    const box = await screen.findByRole('searchbox', { name: 'Buscar' });
+    await slow.type(box, 'pago');
+    await vi.waitFor(() => expect(router.state.location.search).toBe('?q=pago'));
+    expect(box).toHaveValue('pago');
   });
 
   it('keeps the tab in the URL and asks the API for that view', async () => {

@@ -1,6 +1,6 @@
 import { categoryResponseSchema, pageResponseSchema } from '@procesabpm/shared';
 import { queryOptions, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HttpClient } from '@/shared/api';
 import { useDebouncedValue } from '@/shared/lib/use-debounced-value';
@@ -22,7 +22,8 @@ const categoriesQueryOptions = (client: HttpClient) =>
 
 export interface InboxFiltersProps {
   readonly filters: Filters;
-  readonly onChange: (filters: Filters) => void;
+  /** Only what changed: the page merges it into the URL as it is then, so two quick changes never undo each other. */
+  readonly onChange: (changed: Partial<Filters>) => void;
 }
 
 /**
@@ -38,16 +39,20 @@ export function InboxFilters({ filters, onChange }: InboxFiltersProps) {
   const categories = useQuery({ ...categoriesQueryOptions(client), enabled: can('read', 'Category') });
   const [search, setSearch] = useState(filters.search);
   const settled = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
+  // The search this box last sent to the URL: a change of the URL to anything else came from elsewhere (back, clear).
+  const sent = useRef(filters.search);
   useEffect(() => {
-    if (settled !== filters.search) onChange({ ...filters, search: settled });
-    // Only a settled search goes to the URL; the other filters apply at once.
+    if (settled === filters.search) return;
+    sent.current = settled;
+    onChange({ search: settled });
   }, [settled]);
   useEffect(() => {
-    if (filters.search !== search.trim()) setSearch(filters.search);
-    // The URL changed from elsewhere (back button, clear): the box follows.
+    if (filters.search === sent.current) return;
+    sent.current = filters.search;
+    setSearch(filters.search);
   }, [filters.search]);
 
-  const pick = (key: keyof Filters, value: string) => onChange({ ...filters, [key]: value === '' ? undefined : value });
+  const pick = (key: 'priorityId' | 'categoryId' | 'companyId', value: string) => onChange({ [key]: value === '' ? undefined : value });
   return (
     <div className={styles.filters} role="search" aria-label={t('filters.label')}>
       <div className={styles.search}>
@@ -58,7 +63,7 @@ export function InboxFilters({ filters, onChange }: InboxFiltersProps) {
         placeholder={t('filters.anyStatus')}
         options={TICKET_STATUSES.map((value) => ({ value, label: t(`status.${value}`) }))}
         value={filters.status ?? ''}
-        onChange={(event) => onChange({ ...filters, status: TICKET_STATUSES.find((value) => value === event.target.value) as TicketStatus | undefined })}
+        onChange={(event) => onChange({ status: TICKET_STATUSES.find((value) => value === event.target.value) as TicketStatus | undefined })}
       />
       {priorities.data !== undefined && priorities.data.length > 0 && (
         <Select label={t('filters.priority')} placeholder={t('filters.any')} options={priorities.data.map((priority) => ({ value: priority.id, label: priority.name }))} value={filters.priorityId ?? ''} onChange={(event) => pick('priorityId', event.target.value)} />
@@ -73,6 +78,7 @@ export function InboxFilters({ filters, onChange }: InboxFiltersProps) {
         <Button
           variant="ghost"
           onClick={() => {
+            sent.current = '';
             setSearch('');
             onChange(NO_FILTERS);
           }}
