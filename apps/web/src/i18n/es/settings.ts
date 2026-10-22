@@ -1,6 +1,6 @@
 export const settings = {
   title: 'Ajustes',
-  subtitle: 'La seguridad, el acceso de soporte, el almacenamiento y la auditoría de la organización.',
+  subtitle: 'La seguridad, el logo, el acceso de soporte, el almacenamiento y la auditoría de la organización.',
   tabsLabel: 'Secciones de ajustes',
   tabs: { organization: 'Organización', security: 'Seguridad', calculators: 'Calculadoras', support: 'Acceso de soporte', storage: 'Almacenamiento', audit: 'Auditoría' },
   loading: 'Cargando…',
