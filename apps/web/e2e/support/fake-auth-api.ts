@@ -35,7 +35,7 @@ export interface FakeTicket {
   /** Sanitized HTML, as the API keeps it. */
   readonly descriptionHtml?: string;
   /** What the signed-in person may do (`actions` of the detail); by default only comment. */
-  readonly actions?: Partial<Record<'advance' | 'take' | 'reassign' | 'close' | 'openIncident' | 'resolveIncident' | 'reopen' | 'signParallelTask' | 'comment', boolean>>;
+  readonly actions?: Partial<Record<'advance' | 'take' | 'reassign' | 'close' | 'openIncident' | 'resolveIncident' | 'reopen' | 'signParallelTask' | 'comment' | 'edit', boolean>>;
 }
 
 export interface RecordedRequest {
@@ -166,7 +166,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
     department: null,
     site: null,
     valueNames: { users: {}, sites: {}, companies: {}, departments: {}, positions: {} },
-    actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false, ...ticket.actions },
+    actions: { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false, edit: false, ...ticket.actions },
   });
 
   const event = (id: string, type: string, commentHtml: string | null, createdAt: string) => ({

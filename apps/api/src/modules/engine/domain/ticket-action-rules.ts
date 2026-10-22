@@ -23,7 +23,7 @@ import type { ParallelStatus } from './parallel-policy.js';
 export type TicketStatus = 'OPEN' | 'PAUSED' | 'CLOSED';
 export type AssigneeType = 'PRIMARY' | 'POOL' | 'PARALLEL' | 'INCIDENT';
 /** The ticket permissions an action is checked against, always on the concrete ticket (stored conditions apply). */
-export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen' | 'comment' | 'report_error';
+export type TicketAction = 'transition' | 'reassign' | 'close' | 'open_incident' | 'reopen' | 'comment' | 'report_error' | 'update';
 
 export interface Assignment {
   readonly userId: string;
@@ -120,6 +120,12 @@ export function reopenRefusal(mayReopen: boolean, status: TicketStatus): DomainE
 /** Reporting an error: the permission on this very ticket (it must be on an open visit, checked apart). */
 export function reportErrorRefusal(mayReport: boolean): DomainError | null {
   return mayReport ? null : new PermissionDeniedError('Not allowed to report errors on this ticket');
+}
+
+/** Editing the subject, description or priority: the permission on this very ticket, and the ticket not closed. */
+export function editRefusal(mayEdit: boolean, status: TicketStatus): DomainError | null {
+  if (!mayEdit) return new PermissionDeniedError('Not allowed to edit this ticket');
+  return status === 'CLOSED' ? new InvalidStateError('A closed ticket cannot be edited') : null;
 }
 
 /** Signing or rejecting: the current step is a parallel one and the caller's own signature on it is still pending. */

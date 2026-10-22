@@ -1,8 +1,11 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import {
   type CloseTicketRequest,
   type CommentTicketRequest,
   commentTicketRequestSchema,
+  type EditTicketRequest,
+  editTicketRequestSchema,
+  type EditTicketResponse,
   type CommentTicketResponse,
   type DownloadUrlResponse,
   type TicketDocumentResponse,
@@ -58,6 +61,7 @@ import { ReassignTicketService } from '../../engine/application/reassign-ticket.
 import { TakeTicketService } from '../../engine/application/take-ticket.service.js';
 import { TransitionTicketService } from '../../engine/application/transition-ticket.service.js';
 import { CommentTicketService } from '../../engine/application/comment-ticket.service.js';
+import { EditTicketService } from '../../engine/application/edit-ticket.service.js';
 import { TicketCandidatesService } from '../../engine/application/ticket-candidates.service.js';
 import { TicketDocumentsService } from '../application/ticket-documents.service.js';
 import { TicketFormService } from '../application/ticket-form.service.js';
@@ -81,6 +85,7 @@ export class TicketsController {
     @Inject(OpenIncidentService) private readonly incidentOpening: OpenIncidentService,
     @Inject(ResolveIncidentService) private readonly incidentResolution: ResolveIncidentService,
     @Inject(CommentTicketService) private readonly commenting: CommentTicketService,
+    @Inject(EditTicketService) private readonly editing: EditTicketService,
     @Inject(TicketDocumentsService) private readonly documents: TicketDocumentsService,
     @Inject(TicketCandidatesService) private readonly candidatePicker: TicketCandidatesService,
   ) {}
@@ -144,6 +149,12 @@ export class TicketsController {
   @Audited('file.download_url_issued')
   downloadUrl(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Param('fileId', ParseUUIDPipe) fileId: string): Promise<DownloadUrlResponse> {
     return this.documents.downloadUrl(ability, id, fileId);
+  }
+
+  @RequirePermission('update', TICKET_SUBJECT)
+  @Patch(':id')
+  edit(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(editTicketRequestSchema)) body: EditTicketRequest): Promise<EditTicketResponse> {
+    return this.editing.edit(this.actor(principal, ability), id, body);
   }
 
   @RequirePermission('comment', TICKET_SUBJECT)

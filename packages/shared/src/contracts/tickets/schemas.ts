@@ -33,6 +33,21 @@ export const createTicketRequestSchema = z.object({
 });
 export type CreateTicketRequest = z.infer<typeof createTicketRequestSchema>;
 
+/** Edits what the ticket says (`update`): its subject, its description (an HTML fragment, sanitized) and its priority. */
+export const editTicketRequestSchema = z
+  .object({
+    title: z.string().trim().min(1).max(300),
+    description: z.string().trim().max(20_000),
+    /** `null` takes the priority off. */
+    priorityId: uuidSchema.nullable(),
+  })
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
+export type EditTicketRequest = z.infer<typeof editTicketRequestSchema>;
+/** `eventId` is null when nothing actually changed. */
+export const editTicketResponseSchema = z.object({ eventId: uuidSchema.nullable() });
+export type EditTicketResponse = z.infer<typeof editTicketResponseSchema>;
+
 /** `visitId` is the visit the caller saw: if the ticket moved on, the answer is 409 instead of acting twice. */
 export const transitionTicketRequestSchema = z.object({
   transitionId: uuidSchema,
@@ -231,6 +246,8 @@ export interface TicketActionsResponse {
   readonly comment: boolean;
   /** `POST /tickets/:id/errors`: open ticket on a step, and the caller may report errors on it. */
   readonly reportError: boolean;
+  /** `PATCH /tickets/:id`: the ticket is not closed and the caller may edit it. */
+  readonly edit: boolean;
 }
 
 /** `GET /tickets/:id/candidates?for=reassign|incident`: who the current step can go to, or who can take an incident. */
@@ -326,6 +343,7 @@ export const ticketDetailResponseSchema = ticketSummaryResponseSchema.extend({
     signParallelTask: z.boolean(),
     comment: z.boolean(),
     reportError: z.boolean(),
+    edit: z.boolean(),
   }),
 }) satisfies z.ZodType<TicketDetailResponse>;
 

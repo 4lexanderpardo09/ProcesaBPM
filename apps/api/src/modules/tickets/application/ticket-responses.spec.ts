@@ -120,7 +120,7 @@ describe('toDetail', () => {
     const detail = toDetail(detailRow({ closedById: id(3), closedBy: person('Ana', 'Pérez') }), now, valueNames);
     expect(detail.valueNames).toEqual(valueNames);
     expect(detail.closedBy).toEqual({ id: id(3), name: 'Ana Pérez' });
-    const actions = { advance: true, take: false, reassign: false, close: true, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false };
+    const actions = { advance: true, take: false, reassign: false, close: true, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false, edit: false };
     expect(ticketDetailResponseSchema.safeParse({ ...detail, actions }).success).toBe(true);
   });
 });

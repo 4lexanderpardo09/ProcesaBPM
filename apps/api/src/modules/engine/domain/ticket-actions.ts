@@ -1,6 +1,27 @@
 import { type DomainError, InvalidAssigneeError, InvalidReopenStepError, InvalidStateError, InvalidTransitionError, type StepDocument, type TicketActionsResponse } from '@procesabpm/shared';
 import { closeRefusal, leaveByDecisionRefusal } from './close-policy.js';
-import { actRefusal, type Assignment, commentRefusal, hasPendingSignature, type IncidentState, isEligibleAssignee, isSigner, isSoleHolder, openIncidentRefusal, openVisitRefusal, reassignRefusal, reopenRefusal, reportErrorRefusal, resolveIncidentRefusal, type Signature, signatureRefusal, takeRefusal, type TicketAction, type TicketStatus } from './ticket-action-rules.js';
+import {
+  actRefusal,
+  type Assignment,
+  commentRefusal,
+  editRefusal,
+  hasPendingSignature,
+  type IncidentState,
+  isEligibleAssignee,
+  isSigner,
+  isSoleHolder,
+  openIncidentRefusal,
+  openVisitRefusal,
+  reassignRefusal,
+  reopenRefusal,
+  reportErrorRefusal,
+  resolveIncidentRefusal,
+  type Signature,
+  signatureRefusal,
+  takeRefusal,
+  type TicketAction,
+  type TicketStatus,
+} from './ticket-action-rules.js';
 
 /** Everything the action rules look at, read in one transaction for one caller. */
 export interface TicketActionState {
@@ -54,6 +75,7 @@ export function ticketActionRefusals(state: TicketActionState): TicketActionRefu
     signParallelTask: onOpenVisit ?? signatureRefusal(parallel, state.signatures, state.actorId),
     comment: commentRefusal(grants.comment),
     reportError: onOpenVisit ?? reportErrorRefusal(grants.report_error),
+    edit: editRefusal(grants.update, state.status),
   };
 }
 
@@ -71,6 +93,7 @@ export function ticketActionsOf(state: TicketActionState): TicketActionsResponse
     signParallelTask: refused.signParallelTask === null,
     comment: refused.comment === null,
     reportError: refused.reportError === null,
+    edit: refused.edit === null,
   };
 }
 

@@ -17,8 +17,8 @@ const user = (member: Member) => ({ participantType: 'USER', userId: member.user
 const signer = (member: Member) => ({ signerType: 'USER', userId: member.userId });
 
 type ActionName = keyof TicketActionsResponse;
-const ACTION_NAMES: readonly ActionName[] = ['advance', 'take', 'reassign', 'close', 'openIncident', 'resolveIncident', 'reopen', 'signParallelTask', 'comment', 'reportError'];
-const NOTHING: TicketActionsResponse = { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: false, reportError: false };
+const ACTION_NAMES: readonly ActionName[] = ['advance', 'take', 'reassign', 'close', 'openIncident', 'resolveIncident', 'reopen', 'signParallelTask', 'comment', 'reportError', 'edit'];
+const NOTHING: TicketActionsResponse = { advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: false, reportError: false, edit: false };
 
 /** A ticket in the state a scenario needs; a fresh one for every probe, as each action changes it. */
 interface Situation {
@@ -101,6 +101,7 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
     signParallelTask: (as, { ticketId, visitId }) => as.client.post(`/tickets/${ticketId}/parallel-tasks/sign`, { visitId: visitId ?? randomUUID() }),
     comment: (as, { ticketId }) => as.client.post(`/tickets/${ticketId}/comments`, { comment: '<p>A note</p>' }),
     reportError: (as, { ticketId, visitId }) => as.client.post(`/tickets/${ticketId}/errors`, { visitId: visitId ?? randomUUID(), errorTypeId: reportType, description: '<p>A wrong amount</p>' }),
+    edit: (as, { ticketId }) => as.client.patch(`/tickets/${ticketId}`, { title: 'A clearer title' }),
   };
 
   /**
@@ -132,7 +133,7 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
     worker = await world.member([...WORKER_GRANTS, grant('read_all'), grant('open_incident'), grant('comment')]);
     second = await world.member([...WORKER_GRANTS, grant('open_incident'), grant('comment')]);
     helper = await world.member([...WORKER_GRANTS, grant('comment')]);
-    supervisor = await world.member([...SUPERVISOR_GRANTS, grant('close'), grant('open_incident'), grant('reopen'), grant('comment'), grant('report_error')]);
+    supervisor = await world.member([...SUPERVISOR_GRANTS, grant('close'), grant('open_incident'), grant('reopen'), grant('comment'), grant('report_error'), grant('update')]);
     reader = await world.member([grant('read_all')]);
     const task = { assignmentMode: 'USERS', closeRule: 'ALLOWED' };
     single = await publishFlow(world.admin, simpleFlow(task, { candidates: [user(worker)] }));
@@ -198,8 +199,8 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
       await expectAgreement(reader, () => create(single), []);
     });
 
-    it('a supervisor advances, reassigns and opens incidents on a step they do not hold, but does not close it', async () => {
-      await expectAgreement(supervisor, () => create(single), ['advance', 'reassign', 'openIncident', 'comment', 'reportError']);
+    it('a supervisor advances, reassigns, opens incidents and edits on a step they do not hold, but does not close it', async () => {
+      await expectAgreement(supervisor, () => create(single), ['advance', 'reassign', 'openIncident', 'comment', 'reportError', 'edit']);
     });
 
     it('a pool member takes the ticket (and may answer it right away); once taken by someone else they lost it', async () => {
@@ -223,7 +224,7 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
       await expectAgreement(helper, () => paused(single), ['resolveIncident', 'comment']);
       await expectAgreement(worker, () => paused(single), ['resolveIncident', 'comment']);
       await expectAgreement(reader, () => paused(single), []);
-      await expectAgreement(supervisor, () => paused(single), ['resolveIncident', 'comment']);
+      await expectAgreement(supervisor, () => paused(single), ['resolveIncident', 'comment', 'edit']);
     });
 
     it('a closed ticket is reopened by whoever may, and commented on', async () => {
@@ -234,11 +235,11 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
     it('on a parallel step a pending signer signs; after signing, nothing is left but commenting; a supervisor moves it or a signature', async () => {
       await expectAgreement(worker, () => create(parallel), ['signParallelTask', 'openIncident', 'comment']);
       await expectAgreement(worker, signed, ['comment']);
-      await expectAgreement(supervisor, () => create(parallel), ['advance', 'reassign', 'openIncident', 'comment', 'reportError']);
+      await expectAgreement(supervisor, () => create(parallel), ['advance', 'reassign', 'openIncident', 'comment', 'reportError', 'edit']);
     });
 
-    it('a ticket parked on a WAIT block only takes comments', async () => {
-      await expectAgreement(supervisor, () => create(waiting), ['comment']);
+    it('a ticket parked on a WAIT block only takes comments (and edits from whoever may)', async () => {
+      await expectAgreement(supervisor, () => create(waiting), ['comment', 'edit']);
     });
 
     it('the detail matches the contract the web parses', async () => {

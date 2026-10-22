@@ -28,7 +28,7 @@ const PICKED_SITE = '0199a000-0000-7000-8000-000000000006';
 /** A closed ticket the caller may only comment on. */
 const closedState: TicketActionState = {
   actorId: USER, status: 'CLOSED', companyId: CATEGORY, visit: null, step: undefined, hasDecisionExit: false, assignees: [], signatures: [], openIncident: null, hasReopenTarget: true,
-  grants: { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: true, report_error: false },
+  grants: { transition: false, reassign: false, close: false, open_incident: false, reopen: false, comment: true, report_error: false, update: false },
 };
 
 function setUp(totals: readonly number[] = [0, 0, 0, 0], detail: unknown = null) {
@@ -95,7 +95,7 @@ describe('TicketQueriesService', () => {
       const { service, actionStates, tx, inTenant } = setUp(undefined, detailRow);
       const detail = await inTenant(() => service.get(ability, TICKET, USER));
       expect(actionStates.read).toHaveBeenCalledWith(tx, TENANT, TICKET, expect.objectContaining({ userId: USER }));
-      expect(detail.actions).toEqual({ advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false });
+      expect(detail.actions).toEqual({ advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false, edit: false });
     });
 
     it('the body alone does not judge the actions', async () => {
