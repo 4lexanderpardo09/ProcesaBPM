@@ -7,6 +7,10 @@ export interface SignerRecord {
   readonly signedAt: Date;
   /** Key of the image in the renderer's image map; `null` when the person has no usable signature image. */
   readonly imageKey: string | null;
+  /** The signer's position now (a signature box can keep only some positions); `null` without one. */
+  readonly positionId: string | null;
+  /** The made-up signer of a preview, who fills a box whatever positions it keeps. */
+  readonly anyPosition?: boolean;
 }
 
 export interface TicketFacts {

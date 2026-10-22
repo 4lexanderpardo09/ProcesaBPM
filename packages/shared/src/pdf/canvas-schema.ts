@@ -138,7 +138,9 @@ const rectangleElement = z.object({ ...base, type: z.literal('rectangle') }).str
 
 /**
  * A signature box. `STEP`: who signed that step, the last one, all of them side by side, or the n-th (1 is the first);
- * `REQUESTER`: the requester's name; `BLANK`: an empty box to sign on paper.
+ * `REQUESTER`: the requester's name; `BLANK`: an empty box to sign on paper. `positionIds` keeps, of the step's
+ * signatures, those of people with one of these positions (none: anybody's): in a step many sign, it puts each area in
+ * its own box ("Cartera", "Sistemas"), whatever the order they signed in. `signers` then picks among those.
  */
 const signatureElement = z
   .object({
@@ -148,6 +150,7 @@ const signatureElement = z
     stepName: z.string().trim().max(100).nullable(),
     signers: z.enum(['LAST', 'ALL', 'POSITION']),
     position: z.number().int().min(1).max(50),
+    positionIds: z.array(uuidSchema).max(20).optional(),
     label: z.string().max(100),
     showName: z.boolean(),
     showDate: z.boolean(),

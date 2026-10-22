@@ -1,5 +1,8 @@
 import type { CanvasElement, PdfCanvasDesign, WorkflowVersionDocument } from '@procesabpm/shared';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { positionsQueryOptions } from '@/features/people';
+import { useApiClient } from '@/shared/session';
 import { Button, Checkbox, PlusIcon, Select, TextField } from '@/shared/ui';
 import { DecimalField } from '../../../builder/components/DecimalField';
 import { WholeNumberField } from '../../../builder/components/WholeNumberField';
@@ -255,6 +258,7 @@ function SignatureProperties({ element, document, onChange }: { readonly element
             />
             {element.signers === 'POSITION' && <WholeNumberField label={t('documents.canvas.props.position')} min={1} max={50} value={element.position} onChange={(position) => set({ position: Math.max(1, Math.min(50, position ?? 1)) })} />}
           </div>
+          <PositionFilter selected={element.positionIds ?? []} onChange={(positionIds) => onChange(positionIds.length === 0 ? withoutPositions(element) : { ...element, positionIds })} />
         </>
       )}
       <TextField label={t('documents.canvas.props.signatureLabel')} maxLength={100} value={element.label} onChange={(event) => set({ label: event.target.value }, `label-${element.id}`)} />
@@ -262,5 +266,45 @@ function SignatureProperties({ element, document, onChange }: { readonly element
       <Checkbox label={t('documents.canvas.props.showDate')} checked={element.showDate} onChange={(event) => set({ showDate: event.target.checked })} />
       <Checkbox label={t('documents.canvas.props.showLine')} checked={element.showLine} onChange={(event) => set({ showLine: event.target.checked })} />
     </>
+  );
+}
+
+/** A box with no positions takes anybody's signature: the list goes, so the saved design says only what it uses. */
+function withoutPositions(element: Of<'signature'>): Of<'signature'> {
+  const { positionIds: _unused, ...rest } = element;
+  return rest;
+}
+
+/** The positions whose signatures the box keeps (none: anybody's), so each area of a step many sign gets its own box. */
+function PositionFilter({ selected, onChange }: { readonly selected: readonly string[]; readonly onChange: (positionIds: string[]) => void }) {
+  const { t } = useTranslation('workflows');
+  const client = useApiClient();
+  const positions = useQuery(positionsQueryOptions(client));
+  const known = new Set((positions.data ?? []).map((position) => position.id));
+  const missing = positions.data === undefined ? [] : selected.filter((id) => !known.has(id));
+  return (
+    <fieldset className={styles.choiceList}>
+      <legend className={styles.sectionTitle}>{t('documents.canvas.props.signerPositions')}</legend>
+      <p className={styles.note}>{t('documents.canvas.props.signerPositionsHint')}</p>
+      {positions.data === undefined ? (
+        <p className={styles.note}>{positions.isError ? t('documents.canvas.props.positionsFailed') : t('documents.canvas.props.positionsLoading')}</p>
+      ) : positions.data.length === 0 ? (
+        <p className={styles.note}>{t('documents.canvas.props.noPositions')}</p>
+      ) : (
+        <div className={styles.choiceScroll}>
+          {positions.data.map((position) => (
+            <Checkbox
+              key={position.id}
+              label={position.name}
+              checked={selected.includes(position.id)}
+              onChange={(event) => onChange(event.target.checked ? [...selected, position.id] : selected.filter((id) => id !== position.id))}
+            />
+          ))}
+          {missing.map((id) => (
+            <Checkbox key={id} label={t('documents.canvas.props.positionGone')} checked onChange={() => onChange(selected.filter((other) => other !== id))} />
+          ))}
+        </div>
+      )}
+    </fieldset>
   );
 }

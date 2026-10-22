@@ -17,6 +17,8 @@ const DOC = id(62);
 const COMPANY = id(70);
 const FILE_ID = id(90);
 const IMAGE = id(91);
+const CARTERA = id(92);
+const SISTEMAS = id(93);
 
 const version = (versionId: string, number: number, status: string) => ({ id: versionId, number, status, notes: null, revision: 0, publishedAt: status === 'DRAFT' ? null : at, publishedById: null, createdAt: at });
 
@@ -69,6 +71,7 @@ function api(overrides: Record<string, FakeHandler> = {}, initial: AnyPdfDesign 
     [`/workflows/${FLOW}/pdf-templates/${TEMPLATE}`]: () => undefined,
     '/companies': () => page([{ id: COMPANY, name: 'Electrocréditos', taxId: null, countryCode: 'CO', currencyCode: 'COP', timeZone: 'America/Bogota', calendarId: null, isDefault: true, isActive: true, createdAt: at }]),
     '/settings/logo': () => ({ url: 'http://storage.test/logo.png', expiresAt: at }),
+    '/positions': () => page([{ id: CARTERA, name: 'Cartera', isActive: true, createdAt: at }, { id: SISTEMAS, name: 'Sistemas', isActive: true, createdAt: at }]),
     [`/workflows/${FLOW}/pdf-images`]: () => [],
     '/pdf-templates/uploads': () => ({ uploads: [{ fileId: FILE_ID, url: 'http://storage.test/key', method: 'PUT', headers: { 'content-type': 'application/pdf' }, expiresAt: at }], quota: { overLimit: false } }),
     [`/pdf-templates/uploads/${FILE_ID}/confirm`]: () => ({ id: FILE_ID, name: 'banco.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at }),
@@ -352,6 +355,23 @@ describe('PDF documents', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
       await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
       expect(canvasPatch(fake).elements.at(-1)).toMatchObject({ type: 'image', source: 'UPLOADED', imageId: IMAGE });
+    }, 20_000);
+
+    it('a signature box keeps the signatures of the positions it names, and none means anybody', async () => {
+      const { fake } = renderRoute(designerUrl, { handlers: api({}, emptyCanvasDesign()) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Firma' }));
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: /Quién firma/ }), 'STEP');
+      await userEvent.click(await screen.findByRole('checkbox', { name: 'Cartera' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Sistemas' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Sistemas' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+      await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
+      expect(canvasPatch(fake).elements.at(-1)).toMatchObject({ type: 'signature', positionIds: [CARTERA] });
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Cartera' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+      await vi.waitFor(() => expect(canvasPatch(fake).elements.at(-1)).not.toHaveProperty('positionIds'));
     }, 20_000);
 
     it('keeps elements on their sheet, and a repeated one on every sheet', async () => {

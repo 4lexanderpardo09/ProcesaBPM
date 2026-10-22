@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBlocker } from 'react-router';
+import { positionsQueryOptions } from '@/features/people';
 import { tenantLogoQueryOptions } from '@/shared/organization/logo-api';
 import { useApiClient, usePermissions } from '@/shared/session';
 import { Alert, Button, Checkbox, Dialog, PageHeader, Select } from '@/shared/ui';
@@ -70,7 +71,9 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
   const images = useQuery(pdfImagesQueryOptions(client, workflowId));
   const canvasImages = useMemo<CanvasImages>(() => ({ workflowId, logoUrl: logo.isError ? null : logo.data === undefined ? undefined : (logo.data?.url ?? null), images: images.data }), [workflowId, logo.data, logo.isError, images.data]);
   const imageIds = useMemo(() => (images.data === undefined ? undefined : new Set(images.data.map((image) => image.id))), [images.data]);
-  const problems = canvasProblems(design, current, upcoming, imageIds);
+  const positions = useQuery(positionsQueryOptions(client));
+  const positionIds = useMemo(() => (positions.data === undefined ? undefined : new Set(positions.data.map((position) => position.id))), [positions.data]);
+  const problems = canvasProblems(design, current, upcoming, { imageIds, positionIds });
   const blocking = problems.filter((problem) => !problem.draftOnly);
   const readOnly = !canEdit;
 

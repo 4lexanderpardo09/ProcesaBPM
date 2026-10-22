@@ -142,6 +142,15 @@ describe('validateDesign of a canvas', () => {
     expect(validateDesign(design, doc)).toEqual([]);
   });
 
+  it('a signature box may keep some positions, which must be the organization’s when the caller knows them', () => {
+    const cartera = '018f3c1e-7b2a-7c3d-9e4f-00000000000a';
+    const gone = '018f3c1e-7b2a-7c3d-9e4f-00000000000b';
+    const box = { ...at, id: 's', name: 's', type: 'signature', source: 'STEP', stepName: 'Revisión', signers: 'LAST', position: 1, positionIds: [cartera, gone], label: '', showName: true, showDate: true, showLine: true } as CanvasElement;
+    expect(pdfCanvasDesignSchema.safeParse(canvas([box])).success).toBe(true);
+    expect(pdfCanvasDesignSchema.safeParse(canvas([{ ...box, positionIds: ['not-a-uuid'] } as CanvasElement])).success).toBe(false);
+    expect(codes(validateDesign(canvas([box]), doc, { positionIds: new Set([cartera]) }))).toEqual(['DOCUMENT_POSITION_UNKNOWN@elements[0].positionIds[1]']);
+  });
+
   it('a block document cannot read a calculation', () => {
     expect(codes(validateDesign({ ...emptyDesign(), body: [{ type: 'text', text: '{{calc.TOTAL}}' }] }, doc))).toEqual(['DOCUMENT_CALCULATION_UNKNOWN@body[0].text']);
   });

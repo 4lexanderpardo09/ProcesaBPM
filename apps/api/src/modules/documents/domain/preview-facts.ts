@@ -24,7 +24,7 @@ function rawSamples(fields: readonly FieldDocument[], names: { users: Map<string
 /** A ticket that does not exist: every field with a sample of its type, every people step signed by a made-up person. */
 export function buildPreviewFacts(fields: readonly FieldDocument[], steps: readonly StepDocument[], overrides: Readonly<Record<string, unknown>>, locale: { timeZone: string; currencyCode: string }, now: Date): RenderFacts {
   const names = { users: new Map<string, string>(), sites: new Map<string, string>(), files: new Map<string, string>() };
-  const signer: SignerRecord = { userId: 'preview-creator', name: SAMPLE_SIGNER, signedAt: now, imageKey: null };
+  const signer: SignerRecord = { userId: 'preview-creator', name: SAMPLE_SIGNER, signedAt: now, imageKey: null, positionId: null, anyPosition: true };
   return {
     ticket: { number: '0000', title: es.previewTicket.title, status: 'OPEN', createdAt: now, closedAt: null, companyName: es.previewTicket.companyName, creatorId: 'preview-creator', creatorName: es.previewTicket.creatorName, currentStepName: es.previewTicket.stepName },
     timeZone: locale.timeZone,

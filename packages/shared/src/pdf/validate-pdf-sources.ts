@@ -18,6 +18,7 @@ export interface PdfProblem {
     | 'DOCUMENT_CALCULATION_CODE_TAKEN'
     | 'DOCUMENT_FORMULA_INVALID'
     | 'DOCUMENT_IMAGE_UNKNOWN'
+    | 'DOCUMENT_POSITION_UNKNOWN'
     | 'PAGE_AND_PAGES_OUTSIDE_BAND'
     | 'ACROFORM_FIELD_UNKNOWN'
     | 'COORDINATE_OUT_OF_PAGE'
@@ -118,11 +119,14 @@ export function validateExpressionText(text: string, at: string, doc: WorkflowVe
 export interface DesignContext {
   /** The workflow's uploaded images; without it, which image a canvas shows is not checked. */
   readonly imageIds?: ReadonlySet<string>;
+  /** The organization's positions; without it, the positions a signature box keeps are not checked. */
+  readonly positionIds?: ReadonlySet<string>;
 }
 
 /**
  * Checks a designer format against a workflow version: every field, table column, step and calculation it names must
- * exist, and every uploaded image it shows must still be one of the workflow's.
+ * exist, every uploaded image it shows must still be one of the workflow's, and every position a signature box keeps
+ * one of the organization's.
  */
 export function validateDesign(design: AnyPdfDesign, doc: WorkflowVersionDocument, context: DesignContext = {}): PdfProblem[] {
   if (design.version === 2) return validateCanvasDesign(design, doc, context);
@@ -138,10 +142,13 @@ function validateCanvasDesign(design: PdfCanvasDesign, doc: WorkflowVersionDocum
   const scope = scopeOf(doc, design.calculations.map((calculation) => calculation.code));
   // Page numbers make sense anywhere on a canvas: every element knows the page it lands on.
   design.elements.forEach((element, index) => checkElement(element, `elements[${index}]`, scope, problems));
-  if (context.imageIds !== undefined) {
-    for (const [index, element] of design.elements.entries()) {
-      if (element.type === 'image' && element.source === 'UPLOADED' && element.imageId !== undefined && !context.imageIds.has(element.imageId)) {
-        problems.push({ code: 'DOCUMENT_IMAGE_UNKNOWN', path: `elements[${index}].imageId`, detail: element.imageId });
+  for (const [index, element] of design.elements.entries()) {
+    if (context.imageIds !== undefined && element.type === 'image' && element.source === 'UPLOADED' && element.imageId !== undefined && !context.imageIds.has(element.imageId)) {
+      problems.push({ code: 'DOCUMENT_IMAGE_UNKNOWN', path: `elements[${index}].imageId`, detail: element.imageId });
+    }
+    if (context.positionIds !== undefined && element.type === 'signature') {
+      for (const [at, positionId] of (element.positionIds ?? []).entries()) {
+        if (!context.positionIds.has(positionId)) problems.push({ code: 'DOCUMENT_POSITION_UNKNOWN', path: `elements[${index}].positionIds[${at}]`, detail: positionId });
       }
     }
   }

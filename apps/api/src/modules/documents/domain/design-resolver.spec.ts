@@ -18,7 +18,7 @@ const field = (code: string, type: FieldDocument['type'], label: string, config:
   dataSource: null,
 });
 
-const ana: SignerRecord = { userId: 'u-ana', name: 'Ana Gómez', signedAt: new Date('2026-10-01T15:00:00Z'), imageKey: 'sig:u-ana' };
+const ana: SignerRecord = { userId: 'u-ana', name: 'Ana Gómez', signedAt: new Date('2026-10-01T15:00:00Z'), imageKey: 'sig:u-ana', positionId: null };
 
 const facts = (overrides: Partial<RenderFacts> = {}): RenderFacts => ({
   ticket: { number: '1045', title: 'Compra de equipos', status: 'OPEN', createdAt: new Date('2026-10-01T13:00:00Z'), closedAt: null, companyName: 'Acme SAS', creatorId: 'u-creator', creatorName: 'Pedro Pérez', currentStepName: 'Revisión' },
