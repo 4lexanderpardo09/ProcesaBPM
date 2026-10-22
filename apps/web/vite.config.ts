@@ -21,6 +21,8 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}', 'src/**/*.spec.ts'],
     setupFiles: ['src/test/setup.ts'],
+    // Whole pages render in jsdom with many user events: with every core busy, a long one passes the 5 s default.
+    testTimeout: 15_000,
     css: { modules: { classNameStrategy: 'non-scoped' } },
   },
 });

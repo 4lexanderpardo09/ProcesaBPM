@@ -1,7 +1,7 @@
 import type { MfaEnrollment, MfaEnrollmentRequiredResponse, Organization, SelectOrganizationResponse } from '@procesabpm/shared';
 import type { AuthMessageKey } from '../lib/auth-error-message';
 
-export type LoginNotice = 'expired' | 'mfaRequired' | 'signedOutElsewhere' | 'challengeExpired' | 'selectionExpired';
+export type LoginNotice = 'expired' | 'mfaRequired' | 'signedOutElsewhere' | 'challengeExpired' | 'selectionExpired' | 'passwordChanged' | 'invitationAccepted';
 
 export interface OrganizationChoice {
   readonly organizations: readonly Organization[];

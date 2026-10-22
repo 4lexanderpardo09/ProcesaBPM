@@ -59,5 +59,6 @@ function LoginStep({ flow }: { readonly flow: ReturnType<typeof useLoginFlow> })
 function NoticeOf({ state }: { readonly state: Extract<LoginFlowState, { step: 'credentials' }> }) {
   const { t } = useTranslation('auth');
   if (state.notice === undefined) return null;
-  return <Alert tone={state.notice === 'signedOutElsewhere' ? 'info' : 'warn'}>{t(`notices.${state.notice}`)}</Alert>;
+  const tone = state.notice === 'passwordChanged' || state.notice === 'invitationAccepted' ? 'ok' : state.notice === 'signedOutElsewhere' ? 'info' : 'warn';
+  return <Alert tone={tone}>{t(`notices.${state.notice}`)}</Alert>;
 }

@@ -2,6 +2,8 @@ export const paths = {
   home: '/',
   login: '/login',
   forgotPassword: '/forgot-password',
+  resetPassword: '/reset-password',
+  acceptInvitation: '/accept-invitation',
   tickets: '/tickets',
   newTicket: '/tickets/new',
   ticket: '/tickets/:ticketId',
@@ -45,7 +47,7 @@ export function datasetPath(datasetId: string): string {
 }
 
 /** Notices the login page accepts from its URL: a fixed list, never free text. */
-export const loginNotices = ['expired', 'mfaRequired', 'signedOutElsewhere'] as const;
+export const loginNotices = ['expired', 'mfaRequired', 'signedOutElsewhere', 'passwordChanged', 'invitationAccepted'] as const;
 export type UrlLoginNotice = (typeof loginNotices)[number];
 
 export function isUrlLoginNotice(value: string | null): value is UrlLoginNotice {

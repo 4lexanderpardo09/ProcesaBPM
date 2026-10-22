@@ -37,6 +37,10 @@ export const organizationSchema = z.object({
 });
 export type Organization = z.infer<typeof organizationSchema>;
 
+/** `GET /auth/me/organizations`: the organizations of the signed-in user, to move to another one without signing in again. */
+export const myOrganizationsResponseSchema = z.object({ organizations: z.array(organizationSchema) });
+export type MyOrganizationsResponse = z.infer<typeof myOrganizationsResponseSchema>;
+
 const selectOrganizationFields = {
   organizations: z.array(organizationSchema),
   /** Short-lived, single-use token that only works to pick an organization (`POST /auth/select-tenant`). */
