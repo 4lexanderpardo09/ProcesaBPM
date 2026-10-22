@@ -128,6 +128,32 @@ describe('NewTicketPage', () => {
     expect(fake.callsTo(`/subcategories/${PAGOS}/creation-form`)[0]?.path).toBe(`/subcategories/${PAGOS}/creation-form?companyId=${MAIN}`);
   });
 
+  it('fills a field from the Excel row of the key typed in another one', async () => {
+    const withLookup = {
+      ...creationForm,
+      starts: [
+        {
+          ...creationForm.starts[0]!,
+          fields: [
+            field(1, 'CEDULA', 'Cédula', 'TEXT'),
+            field(2, 'NOMBRE', 'Nombre del cliente', 'TEXT', { dataSource: { kind: 'DATASET', datasetId: id(80), column: 'NOMBRE', lookupFieldCode: 'CEDULA' } }),
+          ],
+        },
+      ],
+    };
+    const { fake } = renderRoute('/tickets/new', {
+      handlers: handlers({
+        [`/subcategories/${PAGOS}/creation-form`]: () => withLookup,
+        [`/fields/${id(102)}/dataset-lookup`]: (_options, path) => ({ value: path.endsWith('key=1010') ? 'Ana Ruiz' : null }),
+      }),
+    });
+
+    await chooseRequest();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Cédula' }), '1010');
+    await vi.waitFor(() => expect(screen.getByRole('combobox', { name: 'Nombre del cliente' })).toHaveValue('Ana Ruiz'));
+    expect(fake.callsTo(`/fields/${id(102)}/dataset-lookup`)).toHaveLength(1);
+  });
+
   it('creates a ticket for someone else: their catalog and their companies, and the requester in the request', async () => {
     const OLGA = id(70);
     const OTHER_COMPANY = id(71);
