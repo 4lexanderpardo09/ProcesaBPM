@@ -9,9 +9,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - inicio con resumen y pendientes;
     - bandeja con filtros de prioridad, categoría y empresa, y conteos;
     - crear para otra persona;
-    - visibilidad de categorías (las «reglas de mapeo» de la mesa);
-    - ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría);
-    - avisos;
+    - ~~visibilidad de categorías; ajustes de la organización (seguridad, acceso de soporte, almacenamiento, auditoría); avisos; copia de los datos en eliminación~~ (hecho, §4.23);
     - búsqueda por clave de un Excel en el formulario;
     - calculadoras;
     - probar quién aprueba.

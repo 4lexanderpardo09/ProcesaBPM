@@ -6,6 +6,7 @@ import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
 import { ProfilePage } from '@/features/profile';
+import { SettingsPage } from '@/features/settings';
 import { NewTicketPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
 import { DatasetPage, DatasetsPage, PdfFormatPage, PdfTemplatePage, WorkflowBuilderPage, WorkflowPage, WorkflowsPage } from '@/features/workflows';
 import { paths } from '@/shared/lib/paths';
@@ -22,7 +23,7 @@ function SectionPlaceholder({ itemKey }: { readonly itemKey: NavigationItemKey }
   return <UnderConstructionPage title={t(`items.${itemKey}`)} />;
 }
 
-const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets', 'workflows', 'catalog', 'organization', 'people']);
+const builtSections: ReadonlySet<NavigationItemKey> = new Set(['tickets', 'workflows', 'catalog', 'organization', 'people', 'settings']);
 
 const ticketRoutes: RouteObject[] = [
   { path: paths.tickets, element: <TicketInboxPage /> },
@@ -46,6 +47,8 @@ const configurationRoutes: RouteObject[] = [
   { path: paths.people, element: <PeoplePage /> },
   { path: paths.profile, element: <ProfilePage /> },
   { path: paths.notifications, element: <NotificationsPage /> },
+  { path: paths.settings, element: <SettingsPage /> },
+  { path: `${paths.settings}/:tab`, element: <SettingsPage /> },
 ];
 
 const sectionRoutes: RouteObject[] = navigationSections.flatMap((section) =>

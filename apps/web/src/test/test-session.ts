@@ -43,6 +43,8 @@ export function createTestSession({ signedIn = true, handlers = {} }: TestSessio
     '/text-templates': () => [],
     // The bell in the top bar: nothing unread unless a test says otherwise.
     '/notifications/unread-count': () => ({ count: 0 }),
+    // The platform's notices above every page: none unless a test says otherwise.
+    '/announcements': () => [],
     ...handlers,
   };
   const fake = createFakeTransport(routes);
