@@ -1,4 +1,4 @@
-import { emptyDesign } from '@procesabpm/shared';
+import { emptyCanvasDesign, emptyDesign } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +6,7 @@ import { Link, useNavigate } from 'react-router';
 import { formatDateTime } from '@/shared/lib/format-date-time';
 import { pdfFormatPath } from '@/shared/lib/paths';
 import { useApiClient } from '@/shared/session';
-import { Badge, Button, Card, Dialog, PlusIcon, Table, type TableColumn, TextField } from '@/shared/ui';
+import { Badge, Button, Card, Dialog, PlusIcon, Select, Table, type TableColumn, TextField } from '@/shared/ui';
 import { createPdfFormat, deletePdfFormat, documentQueryKeys, type PdfFormat, pdfFormatsQueryOptions } from '../api/documents-api';
 import { DocumentError } from './DocumentError';
 import type { DocumentPermissions } from './GeneratedDocumentsCard';
@@ -84,15 +84,16 @@ export function FormatsCard({ workflowId, can }: { readonly workflowId: string; 
   );
 }
 
-/** A format starts as a title and every field of the ticket; the designer shapes it from there. */
+/** A format starts as a free canvas with the ticket's title and number, or as blocks with every field of the ticket. */
 function NewFormatDialog({ workflowId, onClose, onCreated }: { readonly workflowId: string; readonly onClose: () => void; readonly onCreated: (formatId: string) => void }) {
   const { t } = useTranslation('workflows');
   const client = useApiClient();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
+  const [kind, setKind] = useState<'CANVAS' | 'BLOCKS'>('CANVAS');
   const [submitted, setSubmitted] = useState(false);
   const create = useMutation({
-    mutationFn: () => createPdfFormat(client, workflowId, { name: name.trim(), design: emptyDesign() }),
+    mutationFn: () => createPdfFormat(client, workflowId, { name: name.trim(), design: kind === 'CANVAS' ? emptyCanvasDesign() : emptyDesign() }),
     onSuccess: async (format) => {
       queryClient.setQueryData(documentQueryKeys.format(workflowId, format.id), format);
       await queryClient.invalidateQueries({ queryKey: documentQueryKeys.formats(workflowId) });
@@ -122,7 +123,8 @@ function NewFormatDialog({ workflowId, onClose, onCreated }: { readonly workflow
     >
       <div className={styles.stack}>
         <TextField label={t('documents.formats.name')} required maxLength={NAME_MAX} error={nameError} value={name} onChange={(event) => setName(event.target.value)} />
-        <p className={styles.note}>{t('documents.formats.newHint')}</p>
+        <Select label={t('documents.formats.kind')} options={(['CANVAS', 'BLOCKS'] as const).map((value) => ({ value, label: t(`documents.formats.kinds.${value}`) }))} value={kind} onChange={(event) => setKind(event.target.value as 'CANVAS' | 'BLOCKS')} />
+        <p className={styles.note}>{kind === 'CANVAS' ? t('documents.formats.canvasHint') : t('documents.formats.newHint')}</p>
         <DocumentError error={create.error} />
       </div>
     </Dialog>

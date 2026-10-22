@@ -10,6 +10,7 @@ import { Alert, Breadcrumb, Button, Dialog, PageHeader } from '@/shared/ui';
 import { workflowQueryOptions } from '../../api/workflows-api';
 import { versionDetailQueryOptions } from '../../builder/api/builder-api';
 import { documentQueryKeys, type PdfFormat, pdfFormatQueryOptions, updatePdfFormat } from '../api/documents-api';
+import { CanvasDesigner } from '../canvas/components/CanvasDesigner';
 import { DocumentError } from '../components/DocumentError';
 import { BandEditor } from '../components/designer/BandEditor';
 import { FormatSettingsDialog } from '../components/designer/FormatSettingsDialog';
@@ -27,8 +28,9 @@ const EMPTY_DOCUMENT: WorkflowVersionDocument = { steps: [], transitions: [], fi
 const documentsTab = (workflowId: string) => `${workflowPath(workflowId)}?tab=documents`;
 
 /**
- * The designer of a PDF format: page, header, body and footer as lists of blocks, checked as they change against the
- * version tickets run on (and the draft), saved as a whole, and drawn by the API with sample values beside them.
+ * The designer of a PDF format: a free canvas (version 2), or page, header, body and footer as lists of blocks
+ * (version 1), checked as they change against the version tickets run on (and the draft), saved as a whole, and drawn
+ * by the API with sample values beside them.
  */
 export function PdfFormatPage() {
   const { workflowId = '', formatId = '' } = useParams();
@@ -62,14 +64,7 @@ export function PdfFormatPage() {
   const current = publishedDoc.data?.document ?? draftDoc.data?.document ?? EMPTY_DOCUMENT;
   const upcoming = publishedDoc.data === undefined ? undefined : draftDoc.data?.document;
   const loaded = format.data;
-  if (loaded.design.version === 2) {
-    return (
-      <>
-        {breadcrumb(loaded.name)}
-        <Alert tone="info">{t('documents.designer.canvasSoon')}</Alert>
-      </>
-    );
-  }
+  if (loaded.design.version === 2) return <CanvasDesigner key={loaded.id} workflowId={workflowId} format={{ ...loaded, design: loaded.design }} current={current} upcoming={upcoming} breadcrumb={breadcrumb} />;
   return <Designer key={loaded.id} workflowId={workflowId} format={{ ...loaded, design: loaded.design }} current={current} upcoming={upcoming} breadcrumb={breadcrumb} />;
 }
 
