@@ -45,8 +45,9 @@ export const FIELD_CONFIG_SCHEMAS: Readonly<Record<FieldType, z.ZodType<Record<s
   CURRENCY: z.object({ currencyCode: currency.optional(), min: z.number().optional(), max: z.number().optional() }).strict(),
   SELECT: z.object({ options: options.optional() }).strict(),
   MULTI_SELECT: z.object({ options: options.optional(), minSelected: z.number().int().min(0).optional(), maxSelected: z.number().int().min(1).optional() }).strict(),
-  DATE: z.object({ min: dateBound.optional(), max: dateBound.optional() }).strict(),
-  DATETIME: z.object({ min: dateBound.optional(), max: dateBound.optional() }).strict(),
+  // `defaultNow`: left empty when it is captured, it takes the date (or date and time) of that moment.
+  DATE: z.object({ min: dateBound.optional(), max: dateBound.optional(), defaultNow: z.boolean().optional() }).strict(),
+  DATETIME: z.object({ min: dateBound.optional(), max: dateBound.optional(), defaultNow: z.boolean().optional() }).strict(),
   DAYS: z.object({ min: z.number().int().optional(), max: z.number().int().optional() }).strict(),
   SITE: z.object({ level: z.number().int().min(1).max(20).optional() }).strict(),
   USER: z.object({ positionIds: z.array(uuid).max(100).optional() }).strict(),

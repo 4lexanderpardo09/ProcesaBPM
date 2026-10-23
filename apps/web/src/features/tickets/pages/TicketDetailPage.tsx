@@ -55,7 +55,7 @@ export function TicketDetailPage() {
           <TicketParallelSignatures tasks={ticket.parallelTasks} timeZone={timeZone} />
           <TicketStepFiles ticketId={ticket.id} stepFiles={stepFiles} />
           <TicketFieldValues values={ticket.values} valueNames={ticket.valueNames} form={form} timeZone={timeZone} />
-          <TicketAttachments ticketId={ticket.id} documents={documents} timeZone={timeZone} />
+          <TicketAttachments ticketId={ticket.id} number={ticket.number} documents={documents} timeZone={timeZone} />
           <TicketTagsCard ticket={ticket} />
         </aside>
       </div>

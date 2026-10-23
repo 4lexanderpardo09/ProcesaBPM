@@ -85,6 +85,20 @@ describe('ticket forms', () => {
       await member.client.get(`/catalog/available?requesterId=${colleague.userId}`).expect(403);
     });
 
+    it('offers the subcategories of the person\'s latest tickets as a shortcut, the most recent first, while they can still pick them', async () => {
+      const opener = await world.member([grant('create'), grant('read_created')]);
+      const [first, second] = [await publishFlow(world.admin, simpleFlow()), await publishFlow(world.admin, simpleFlow())];
+      const recent = async () => (await opener.client.get('/catalog/available').expect(200)).body.recent as string[];
+      expect(await recent()).toEqual([]);
+      for (const target of [first, second, first]) await opener.client.post('/tickets', { subcategoryId: target.subcategoryId, title: unique('T'), values: {} }).expect(201);
+      await opener.client.post('/tickets', { subcategoryId: second.subcategoryId, title: unique('T'), values: {} }).expect(201);
+      expect(await recent()).toEqual([second.subcategoryId, first.subcategoryId]);
+      // Someone else's tickets are theirs, and a subcategory switched off drops out.
+      expect((await colleague.client.get('/catalog/available').expect(200)).body.recent).not.toContain(second.subcategoryId);
+      await world.admin.post(`/subcategories/${second.subcategoryId}/deactivate`).expect(200);
+      expect(await recent()).toEqual([first.subcategoryId]);
+    });
+
     it('needs the create permission and an existing subcategory', async () => {
       await reader.client.get(`/subcategories/${flow.subcategoryId}/creation-form`).expect(403);
       await member.client.get('/subcategories/0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f90/creation-form').expect(404);
@@ -111,6 +125,32 @@ describe('ticket forms', () => {
       expect(detail.values.COUNT.map((row) => row.SUB)).toEqual([150000, 1001]);
       expect(detail.totals.COUNT).toEqual({ SUB: '151001' });
       expect(Number(detail.values.TOTAL)).toBe(151001);
+    });
+  });
+
+  describe('«fecha actual»', () => {
+    it('fills an empty date and date-time with the moment of the submission, even read-only, and keeps a typed one', async () => {
+      const dated = await publishFlow(world.admin, {
+        ...simpleFlow(),
+        fields: [
+          { step: 'start', code: 'RECEIVED_ON', type: 'DATE', capture: 'CREATION', isReadOnly: true, config: { defaultNow: true } },
+          { step: 'start', code: 'PAID_ON', type: 'DATE', capture: 'CREATION', isRequired: true, config: { defaultNow: true } },
+          { step: 'start', code: 'STAMP', type: 'DATETIME', capture: 'CREATION', config: { defaultNow: true } },
+        ],
+      });
+      const before = Date.now();
+      const empty = (await member.client.post('/tickets', { subcategoryId: dated.subcategoryId, title: unique('T'), values: {} }).expect(201)).body.id as string;
+      const values = (await member.client.get(`/tickets/${empty}`).expect(200)).body.values as Record<string, string>;
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+      expect(values.RECEIVED_ON).toBe(today);
+      expect(values.PAID_ON).toBe(today);
+      expect(Date.parse(values.STAMP!)).toBeGreaterThanOrEqual(before - 1000);
+
+      const typed = (await member.client.post('/tickets', { subcategoryId: dated.subcategoryId, title: unique('T'), values: { PAID_ON: '2026-01-15' } }).expect(201)).body.id as string;
+      expect((await member.client.get(`/tickets/${typed}`).expect(200)).body.values.PAID_ON).toBe('2026-01-15');
+      // Read-only is still read-only: nobody types it.
+      const refused = await member.client.post('/tickets', { subcategoryId: dated.subcategoryId, title: unique('T'), values: { RECEIVED_ON: '2026-01-15' } }).expect(422);
+      expect(refused.body.error.details.issues).toEqual([{ code: 'NOT_EDITABLE', fieldCode: 'RECEIVED_ON' }]);
     });
   });
 

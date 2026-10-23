@@ -16,6 +16,8 @@ export interface ReferenceToVerify {
 export interface ValidationContext {
   /** Today in the company time zone, `YYYY-MM-DD`. */
   readonly today: string;
+  /** The instant of the submission (ISO 8601), for a date-time field that takes it when left empty. */
+  readonly now?: string;
 }
 
 /** A reference to the tenant's data (everything but files, which are checked where they are locked for attaching). */

@@ -18,6 +18,7 @@ import { pageResponseSchema } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
+import { saveBlob } from '@/shared/lib/save-blob';
 import type { ReportFilters } from '../lib/report-filters';
 
 const minutes = z.number().nullable();
@@ -281,12 +282,5 @@ export function workflowOptionsQuery(client: HttpClient) {
 /** Downloads a report as a workbook: it travels with the session, so it is fetched and then saved. */
 export async function downloadReport(client: HttpClient, name: ReportName, params: URLSearchParams): Promise<void> {
   const blob = await client.request(`/reports/${name}/export?${params.toString()}`, { responseType: 'blob' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `reporte-${name}.xlsx`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlob(blob, `reporte-${name}.xlsx`);
 }

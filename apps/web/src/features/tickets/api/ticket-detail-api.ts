@@ -12,6 +12,7 @@ import {
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
+import { saveBlob } from '@/shared/lib/save-blob';
 import { ticketQueryKeys } from './tickets-api';
 
 const ticketDocumentsResponseSchema = z.array(ticketDocumentResponseSchema);
@@ -87,4 +88,10 @@ export function commentOnTicket(client: HttpClient, ticketId: string, commentHtm
 /** A short-lived link to the stored file; asked for at the moment of downloading. */
 export function ticketFileDownloadUrl(client: HttpClient, ticketId: string, fileId: string) {
   return client.request(`${ticketUrl(ticketId)}/files/${encodeURIComponent(fileId)}/download-url`, { schema: downloadUrlResponseSchema });
+}
+
+/** Every PDF and image of the ticket in one PDF, made on the spot and saved by the browser. */
+export async function downloadCombinedDocuments(client: HttpClient, ticketId: string, number: string): Promise<void> {
+  const blob = await client.request(`${ticketUrl(ticketId)}/documents/combined`, { responseType: 'blob' });
+  saveBlob(blob, `ticket-${number}-documentos.pdf`);
 }

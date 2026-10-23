@@ -261,12 +261,29 @@ describe('TicketDetailPage', () => {
     expect(box).toHaveValue('');
   });
 
+  it('formats a comment with the toolbar: bold and a list, sent as HTML', async () => {
+    const { fake } = renderRoute(base, { handlers: ticketHandlers({ [`${base}/comments`]: () => ({ eventId: id(399) }) }) });
+
+    const box = await screen.findByRole('textbox', { name: 'Agregar un comentario' });
+    await userEvent.type(box, 'Revisado');
+    (box as HTMLTextAreaElement).setSelectionRange(0, 8);
+    await userEvent.click(screen.getByRole('button', { name: 'Negrita' }));
+    expect(box).toHaveValue('**Revisado**');
+    await userEvent.type(box, '{End}{Enter}la cédula{Enter}el RUT');
+    (box as HTMLTextAreaElement).setSelectionRange(13, 29);
+    await userEvent.click(screen.getByRole('button', { name: 'Lista' }));
+    expect(box).toHaveValue('**Revisado**\n\n- la cédula\n- el RUT');
+    await userEvent.click(screen.getByRole('button', { name: 'Comentar' }));
+
+    await vi.waitFor(() => expect(fake.callsTo(`${base}/comments`)[0]?.options.body).toEqual({ comment: '<p><strong>Revisado</strong></p><ul><li>la cédula</li><li>el RUT</li></ul>' }));
+  });
+
   it('asks for the comment instead of sending an empty one', async () => {
     const { fake } = renderRoute(base, { handlers: ticketHandlers() });
 
     await userEvent.click(await screen.findByRole('button', { name: 'Comentar' }));
 
-    expect(screen.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveAccessibleDescription('Escribe un comentario.');
+    expect(screen.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveAccessibleDescription(/Escribe un comentario\./);
     expect(fake.callsTo(`${base}/comments`)).toHaveLength(0);
   });
 
@@ -357,6 +374,37 @@ describe('TicketDetailPage', () => {
 
     expect(await screen.findByText('comprobante-pago.pdf')).toBeInTheDocument();
     expect(screen.queryByText('Documentos del flujo')).not.toBeInTheDocument();
+  });
+
+  it('downloads every PDF and image of the ticket in one PDF, and says when they weigh too much', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:combined');
+    URL.revokeObjectURL = vi.fn();
+    const second = { ...documents[0]!, id: id(402), file: { ...documents[0]!.file, id: id(104), name: 'orden.pdf' } };
+    let tooLarge = false;
+    const { fake } = renderRoute(base, {
+      handlers: ticketHandlers({
+        [`${base}/documents`]: () => [...documents, second],
+        [`${base}/documents/combined`]: () => {
+          if (tooLarge) throw new ApiError({ status: 422, code: 'DOCUMENTS_TOO_LARGE', message: 'Too large' });
+          return new Blob(['%PDF-1.7'], { type: 'application/pdf' });
+        },
+      }),
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Todo en un PDF' }));
+    await vi.waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+    expect(fake.callsTo(`${base}/documents/combined`)[0]?.options.responseType).toBe('blob');
+
+    tooLarge = true;
+    await userEvent.click(screen.getByRole('button', { name: 'Todo en un PDF' }));
+    expect(await screen.findByText('Los archivos pesan demasiado para unirlos: descárgalos uno por uno.')).toBeInTheDocument();
+  });
+
+  it('offers no combined PDF when there is only one file to put in it', async () => {
+    renderRoute(base, { handlers: ticketHandlers() });
+
+    expect(await screen.findByText('comprobante-pago.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Todo en un PDF' })).toBeNull();
   });
 
   it('says when the download link could not be had', async () => {
@@ -647,7 +695,8 @@ describe('TicketDetailPage', () => {
 
       await userEvent.click(await screen.findByRole('button', { name: 'Editar' }));
       const dialog = screen.getByRole('dialog', { name: 'Editar ticket' });
-      expect(within(dialog).getByRole('textbox', { name: /Descripción/ })).toHaveValue('Adjunto el comprobante del pago del 1 de octubre.');
+      // The bold of the saved description comes back as its marks, so editing keeps it.
+      expect(within(dialog).getByRole('textbox', { name: /Descripción/ })).toHaveValue('Adjunto el comprobante del pago del **1 de octubre**.');
       const subject = within(dialog).getByRole('textbox', { name: /Asunto/ });
       await userEvent.clear(subject);
       await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { htmlToPlainText, plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient } from '@/shared/session';
-import { Select, TextArea, TextField } from '@/shared/ui';
+import { FormattedTextArea, Select, TextField } from '@/shared/ui';
 import { prioritiesQueryOptions } from '../../api/new-ticket-api';
 import { editTicket } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
@@ -71,7 +71,7 @@ export function EditTicketDialog({ ticket, onClose }: { readonly ticket: TicketD
         options={options}
         onChange={(event) => setPriorityId(event.target.value)}
       />
-      <TextArea label={t('actions.edit.description')} value={description} maxLength={DESCRIPTION_MAX} rows={6} onChange={(event) => setDescription(event.target.value)} />
+      <FormattedTextArea label={t('actions.edit.description')} value={description} maxLength={DESCRIPTION_MAX} rows={6} onValueChange={setDescription} />
     </ActionDialog>
   );
 }

@@ -80,6 +80,7 @@ export const ERROR_CODES = {
   datasetFileInvalid: 'DATASET_FILE_INVALID',
   datasetInUse: 'DATASET_IN_USE',
   reportTooLarge: 'REPORT_TOO_LARGE',
+  documentsTooLarge: 'DOCUMENTS_TOO_LARGE',
   reportTimeout: 'REPORT_TIMEOUT',
   lastReopeningType: 'LAST_REOPENING_TYPE',
   ticketWaiting: 'TICKET_WAITING',
@@ -710,6 +711,13 @@ export class DatasetInUseError extends DomainError {
 export class ReportTooLargeError extends DomainError {
   constructor(readonly maxRows: number) {
     super(ERROR_CODES.reportTooLarge, 'The report is too large to export: narrow the filters', { details: { maxRows } });
+  }
+}
+
+/** The ticket's files are too many bytes to be put together into one PDF on the spot: they are downloaded one by one. */
+export class DocumentsTooLargeError extends DomainError {
+  constructor(readonly maxBytes: number) {
+    super(ERROR_CODES.documentsTooLarge, 'The documents are too large to combine: download them one by one', { details: { maxBytes } });
   }
 }
 

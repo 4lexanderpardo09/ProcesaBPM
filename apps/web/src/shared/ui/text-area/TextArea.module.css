@@ -2,3 +2,35 @@
   resize: vertical;
   font-family: inherit;
 }
+
+.formatted {
+  position: relative;
+}
+
+/* The buttons sit on the label's line, at its right: the text area keeps its own label and hint. */
+.toolbar {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  display: flex;
+  gap: 2px;
+}
+
+.tool {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 var(--space-1);
+  color: var(--slate);
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tool:hover {
+  color: var(--ink);
+  background: var(--surface-3);
+  border-color: var(--line);
+}

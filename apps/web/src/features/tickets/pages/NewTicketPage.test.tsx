@@ -36,6 +36,7 @@ const catalog = {
     },
   ],
   companies: [{ id: MAIN, name: 'Electrocréditos' }],
+  recent: [] as string[],
 };
 
 const priorities = {
@@ -102,6 +103,19 @@ describe('NewTicketPage', () => {
     expect(within(group).getAllByRole('radio').map((radio) => radio.closest('label')?.textContent)).toEqual(['Alta', 'Media']);
   });
 
+  it('picks a recently used request with one click', async () => {
+    renderRoute('/tickets/new', { handlers: handlers({ '/catalog/available': () => ({ ...catalog, recent: [PAGOS, id(999)] }) }) });
+
+    const shortcuts = await screen.findByRole('group', { name: 'Usadas hace poco' });
+    // A subcategory the catalog no longer offers is not a shortcut.
+    expect(within(shortcuts).getAllByRole('button')).toHaveLength(1);
+    await userEvent.click(within(shortcuts).getByRole('button', { name: 'Cartera › Confirmación de pago' }));
+
+    expect(screen.getByRole('combobox', { name: /Subcategoría/ })).toHaveValue(PAGOS);
+    expect(await screen.findByRole('textbox', { name: /Asunto/ })).toBeInTheDocument();
+    expect(within(shortcuts).getByRole('button', { name: 'Cartera › Confirmación de pago' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('creates the ticket with the subject, the start fields, the default priority and the description, and opens it', async () => {
     const { fake, router } = renderRoute('/tickets/new', { handlers: handlers() });
 
@@ -126,6 +140,20 @@ describe('NewTicketPage', () => {
     });
     expect(fake.callsTo('/tickets')[0]?.options.body).not.toHaveProperty('priorityId');
     expect(fake.callsTo(`/subcategories/${PAGOS}/creation-form`)[0]?.path).toBe(`/subcategories/${PAGOS}/creation-form?companyId=${MAIN}`);
+  });
+
+  it('does not ask for a «fecha actual» date, says it fills itself, and sends it empty for the API to fill', async () => {
+    const dated = { ...creationForm, starts: [{ ...creationForm.starts[0]!, fields: [field(3, 'PAID_ON', 'Fecha del pago', 'DATE', { isRequired: true, config: { defaultNow: true } })] }] };
+    const { fake } = renderRoute('/tickets/new', { handlers: handlers({ [`/subcategories/${PAGOS}/creation-form`]: () => dated }) });
+
+    await chooseRequest();
+    expect(screen.getByLabelText(/Fecha del pago/)).toHaveAccessibleDescription('Si lo dejas vacío, queda la fecha de hoy.');
+    await userEvent.type(screen.getByRole('textbox', { name: /Asunto/ }), 'Pago');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear y enviar' }));
+
+    await vi.waitFor(() => expect(fake.callsTo('/tickets')).toHaveLength(1));
+    // Sent blank, which the API fills with the date of the day.
+    expect((fake.callsTo('/tickets')[0]?.options.body as { values: Record<string, unknown> }).values.PAID_ON).toBeNull();
   });
 
   it('fills a field from the Excel row of the key typed in another one', async () => {
