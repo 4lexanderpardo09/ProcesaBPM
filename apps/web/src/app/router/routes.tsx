@@ -7,6 +7,7 @@ import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
 import { ProfilePage } from '@/features/profile';
+import { ReportsPage } from '@/features/reports';
 import { SettingsPage } from '@/features/settings';
 import { NewTicketPage, TicketBatchPage, TicketDetailPage, TicketInboxPage } from '@/features/tickets';
 import { DatasetPage, DatasetsPage, ExportCatalogsPage, ExportPage, ExportsPage, MyExportsPage, PdfFormatPage, PdfTemplatePage, WorkflowBuilderPage, WorkflowPage, WorkflowsPage } from '@/features/workflows';
@@ -24,7 +25,7 @@ function SectionPlaceholder({ itemKey }: { readonly itemKey: NavigationItemKey }
   return <UnderConstructionPage title={t(`items.${itemKey}`)} />;
 }
 
-const builtSections: ReadonlySet<NavigationItemKey> = new Set(['home', 'tickets', 'workflows', 'catalog', 'organization', 'people', 'settings']);
+const builtSections: ReadonlySet<NavigationItemKey> = new Set(['home', 'tickets', 'workflows', 'reports', 'catalog', 'organization', 'people', 'settings']);
 
 const ticketRoutes: RouteObject[] = [
   { path: paths.tickets, element: <TicketInboxPage /> },
@@ -46,6 +47,11 @@ const workflowRoutes: RouteObject[] = [
   { path: paths.exportCatalogs, element: <ExportCatalogsPage /> },
   { path: paths.export, element: <ExportPage /> },
   { path: paths.myExports, element: <MyExportsPage /> },
+];
+
+const reportRoutes: RouteObject[] = [
+  { path: paths.reports, element: <ReportsPage /> },
+  { path: `${paths.reports}/:tab`, element: <ReportsPage /> },
 ];
 
 const configurationRoutes: RouteObject[] = [
@@ -77,7 +83,7 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         element: <AppLayout />,
-        children: [{ index: true, element: <HomePage /> }, ...ticketRoutes, ...workflowRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
+        children: [{ index: true, element: <HomePage /> }, ...ticketRoutes, ...workflowRoutes, ...reportRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
       },
     ],
   },

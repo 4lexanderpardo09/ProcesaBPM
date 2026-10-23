@@ -41,7 +41,57 @@ export type RankingFilters = z.infer<typeof rankingFiltersSchema>;
 export const backlogFiltersSchema = z.object({ companyId: periodShape.companyId, workflowId: periodShape.workflowId, departmentId: periodShape.departmentId, siteId: periodShape.siteId }).strict();
 export type BacklogFilters = z.infer<typeof backlogFiltersSchema>;
 
-export const REPORT_NAMES = ['summary', 'sla-responsibles', 'sla-steps', 'ranking', 'time-distribution', 'incidents', 'categories', 'backlog', 'user-detail'] as const;
+/** Tickets are grouped by their site, raised to its ancestor at this level of the tree (1: the top one, e.g. the region). */
+const siteLevel = z.coerce.number().int().min(1).max(10).default(1);
+
+export const siteReportFiltersSchema = z.object({ ...periodShape, level: siteLevel }).strict().refine(periodIsSane, PERIOD_MESSAGE);
+export type SiteReportFilters = z.infer<typeof siteReportFiltersSchema>;
+
+/**
+ * The tickets behind a number of a report. With `stepName` (and `workflowId`) or `responsibleId`, the tickets whose visit
+ * of that step or whose clock of that person ended in the period; otherwise the tickets created in the period.
+ * `underSiteId` takes a site and everything below it (a row of the report by site); `noSite` the tickets without one.
+ */
+export const reportTicketsFiltersSchema = z
+  .object({
+    ...periodShape,
+    ...paging,
+    categoryId: uuidSchema.optional(),
+    subcategoryId: uuidSchema.optional(),
+    stepName: z.string().trim().min(1).max(100).optional(),
+    responsibleId: uuidSchema.optional(),
+    underSiteId: uuidSchema.optional(),
+    noSite: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+  })
+  .strict()
+  .refine(periodIsSane, PERIOD_MESSAGE)
+  .refine((value) => value.stepName === undefined || value.workflowId !== undefined, { message: 'A step is named within its workflow', path: ['workflowId'] })
+  .refine((value) => !(value.noSite === true && (value.underSiteId !== undefined || value.siteId !== undefined)), { message: 'Without a site or under one, not both', path: ['noSite'] });
+export type ReportTicketsFilters = z.infer<typeof reportTicketsFiltersSchema>;
+
+/** The open tickets that are now at one step of a workflow (a row of the backlog). */
+export const backlogTicketsFiltersSchema = z
+  .object({ companyId: periodShape.companyId, workflowId: uuidSchema, stepName: z.string().trim().min(1).max(100), departmentId: periodShape.departmentId, siteId: periodShape.siteId, ...paging })
+  .strict();
+export type BacklogTicketsFilters = z.infer<typeof backlogTicketsFiltersSchema>;
+
+export const REPORT_NAMES = [
+  'summary',
+  'sla-responsibles',
+  'sla-steps',
+  'ranking',
+  'time-distribution',
+  'incidents',
+  'categories',
+  'backlog',
+  'user-detail',
+  'sites',
+  'heatmap',
+  'tickets',
+  'comments',
+  'workflow-usage',
+  'complete',
+] as const;
 export type ReportName = (typeof REPORT_NAMES)[number];
 
 export const exportReportNameSchema = z.enum(REPORT_NAMES);

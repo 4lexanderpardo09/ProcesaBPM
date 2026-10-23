@@ -1,0 +1,236 @@
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.tabs {
+  margin-bottom: var(--space-4);
+  overflow-x: auto;
+}
+
+.refreshing {
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-4);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: end;
+  justify-content: space-between;
+}
+
+.toolbarStart {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.tileValue {
+  color: var(--ink);
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.tileLabel {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.tileHint {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* Bars: thin, one hue, the value always written beside them. */
+.barRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 120px;
+}
+
+.barTrack {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  background: var(--line-2);
+  border-radius: var(--radius-pill);
+}
+
+.barFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+}
+
+.barFill.ok {
+  background: var(--ok);
+}
+
+.barFill.warn {
+  background: var(--warn);
+}
+
+.barFill.danger {
+  background: var(--danger);
+}
+
+.barTarget {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--ink);
+}
+
+.barValue {
+  min-width: 56px;
+  color: var(--ink);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.number {
+  font-variant-numeric: tabular-nums;
+}
+
+.linkButton {
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  color: var(--accent-600);
+}
+
+.sub {
+  padding-left: var(--space-5);
+  color: var(--slate);
+}
+
+.state {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  font-size: 12.5px;
+}
+
+/* Heat map cells: tinted by state, the number always in ink. */
+.cell {
+  display: inline-block;
+  min-width: 36px;
+  padding: 2px var(--space-2);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  border-radius: var(--radius-sm);
+}
+
+.cellDanger {
+  background: var(--danger-50);
+  box-shadow: inset 0 0 0 1px var(--danger-line);
+}
+
+.cellWarn {
+  background: var(--warn-50);
+  box-shadow: inset 0 0 0 1px var(--warn-line);
+}
+
+.cellOk {
+  background: var(--ok-50);
+  box-shadow: inset 0 0 0 1px var(--ok-line);
+}
+
+.siteHeading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.buckets {
+  display: flex;
+  gap: 2px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bucket {
+  min-width: 28px;
+  padding: 1px var(--space-1);
+  text-align: center;
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+}
+
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-3);
+}
+
+.download {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  justify-content: space-between;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.downloadTitle {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}

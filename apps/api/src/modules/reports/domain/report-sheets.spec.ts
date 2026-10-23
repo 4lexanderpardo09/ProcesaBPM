@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backlogSheets, categoriesSheets, distributionSheets, incidentsSheets, rankingSheets, responsiblesSheets, rowCount, stepsSheets, summarySheets, userDetailSheets } from './report-sheets.js';
+import { backlogSheets, commentText, categoriesSheets, distributionSheets, incidentsSheets, rankingSheets, responsiblesSheets, rowCount, stepsSheets, summarySheets, userDetailSheets } from './report-sheets.js';
 
 const ranking = { rank: 1, userId: 'u', name: 'Ana', delivered: 5, onTime: 5, late: 1, errors: 1, compliance: 5 / 6, quality: 0.8, score: 66.7, medianMin: 120 };
 
@@ -28,5 +28,10 @@ describe('report sheets', () => {
   it('shows the compliance and the quality of the ranking as percentages', () => {
     const [ranked] = rankingSheets({ minVolume: 1, ranked: [ranking], unranked: [] });
     expect(ranked!.rows[0]).toEqual([1, 'Ana', 5, 5, 1, 1, 83.3, 80, 66.7, 120]);
+  });
+
+  it('turns a comment into the plain text of a cell: paragraphs and breaks kept, tags and entities gone', () => {
+    expect(commentText('<p>Hola <strong>Ana</strong></p><p>Va el soporte&nbsp;&amp; la factura<br>Gracias</p>')).toBe('Hola Ana\nVa el soporte & la factura\nGracias');
+    expect(commentText('<p></p><p></p><p></p><p>x</p>')).toBe('x');
   });
 });

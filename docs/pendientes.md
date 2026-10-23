@@ -22,6 +22,16 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Diseñador de formatos:** la mesa ya tiene el lienzo libre (v2): elementos con posición, hojas con condición, cálculos, estilos completos, imagen subida, rectángulo, línea vertical, firmas con más opciones y datos del solicitante. ~~El motor del lienzo (esquema, cálculos, condiciones, maquetado y dibujo)~~ y su editor en la web (hecho, arquitectura §15); ~~imágenes subidas al formato y subir el logo de la organización~~ (hecho, arquitectura §15); ~~firmas filtradas por cargo~~ (hecho, arquitectura §15; sin «jefe inmediato», que la membresía no tiene).
   - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
   - **Fuera del alcance:** ventas, listas de precios y la parte propia de viáticos.
+- **Segundo inventario de paridad (2026-10-22, rutas del API, pantallas y manual de la mesa):** lo que falta.
+  - ~~**Reportes:**~~ la web no tenía ninguna pantalla (el menú «Reportes» no lleva a nada). El API tiene 9 reportes; faltan el análisis por sede (regional), el mapa de calor, las listas de tickets detrás de cada número, los tickets abiertos de un paso y los Excel de tickets, comentarios, uso de flujos y el completo (~~el API y la web~~ hechos, arquitectura §16).
+  - **Ticket:** el estado de las firmas paralelas (quién firmó y quién falta) no se muestra; los archivos de apoyo del paso se configuran en el flujo pero nunca se ofrecen en el ticket; el documento no dice «se está generando» ni muestra su error, y no se puede regenerar; no hay un PDF con todos los documentos.
+  - **Formularios:** columnas de tabla de tipo archivo y de tipo fórmula; fuente «fecha actual»; texto con formato en comentarios y descripción.
+  - **Bandeja:** búsqueda en los mensajes; atajo a las subcategorías donde ya participé.
+  - **Procesar en lote:** la configuración de la bandeja por paso (título, agrupar por un dato de la persona o por corte de plano, nombre y montos que se muestran) y «Procesar sus tickets» desde un archivo del plano.
+  - **Flujos:** el probador de «quién puede crear» (persona + empresa → ✔/✘ con cada regla).
+  - **Formatos PDF:** plantillas de inicio (arqueo F23), duplicar un formato, copiar y pegar elementos; la casilla de firma «aprobador del solicitante» (el jefe inmediato de la mesa).
+  - **Personas:** que el administrador cargue la firma de otra persona.
+  - **Consola de la plataforma en la web** (mantenimiento y notas de cambios de la mesa están en los avisos de la plataforma, que hoy solo tienen API).
 - **Acceso a la cuenta en la web (2026-10-21, `feat/web-account-access`):** recuperar contraseña, aceptar invitaciones, cambiar de organización y enlaces de correo con `?tenant=`. Detalle en arquitectura.md §4.21.
   - **API nueva:** `GET /auth/me/organizations`.
   - **Decidido (con criterio, el usuario delegó):** la invitación se acepta primero sin contraseña y solo se pide si el API la exige; después de aceptar se inicia sesión (el API no abre la sesión al aceptar).
