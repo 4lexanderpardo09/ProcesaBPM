@@ -359,6 +359,37 @@ describe('TicketDetailPage', () => {
     expect(screen.queryByText('Documentos del flujo')).not.toBeInTheDocument();
   });
 
+  it('downloads every PDF and image of the ticket in one PDF, and says when they weigh too much', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:combined');
+    URL.revokeObjectURL = vi.fn();
+    const second = { ...documents[0]!, id: id(402), file: { ...documents[0]!.file, id: id(104), name: 'orden.pdf' } };
+    let tooLarge = false;
+    const { fake } = renderRoute(base, {
+      handlers: ticketHandlers({
+        [`${base}/documents`]: () => [...documents, second],
+        [`${base}/documents/combined`]: () => {
+          if (tooLarge) throw new ApiError({ status: 422, code: 'DOCUMENTS_TOO_LARGE', message: 'Too large' });
+          return new Blob(['%PDF-1.7'], { type: 'application/pdf' });
+        },
+      }),
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Todo en un PDF' }));
+    await vi.waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+    expect(fake.callsTo(`${base}/documents/combined`)[0]?.options.responseType).toBe('blob');
+
+    tooLarge = true;
+    await userEvent.click(screen.getByRole('button', { name: 'Todo en un PDF' }));
+    expect(await screen.findByText('Los archivos pesan demasiado para unirlos: descárgalos uno por uno.')).toBeInTheDocument();
+  });
+
+  it('offers no combined PDF when there is only one file to put in it', async () => {
+    renderRoute(base, { handlers: ticketHandlers() });
+
+    expect(await screen.findByText('comprobante-pago.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Todo en un PDF' })).toBeNull();
+  });
+
   it('says when the download link could not be had', async () => {
     renderRoute(base, { handlers: ticketHandlers({ [`${base}/files/${FILE}/download-url`]: forbidden }) });
 

@@ -4,6 +4,7 @@ import { TenantContext } from '../../../infrastructure/database/tenant-context.j
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { AuditTrail } from '../../audit/application/audit-trail.js';
+import { combinePdf } from '../../../infrastructure/pdf/pdf-combiner.js';
 import { TicketFileService } from '../../files/application/ticket-file.service.js';
 import { TicketQueryRepository } from '../data/ticket-query.repository.js';
 import { readableTickets } from './ticket-access.js';
@@ -38,6 +39,22 @@ export class TicketDocumentsService {
       await this.audit.record(tx, { action: 'file.download_url_issued', subjectType: 'StoredFile', subjectId: fileId, after: { ticketId, fileName: file.originalName } });
       return file;
     }).then((file) => this.files.signDownload(file));
+  }
+
+  /**
+   * Every PDF and image of the ticket in one PDF, to print or send at once: the workflow's documents first, then the
+   * attachments. Other kinds of files (spreadsheets, archives) are not part of it; a file that cannot be read is left out.
+   */
+  async combined(ability: AppAbility, ticketId: string): Promise<{ bytes: Uint8Array; fileName: string; skipped: string[] }> {
+    const { files, number } = await this.readable(ability, ticketId, async (tx, tenantId) => {
+      const found = await this.files.combinable(tx, tenantId, ticketId);
+      const ticketNumber = await this.tickets.numberOf(tx, tenantId, ticketId);
+      await this.audit.record(tx, { action: 'ticket.documents_combined', subjectType: 'Ticket', subjectId: ticketId, after: { files: found.length } });
+      return { files: found, number: ticketNumber };
+    });
+    const contents = await this.files.read(files);
+    const { bytes, skipped } = await combinePdf(files.map((file, index) => ({ name: file.name, mimeType: file.mimeType, bytes: contents[index]! })), `Ticket ${number}`);
+    return { bytes, fileName: `ticket-${number}-documentos.pdf`, skipped };
   }
 
   private readable<T>(ability: AppAbility, ticketId: string, work: (tx: TenantTransaction, tenantId: string) => Promise<T>): Promise<T> {
