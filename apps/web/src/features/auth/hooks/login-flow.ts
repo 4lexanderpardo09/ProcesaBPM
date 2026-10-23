@@ -82,6 +82,9 @@ export function loginFlowReducer(state: LoginFlowState, event: LoginFlowEvent): 
   }
 }
 
+/** What `openingTenantId` holds while the platform console (not an organization) opens. */
+export const PLATFORM_CHOICE = 'platform';
+
 /** An active membership without a maintenance block can be entered. */
 export function isSelectable(organization: Organization): boolean {
   return organization.membershipStatus === 'ACTIVE' && organization.maintenance === null;

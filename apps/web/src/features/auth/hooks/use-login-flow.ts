@@ -1,9 +1,12 @@
 import type { LoginRequest, MfaCode, MfaFactor, SelectOrganizationResponse } from '@procesabpm/shared';
 import { useEffect, useReducer, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { usePlatformSession } from '@/features/platform';
+import { paths } from '@/shared/lib/paths';
 import { useSessionManager } from '@/shared/session';
 import { beginMfaEnrollment, confirmMfaEnrollment, logIn, selectTenant, verifyMfa } from '../api/login-api';
 import { type AuthErrorContext, authErrorMessage, isExpiredStep, isOrganizationRefusal } from '../lib/auth-error-message';
-import { autoSelectable, expiryOf, initialLoginFlow, type LoginFlowEvent, type LoginFlowState, type LoginNotice, loginFlowReducer } from './login-flow';
+import { autoSelectable, expiryOf, initialLoginFlow, PLATFORM_CHOICE, type LoginFlowEvent, type LoginFlowState, type LoginNotice, loginFlowReducer } from './login-flow';
 
 export interface StepFailure {
   readonly error: unknown;
@@ -21,6 +24,8 @@ type OfferedOrganizations = SelectOrganizationResponse & { readonly backupCodesL
  */
 export function useLoginFlow(notice: LoginNotice | undefined) {
   const manager = useSessionManager();
+  const platform = usePlatformSession();
+  const navigate = useNavigate();
   const transport = manager.publicClient;
   const [state, dispatch] = useReducer(loginFlowReducer, notice, initialLoginFlow);
   const [failure, setFailure] = useState<StepFailure>();
@@ -122,6 +127,25 @@ export function useLoginFlow(notice: LoginNotice | undefined) {
     if (only !== undefined) void open(state.next.selectionToken, only.tenantId);
   }
 
+  /** A platform administrator opens the console with the same selection token, instead of an organization. */
+  async function openPlatform() {
+    if (state.step !== 'organization' || state.openingTenantId !== undefined || !state.choice.platformAdmin) return;
+    const { selectionToken } = state.choice;
+    setFailure(undefined);
+    dispatch({ type: 'ORGANIZATION_OPENING', tenantId: PLATFORM_CHOICE });
+    const outcome = await call(() => platform.open(selectionToken));
+    if (outcome === undefined) return;
+    if (outcome.ok) {
+      void navigate(paths.platform, { replace: true });
+      return;
+    }
+    if (isExpiredStep(outcome.error)) startOver({ type: 'EXPIRED', notice: 'selectionExpired' });
+    else {
+      dispatch({ type: 'ORGANIZATION_FAILED' });
+      setFailure({ error: outcome.error, context: 'selection', step: 'organization' });
+    }
+  }
+
   function chooseOrganization(tenantId: string) {
     if (state.step === 'organization' && state.openingTenantId === undefined) void open(state.choice.selectionToken, tenantId);
   }
@@ -136,6 +160,7 @@ export function useLoginFlow(notice: LoginNotice | undefined) {
     submitEnrollmentCode,
     saveBackupCodes,
     chooseOrganization,
+    openPlatform: () => void openPlatform(),
     restart: () => startOver({ type: 'RESTARTED' }),
   };
 }

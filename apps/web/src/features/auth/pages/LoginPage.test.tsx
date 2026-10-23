@@ -144,11 +144,24 @@ describe('LoginPage', () => {
     await screen.findByRole('heading', { level: 1, name: 'Hola, Ana' });
   });
 
-  it('tells a platform admin the console is not in the web yet, without entering by itself', async () => {
-    renderLogin({ '/auth/login': () => selection([organization(ACME, 'Acme')], { platformAdmin: true }) });
+  it('lets a platform admin enter the console with the selection token, without entering an organization by itself', async () => {
+    const tenant = { tenantId: ACME, slug: 'acme', name: 'Acme', status: 'ACTIVE', planCode: 'pro', countryCode: 'CO', createdAt: '2026-10-01T15:00:00.000Z' };
+    const { fake, router } = renderLogin({
+      '/auth/login': () => selection([organization(ACME, 'Acme')], { platformAdmin: true }),
+      '/auth/platform/select': () => ({ accessToken: 'platform-token', tokenType: 'Bearer', expiresIn: 900 }),
+      '/platform/tenants': () => ({ items: [tenant], page: 1, pageSize: 25, total: 1 }),
+      '/platform/plans': () => [{ code: 'pro', name: 'Pro', storageBaseBytes: '1', storagePerUserBytes: '1', storageGracePercent: 10, maxUsers: null, isActive: true, tenants: 1 }],
+    });
     await signIn();
-    expect(await screen.findByText('La consola de plataforma todavía no está disponible en la web.')).toBeInTheDocument();
+    expect(await screen.findByText('Administras la plataforma: entra a su consola o a una de tus organizaciones.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Acme/ })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Entrar a la consola de plataforma' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Organizaciones' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/platform');
+    expect(fake.callsTo('/auth/platform/select')[0]?.options.headers).toMatchObject({ Authorization: 'Bearer selection-token' });
+    expect(fake.callsTo('/platform/tenants')[0]?.options.headers).toMatchObject({ Authorization: 'Bearer platform-token' });
+    expect(await screen.findByRole('cell', { name: 'Pro' })).toBeInTheDocument();
   });
 
   it('explains an account without organizations', async () => {

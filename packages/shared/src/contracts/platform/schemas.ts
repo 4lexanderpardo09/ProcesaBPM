@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { emailSchema, isoDateSchema } from '../common.js';
-import type { DataExportStatus } from '../data-exports/schemas.js';
+import { DATA_EXPORT_STATUSES, type DataExportStatus } from '../data-exports/schemas.js';
 import { uuidSchema } from '../ids.js';
 
 /** Same pattern as the CHECK constraint `tenants_slug_format` of the database. */
@@ -53,7 +53,8 @@ export const platformAdminSummarySchema = z.object({
 });
 export type PlatformAdminSummary = z.infer<typeof platformAdminSummarySchema>;
 
-const tenantStatusSchema = z.enum(['ACTIVE', 'SUSPENDED', 'CANCELLED', 'DELETED', 'PENDING_DELETION', 'PURGED']);
+export const TENANT_STATUSES = ['ACTIVE', 'SUSPENDED', 'CANCELLED', 'DELETED', 'PENDING_DELETION', 'PURGED'] as const;
+const tenantStatusSchema = z.enum(TENANT_STATUSES);
 const reasonSchema = z.string().trim().min(3).max(500);
 /** Byte counts travel as decimal strings: they can exceed what a JSON number holds exactly. */
 const bytesSchema = z.string().regex(/^\d{1,18}$/, 'Use a whole number of bytes');
@@ -100,6 +101,38 @@ export interface TenantDetail extends TenantListItem {
   readonly dataExport: { readonly status: DataExportStatus; readonly errorCode: string | null } | null;
 }
 
+/** Parses `TenantListItem` (for the web console). */
+export const tenantListItemSchema = z.object({
+  tenantId: uuidSchema,
+  slug: z.string(),
+  name: z.string(),
+  status: tenantStatusSchema,
+  planCode: z.string(),
+  countryCode: z.string(),
+  createdAt: z.string(),
+}) satisfies z.ZodType<TenantListItem>;
+
+/** Parses `TenantDetail` (for the web console). */
+export const tenantDetailSchema = tenantListItemSchema.extend({
+  plan: z.object({ code: z.string(), name: z.string() }),
+  owner: z.object({ email: z.string(), firstName: z.string(), lastName: z.string(), membershipStatus: z.string() }).nullable(),
+  companies: z.number(),
+  activeUsers: z.number(),
+  storage: z.object({
+    usedBytes: z.string(),
+    reservedBytes: z.string(),
+    extraBytes: z.string(),
+    limitBytes: z.string(),
+    hardLimitBytes: z.string(),
+    state: z.enum(['OK', 'OVER_LIMIT', 'BLOCKED']),
+  }),
+  ticketsLast30Days: z.number(),
+  lastActivityAt: z.string().nullable(),
+  suspension: z.object({ reason: z.string(), at: z.string() }).nullable(),
+  deletion: z.object({ requestedAt: z.string(), purgeAfter: z.string().nullable(), purgedAt: z.string().nullable() }).nullable(),
+  dataExport: z.object({ status: z.enum(DATA_EXPORT_STATUSES), errorCode: z.string().nullable() }).nullable(),
+}) satisfies z.ZodType<TenantDetail>;
+
 export const changeTenantPlanRequestSchema = z.object({ planCode: z.string().trim().min(1).max(64) });
 export type ChangeTenantPlanRequest = z.infer<typeof changeTenantPlanRequestSchema>;
 
@@ -122,6 +155,18 @@ export interface PlanSummary {
   readonly isActive: boolean;
   readonly tenants: number;
 }
+
+/** Parses `PlanSummary` (for the web console). */
+export const planSummarySchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  storageBaseBytes: z.string(),
+  storagePerUserBytes: z.string(),
+  storageGracePercent: z.number(),
+  maxUsers: z.number().nullable(),
+  isActive: z.boolean(),
+  tenants: z.number(),
+}) satisfies z.ZodType<PlanSummary>;
 
 /** Limits only: prices live outside the platform. `maxUsers: null` removes the cap. */
 export const updatePlanRequestSchema = z
@@ -179,6 +224,19 @@ export interface PlatformAnnouncementResponse extends AnnouncementResponse {
   readonly tenantIds: readonly string[];
 }
 
+/** Parses `PlatformAnnouncementResponse` (for the web console). */
+export const platformAnnouncementResponseSchema = z.object({
+  id: uuidSchema,
+  type: z.enum(['MAINTENANCE', 'RELEASE_NOTES', 'INFO']),
+  title: z.string(),
+  body: z.string(),
+  startsAt: z.string(),
+  endsAt: z.string().nullable(),
+  blocksLogin: z.boolean(),
+  audience: announcementAudienceSchema,
+  tenantIds: z.array(z.string()),
+}) satisfies z.ZodType<PlatformAnnouncementResponse>;
+
 export const createCountryRequestSchema = z.object({
   code: z.string().regex(/^[A-Z]{2}$/, 'Use the two-letter country code in capitals'),
   name: z.string().trim().min(1).max(100),
@@ -196,6 +254,16 @@ export interface CountrySummary {
   /** Whether the platform ships a rule-based holiday calendar for the country (so a year can be regenerated). */
   readonly hasHolidayGenerator: boolean;
 }
+
+/** Parses `CountrySummary` (for the web console). */
+export const countrySummarySchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  currencyCode: z.string(),
+  timeZone: z.string(),
+  tenants: z.number(),
+  hasHolidayGenerator: z.boolean(),
+}) satisfies z.ZodType<CountrySummary>;
 
 export const countryHolidaysQuerySchema = z.object({ year: z.coerce.number().int().min(2000).max(2100) });
 export type CountryHolidaysQuery = z.infer<typeof countryHolidaysQuerySchema>;

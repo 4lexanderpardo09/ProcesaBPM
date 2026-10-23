@@ -1,0 +1,53 @@
+.shell {
+  min-height: 100vh;
+  background: var(--canvas, var(--surface-2));
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.nav {
+  display: flex;
+  flex: 1;
+  gap: var(--space-3);
+}
+
+.link,
+.active {
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  color: var(--slate);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.active {
+  background: var(--accent-50);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-5);
+}
+
+@media (max-width: 640px) {
+  .top,
+  .main {
+    padding: var(--space-3) var(--space-4);
+  }
+}

@@ -27,10 +27,18 @@ export const paths = {
   profile: '/profile',
   notifications: '/notifications',
   settings: '/settings',
+  platform: '/platform',
+  platformTenant: '/platform/tenants/:tenantId',
+  platformAnnouncements: '/platform/announcements',
 } as const;
 
 export function ticketPath(ticketId: string): string {
   return `${paths.tickets}/${encodeURIComponent(ticketId)}`;
+}
+
+/** An organization in the platform console. */
+export function platformTenantPath(tenantId: string): string {
+  return `${paths.platform}/tenants/${encodeURIComponent(tenantId)}`;
 }
 
 /** "Procesar en lote" with only the tickets that went out in one export file. */
