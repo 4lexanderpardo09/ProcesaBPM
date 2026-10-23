@@ -25,3 +25,32 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Open: Story = {};
+
+/** Room for a table: the rows of a TABLE field on the ticket. */
+export const Wide: Story = {
+  args: {
+    size: 'wide',
+    title: 'Gastos',
+    footer: <Button>Cerrar</Button>,
+    children: (
+      <table>
+        <thead>
+          <tr>
+            <th>Gasto</th>
+            <th>Valor</th>
+            <th>Fecha</th>
+            <th>Soporte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Taxi</td>
+            <td>25.000,00</td>
+            <td>1 de oct de 2026</td>
+            <td>taxi.pdf</td>
+          </tr>
+        </tbody>
+      </table>
+    ),
+  },
+};

@@ -296,6 +296,10 @@ export const tickets = {
       rows_one: '{{count}} fila',
       rows_other: '{{count}} filas',
       unknown: 'Desconocido',
+      showRows: 'Ver las filas de «{{field}}»',
+      total: 'Total',
+      close: 'Cerrar',
+      fileGone: 'Archivo no disponible',
     },
     attachments: {
       title: 'Adjuntos',

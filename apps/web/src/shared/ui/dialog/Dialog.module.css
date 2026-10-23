@@ -8,6 +8,10 @@
   box-shadow: var(--shadow-lg);
 }
 
+.wide {
+  width: min(880px, calc(100vw - 2 * var(--space-4)));
+}
+
 .dialog::backdrop {
   background: rgb(15 23 42 / 0.32);
 }

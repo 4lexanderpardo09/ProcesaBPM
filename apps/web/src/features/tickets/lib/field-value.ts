@@ -108,3 +108,43 @@ function formulaText(field: ReadField, value: unknown, timeZone: string | undefi
       return text(String(value));
   }
 }
+
+/** A TABLE column as the ticket reads it (`config.columns`). */
+export interface ReadColumn {
+  readonly code: string;
+  readonly label: string;
+  readonly type: string;
+  readonly options?: readonly Option[];
+  readonly decimals?: number;
+}
+
+/** The columns of a TABLE field. */
+export function readColumnsOf(field: ReadField): readonly ReadColumn[] {
+  const columns = field.config['columns'];
+  return Array.isArray(columns) ? (columns as readonly ReadColumn[]) : [];
+}
+
+/**
+ * A cell of a TABLE as text, formatted like a field of its type: numbers and amounts with their decimals, dates as
+ * dates, a list option by its label. A file cell is shown by the caller (its names come from the ticket's files);
+ * here it is `undefined`, as is an empty cell.
+ */
+export function tableCellText(column: ReadColumn, value: unknown, timeZone?: string): string | undefined {
+  if (isEmpty(value) || column.type === 'FILE') return undefined;
+  switch (column.type) {
+    case 'NUMBER':
+      return displayText(numberText(value, { maximumFractionDigits: column.decimals ?? 6 }));
+    case 'CURRENCY':
+      return displayText(currencyText(value, undefined));
+    case 'FORMULA':
+      return displayText(numberText(value, { maximumFractionDigits: column.decimals ?? 6 }));
+    case 'DATE':
+      return dateText(String(value), timeZone);
+    case 'SELECT':
+      return column.options?.find((option) => option.value === String(value))?.label ?? String(value);
+    default:
+      return String(value);
+  }
+}
+
+const displayText = (display: FieldValueDisplay): string => (display.kind === 'text' ? display.text : '');
