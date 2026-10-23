@@ -369,6 +369,17 @@ export interface PlatformUserResponse {
   readonly memberships: readonly PlatformUserMembership[];
 }
 
+/** Parses `PlatformUserResponse` (for the web console). */
+export const platformUserResponseSchema = z.object({
+  id: uuidSchema,
+  firstName: z.string(),
+  lastName: z.string(),
+  status: z.enum(['ACTIVE', 'LOCKED', 'DISABLED']),
+  mfaEnabled: z.boolean(),
+  isPlatformAdmin: z.boolean(),
+  memberships: z.array(z.object({ tenantId: z.string(), tenantName: z.string(), status: z.enum(['INVITED', 'ACTIVE', 'INACTIVE']), isOwner: z.boolean() })),
+}) satisfies z.ZodType<PlatformUserResponse>;
+
 /** How support verified who asked for the reset (recorded, not automated). */
 export const MFA_RESET_VERIFICATION_METHODS = ['VIDEO_CALL', 'CALLBACK_KNOWN_NUMBER', 'TENANT_ADMIN_REQUEST', 'IN_PERSON'] as const;
 export type MfaResetVerificationMethod = (typeof MFA_RESET_VERIFICATION_METHODS)[number];
@@ -408,3 +419,6 @@ export interface MfaResetResponse {
   readonly resetAt: string;
   readonly revokedSessions: number;
 }
+
+/** Parses `MfaResetResponse` (for the web console). */
+export const mfaResetResponseSchema = z.object({ resetAt: z.string(), revokedSessions: z.number() }) satisfies z.ZodType<MfaResetResponse>;

@@ -3,22 +3,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
-import { formatFileSize } from '@/shared/lib/format-file-size';
 import { formatDateTime, formatShortDate } from '@/shared/lib/format-date-time';
 import { paths } from '@/shared/lib/paths';
 import { Alert, Breadcrumb, Button, Card, Dialog, PageHeader, Select, TextArea } from '@/shared/ui';
 import { changeTenantPlan, plansQueryOptions, platformQueryKeys, reactivateTenant, suspendTenant, tenantQueryOptions } from '../api/platform-api';
 import { PlatformError } from '../components/PlatformError';
+import { formatStorage } from '../lib/storage-units';
 import { TenantStatusBadge } from '../components/TenantStatusBadge';
 import { usePlatformClient } from '../session/PlatformSessionContext';
 import styles from './Platform.module.css';
 
-const GIGABYTE = 1024 ** 3;
-/** Storage reads in GB from one up (the plans count in gigabytes); below, as a file size. */
-const bytes = (text: string) => {
-  const value = Number(text);
-  return value >= GIGABYTE ? new Intl.NumberFormat('es-CO', { style: 'unit', unit: 'gigabyte', unitDisplay: 'short', maximumFractionDigits: 1 }).format(value / GIGABYTE) : formatFileSize(value);
-};
+const bytes = (text: string) => formatStorage(text);
 
 /** One organization: what it uses (aggregates only), its state and what the platform can do with it. */
 export function TenantPage() {

@@ -21,6 +21,7 @@
 .nav {
   display: flex;
   flex: 1;
+  flex-wrap: wrap;
   gap: var(--space-3);
 }
 
