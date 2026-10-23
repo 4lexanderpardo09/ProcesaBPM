@@ -17,7 +17,7 @@ import { SystemFileService } from '../../files/application/system-file.service.j
 import { TicketDocumentRepository } from '../../files/data/ticket-document.repository.js';
 import { DocumentSourceRepository } from '../data/document-source.repository.js';
 import { deriveGeneratedFileId } from '../domain/derive-file-id.js';
-import { planRender, type RenderPlan } from '../domain/render-plan.js';
+import { approverAsksOf, planRender, type RenderPlan } from '../domain/render-plan.js';
 import { type DocumentGeneratePayload, DOCUMENT_GENERATE_EVENT, documentGeneratePayloadSchema } from './document-generate.payload.js';
 import { PdfImageRepository } from '../data/pdf-image.repository.js';
 import { uploadedImageIds, uploadedImageKey } from '../domain/canvas-resolver.js';
@@ -82,7 +82,7 @@ export class DocumentGenerationHandler implements ExternalEffectHandler<Document
     if (await this.ticketDocuments.existsForFile(tx, tenantId, fileId)) return null;
 
     const source = await this.sources.findWorkflowDocument(tx, tenantId, payload.workflowDocumentId);
-    const loaded = await this.factsLoader.load(tx, tenantId, payload.ticketId, this.clock.now());
+    const loaded = await this.factsLoader.load(tx, tenantId, payload.ticketId, this.clock.now(), source === null ? [] : approverAsksOf(source));
     if (source === null || loaded === null) return this.skip(event, 'the document or the ticket no longer exists');
     if (!isUsable(source, loaded.workflowId, loaded.companyId)) return this.skip(event, 'the document is switched off or does not apply to this ticket');
     const plan = planOrFail(source, loaded.facts);

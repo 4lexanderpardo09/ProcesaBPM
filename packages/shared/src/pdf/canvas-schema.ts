@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FORMULA_LIMITS } from '../engine/formulas/types.js';
 import { FIELD_CODE_PATTERN } from '../workflow/constants.js';
 import { expressionSchema, type PdfDesign, pdfDesignSchema } from './design-schema.js';
+import { MAX_APPROVAL_LEVEL } from '../contracts/approvals/types.js';
 import { uuidSchema } from '../contracts/ids.js';
 import { PDF_LIMITS } from './limits.js';
 
@@ -140,7 +141,9 @@ const rectangleElement = z.object({ ...base, type: z.literal('rectangle') }).str
  * A signature box. `STEP`: who signed that step, the last one, all of them side by side, or the n-th (1 is the first);
  * `REQUESTER`: the requester's name; `BLANK`: an empty box to sign on paper. `positionIds` keeps, of the step's
  * signatures, those of people with one of these positions (none: anybody's): in a step many sign, it puts each area in
- * its own box ("Cartera", "Sistemas"), whatever the order they signed in. `signers` then picks among those.
+ * its own box ("Cartera", "Sistemas"), whatever the order they signed in. `approverOf` keeps only the signature of the
+ * requester's approver of that type and level (the help desk's "jefe inmediato"), or of their delegate. `signers` then
+ * picks among those.
  */
 const signatureElement = z
   .object({
@@ -151,6 +154,7 @@ const signatureElement = z
     signers: z.enum(['LAST', 'ALL', 'POSITION']),
     position: z.number().int().min(1).max(50),
     positionIds: z.array(uuidSchema).max(20).optional(),
+    approverOf: z.object({ typeId: uuidSchema, level: z.number().int().min(1).max(MAX_APPROVAL_LEVEL) }).strict().optional(),
     label: z.string().max(100),
     showName: z.boolean(),
     showDate: z.boolean(),
