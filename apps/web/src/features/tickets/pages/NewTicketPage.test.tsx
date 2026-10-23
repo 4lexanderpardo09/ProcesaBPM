@@ -36,6 +36,7 @@ const catalog = {
     },
   ],
   companies: [{ id: MAIN, name: 'Electrocréditos' }],
+  recent: [] as string[],
 };
 
 const priorities = {
@@ -100,6 +101,19 @@ describe('NewTicketPage', () => {
     expect(screen.queryByRole('combobox', { name: 'Empresa' })).toBeNull();
     const group = await screen.findByRole('group', { name: 'Prioridad de la solicitud' });
     expect(within(group).getAllByRole('radio').map((radio) => radio.closest('label')?.textContent)).toEqual(['Alta', 'Media']);
+  });
+
+  it('picks a recently used request with one click', async () => {
+    renderRoute('/tickets/new', { handlers: handlers({ '/catalog/available': () => ({ ...catalog, recent: [PAGOS, id(999)] }) }) });
+
+    const shortcuts = await screen.findByRole('group', { name: 'Usadas hace poco' });
+    // A subcategory the catalog no longer offers is not a shortcut.
+    expect(within(shortcuts).getAllByRole('button')).toHaveLength(1);
+    await userEvent.click(within(shortcuts).getByRole('button', { name: 'Cartera › Confirmación de pago' }));
+
+    expect(screen.getByRole('combobox', { name: /Subcategoría/ })).toHaveValue(PAGOS);
+    expect(await screen.findByRole('textbox', { name: /Asunto/ })).toBeInTheDocument();
+    expect(within(shortcuts).getByRole('button', { name: 'Cartera › Confirmación de pago' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('creates the ticket with the subject, the start fields, the default priority and the description, and opens it', async () => {

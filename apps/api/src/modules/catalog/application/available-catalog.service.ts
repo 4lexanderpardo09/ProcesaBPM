@@ -6,6 +6,10 @@ import { CreationGate } from '../../engine/application/creation-gate.js';
 import { PublishedVersionReader } from '../../workflows/application/published-version-reader.js';
 import { CategoryRepository } from '../data/category.repository.js';
 import { MembershipCompaniesRepository } from '../data/membership-companies.repository.js';
+import { RecentSubcategoriesRepository } from '../data/recent-subcategories.repository.js';
+
+/** How many recent subcategories the shortcut offers. */
+const RECENT_LIMIT = 5;
 
 export interface CatalogViewer {
   readonly userId: string;
@@ -28,6 +32,7 @@ export class AvailableCatalogService {
     @Inject(MembershipCompaniesRepository) private readonly memberships: MembershipCompaniesRepository,
     @Inject(PublishedVersionReader) private readonly versions: PublishedVersionReader,
     @Inject(CreationGate) private readonly gate: CreationGate,
+    @Inject(RecentSubcategoriesRepository) private readonly recent: RecentSubcategoriesRepository,
   ) {}
 
   /**
@@ -44,7 +49,11 @@ export class AvailableCatalogService {
       }
       const companyIds = companyId === undefined ? ownCompanyIds : [companyId];
       const visible = await this.categories.findVisible(tx, tenantId, { companyIds, departmentId: viewer.departmentId });
-      return { categories: await this.startable(tx, tenantId, viewer.userId, companyIds, visible), companies: await this.memberships.activeCompaniesOf(tx, tenantId, viewer.userId) };
+      const categories = await this.startable(tx, tenantId, viewer.userId, companyIds, visible);
+      // Only what can still be picked: a subcategory switched off or no longer shown to them drops out of the shortcut.
+      const offered = new Set(categories.flatMap((category) => category.subcategories.map((subcategory) => subcategory.id)));
+      const recent = (await this.recent.of(tx, tenantId, viewer.userId)).filter((id) => offered.has(id)).slice(0, RECENT_LIMIT);
+      return { categories, companies: await this.memberships.activeCompaniesOf(tx, tenantId, viewer.userId), recent };
     });
   }
 
