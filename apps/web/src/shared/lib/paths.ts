@@ -33,6 +33,9 @@ export const paths = {
   platformPlans: '/platform/plans',
   platformAdmins: '/platform/admins',
   platformAccounts: '/platform/accounts',
+  platformCountries: '/platform/countries',
+  platformOperations: '/platform/operations',
+  platformAudit: '/platform/audit',
 } as const;
 
 export function ticketPath(ticketId: string): string {

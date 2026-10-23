@@ -279,10 +279,16 @@ export interface CountryHolidayResponse {
   readonly name: string;
 }
 
+/** Parses `CountryHolidayResponse` (for the web console). */
+export const countryHolidayResponseSchema = z.object({ date: z.string(), name: z.string() }) satisfies z.ZodType<CountryHolidayResponse>;
+
 export interface RegeneratedHolidays {
   readonly year: number;
   readonly holidays: readonly CountryHolidayResponse[];
 }
+
+/** Parses `RegeneratedHolidays` (for the web console). */
+export const regeneratedHolidaysSchema = z.object({ year: z.number(), holidays: z.array(z.object({ date: z.string(), name: z.string() })) }) satisfies z.ZodType<RegeneratedHolidays>;
 
 export const listFailedEventsQuerySchema = z.object({
   scope: z.enum(['PLATFORM', 'TENANT']),
@@ -302,12 +308,31 @@ export interface FailedOutboxEvent {
   readonly createdAt: string;
 }
 
+/** Parses `FailedOutboxEvent` (for the web console). */
+export const failedOutboxEventSchema = z.object({
+  scope: z.enum(['PLATFORM', 'TENANT']),
+  tenantId: z.string().nullable(),
+  id: uuidSchema,
+  type: z.string(),
+  attempts: z.number(),
+  lastError: z.string().nullable(),
+  createdAt: z.string(),
+}) satisfies z.ZodType<FailedOutboxEvent>;
+
 export interface PlatformMetrics {
   readonly tenantsByStatus: Readonly<Record<string, number>>;
   readonly users: { readonly total: number; readonly withActiveMembership: number };
   readonly storageUsedBytes: string;
   readonly ticketsPerDay: ReadonlyArray<{ readonly date: string; readonly count: number }>;
 }
+
+/** Parses `PlatformMetrics` (for the web console). */
+export const platformMetricsSchema = z.object({
+  tenantsByStatus: z.record(z.string(), z.number()),
+  users: z.object({ total: z.number(), withActiveMembership: z.number() }),
+  storageUsedBytes: z.string(),
+  ticketsPerDay: z.array(z.object({ date: z.string(), count: z.number() })),
+}) satisfies z.ZodType<PlatformMetrics>;
 
 export const listPlatformAuditQuerySchema = z
   .object({
@@ -333,6 +358,17 @@ export interface PlatformAuditEntryResponse {
   readonly createdAt: string;
 }
 
+/** Parses `PlatformAuditEntryResponse` (for the web console). */
+export const platformAuditEntrySchema = z.object({
+  id: z.string(),
+  actorUserId: z.string().nullable(),
+  action: z.string(),
+  targetTenantId: z.string().nullable(),
+  data: z.unknown(),
+  ipAddress: z.string().nullable(),
+  createdAt: z.string(),
+}) satisfies z.ZodType<PlatformAuditEntryResponse>;
+
 export const requestTenantDeletionSchema = z.object({
   /** The name of the organization, typed again: deleting is not something to do by accident. */
   confirmName: z.string().trim().min(1).max(200),
@@ -346,6 +382,9 @@ export interface TenantDeletionResponse {
   /** When the purge becomes possible; empty after the deletion was cancelled. */
   readonly purgeAfter: string | null;
 }
+
+/** Parses `TenantDeletionResponse` (for the web console). */
+export const tenantDeletionResponseSchema = z.object({ tenantId: uuidSchema, status: z.enum(['PENDING_DELETION', 'SUSPENDED']), purgeAfter: z.string().nullable() }) satisfies z.ZodType<TenantDeletionResponse>;
 
 /** Exact e-mail only: no search and no prefix, so the lookup cannot be used to list accounts. */
 export const platformUserLookupQuerySchema = z.object({ email: emailSchema }).strict();

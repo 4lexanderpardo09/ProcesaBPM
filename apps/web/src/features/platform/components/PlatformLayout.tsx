@@ -13,6 +13,9 @@ const SECTIONS = [
   [paths.platformPlans, 'plans'],
   [paths.platformAdmins, 'admins'],
   [paths.platformAccounts, 'accounts'],
+  [paths.platformCountries, 'countries'],
+  [paths.platformOperations, 'operations'],
+  [paths.platformAudit, 'audit'],
 ] as const;
 
 /**
