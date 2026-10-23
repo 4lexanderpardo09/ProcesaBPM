@@ -16,6 +16,8 @@ export interface RequestTypeCardProps {
   /** `undefined` while the catalog loads. */
   readonly categories: readonly AvailableCategory[] | undefined;
   readonly catalogFailed: boolean;
+  /** Subcategories of the person's latest tickets, the most recent first: one click picks one. */
+  readonly recent?: readonly string[];
   readonly priorities: readonly PriorityResponse[];
   /** The priority shown as chosen: the person's pick, or the subcategory's default. */
   readonly priorityId: string | null;
@@ -24,12 +26,33 @@ export interface RequestTypeCardProps {
 }
 
 /** Step 1: what is being asked for. The subcategory decides the workflow, so choosing another one resets the form below. */
-export function RequestTypeCard({ companies, categories, catalogFailed, priorities, priorityId, value, onChange }: RequestTypeCardProps) {
+export function RequestTypeCard({ companies, categories, catalogFailed, recent = [], priorities, priorityId, value, onChange }: RequestTypeCardProps) {
   const { t } = useTranslation('tickets');
   const subcategories = categories?.find((category) => category.id === value.categoryId)?.subcategories ?? [];
   const catalogStatus = catalogFailed ? t('new.type.catalogFailed') : categories === undefined ? t('new.type.loading') : categories.length === 0 ? t('new.type.noCategories') : undefined;
+  const shortcuts = recent.flatMap((subcategoryId) => {
+    const category = categories?.find((candidate) => candidate.subcategories.some((subcategory) => subcategory.id === subcategoryId));
+    const subcategory = category?.subcategories.find((candidate) => candidate.id === subcategoryId);
+    return category === undefined || subcategory === undefined ? [] : [{ category, subcategory }];
+  });
   return (
     <Card title={<SectionTitle number={1} title={t('new.type.title')} />} actions={<span className={styles.hint}>{t('new.type.hint')}</span>}>
+      {shortcuts.length > 0 && (
+        <div className={styles.recent} role="group" aria-label={t('new.type.recent')}>
+          <span className={styles.recentLabel}>{t('new.type.recent')}</span>
+          {shortcuts.map(({ category, subcategory }) => (
+            <button
+              key={subcategory.id}
+              type="button"
+              className={styles.recentChip}
+              aria-pressed={value.subcategoryId === subcategory.id}
+              onClick={() => onChange({ ...value, categoryId: category.id, subcategoryId: subcategory.id, priorityId: undefined })}
+            >
+              {t('new.type.recentItem', { category: category.name, subcategory: subcategory.name })}
+            </button>
+          ))}
+        </div>
+      )}
       <div className={styles.grid}>
         {companies.length > 1 && (
           <Select
