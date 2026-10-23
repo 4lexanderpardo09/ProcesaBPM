@@ -23,7 +23,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Cubierto con otro nombre:** regionales y zonas (sedes), perfiles (grupos), importaciones de Excel (datos de Excel), organigrama (grupos de aprobación, decidido en el análisis).
   - **Fuera del alcance:** ventas, listas de precios y la parte propia de viáticos.
 - **Segundo inventario de paridad (2026-10-22, rutas del API, pantallas y manual de la mesa):** lo que falta.
-  - **Reportes:** la web no tiene ninguna pantalla (el menú «Reportes» no lleva a nada). El API tiene 9 reportes; faltan el análisis por sede (regional), el mapa de calor, las listas de tickets detrás de cada número, los tickets abiertos de un paso y los Excel de tickets, comentarios, uso de flujos y el completo (~~el API~~ hecho, arquitectura §16; falta la web).
+  - ~~**Reportes:**~~ la web no tenía ninguna pantalla (el menú «Reportes» no lleva a nada). El API tiene 9 reportes; faltan el análisis por sede (regional), el mapa de calor, las listas de tickets detrás de cada número, los tickets abiertos de un paso y los Excel de tickets, comentarios, uso de flujos y el completo (~~el API y la web~~ hechos, arquitectura §16).
   - **Ticket:** el estado de las firmas paralelas (quién firmó y quién falta) no se muestra; los archivos de apoyo del paso se configuran en el flujo pero nunca se ofrecen en el ticket; el documento no dice «se está generando» ni muestra su error, y no se puede regenerar; no hay un PDF con todos los documentos.
   - **Formularios:** columnas de tabla de tipo archivo y de tipo fórmula; fuente «fecha actual»; texto con formato en comentarios y descripción.
   - **Bandeja:** búsqueda en los mensajes; atajo a las subcategorías donde ya participé.

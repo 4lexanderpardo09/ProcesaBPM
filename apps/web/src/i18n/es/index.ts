@@ -8,9 +8,10 @@ import { notifications } from './notifications';
 import { organization } from './organization';
 import { people } from './people';
 import { profile } from './profile';
+import { reports } from './reports';
 import { settings } from './settings';
 import { tickets } from './tickets';
 import { workflowProblems } from './workflow-problems';
 import { workflows } from './workflows';
 
-export const es = { admin, auth, catalog, common, home, navigation, notifications, organization, people, profile, settings, tickets, workflowProblems, workflows } as const;
+export const es = { admin, auth, catalog, common, home, navigation, notifications, organization, people, profile, reports, settings, tickets, workflowProblems, workflows } as const;
