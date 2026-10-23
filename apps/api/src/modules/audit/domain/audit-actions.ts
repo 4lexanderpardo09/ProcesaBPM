@@ -5,6 +5,8 @@ export const AUDIT_ACTIONS = [
   'member.updated',
   'member.deactivated',
   'member.reactivated',
+  'member.signature_updated',
+  'member.signature_removed',
   'role.created',
   'role.updated',
   'role.activated',
