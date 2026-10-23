@@ -2,7 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { FieldDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { RenderFactsRepository } from '../data/render-facts.repository.js';
-import type { NameLookups, RenderFacts, SignerRecord } from '../domain/render-facts.js';
+import { ApproverSnapshotRepository } from '../../approvals/data/approver-snapshot.repository.js';
+import { resolveApprover } from '../../approvals/domain/resolve-approver.js';
+import { type ApproverAsk, approverKey, type NameLookups, type RenderFacts, type SignerRecord } from '../domain/render-facts.js';
 
 export interface LoadedFacts {
   readonly facts: RenderFacts;
@@ -21,9 +23,13 @@ const ids = (fields: readonly FieldDocument[], values: Readonly<Record<string, u
 /** Reads what a ticket's documents show, in a handful of queries, into plain data. */
 @Injectable()
 export class RenderFactsLoader {
-  constructor(@Inject(RenderFactsRepository) private readonly repository: RenderFactsRepository) {}
+  constructor(
+    @Inject(RenderFactsRepository) private readonly repository: RenderFactsRepository,
+    @Inject(ApproverSnapshotRepository) private readonly approverSnapshots: ApproverSnapshotRepository,
+  ) {}
 
-  async load(tx: TenantTransaction, tenantId: string, ticketId: string, now: Date): Promise<LoadedFacts | null> {
+  /** `approverAsks`: the requester's approvers the document's signature boxes keep (see `approverAsksOf`). */
+  async load(tx: TenantTransaction, tenantId: string, ticketId: string, now: Date, approverAsks: readonly ApproverAsk[] = []): Promise<LoadedFacts | null> {
     const base = await this.repository.ticketBase(tx, tenantId, ticketId);
     if (base === null) return null;
     const fields = await this.repository.fields(tx, tenantId, base.versionId);
@@ -54,6 +60,20 @@ export class RenderFactsLoader {
       sites: await this.repository.siteNames(tx, tenantId, [...new Set(ids(fields, values, 'SITE'))]),
       files: await this.repository.fileNames(tx, tenantId, [...new Set(ids(fields, values, 'FILE'))]),
     };
-    return { facts: { ticket: base.ticket, timeZone: base.timeZone, currencyCode: base.currencyCode, fields, values, names, signers, now }, workflowId: base.workflowId, companyId: base.companyId, imageStorageKeys };
+    const approvers = await this.approvers(tx, tenantId, { creatorId: base.ticket.creatorId, companyId: base.companyId, at: now }, approverAsks);
+    return { facts: { ticket: base.ticket, timeZone: base.timeZone, currencyCode: base.currencyCode, fields, values, names, signers, approvers, now }, workflowId: base.workflowId, companyId: base.companyId, imageStorageKeys };
+  }
+
+  /**
+   * Each asked approver as the engine finds them now, with the nominal approver and the delegate both kept: either may
+   * have signed. Nobody found leaves the box empty, as a step that has not been signed.
+   */
+  private async approvers(tx: TenantTransaction, tenantId: string, scope: { creatorId: string; companyId: string; at: Date }, asks: readonly ApproverAsk[]): Promise<Map<string, ReadonlySet<string>>> {
+    const found = new Map<string, ReadonlySet<string>>();
+    for (const ask of asks) {
+      const outcome = resolveApprover(await this.approverSnapshots.load(tx, tenantId, { ...scope, typeId: ask.typeId }), scope.creatorId, ask.level);
+      found.set(approverKey(ask), new Set(outcome.found ? [outcome.approverId, ...(outcome.onBehalfOfId === null ? [] : [outcome.onBehalfOfId])] : []));
+    }
+    return found;
   }
 }

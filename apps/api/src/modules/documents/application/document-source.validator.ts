@@ -20,7 +20,7 @@ export interface SourceChecker {
 
 const sameProblem = (a: PdfProblem, b: PdfProblem): boolean => a.code === b.code && a.path === b.path && a.detail === b.detail;
 
-/** Checks formats and mappings against a workflow's versions (published first, the draft as a heads-up), its images and the organization's positions. */
+/** Checks formats and mappings against a workflow's versions (published first, the draft as a heads-up), its images and the organization's positions and approval types. */
 @Injectable()
 export class DocumentSourceValidator {
   constructor(
@@ -35,6 +35,7 @@ export class DocumentSourceValidator {
     const { published, draft } = current;
     const imageIds = await this.images.ids(tx, tenantId, workflowId);
     const positionIds = await this.sources.positionIds(tx, tenantId);
+    const approvalTypeIds = await this.sources.approvalTypeIds(tx, tenantId);
     const run = (check: (document: WorkflowVersionDocument) => PdfProblem[]): CheckResult => {
       if (published === null) return { errors: draft === null ? [] : check(draft), warnings: [] };
       const errors = check(published);
@@ -42,7 +43,7 @@ export class DocumentSourceValidator {
     };
     return {
       document: published ?? draft ?? { steps: [], transitions: [], fields: [], amountRules: [] },
-      design: (design) => run((document) => validateDesign(design, document, { imageIds, positionIds })),
+      design: (design) => run((document) => validateDesign(design, document, { imageIds, positionIds, approvalTypeIds })),
       mapping: (mapping, template) => run((document) => validateMapping(mapping, template, document)),
     };
   }

@@ -151,6 +151,15 @@ describe('validateDesign of a canvas', () => {
     expect(codes(validateDesign(canvas([box]), doc, { positionIds: new Set([cartera]) }))).toEqual(['DOCUMENT_POSITION_UNKNOWN@elements[0].positionIds[1]']);
   });
 
+  it('a signature box may keep the requester’s approver of a type the organization has, at a level up to the last one', () => {
+    const boss = '018f3c1e-7b2a-7c3d-9e4f-00000000000c';
+    const box = { ...at, id: 's', name: 's', type: 'signature', source: 'STEP', stepName: 'Revisión', signers: 'LAST', position: 1, approverOf: { typeId: boss, level: 1 }, label: '', showName: true, showDate: true, showLine: true } as CanvasElement;
+    expect(pdfCanvasDesignSchema.safeParse(canvas([box])).success).toBe(true);
+    expect(pdfCanvasDesignSchema.safeParse(canvas([{ ...box, approverOf: { typeId: boss, level: 6 } } as CanvasElement])).success).toBe(false);
+    expect(validateDesign(canvas([box]), doc, { approvalTypeIds: new Set([boss]) })).toEqual([]);
+    expect(codes(validateDesign(canvas([box]), doc, { approvalTypeIds: new Set() }))).toEqual(['DOCUMENT_APPROVAL_TYPE_UNKNOWN@elements[0].approverOf.typeId']);
+  });
+
   it('a block document cannot read a calculation', () => {
     expect(codes(validateDesign({ ...emptyDesign(), body: [{ type: 'text', text: '{{calc.TOTAL}}' }] }, doc))).toEqual(['DOCUMENT_CALCULATION_UNKNOWN@body[0].text']);
   });

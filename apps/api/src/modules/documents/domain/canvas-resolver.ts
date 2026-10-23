@@ -17,7 +17,7 @@ import {
 import type { CanvasContent, ResolvedCanvasElement, ResolvedSigner } from '../../../infrastructure/pdf/canvas-document.js';
 import { DesignResolver } from './design-resolver.js';
 import { sumColumn } from './field-display.js';
-import type { RenderFacts, SignerRecord } from './render-facts.js';
+import { approverKey, type RenderFacts, type SignerRecord } from './render-facts.js';
 
 const LOGO_KEY = 'logo';
 const UPLOADED_PREFIX = 'img:';
@@ -168,7 +168,10 @@ export class CanvasResolver {
         const all = this.facts.signers.get(element.stepName ?? '') ?? [];
         const kept = element.positionIds ?? [];
         // A box of one area keeps only the signatures of people in it, whatever the order they signed in.
-        const records = kept.length === 0 ? all : all.filter((record) => record.anyPosition === true || (record.positionId !== null && kept.includes(record.positionId)));
+        const ofPositions = kept.length === 0 ? all : all.filter((record) => record.anyPosition === true || (record.positionId !== null && kept.includes(record.positionId)));
+        // A box of the requester's approver keeps only theirs (or their delegate's).
+        const approvers = element.approverOf === undefined ? undefined : (this.facts.approvers?.get(approverKey(element.approverOf)) ?? new Set<string>());
+        const records = approvers === undefined ? ofPositions : ofPositions.filter((record) => record.anyPosition === true || approvers.has(record.userId));
         if (element.signers === 'ALL') return records.length === 0 ? [null] : records.map(signer);
         const chosen = element.signers === 'POSITION' ? records[element.position - 1] : records[records.length - 1];
         return [chosen === undefined ? null : signer(chosen)];
