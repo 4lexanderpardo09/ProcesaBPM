@@ -14,6 +14,8 @@ export const ticketQueryKeys = {
   timeline: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'timeline'] as const,
   documents: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'documents'] as const,
   flow: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'flow'] as const,
+  stepFiles: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'step-files'] as const,
+  documentJobs: (ticketId: string) => [...ticketQueryKeys.detail(ticketId), 'document-jobs'] as const,
 };
 
 /** One page of the inbox; the previous page stays on screen while the next one loads. */
