@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import {
   type CloseTicketRequest,
   type CommentTicketRequest,
@@ -47,9 +47,11 @@ import {
   transitionTicketRequestSchema,
 } from '@procesabpm/shared';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
+import type { Response } from 'express';
 import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequireAnyPermission, RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
+import { contentDisposition } from '../../../infrastructure/storage/content-disposition.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { CurrentAbility } from '../../authorization/http/current-ability.decorator.js';
 import { ParallelTaskService } from '../../engine/application/parallel-task.service.js';
@@ -157,6 +159,20 @@ export class TicketsController {
   @Get(':id/step-files')
   stepFiles(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketStepFileResponse[]> {
     return this.documents.stepFiles(ability, id);
+  }
+
+  /** Every PDF and image of the ticket in one PDF. `X-Documents-Skipped` counts the files that could not be read. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Get(':id/documents/combined')
+  @Audited('ticket.documents_combined')
+  async combinedDocuments(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Res({ passthrough: true }) response: Response): Promise<StreamableFile> {
+    const { bytes, fileName, skipped } = await this.documents.combined(ability, id);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', contentDisposition('attachment', fileName));
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('X-Documents-Skipped', String(skipped.length));
+    return new StreamableFile(bytes);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
