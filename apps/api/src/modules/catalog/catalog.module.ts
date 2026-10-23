@@ -9,6 +9,7 @@ import { SubcategoriesService } from './application/subcategories.service.js';
 import { CategoryRepository } from './data/category.repository.js';
 import { ErrorTypeRepository } from './data/error-type.repository.js';
 import { MembershipCompaniesRepository } from './data/membership-companies.repository.js';
+import { RecentSubcategoriesRepository } from './data/recent-subcategories.repository.js';
 import { PriorityRepository } from './data/priority.repository.js';
 import { SubcategoryRepository } from './data/subcategory.repository.js';
 import { AvailableCatalogController } from './http/available-catalog.controller.js';
@@ -26,6 +27,7 @@ import { SubcategoriesController } from './http/subcategories.controller.js';
     CategoryRepository,
     SubcategoryRepository,
     MembershipCompaniesRepository,
+    RecentSubcategoriesRepository,
     ErrorTypeRepository,
     ErrorTypesService,
     PrioritiesService,

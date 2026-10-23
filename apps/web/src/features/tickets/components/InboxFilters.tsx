@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { HttpClient } from '@/shared/api';
 import { useDebouncedValue } from '@/shared/lib/use-debounced-value';
 import { useApiClient, useCurrentUser, usePermissions } from '@/shared/session';
-import { Button, Select, TextField } from '@/shared/ui';
+import { Button, Checkbox, Select, TextField } from '@/shared/ui';
 import { prioritiesQueryOptions } from '../api/new-ticket-api';
 import { hasFilters, type InboxFilters as Filters, MORE_FILTERS, NO_FILTERS, TICKET_STATUSES, type TicketStatus } from '../lib/inbox-params';
 import { MoreInboxFilters } from './MoreInboxFilters';
@@ -61,6 +61,7 @@ export function InboxFilters({ filters, onChange }: InboxFiltersProps) {
       <div className={styles.filters}>
         <div className={styles.search}>
           <TextField label={t('filters.search')} type="search" placeholder={t('filters.searchPlaceholder')} value={search} maxLength={100} onChange={(event) => setSearch(event.target.value)} />
+          <Checkbox label={t('filters.searchMessages')} checked={filters.searchMessages} onChange={(event) => onChange({ searchMessages: event.target.checked })} />
         </div>
         <Select
           label={t('filters.status')}

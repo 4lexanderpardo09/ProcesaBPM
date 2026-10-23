@@ -280,6 +280,35 @@ describe('workflows', () => {
     await vi.waitFor(() => expect(within(list).queryByText('Analista de cartera')).not.toBeInTheDocument());
   });
 
+  it('checks, rule by rule, why a person cannot open a ticket of the workflow', async () => {
+    const { fake } = renderRoute(`/workflows/${FLOW}?tab=creationCheck`, {
+      handlers: {
+        ...api(),
+        [`/workflows/${FLOW}/creation-check`]: () => ({
+          canCreate: false,
+          activeMember: true,
+          companyAllowed: true,
+          subcategoryVisible: true,
+          published: true,
+          starts: [{ stepId: id(80), name: 'Solicitud', allowed: false, rules: [{ kind: 'POSITION', targetId: POSITION, matches: false }, { kind: 'GROUP', targetId: GROUP, matches: false }] }],
+        }),
+      },
+    });
+
+    await userEvent.type(await screen.findByRole('searchbox', { name: /Persona/ }), 'Olga');
+    await userEvent.click(await screen.findByRole('button', { name: 'Elegir a Olga Pérez' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Probar' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Olga Pérez no puede crear tickets de este flujo.');
+    const rules = screen.getByRole('list', { name: 'Reglas del inicio «Solicitud»' });
+    expect(within(rules).getByText('Cargo: Analista de cartera')).toBeInTheDocument();
+    expect(await within(rules).findByText('Grupo: Tesorería')).toBeInTheDocument();
+    expect(within(rules).getAllByText('No')).toHaveLength(2);
+    const asked = new URLSearchParams(fake.calls.find((call) => call.path.startsWith(`/workflows/${FLOW}/creation-check`))!.path.split('?')[1]);
+    expect(asked.get('userId')).toBe(OLGA);
+    expect(asked.get('companyId')).not.toBeNull();
+  });
+
   it('only shows a reader what is there, without the actions', async () => {
     renderRoute(`/workflows/${FLOW}`, { handlers: { ...api(), ...reader } });
 

@@ -99,6 +99,8 @@ export interface AvailableCatalogResponse {
   readonly categories: readonly AvailableCategory[];
   /** The active companies of the person the catalog is for: a ticket names one of them (needed when there are several). */
   readonly companies: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  /** Subcategories of the person's latest tickets that they can still pick, the most recent first (a shortcut). */
+  readonly recent: readonly string[];
 }
 
 /** Parses `AvailableCatalogResponse` (for the web client). */
@@ -111,6 +113,7 @@ export const availableCatalogResponseSchema = z.object({
     }),
   ),
   companies: z.array(z.object({ id: uuidSchema, name: z.string() })),
+  recent: z.array(uuidSchema),
 }) satisfies z.ZodType<AvailableCatalogResponse>;
 
 // ---- Error types (what a reopening or an error report is filed under) ----

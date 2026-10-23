@@ -23,6 +23,13 @@ describe('ticketNumberOf', () => {
 });
 
 describe('searchFilter', () => {
+  it('looks in the description and the comments only when asked', () => {
+    expect((searchFilter('factura').OR as unknown[]).length).toBe(2);
+    const [, , description, comments] = searchFilter('factura', true).OR as unknown[];
+    expect(description).toEqual({ descriptionHtml: { contains: 'factura', mode: 'insensitive' } });
+    expect(comments).toEqual({ events: { some: { commentHtml: { contains: 'factura', mode: 'insensitive' } } } });
+  });
+
   it('looks for the number, the title and the requester\'s name', () => {
     expect(searchFilter('#42')).toEqual({
       OR: [{ number: 42n }, { title: like('#42') }, { creator: { user: { AND: [{ OR: [{ firstName: like('#42') }, { lastName: like('#42') }] }] } } }],
