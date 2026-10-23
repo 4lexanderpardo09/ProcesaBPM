@@ -39,6 +39,8 @@ export function fieldRangeKind(from: string | undefined, to: string | undefined)
 const ticketFiltersObject = z.object({
   status: ticketStatusSchema.optional(),
   search: pageQuerySchema.shape.search,
+  /** `true`: the search also looks in the description and the comments (slower: plain text search over every message). */
+  searchMessages: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
   priorityId: uuidSchema.optional(),
   categoryId: uuidSchema.optional(),
   subcategoryId: uuidSchema.optional(),

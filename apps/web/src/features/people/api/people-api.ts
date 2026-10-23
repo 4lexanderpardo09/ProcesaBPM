@@ -15,6 +15,7 @@ import {
   type RolePermissionInput,
   roleResponseSchema,
   rolePermissionResponseSchema,
+  signatureResponseSchema,
   siteResponseSchema,
   type UpdateMemberRequest,
 } from '@procesabpm/shared';
@@ -78,6 +79,23 @@ export function inviteMember(client: HttpClient, request: InviteMemberRequest) {
 
 export function updateMember(client: HttpClient, userId: string, request: UpdateMemberRequest) {
   return client.request(`/members/${encodeURIComponent(userId)}`, { method: 'PATCH', body: request, schema: memberResponseSchema });
+}
+
+/** A short-lived link to the member's signature, or null when they have none. */
+export function memberSignatureQueryOptions(client: HttpClient, userId: string) {
+  return queryOptions({
+    queryKey: [...adminQueryKeys.all, '/members', userId, 'signature'] as const,
+    queryFn: ({ signal }) => client.request(`/members/${encodeURIComponent(userId)}/signature`, { schema: signatureResponseSchema.nullish().transform((signature) => signature ?? null), signal }),
+  });
+}
+
+/** Makes an image the caller uploaded the member's signature. */
+export function setMemberSignature(client: HttpClient, userId: string, fileId: string) {
+  return client.request(`/members/${encodeURIComponent(userId)}/signature`, { method: 'PUT', body: { fileId } });
+}
+
+export function clearMemberSignature(client: HttpClient, userId: string) {
+  return client.request(`/members/${encodeURIComponent(userId)}/signature`, { method: 'DELETE' });
 }
 
 /** A new link; the earlier ones keep working until they expire. */

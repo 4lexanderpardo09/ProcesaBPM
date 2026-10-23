@@ -4,6 +4,7 @@ import { AuthorizationModule } from '../authorization/authorization.module.js';
 import { GroupsService } from './application/groups.service.js';
 import { MemberDirectoryService } from './application/member-directory.service.js';
 import { MemberInvitationService } from './application/member-invitation.service.js';
+import { MemberSignatureService } from './application/member-signature.service.js';
 import { MembersService } from './application/members.service.js';
 import { PermissionCatalogService } from './application/permission-catalog.service.js';
 import { RolesService } from './application/roles.service.js';
@@ -27,6 +28,7 @@ import { RolesController } from './http/roles.controller.js';
     MembersService,
     MemberInvitationService,
     MemberDirectoryService,
+    MemberSignatureService,
     RolesService,
     PermissionCatalogService,
     GroupsService,

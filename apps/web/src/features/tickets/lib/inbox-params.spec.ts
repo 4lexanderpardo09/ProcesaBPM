@@ -17,6 +17,7 @@ describe('readInboxParams', () => {
       view: 'observed',
       status: 'PAUSED',
       search: 'cuenta',
+      searchMessages: false,
       priorityId: PRIORITY,
       categoryId: CATEGORY,
       companyId: COMPANY,
@@ -42,7 +43,7 @@ describe('writeInboxParams', () => {
   });
 
   it('round-trips what differs from the defaults', () => {
-    const params = { ...defaults, view: 'all', status: 'CLOSED', search: 'PAG-12', categoryId: CATEGORY, page: 2 } as const;
+    const params = { ...defaults, view: 'all', status: 'CLOSED', search: 'PAG-12', searchMessages: true, categoryId: CATEGORY, page: 2 } as const;
     expect(readInboxParams(writeInboxParams(params))).toEqual(params);
   });
 });
@@ -50,6 +51,11 @@ describe('writeInboxParams', () => {
 describe('filterQuery', () => {
   it('names the filters as the API does, only those set', () => {
     expect(filterQuery({ ...NO_FILTERS, search: 'ana', priorityId: PRIORITY }).toString()).toBe(`search=ana&priorityId=${PRIORITY}`);
+  });
+
+  it('asks to look in the messages only with something to search', () => {
+    expect(filterQuery({ ...NO_FILTERS, search: 'tóner', searchMessages: true }).toString()).toBe('search=t%C3%B3ner&searchMessages=true');
+    expect(filterQuery({ ...NO_FILTERS, searchMessages: true }).toString()).toBe('');
   });
 });
 

@@ -71,6 +71,7 @@ export const tickets = {
     label: 'Filtros de la bandeja',
     search: 'Buscar',
     searchPlaceholder: 'Número, asunto o solicitante',
+    searchMessages: 'Buscar también en la descripción y los comentarios',
     status: 'Estado',
     anyStatus: 'Todos',
     priority: 'Prioridad',

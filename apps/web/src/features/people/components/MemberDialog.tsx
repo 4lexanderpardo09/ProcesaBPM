@@ -9,6 +9,7 @@ import { Checkbox, Select, TextField } from '@/shared/ui';
 import { companiesQueryOptions, departmentsQueryOptions, inviteMember, positionsQueryOptions, rolesQueryOptions, sitesQueryOptions, updateMember } from '../api/people-api';
 import { memberName } from '../lib/member-name';
 import { peopleErrorKey } from '../lib/people-error';
+import { MemberSignature } from './MemberSignature';
 import { PeopleError } from './PeopleError';
 import styles from './People.module.css';
 
@@ -36,7 +37,7 @@ export interface MemberDialogProps {
 /**
  * Invites a person (e-mail and name, which they cannot be invited without) or edits a member. The role decides what
  * they can do; position, department and site decide which steps they can be assigned; the companies, which tickets
- * they can create and see.
+ * they can create and see. Editing, the member's signature is there too (it changes at once).
  */
 export function MemberDialog({ member, onClose, onInvited }: MemberDialogProps) {
   const { t } = useTranslation(['people', 'admin']);
@@ -135,6 +136,7 @@ export function MemberDialog({ member, onClose, onInvited }: MemberDialogProps) 
           ))}
       </fieldset>
       <PeopleError error={peopleErrorKey(save.error, contextOfError) === undefined ? null : save.error} context={contextOfError} />
+      {member !== undefined && <MemberSignature userId={member.userId} name={memberName(member)} />}
     </AdminDialog>
   );
 }
