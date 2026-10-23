@@ -416,7 +416,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
       - texto con largo y, opcional, el valor de un Excel;
       - número y moneda con mínimo, máximo, decimales o moneda;
       - listas con opciones propias, una lista de la organización (`PRESET`) o la columna de un Excel (`DATASET`, con búsqueda por clave);
-      - fechas con «Hoy» o una fecha;
+      - fechas con «Hoy» o una fecha; «Fecha actual» (`defaultNow`, 2026-10-23): si el campo de fecha (o fecha y hora) queda vacío al capturarse y no tenía valor, el motor (`validateCapturedValues`) pone la fecha del día en la zona de la empresa (o el instante del envío), también si es de solo lectura; un obligatorio con esta opción no se exige y el formulario lo dice debajo del campo;
       - días, nivel de sede y cargos de una persona;
       - tabla con sus columnas (código, tipo, obligatoria, total y opciones);
       - archivos con máximo y tipos;

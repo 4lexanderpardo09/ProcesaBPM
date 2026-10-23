@@ -49,9 +49,9 @@ export function StepFieldInput({ field, value, error, knownLabels, knownFiles, o
     case 'DAYS':
       return <TextField {...common} value={text} inputMode="numeric" hint={t('advance.daysHint')} onChange={(event) => onChange(event.target.value)} />;
     case 'DATE':
-      return <TextField {...common} type="date" value={text} onChange={(event) => onChange(event.target.value)} />;
+      return <TextField {...common} type="date" value={text} hint={config['defaultNow'] === true ? t('advance.defaultToday') : undefined} onChange={(event) => onChange(event.target.value)} />;
     case 'DATETIME':
-      return <TextField {...common} type="datetime-local" value={text} onChange={(event) => onChange(event.target.value)} />;
+      return <TextField {...common} type="datetime-local" value={text} hint={config['defaultNow'] === true ? t('advance.defaultNow') : undefined} onChange={(event) => onChange(event.target.value)} />;
     case 'SELECT':
       return <Select {...common} value={text} placeholder={t('advance.choose')} options={optionsOf(field)} onChange={(event) => onChange(event.target.value)} />;
     case 'MULTI_SELECT':

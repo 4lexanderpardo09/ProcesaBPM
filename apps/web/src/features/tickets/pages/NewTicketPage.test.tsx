@@ -142,6 +142,20 @@ describe('NewTicketPage', () => {
     expect(fake.callsTo(`/subcategories/${PAGOS}/creation-form`)[0]?.path).toBe(`/subcategories/${PAGOS}/creation-form?companyId=${MAIN}`);
   });
 
+  it('does not ask for a «fecha actual» date, says it fills itself, and sends it empty for the API to fill', async () => {
+    const dated = { ...creationForm, starts: [{ ...creationForm.starts[0]!, fields: [field(3, 'PAID_ON', 'Fecha del pago', 'DATE', { isRequired: true, config: { defaultNow: true } })] }] };
+    const { fake } = renderRoute('/tickets/new', { handlers: handlers({ [`/subcategories/${PAGOS}/creation-form`]: () => dated }) });
+
+    await chooseRequest();
+    expect(screen.getByLabelText(/Fecha del pago/)).toHaveAccessibleDescription('Si lo dejas vacío, queda la fecha de hoy.');
+    await userEvent.type(screen.getByRole('textbox', { name: /Asunto/ }), 'Pago');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear y enviar' }));
+
+    await vi.waitFor(() => expect(fake.callsTo('/tickets')).toHaveLength(1));
+    // Sent blank, which the API fills with the date of the day.
+    expect((fake.callsTo('/tickets')[0]?.options.body as { values: Record<string, unknown> }).values.PAID_ON).toBeNull();
+  });
+
   it('fills a field from the Excel row of the key typed in another one', async () => {
     const withLookup = {
       ...creationForm,
