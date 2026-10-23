@@ -1,8 +1,8 @@
 import type { Organization } from '@procesabpm/shared';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/shared/lib/format-date-time';
-import { Alert, Badge } from '@/shared/ui';
-import { isSelectable, type OrganizationChoice } from '../hooks/login-flow';
+import { Alert, Badge, Button } from '@/shared/ui';
+import { isSelectable, type OrganizationChoice, PLATFORM_CHOICE } from '../hooks/login-flow';
 import type { AuthMessageKey } from '../lib/auth-error-message';
 import styles from './auth-forms.module.css';
 import picker from './OrganizationPicker.module.css';
@@ -16,17 +16,28 @@ export interface OrganizationPickerProps {
   readonly openingTenantId?: string | undefined;
   readonly error: unknown;
   readonly onChoose: (tenantId: string) => void;
+  /** A platform administrator enters the console instead. */
+  readonly onOpenPlatform?: () => void;
   readonly onRestart: () => void;
 }
 
-export function OrganizationPicker({ choice, backupCodesLeft, rowErrors, openingTenantId, error, onChoose, onRestart }: OrganizationPickerProps) {
+export function OrganizationPicker({ choice, backupCodesLeft, rowErrors, openingTenantId, error, onChoose, onOpenPlatform, onRestart }: OrganizationPickerProps) {
   const { t } = useTranslation(['auth', 'common']);
   return (
     <div className={styles.form}>
       <StepHeading title={t('organizations.title')} />
       {error !== undefined && <StepError error={error} context="selection" />}
       {backupCodesLeft !== undefined && <Alert tone="warn">{t('organizations.backupCodesLeft', { count: backupCodesLeft })}</Alert>}
-      {choice.platformAdmin && <Alert tone="info">{t('organizations.platformAdmin')}</Alert>}
+      {choice.platformAdmin && (
+        <>
+          <Alert tone="info">{t('organizations.platformAdmin')}</Alert>
+          {onOpenPlatform !== undefined && (
+            <Button variant="primary" disabled={openingTenantId !== undefined} aria-busy={openingTenantId === PLATFORM_CHOICE} onClick={onOpenPlatform}>
+              {openingTenantId === PLATFORM_CHOICE ? t('organizations.openingPlatform') : t('organizations.openPlatform')}
+            </Button>
+          )}
+        </>
+      )}
       {choice.organizations.length === 0 ? (
         <p className={styles.description}>{t('organizations.empty')}</p>
       ) : (

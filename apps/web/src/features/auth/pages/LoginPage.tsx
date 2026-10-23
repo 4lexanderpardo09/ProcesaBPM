@@ -50,6 +50,7 @@ function LoginStep({ flow }: { readonly flow: ReturnType<typeof useLoginFlow> })
           openingTenantId={state.openingTenantId}
           error={error}
           onChoose={flow.chooseOrganization}
+          onOpenPlatform={flow.openPlatform}
           onRestart={flow.restart}
         />
       );

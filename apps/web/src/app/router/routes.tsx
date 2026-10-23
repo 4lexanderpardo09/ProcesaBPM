@@ -6,6 +6,7 @@ import { HomePage } from '@/features/home';
 import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
+import { AnnouncementsPage, PlatformLayout, TenantPage, TenantsPage } from '@/features/platform';
 import { ProfilePage } from '@/features/profile';
 import { ReportsPage } from '@/features/reports';
 import { SettingsPage } from '@/features/settings';
@@ -76,6 +77,15 @@ export const appRoutes: RouteObject[] = [
       { path: paths.forgotPassword, element: <ForgotPasswordPage /> },
       { path: paths.resetPassword, element: <ResetPasswordPage /> },
       { path: paths.acceptInvitation, element: <AcceptInvitationPage /> },
+    ],
+  },
+  {
+    // The platform console has its own short session, apart from the organizations' one.
+    element: <PlatformLayout />,
+    children: [
+      { path: paths.platform, element: <TenantsPage /> },
+      { path: paths.platformTenant, element: <TenantPage /> },
+      { path: paths.platformAnnouncements, element: <AnnouncementsPage /> },
     ],
   },
   {
