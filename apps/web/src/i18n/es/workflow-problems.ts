@@ -77,6 +77,8 @@ export const workflowProblems = {
   FIELD_CONFIG_INVALID: 'La configuración de un campo está incompleta: {{issues}}.',
   FIELD_DATA_SOURCE_INVALID: 'La fuente de datos de un campo no es válida: {{issues}}.',
   FORMULA_INVALID: 'Una fórmula tiene un error.',
+  TABLE_FORMULA_INVALID: 'La columna {{column}} de una tabla tiene una fórmula con un error.',
+  TABLE_FORMULA_NOT_NUMBER: 'La columna {{column}} de una tabla debe dar un número.',
   FORMULA_UNKNOWN_FIELD: 'Una fórmula usa un campo que no existe.',
   FORMULA_RESULT_TYPE_MISMATCH: 'Una fórmula da {{actual}} pero se declaró como {{declared}}.',
   FORMULA_CYCLE: 'La fórmula del campo {{code}} depende de sí misma.',

@@ -15,8 +15,10 @@ const tableColumn = z
   .object({
     code,
     label: z.string().min(1).max(200),
-    type: z.enum(['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT']),
+    type: z.enum(['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA']),
     required: z.boolean().default(false),
+    /** FORMULA columns: a number computed from the other columns of the same row (`QTY * PRICE`). */
+    expression: z.string().min(1).max(500).optional(),
     options: options.optional(),
     /** NUMBER columns: digits after the point (CURRENCY always has two). */
     decimals: z.number().int().min(0).max(6).optional(),
@@ -27,9 +29,12 @@ const tableColumn = z
   })
   .strict()
   .superRefine((column, context) => {
-    const numeric = column.type === 'NUMBER' || column.type === 'CURRENCY';
+    const formula = column.type === 'FORMULA';
+    const numeric = column.type === 'NUMBER' || column.type === 'CURRENCY' || formula;
     if (!numeric && (column.showTotal || column.min !== undefined || column.max !== undefined)) context.addIssue({ code: 'custom', message: 'min, max and showTotal only apply to number and currency columns' });
-    if (column.type !== 'NUMBER' && column.decimals !== undefined) context.addIssue({ code: 'custom', message: 'decimals only applies to number columns' });
+    if (column.type !== 'NUMBER' && !formula && column.decimals !== undefined) context.addIssue({ code: 'custom', message: 'decimals only applies to number columns' });
+    if (formula !== (column.expression !== undefined)) context.addIssue({ code: 'custom', message: 'expression goes with formula columns, and only with them' });
+    if (formula && (column.required || column.min !== undefined || column.max !== undefined || column.options !== undefined)) context.addIssue({ code: 'custom', message: 'a formula column is computed: no required, min, max or options' });
   });
 
 /** `config` of a field by type. No user-supplied regex (ReDoS), no ids of this version. */

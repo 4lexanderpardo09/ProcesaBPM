@@ -416,7 +416,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
       - listas con opciones propias, una lista de la organización (`PRESET`) o la columna de un Excel (`DATASET`, con búsqueda por clave);
       - fechas con «Hoy» o una fecha;
       - días, nivel de sede y cargos de una persona;
-      - tabla con sus columnas (código, tipo, obligatoria, total y opciones);
+      - tabla con sus columnas (código, tipo, obligatoria, total y opciones); una columna de tipo **Fórmula** (2026-10-23) da un número calculado con las otras columnas de la misma fila (`CANTIDAD * VALOR`): el motor (`engine/fields/table-formulas`) la calcula al normalizar la tabla (lo que mande el cliente para ella se ignora; una fila que no puede darla la deja vacía), entra en el total si se marca y un campo fórmula la puede sumar (`SUM(TABLA.COLUMNA)`); el validador avisa `TABLE_FORMULA_INVALID` y `TABLE_FORMULA_NOT_NUMBER`; en el formulario se ve calculada al escribir y no se envía;
       - archivos con máximo y tipos;
       - fórmula con resultado y decimales;
       - calculadora con sus datos.

@@ -833,6 +833,24 @@ describe('TicketDetailPage', () => {
       expect(within(dialog).queryByRole('textbox', { name: 'Ítem, fila 2' })).toBeNull();
     });
 
+    it('shows a formula column computed from its row as it is typed, and does not send it', async () => {
+      const count = { ...field(9, 'count', 'Conteo', 'TABLE', { columns: [{ code: 'QTY', label: 'Cantidad', type: 'NUMBER' }, { code: 'VALUE', label: 'Valor', type: 'CURRENCY' }, { code: 'SUB', label: 'Subtotal', type: 'FORMULA', expression: 'QTY * VALUE' }] }) };
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: () => mutation }, { fields: [count], editableFieldCodes: ['count'] }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Agregar fila' }));
+      const subtotal = within(dialog).getByRole('status', { name: 'Subtotal, fila 1' });
+      expect(subtotal).toHaveTextContent('–');
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Cantidad, fila 1' }), '3');
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Valor, fila 1' }), '50.000');
+      expect(subtotal).toHaveTextContent('150.000');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)).toHaveLength(1));
+      expect((fake.callsTo(`${base}/transition`)[0]?.options.body as { values: { count: unknown[] } }).values.count).toEqual([{ QTY: '3', VALUE: '50000' }]);
+    });
+
     it('uploads a file as soon as it is chosen and sends its id with the step', async () => {
       const FILE_ID = id(900);
       const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/key?sig=1', method: 'PUT', headers: { 'content-type': 'application/pdf', 'content-length': '4' }, expiresAt: at };

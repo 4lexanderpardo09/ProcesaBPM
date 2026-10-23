@@ -7,7 +7,7 @@ import type { TableColumn } from './normalize-value.js';
  * (it cannot be: rows are normalized on the way in) makes the column's total absent instead of wrong.
  */
 export function tableColumnTotals(config: Readonly<Record<string, unknown>>, rows: unknown): Record<string, string> {
-  const columns = ((config.columns as TableColumn[] | undefined) ?? []).filter((column) => column.showTotal === true && (column.type === 'NUMBER' || column.type === 'CURRENCY'));
+  const columns = ((config.columns as TableColumn[] | undefined) ?? []).filter((column) => column.showTotal === true && (column.type === 'NUMBER' || column.type === 'CURRENCY' || column.type === 'FORMULA'));
   if (columns.length === 0 || !Array.isArray(rows)) return {};
   const totals: Record<string, string> = {};
   for (const column of columns) {

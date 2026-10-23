@@ -4,7 +4,7 @@ import { codeFromLabel } from '../../lib/content-doc';
 import { ListTextField } from '../ListTextField';
 import styles from '../Builder.module.css';
 
-const COLUMN_TYPES = ['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT'] as const;
+const COLUMN_TYPES = ['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA'] as const;
 export type ColumnType = (typeof COLUMN_TYPES)[number];
 
 export interface TableColumn {
@@ -14,9 +14,11 @@ export interface TableColumn {
   readonly required?: boolean;
   readonly showTotal?: boolean;
   readonly options?: ReadonlyArray<{ readonly value: string; readonly label: string }>;
+  /** FORMULA columns: computed from the other columns of the row. */
+  readonly expression?: string;
 }
 
-const isNumeric = (type: ColumnType) => type === 'NUMBER' || type === 'CURRENCY';
+const isNumeric = (type: ColumnType) => type === 'NUMBER' || type === 'CURRENCY' || type === 'FORMULA';
 
 /** The columns of a table field; a column's code follows its name until it is typed by hand. */
 export function TableColumnsEditor({ columns, onChange }: { readonly columns: readonly TableColumn[]; readonly onChange: (columns: TableColumn[]) => void }) {
@@ -49,8 +51,15 @@ export function TableColumnsEditor({ columns, onChange }: { readonly columns: re
               onChange={(event) => {
                 const type = event.target.value as ColumnType;
                 // Totals and options only belong to some types (the schema refuses them elsewhere).
-                const { showTotal: _showTotal, options: _options, ...rest } = column;
-                replace(index, { ...rest, type, ...(isNumeric(type) && column.showTotal === true ? { showTotal: true } : {}), ...(type === 'SELECT' ? { options: column.options ?? [] } : {}) });
+                const { showTotal: _showTotal, options: _options, expression: _expression, required: _required, ...rest } = column;
+                replace(index, {
+                  ...rest,
+                  type,
+                  ...(type !== 'FORMULA' && column.required === true ? { required: true } : {}),
+                  ...(isNumeric(type) && column.showTotal === true ? { showTotal: true } : {}),
+                  ...(type === 'SELECT' ? { options: column.options ?? [] } : {}),
+                  ...(type === 'FORMULA' ? { expression: column.expression ?? '' } : {}),
+                });
               }}
             />
             {column.type === 'SELECT' && (
@@ -60,7 +69,17 @@ export function TableColumnsEditor({ columns, onChange }: { readonly columns: re
                 onChange={(labels) => replace(index, { ...column, options: labels.map((label) => ({ value: label, label })) })}
               />
             )}
-            <Checkbox label={t('builder.fields.config.columnRequired')} checked={column.required === true} onChange={(event) => replace(index, { ...column, required: event.target.checked })} />
+            {column.type === 'FORMULA' ? (
+              <TextField
+                label={t('builder.fields.config.columnExpression')}
+                hint={t('builder.fields.config.columnExpressionHint', { codes: columns.filter((other) => other.type !== 'FORMULA' && other.code !== '').map((other) => other.code).join(', ') || '—' })}
+                maxLength={500}
+                value={column.expression ?? ''}
+                onChange={(event) => replace(index, { ...column, expression: event.target.value })}
+              />
+            ) : (
+              <Checkbox label={t('builder.fields.config.columnRequired')} checked={column.required === true} onChange={(event) => replace(index, { ...column, required: event.target.checked })} />
+            )}
             {isNumeric(column.type) && <Checkbox label={t('builder.fields.config.columnTotal')} checked={column.showTotal === true} onChange={(event) => replace(index, { ...column, showTotal: event.target.checked })} />}
             <Button variant="ghost" onClick={() => onChange(columns.filter((_column, at) => at !== index))}>
               {t('builder.fields.config.removeColumn', { index: index + 1 })}

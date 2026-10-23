@@ -1,7 +1,7 @@
 import type { FormFieldResponse } from '@procesabpm/shared';
 import { useTranslation } from 'react-i18next';
 import { Button, PlusIcon } from '@/shared/ui';
-import { columnsOf, type TableColumn, type TableRow } from '../../lib/step-values';
+import { columnsOf, formulaCellsOf, type TableColumn, type TableRow } from '../../lib/step-values';
 import styles from './TableInput.module.css';
 
 export interface TableInputProps {
@@ -11,11 +11,14 @@ export interface TableInputProps {
   readonly onChange: (rows: readonly TableRow[]) => void;
 }
 
-/** A TABLE field: one row per entry, a cell per column; rows are added and removed here, and the API checks the limits. */
+/** A TABLE field: one row per entry, a cell per column (a formula column shows what it computes); rows are added and removed here, and the API checks the limits. */
 export function TableInput({ field, rows, error, onChange }: TableInputProps) {
   const { t } = useTranslation('tickets');
   const columns = columnsOf(field);
   const maxRows = typeof field.config['maxRows'] === 'number' ? field.config['maxRows'] : 200;
+  // The day the formulas see (the API uses the company's): enough for what a row formula can do with a date.
+  const today = new Date().toISOString().slice(0, 10);
+  const number = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 6 });
   const setCell = (index: number, code: string, text: string) => onChange(rows.map((row, current) => (current === index ? { ...row, [code]: text } : row)));
   return (
     <fieldset className={styles.table} aria-invalid={error !== undefined}>
@@ -40,12 +43,20 @@ export function TableInput({ field, rows, error, onChange }: TableInputProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
+              {rows.map((row, index) => {
+                const computed = formulaCellsOf(columns, row, today);
+                return (
                 // Rows have no id of their own: their position is who they are while the form is open.
                 <tr key={index}>
                   {columns.map((column) => (
                     <td key={column.code}>
-                      <Cell column={column} label={t('advance.table.cell', { column: column.label, row: index + 1 })} value={row[column.code] ?? ''} onChange={(text) => setCell(index, column.code, text)} />
+                      {column.type === 'FORMULA' ? (
+                        <output className={styles.computed} aria-label={t('advance.table.cell', { column: column.label, row: index + 1 })}>
+                          {computed[column.code] === undefined ? '–' : number.format(Number(computed[column.code]))}
+                        </output>
+                      ) : (
+                        <Cell column={column} label={t('advance.table.cell', { column: column.label, row: index + 1 })} value={row[column.code] ?? ''} onChange={(text) => setCell(index, column.code, text)} />
+                      )}
                     </td>
                   ))}
                   <td>
@@ -54,7 +65,8 @@ export function TableInput({ field, rows, error, onChange }: TableInputProps) {
                     </Button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
