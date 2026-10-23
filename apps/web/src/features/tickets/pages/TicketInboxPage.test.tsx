@@ -97,6 +97,12 @@ describe('TicketInboxPage', () => {
     await vi.waitFor(() => expect(router.state.location.search).toBe('?q=cr%C3%A9dito'));
     // The router applies a new URL in a transition: the page has it once it asked for the list with it.
     await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('search')).toBe('crédito'));
+    // Also in the messages, and back: it travels in the URL and only with a search.
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Buscar también en la descripción y los comentarios' }));
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('searchMessages')).toBe('true'));
+    expect(router.state.location.search).toBe('?q=cr%C3%A9dito&msgs=1');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Buscar también en la descripción y los comentarios' }));
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.has('searchMessages')).toBe(false));
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Prioridad' }), 'Alta');
     await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('priorityId')).toBe(PRIORITY));
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Categoría' }), 'Cartera');
