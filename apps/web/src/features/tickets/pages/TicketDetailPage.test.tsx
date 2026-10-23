@@ -158,6 +158,8 @@ function ticketHandlers(overrides: Record<string, FakeHandler> = {}): Record<str
     [`${base}/timeline`]: () => timeline,
     [`${base}/documents`]: () => documents,
     [`${base}/flow`]: () => flow,
+    [`${base}/step-files`]: () => [],
+    [`${base}/document-jobs`]: () => ({ canRegenerate: false, documents: [] }),
     ...overrides,
   };
 }
@@ -300,6 +302,61 @@ describe('TicketDetailPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Descargar comprobante-pago.pdf' }));
 
     await vi.waitFor(() => expect(openDownload).toHaveBeenCalledWith('https://files.example/comprobante?sig=1'));
+  });
+
+  it('lists the support files of the step and downloads one', async () => {
+    const guide = { id: id(110), name: 'guia-cartera.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 2048, status: 'CONFIRMED', createdAt: at, confirmedAt: at };
+    renderRoute(base, {
+      handlers: ticketHandlers({
+        [`${base}/step-files`]: () => [{ label: 'Guía de cartera', file: guide }],
+        [`${base}/files/${guide.id}/download-url`]: () => ({ url: 'https://files.example/guia?sig=1', expiresAt: at }),
+      }),
+    });
+
+    const card = (await screen.findByRole('heading', { name: 'Archivos de apoyo del paso' })).closest('section')!;
+    expect(within(card).getByText(/^guia-cartera\.pdf · /)).toBeInTheDocument();
+    await userEvent.click(within(card).getByRole('button', { name: 'Descargar Guía de cartera' }));
+    await vi.waitFor(() => expect(openDownload).toHaveBeenCalledWith('https://files.example/guia?sig=1'));
+  });
+
+  it('shows who signed the parallel step and who is still missing', async () => {
+    const parallelTasks = [
+      { id: id(120), userId: ME, name: 'Ana Pérez', status: 'SIGNED', completedAt: at },
+      { id: id(121), userId: OTHER, name: 'Luis Gómez', status: 'PENDING', completedAt: null },
+    ];
+    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ parallelTasks }) }) });
+
+    const card = (await screen.findByRole('heading', { name: 'Firmas del paso' })).closest('section')!;
+    expect(within(card).getByText('1 de 2 firmaron.')).toBeInTheDocument();
+    expect(within(card).getByText('Firmó')).toBeInTheDocument();
+    expect(within(card).getByText('Pendiente')).toBeInTheDocument();
+  });
+
+  it('says which document failed and draws it again for whoever may edit the ticket', async () => {
+    const DOCUMENT = id(130);
+    let state: string | null = 'FAILED';
+    const { fake } = renderRoute(base, {
+      handlers: ticketHandlers({
+        [`${base}/document-jobs`]: (options) => {
+          if (options.method === 'POST') state = 'GENERATING';
+          return { canRegenerate: true, documents: [{ workflowDocumentId: DOCUMENT, name: 'Orden de pago', state, requestedAt: at }] };
+        },
+      }),
+    });
+
+    expect(await screen.findByText('No se pudo generar')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Volver a generar «Orden de pago»' }));
+
+    expect(await screen.findByText('Generando…')).toBeInTheDocument();
+    expect(fake.calls.find((call) => call.path === `${base}/document-jobs` && call.options.method === 'POST')?.options.body).toEqual({ workflowDocumentId: DOCUMENT });
+    expect(screen.queryByRole('button', { name: 'Volver a generar «Orden de pago»' })).not.toBeInTheDocument();
+  });
+
+  it('offers no document section to someone who cannot draw them again when nothing is pending', async () => {
+    renderRoute(base, { handlers: ticketHandlers({ [`${base}/document-jobs`]: () => ({ canRegenerate: false, documents: [{ workflowDocumentId: id(130), name: 'Orden de pago', state: null, requestedAt: null }] }) }) });
+
+    expect(await screen.findByText('comprobante-pago.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('Documentos del flujo')).not.toBeInTheDocument();
   });
 
   it('says when the download link could not be had', async () => {

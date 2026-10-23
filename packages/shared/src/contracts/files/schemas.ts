@@ -121,6 +121,40 @@ export const ticketDocumentResponseSchema = z.object({
 
 export const downloadUrlResponseSchema = z.object({ url: z.string(), expiresAt: z.string() }) satisfies z.ZodType<DownloadUrlResponse>;
 
+/** `GET /tickets/:id/step-files`: the support files the workflow attaches to the ticket's current step (a guide, a format to fill). */
+export interface TicketStepFileResponse {
+  readonly label: string;
+  readonly file: StoredFileResponse;
+}
+
+export const ticketStepFileResponseSchema = z.object({ label: z.string(), file: storedFileResponseSchema }) satisfies z.ZodType<TicketStepFileResponse>;
+export const ticketStepFilesResponseSchema = z.array(ticketStepFileResponseSchema);
+
+/** Where the drawing of a workflow document for the ticket stands: being drawn, failed, or nothing pending (`null`). */
+export type TicketDocumentJobState = 'GENERATING' | 'FAILED';
+
+/** `GET /tickets/:id/document-jobs`: the documents the ticket's workflow draws for it, and whether one is being drawn or failed. */
+export interface TicketDocumentJobsResponse {
+  /** Whether the caller may ask for a document again (`POST /tickets/:id/document-jobs`). */
+  readonly canRegenerate: boolean;
+  readonly documents: ReadonlyArray<{
+    readonly workflowDocumentId: string;
+    readonly name: string;
+    readonly state: TicketDocumentJobState | null;
+    /** When the last request to draw it was queued; `null` when none is on record. */
+    readonly requestedAt: string | null;
+  }>;
+}
+
+export const ticketDocumentJobsResponseSchema = z.object({
+  canRegenerate: z.boolean(),
+  documents: z.array(z.object({ workflowDocumentId: uuidSchema, name: z.string(), state: z.enum(['GENERATING', 'FAILED']).nullable(), requestedAt: z.string().nullable() })),
+}) satisfies z.ZodType<TicketDocumentJobsResponse>;
+
+/** `POST /tickets/:id/document-jobs`: draw this document of the ticket again, with its current data. */
+export const regenerateTicketDocumentRequestSchema = z.object({ workflowDocumentId: uuidSchema }).strict();
+export type RegenerateTicketDocumentRequest = z.infer<typeof regenerateTicketDocumentRequestSchema>;
+
 export type StorageState = 'OK' | 'OVER_LIMIT' | 'BLOCKED';
 
 /** Byte amounts are strings: they can exceed what a JSON number holds exactly. */

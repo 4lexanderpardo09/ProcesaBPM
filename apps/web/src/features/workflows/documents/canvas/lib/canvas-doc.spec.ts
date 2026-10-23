@@ -1,6 +1,6 @@
 import { type CanvasElement, emptyCanvasDesign, type FieldDocument, type PdfCanvasDesign } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { addSheet, alignElements, createElement, duplicateElements, elementOfPath, moveLayer, removeSheet, snap, swapSheets } from './canvas-doc';
+import { addSheet, alignElements, createElement, duplicateElements, elementOfPath, moveLayer, pasteElements, removeSheet, sheetSizeOf, snap, swapSheets } from './canvas-doc';
 
 const sheet = { width: 200, height: 280 };
 const design = (elements: CanvasElement[], sheets = 1): PdfCanvasDesign => ({ ...emptyCanvasDesign(), sheets: Array.from({ length: sheets }, () => ({ name: '', condition: '' })), elements });
@@ -77,5 +77,20 @@ describe('sheets', () => {
     const base = design([text('a', 0, 0), text('b', 0, 0)]);
     expect(elementOfPath(base, 'elements[1].content')).toBe('b');
     expect(elementOfPath(base, 'calculations[0].formula')).toBeUndefined();
+  });
+});
+
+describe('pasteElements', () => {
+  it('adds unlocked copies with new ids on the sheet being edited, a little moved and kept inside the sheet', () => {
+    const copied = [text('a', 10, 10, { locked: true, sheet: 0 }), text('b', 40, 40, { sheet: 0 })];
+    const target = design([text('a', 10, 10)], 2);
+    const size = sheetSizeOf(target);
+    const result = pasteElements(target, [...copied, text('c', size.width - 1, size.height - 1)], 1);
+    const [first, , last] = result.design.elements.slice(1);
+    expect(result.copies).toHaveLength(3);
+    expect(result.copies).not.toContain('a');
+    expect(first).toMatchObject({ x: 15, y: 15, locked: false, sheet: 1 });
+    expect(last!.x + last!.width).toBeLessThanOrEqual(size.width + 0.001);
+    expect(last!.y + last!.height).toBeLessThanOrEqual(size.height + 0.001);
   });
 });
