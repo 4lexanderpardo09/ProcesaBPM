@@ -1,5 +1,11 @@
 import {
   type AnnouncementRequest,
+  type InvitePlatformAdminRequest,
+  type MfaResetRequest,
+  mfaResetResponseSchema,
+  platformAdminSummarySchema,
+  platformUserResponseSchema,
+  type UpdatePlanRequest,
   countrySummarySchema,
   type CreateTenantRequest,
   createTenantResponseSchema,
@@ -23,6 +29,7 @@ export const platformQueryKeys = {
   plans: () => [...platformQueryKeys.all, 'plans'] as const,
   countries: () => [...platformQueryKeys.all, 'countries'] as const,
   announcements: () => [...platformQueryKeys.all, 'announcements'] as const,
+  admins: () => [...platformQueryKeys.all, 'admins'] as const,
 };
 
 const query = (values: Readonly<Record<string, string | number | undefined>>) => {
@@ -83,4 +90,29 @@ export function saveAnnouncement(client: HttpClient, id: string | undefined, bod
 
 export function deleteAnnouncement(client: HttpClient, id: string) {
   return client.request(`/platform/announcements/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function updatePlan(client: HttpClient, code: string, body: UpdatePlanRequest) {
+  return client.request(`/platform/plans/${encodeURIComponent(code)}`, { method: 'PUT', body, schema: planSummarySchema });
+}
+
+export function adminsQueryOptions(client: HttpClient) {
+  return queryOptions({ queryKey: platformQueryKeys.admins(), queryFn: ({ signal }) => client.request('/platform/admins', { schema: z.array(platformAdminSummarySchema), signal }) });
+}
+
+export function inviteAdmin(client: HttpClient, body: InvitePlatformAdminRequest) {
+  return client.request('/platform/admins', { method: 'POST', body, schema: platformAdminSummarySchema });
+}
+
+export function revokeAdmin(client: HttpClient, userId: string) {
+  return client.request(`/platform/admins/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+}
+
+/** An account by its exact e-mail (support never searches): a mutation, so nothing of it stays in a cache. */
+export function lookUpUser(client: HttpClient, email: string) {
+  return client.request(`/platform/users${query({ email })}`, { schema: platformUserResponseSchema });
+}
+
+export function resetUserMfa(client: HttpClient, userId: string, body: MfaResetRequest) {
+  return client.request(`/platform/users/${encodeURIComponent(userId)}/mfa-reset`, { method: 'POST', body, schema: mfaResetResponseSchema });
 }

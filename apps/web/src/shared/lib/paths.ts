@@ -30,6 +30,9 @@ export const paths = {
   platform: '/platform',
   platformTenant: '/platform/tenants/:tenantId',
   platformAnnouncements: '/platform/announcements',
+  platformPlans: '/platform/plans',
+  platformAdmins: '/platform/admins',
+  platformAccounts: '/platform/accounts',
 } as const;
 
 export function ticketPath(ticketId: string): string {

@@ -8,6 +8,13 @@ import { platformQueryKeys } from '../api/platform-api';
 import { usePlatformSession, usePlatformSessionState } from '../session/PlatformSessionContext';
 import styles from './PlatformLayout.module.css';
 
+const SECTIONS = [
+  [paths.platformAnnouncements, 'announcements'],
+  [paths.platformPlans, 'plans'],
+  [paths.platformAdmins, 'admins'],
+  [paths.platformAccounts, 'accounts'],
+] as const;
+
 /**
  * The console's frame: only with an open platform session (else back to sign in), ended at the token's expiry, with
  * its own sections and «Salir». What it read is dropped when the session ends.
@@ -37,9 +44,11 @@ export function PlatformLayout() {
           <NavLink to={paths.platform} end className={({ isActive }) => (isActive ? styles.active : styles.link)}>
             {t('nav.tenants')}
           </NavLink>
-          <NavLink to={paths.platformAnnouncements} className={({ isActive }) => (isActive ? styles.active : styles.link)}>
-            {t('nav.announcements')}
-          </NavLink>
+          {SECTIONS.map(([path, key]) => (
+            <NavLink key={path} to={path} className={({ isActive }) => (isActive ? styles.active : styles.link)}>
+              {t(`nav.${key}`)}
+            </NavLink>
+          ))}
         </nav>
         <Button
           variant="ghost"
