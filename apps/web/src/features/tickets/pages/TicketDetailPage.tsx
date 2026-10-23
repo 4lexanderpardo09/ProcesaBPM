@@ -54,7 +54,15 @@ export function TicketDetailPage() {
         <aside className={styles.side}>
           <TicketParallelSignatures tasks={ticket.parallelTasks} timeZone={timeZone} />
           <TicketStepFiles ticketId={ticket.id} stepFiles={stepFiles} />
-          <TicketFieldValues values={ticket.values} valueNames={ticket.valueNames} form={form} timeZone={timeZone} />
+          <TicketFieldValues
+            ticketId={ticket.id}
+            values={ticket.values}
+            valueNames={ticket.valueNames}
+            totals={ticket.totals}
+            fileNames={Object.fromEntries((documents.data ?? []).map((document) => [document.file.id, document.file.name]))}
+            form={form}
+            timeZone={timeZone}
+          />
           <TicketAttachments ticketId={ticket.id} number={ticket.number} documents={documents} timeZone={timeZone} />
           <TicketTagsCard ticket={ticket} />
         </aside>

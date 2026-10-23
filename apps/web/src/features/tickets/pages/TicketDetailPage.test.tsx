@@ -212,6 +212,33 @@ describe('TicketDetailPage', () => {
     expect(screen.queryByText('version-vieja.pdf')).toBeNull();
   }, 15_000);
 
+  it('opens the rows of a table: cells formatted like fields, the totals and its files to download', async () => {
+    const items = field(5, 'items', 'Gastos', 'TABLE', {
+      columns: [
+        { code: 'ITEM', label: 'Gasto', type: 'SELECT', options: [{ value: 'taxi', label: 'Taxi' }] },
+        { code: 'VALUE', label: 'Valor', type: 'CURRENCY', showTotal: true },
+        { code: 'ON', label: 'Fecha', type: 'DATE' },
+        { code: 'PROOF', label: 'Soporte', type: 'FILE' },
+      ],
+    });
+    renderRoute(base, {
+      handlers: ticketHandlers({
+        [base]: () => detail({ values: { items: [{ ITEM: 'taxi', VALUE: '25000.00', ON: '2026-10-01', PROOF: [FILE] }, { ITEM: 'otro', VALUE: '5000.50' }] }, totals: { items: { VALUE: '30000.50' } } }),
+        [`${base}/form`]: () => ({ ...form, fields: [items] }),
+        [`${base}/files/${FILE}/download-url`]: () => ({ url: 'https://files.example/comprobante?sig=1', expiresAt: at }),
+      }),
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver las filas de «Gastos»' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Gastos' });
+    const rows = within(dialog).getAllByRole('row').map((row) => row.textContent);
+    expect(rows[1]).toBe('Taxi25.000,001 de oct de 2026comprobante-pago.pdf');
+    expect(rows[2]).toBe('otro5.000,50——');
+    expect(rows[3]).toBe('Total30.000,50');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Descargar comprobante-pago.pdf' }));
+    await vi.waitFor(() => expect(openDownload).toHaveBeenCalledWith('https://files.example/comprobante?sig=1'));
+  });
+
   it('says what an edit and a submitted form changed', async () => {
     const priority = { id: id(700), name: 'Alta', color: '#be123c', sortOrder: 1, isActive: true, isDefault: false, createdAt: at };
     const edited = {

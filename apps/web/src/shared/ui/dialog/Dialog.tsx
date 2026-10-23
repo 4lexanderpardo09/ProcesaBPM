@@ -12,13 +12,15 @@ export interface DialogProps {
   readonly footer: ReactNode;
   readonly closeLabel: string;
   readonly children: ReactNode;
+  /** `wide` for content that needs room, such as a table. */
+  readonly size?: 'default' | 'wide';
 }
 
 /**
  * A modal over the page on the native `<dialog>`: the browser traps the focus, makes the rest inert and closes it
  * with Escape. Use it for a decision or a short form; the page behind does not change until it is confirmed.
  */
-export function Dialog({ open, title, onClose, onSubmit, footer, closeLabel, children }: DialogProps) {
+export function Dialog({ open, title, onClose, onSubmit, footer, closeLabel, children, size = 'default' }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -38,7 +40,7 @@ export function Dialog({ open, title, onClose, onSubmit, footer, closeLabel, chi
   return (
     <dialog
       ref={ref}
-      className={styles.dialog}
+      className={cx(styles.dialog, size === 'wide' && styles.wide)}
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
