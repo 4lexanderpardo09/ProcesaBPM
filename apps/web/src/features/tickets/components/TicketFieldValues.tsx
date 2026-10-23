@@ -48,7 +48,8 @@ export function TicketFieldValues({ values, valueNames, form, timeZone }: Ticket
   );
 }
 
-function DisplayedValue({ display }: { readonly display: FieldValueDisplay }) {
+/** A field's value as `fieldValueDisplay` reads it. */
+export function DisplayedValue({ display }: { readonly display: FieldValueDisplay }) {
   const { t } = useTranslation('tickets');
   switch (display.kind) {
     case 'text':

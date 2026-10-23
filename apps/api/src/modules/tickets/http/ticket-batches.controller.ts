@@ -1,5 +1,5 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post } from '@nestjs/common';
-import { type BatchTransitionRequest, batchTransitionRequestSchema, type BatchTransitionResponse, type TicketBatchGroup } from '@procesabpm/shared';
+import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Post, Query } from '@nestjs/common';
+import { type BatchTransitionRequest, batchTransitionRequestSchema, type BatchTransitionResponse, type TicketBatchesQuery, ticketBatchesQuerySchema, type TicketBatchGroup } from '@procesabpm/shared';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
@@ -19,8 +19,8 @@ export class TicketBatchesController {
 
   @RequirePermission('transition', TICKET_SUBJECT)
   @Get()
-  groups(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility): Promise<TicketBatchGroup[]> {
-    return this.batches.groups(this.queries.actorFor(principal, ability));
+  groups(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Query(new ZodValidationPipe(ticketBatchesQuerySchema)) query: TicketBatchesQuery): Promise<TicketBatchGroup[]> {
+    return this.batches.groups(this.queries.actorFor(principal, ability), query.cutoffId);
   }
 
   @RequirePermission('transition', TICKET_SUBJECT)

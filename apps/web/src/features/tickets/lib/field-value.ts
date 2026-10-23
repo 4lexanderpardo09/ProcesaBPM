@@ -16,8 +16,11 @@ interface Option {
   readonly label: string;
 }
 
+/** What of a field its value's reading needs. */
+type ReadField = Pick<FormFieldResponse, 'type' | 'config'>;
+
 /** `undefined` when there is nothing to show: no value, or a file (those are listed with the attachments). */
-export function fieldValueDisplay(field: FormFieldResponse, value: unknown, names: TicketValueNamesResponse, timeZone?: string): FieldValueDisplay | undefined {
+export function fieldValueDisplay(field: ReadField, value: unknown, names: TicketValueNamesResponse, timeZone?: string): FieldValueDisplay | undefined {
   if (isEmpty(value) || field.type === 'FILE') return undefined;
   switch (field.type) {
     case 'SELECT':
@@ -56,18 +59,18 @@ const text = (value: string): FieldValueDisplay => ({ kind: 'text', text: value 
 const named = (name: string | undefined): FieldValueDisplay => (name === undefined ? { kind: 'unknown' } : text(name));
 
 /** The option's label; lists from presets (people, sites, companies, departments, positions) hold ids the API names in `valueNames`. */
-function optionLabel(field: FormFieldResponse, value: string, names: TicketValueNamesResponse): string {
+function optionLabel(field: ReadField, value: string, names: TicketValueNamesResponse): string {
   const options = field.config['options'];
   const label = Array.isArray(options) ? (options as readonly Option[]).find((option) => option.value === value)?.label : undefined;
   return label ?? names.users[value] ?? names.sites[value] ?? names.companies[value] ?? names.departments[value] ?? names.positions[value] ?? value;
 }
 
-function numberConfig(field: FormFieldResponse, key: string): number | undefined {
+function numberConfig(field: ReadField, key: string): number | undefined {
   const value = field.config[key];
   return typeof value === 'number' ? value : undefined;
 }
 
-function stringConfig(field: FormFieldResponse, key: string): string | undefined {
+function stringConfig(field: ReadField, key: string): string | undefined {
   const value = field.config[key];
   return typeof value === 'string' ? value : undefined;
 }
@@ -93,7 +96,7 @@ function dateText(value: string, timeZone: string | undefined): string {
   return DATE_ONLY.test(value) ? formatShortDate(`${value}T00:00:00Z`, 'UTC') : formatShortDate(value, timeZone);
 }
 
-function formulaText(field: FormFieldResponse, value: unknown, timeZone: string | undefined): FieldValueDisplay {
+function formulaText(field: ReadField, value: unknown, timeZone: string | undefined): FieldValueDisplay {
   switch (field.config['resultType']) {
     case 'NUMBER':
       return numberText(value, { maximumFractionDigits: numberConfig(field, 'decimals') ?? 6 });

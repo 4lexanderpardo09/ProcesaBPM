@@ -7,6 +7,7 @@ import { PublishedVersionReader } from '../../workflows/application/published-ve
 import { BatchTicketsRepository } from '../data/batch-tickets.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
 import { batchLimitOf, batchRefusal } from '../domain/batch-policy.js';
+import { batchSubgroupOf, batchTrayOf } from '../domain/batch-tray.js';
 import { decisionExits } from '../domain/ticket-action-rules.js';
 import type { TicketActor } from './locked-ticket.js';
 import { TransitionTicketService } from './transition-ticket.service.js';
@@ -28,12 +29,15 @@ export class TicketBatchService {
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {}
 
-  /** The caller's tickets on batch steps, a group per step of a workflow version, in the order they arrived. */
-  groups(actor: TicketActor): Promise<TicketBatchGroup[]> {
+  /**
+   * The caller's tickets on batch steps, a group per step of a workflow version, in the order they arrived, each with the
+   * data and the part of the tray its step asks for. With `cutoffId`, only those that went out in that export file.
+   */
+  groups(actor: TicketActor, cutoffId?: string): Promise<TicketBatchGroup[]> {
     return this.runner.withTenantTransaction(async (tx) => {
       const { tenantId } = this.context.require();
       const groups = new Map<string, TicketBatchGroup & { tickets: TicketBatchGroup['tickets'][number][] }>();
-      for (const row of await this.batches.heldOnBatchSteps(tx, tenantId, actor.userId)) {
+      for (const row of await this.batches.heldOnBatchSteps(tx, tenantId, actor.userId, cutoffId)) {
         const key = `${row.workflowVersionId}:${row.currentStepId}`;
         let group = groups.get(key);
         if (group === undefined) {
@@ -46,6 +50,7 @@ export class TicketBatchService {
             stepName: step.name,
             workflowName: row.workflowName,
             maxTickets: batchLimitOf(step),
+            ...batchTrayOf(step, document.fields),
             decisions: decisionExits(document, step.id).map((transition) => ({ transitionId: transition.id, label: transition.label })),
             tickets: [],
           };
@@ -60,6 +65,8 @@ export class TicketBatchService {
           companyName: row.companyName,
           createdAt: row.createdAt.toISOString(),
           dueAt: row.dueAt?.toISOString() ?? null,
+          values: Object.fromEntries(group.shownFields.flatMap((field) => (row.values[field.code] === undefined ? [] : [[field.code, row.values[field.code]]]))),
+          subgroup: batchSubgroupOf(group.groupBy, row),
         });
       }
       return [...groups.values()];

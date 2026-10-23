@@ -4,7 +4,19 @@ import { FIELD_CODE_PATTERN, SLA_UNITS, type StepType } from './constants.js';
 const instructions = z.string().max(5000).optional();
 const uuid = z.uuid();
 const fieldCode = z.string().regex(FIELD_CODE_PATTERN);
-const batch = z.object({ maxTickets: z.number().int().min(1).max(500) }).strict().optional();
+/** How a step's batch tray can split its tickets: by company, by the requester's site or department, or by export file. */
+export const BATCH_GROUP_BY = ['COMPANY', 'REQUESTER_SITE', 'REQUESTER_DEPARTMENT', 'EXPORT_CUTOFF'] as const;
+export type BatchGroupBy = (typeof BATCH_GROUP_BY)[number];
+/** How the batch tray of a step reads: its title, up to four data of the ticket beside each one, and how it splits them. */
+const batch = z
+  .object({
+    maxTickets: z.number().int().min(1).max(500),
+    title: z.string().trim().min(1).max(120).optional(),
+    showFields: z.array(fieldCode).max(4).optional(),
+    groupBy: z.enum(BATCH_GROUP_BY).optional(),
+  })
+  .strict()
+  .optional();
 /** The ticket cannot leave the step while its line in this export has not come out in a file ("exige corte del plano"). */
 const requiredExportId = uuid.optional();
 

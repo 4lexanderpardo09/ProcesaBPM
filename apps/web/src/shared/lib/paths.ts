@@ -33,6 +33,11 @@ export function ticketPath(ticketId: string): string {
   return `${paths.tickets}/${encodeURIComponent(ticketId)}`;
 }
 
+/** "Procesar en lote" with only the tickets that went out in one export file. */
+export function cutoffBatchPath(cutoffId: string): string {
+  return `${paths.ticketBatches}?${new URLSearchParams({ cutoff: cutoffId }).toString()}`;
+}
+
 export function workflowPath(workflowId: string): string {
   return `${paths.workflows}/${encodeURIComponent(workflowId)}`;
 }

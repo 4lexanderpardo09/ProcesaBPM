@@ -156,5 +156,6 @@ describe('exports ("planos")', () => {
     const table = await screen.findByRole('table', { name: 'Mis planos' });
     expect(await within(table).findByText('Pagos al banco')).toBeInTheDocument();
     expect(within(table).getByRole('button', { name: 'Descargar el archivo del 22/10/2026' })).toBeInTheDocument();
+    expect(within(table).getByRole('link', { name: 'Procesar en lote los tickets del archivo del 22/10/2026' }).getAttribute('href')).toMatch(/^\/tickets\/batch\?cutoff=/);
   });
 });

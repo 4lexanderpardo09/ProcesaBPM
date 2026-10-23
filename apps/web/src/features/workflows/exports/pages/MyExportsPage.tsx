@@ -2,8 +2,9 @@ import type { ExportCutoffResponse } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/shared/lib/format-date-time';
+import { cutoffBatchPath } from '@/shared/lib/paths';
 import { useApiClient, useCurrentUser } from '@/shared/session';
-import { Button, PageHeader, Table, type TableColumn } from '@/shared/ui';
+import { Button, ButtonLink, PageHeader, Table, type TableColumn } from '@/shared/ui';
 import { WorkflowError } from '../../components/WorkflowError';
 import { myCutoffsQueryOptions } from '../api/exports-api';
 import { useCutoffDownload } from '../components/ExportFilesTab';
@@ -31,6 +32,16 @@ export function MyExportsPage() {
             {t('exports.files.download')}
           </Button>
         ),
+    },
+    {
+      key: 'process',
+      header: '',
+      width: '150px',
+      cell: (row) => (
+        <ButtonLink variant="ghost" to={cutoffBatchPath(row.id)} aria-label={t('exports.files.processNamed', { date: dayMonthYear(row.cutoffDate) })}>
+          {t('exports.files.process')}
+        </ButtonLink>
+      ),
     },
   ];
   return (

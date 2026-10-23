@@ -15,8 +15,10 @@ const ticket = (index: number, name: string) => ({
   companyName: 'Arpesod',
   createdAt: '2026-10-20T15:00:00.000Z',
   dueAt: null,
+  values: {},
+  subgroup: null,
 });
-const group = { workflowVersionId: id(1), stepId: STEP, stepName: 'Tesorería', workflowName: 'Viáticos', maxTickets: 2, decisions: [{ transitionId: PAID, label: 'Pagado' }], tickets: [ticket(1, 'Ana Pérez'), ticket(2, 'Luis Gómez'), ticket(3, 'Olga Ruiz')] };
+const group = { workflowVersionId: id(1), stepId: STEP, stepName: 'Tesorería', workflowName: 'Viáticos', maxTickets: 2, title: null, shownFields: [], groupBy: null, decisions: [{ transitionId: PAID, label: 'Pagado' }], tickets: [ticket(1, 'Ana Pérez'), ticket(2, 'Luis Gómez'), ticket(3, 'Olga Ruiz')] };
 const form = {
   ticketId: id(101),
   versionId: id(1),
@@ -74,6 +76,33 @@ describe('TicketBatchPage', () => {
     const result = await screen.findByRole('dialog', { name: 'Resultado del lote' });
     expect(within(result).getByText('1 ticket avanzó.')).toBeInTheDocument();
     expect(within(result).getByText(/los datos del paso no sirven para este ticket/)).toHaveTextContent('T-1003 · los datos del paso no sirven para este ticket.');
+  });
+
+  it('reads the tray as the step asks: its title, the data beside each ticket and its parts, each chosen at once', async () => {
+    const at = (index: number, site: { key: string; name: string }, amount: string) => ({ ...ticket(index, 'Ana Pérez'), values: { AMOUNT: amount }, subgroup: site });
+    const north = { key: id(50), name: 'Barranquilla' };
+    const none = { key: '', name: '' };
+    const tray = {
+      ...group,
+      maxTickets: 10,
+      title: 'Pagos del día',
+      groupBy: 'REQUESTER_SITE',
+      shownFields: [{ code: 'AMOUNT', label: 'Monto', type: 'CURRENCY', config: { currencyCode: 'COP' } }],
+      tickets: [at(1, none, '1250000.00'), at(2, north, '80000.00'), at(3, north, '5000.00')],
+    };
+    const { fake } = renderRoute(`/tickets/batch?cutoff=${id(60)}`, { handlers: { '/ticket-batches': () => [tray] } });
+
+    expect(await screen.findByRole('heading', { name: 'Pagos del día · Viáticos' })).toBeInTheDocument();
+    expect(new URLSearchParams(fake.callsTo('/ticket-batches')[0]!.path.split('?')[1]).get('cutoffId')).toBe(id(60));
+    expect(screen.getByText('Solo los tickets que salieron en un archivo del plano.')).toBeInTheDocument();
+    const parts = screen.getAllByRole('region').filter((region) => ['Barranquilla', 'Sin sede'].includes(region.getAttribute('aria-label') ?? ''));
+    expect(parts.map((region) => region.getAttribute('aria-label'))).toEqual(['Barranquilla', 'Sin sede']);
+    expect(within(parts[1]!).getByRole('columnheader', { name: 'Monto' })).toBeInTheDocument();
+    expect(within(parts[1]!).getByText(/1\.250\.000/)).toBeInTheDocument();
+
+    await userEvent.click(within(parts[0]!).getByRole('checkbox', { name: 'Elegir estos 2' }));
+    expect(screen.getByText('2 elegidos de máximo 10 por lote')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Elegir el ticket T-1001' })).not.toBeChecked();
   });
 
   it('says when there is nothing to answer in a batch', async () => {

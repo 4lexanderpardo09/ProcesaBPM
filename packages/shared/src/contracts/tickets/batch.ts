@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { FIELD_TYPES } from '../../workflow/constants.js';
+import { BATCH_GROUP_BY } from '../../workflow/block-config.js';
 import { uuidSchema } from '../ids.js';
 import { ticketMutationResponseSchema } from './mutation-responses.js';
 
@@ -15,6 +17,12 @@ export const ticketBatchGroupSchema = z.object({
   stepName: z.string(),
   workflowName: z.string(),
   maxTickets: z.number().int().min(1),
+  /** The step's own title for its tray (`config.batch.title`), or `null` for the step's name. */
+  title: z.string().nullable(),
+  /** The data of each ticket the tray shows beside it, in order: code, label, type and how the field reads its value. */
+  shownFields: z.array(z.object({ code: z.string(), label: z.string(), type: z.enum(FIELD_TYPES), config: z.record(z.string(), z.unknown()) })),
+  /** How the tray splits its tickets; `null` keeps them in one list. */
+  groupBy: z.enum(BATCH_GROUP_BY).nullable(),
   decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string() })),
   tickets: z.array(
     z.object({
@@ -26,9 +34,17 @@ export const ticketBatchGroupSchema = z.object({
       companyName: z.string(),
       createdAt: z.string(),
       dueAt: z.string().nullable(),
+      /** The values of `shownFields`, by code (absent when the ticket has none). */
+      values: z.record(z.string(), z.unknown()),
+      /** Its part of the tray under `groupBy`; `null` without grouping. `key` is `''` for "none" (no site, not in a file). */
+      subgroup: z.object({ key: z.string(), name: z.string() }).nullable(),
     }),
   ),
 });
+
+/** `GET /ticket-batches?cutoffId=`: only the tickets that went out in that export file ("procesar sus tickets"). */
+export const ticketBatchesQuerySchema = z.object({ cutoffId: uuidSchema.optional() });
+export type TicketBatchesQuery = z.infer<typeof ticketBatchesQuerySchema>;
 export type TicketBatchGroup = z.infer<typeof ticketBatchGroupSchema>;
 export const ticketBatchGroupsResponseSchema = z.array(ticketBatchGroupSchema);
 

@@ -23,6 +23,7 @@ describe('answering several tickets of a step at once', () => {
   let supervisor: Member;
   let payments: PublishedFlow;
   let single: PublishedFlow;
+  let tray: PublishedFlow;
 
   const create = async (flow: PublishedFlow): Promise<Created> => (await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: unique('Payment'), values: {} }).expect(201)).body as Created;
   const itemOf = (ticket: Created) => ({ ticketId: ticket.id, visitId: ticket.openVisitId });
@@ -43,6 +44,10 @@ describe('answering several tickets of a step at once', () => {
       fields: [{ step: 'task', code: 'PAY_METHOD', type: 'TEXT', capture: 'STEP', isRequired: true }],
     });
     single = await publishFlow(world.admin, simpleFlow({ assignmentMode: 'USERS' }, toWorker));
+    tray = await publishFlow(world.admin, {
+      ...simpleFlow({ assignmentMode: 'USERS', allowsBatch: true, config: { batch: { maxTickets: 5, title: 'Pagos del día', showFields: ['AMOUNT'], groupBy: 'COMPANY' } } }, toWorker),
+      fields: [{ step: 'start', code: 'AMOUNT', type: 'NUMBER', capture: 'CREATION' }],
+    });
   });
 
   afterAll(async () => {
@@ -60,6 +65,22 @@ describe('answering several tickets of a step at once', () => {
     expect(group.tickets.map((ticket) => ticket.id)).toEqual(expect.arrayContaining([first.id, second.id]));
     expect(groups.flatMap((candidate) => candidate.tickets).map((ticket) => ticket.id)).not.toContain(loose.id);
     expect((await requester.client.get('/ticket-batches').expect(403)).body.error.code).toBe('PERMISSION_DENIED');
+  });
+
+  it('reads the tray as the step asks: its title, the data beside each ticket and its part of the tray', async () => {
+    const ticket = (await requester.client.post('/tickets', { subcategoryId: tray.subcategoryId, title: unique('Payment'), values: { AMOUNT: 1500 } }).expect(201)).body as Created;
+
+    const groups = ticketBatchGroupsResponseSchema.parse((await worker.client.get('/ticket-batches').expect(200)).body);
+    const group = groups.find((candidate) => candidate.stepId === tray.step.task)!;
+    expect(group).toMatchObject({ title: 'Pagos del día', groupBy: 'COMPANY', shownFields: [{ code: 'AMOUNT', label: 'AMOUNT', type: 'NUMBER', config: {} }] });
+    const row = group.tickets.find((candidate) => candidate.id === ticket.id)!;
+    expect(row.values).toEqual({ AMOUNT: 1500 });
+    expect(row.subgroup).toEqual({ key: expect.any(String), name: row.companyName });
+    expect(groups.find((candidate) => candidate.stepId === payments.step.task)).toMatchObject({ title: null, shownFields: [], groupBy: null });
+
+    const none = ticketBatchGroupsResponseSchema.parse((await worker.client.get('/ticket-batches?cutoffId=018f0000-0000-7000-8000-000000000000').expect(200)).body);
+    expect(none).toEqual([]);
+    await worker.client.get('/ticket-batches?cutoffId=nope').expect(400);
   });
 
   it('moves every ticket it can with the same values, and says why the others stayed', async () => {

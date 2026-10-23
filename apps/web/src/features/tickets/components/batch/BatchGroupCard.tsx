@@ -1,16 +1,46 @@
-import type { TicketBatchGroup } from '@procesabpm/shared';
+import type { TicketBatchGroup, TicketValueNamesResponse } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { formatDateTime } from '@/shared/lib/format-date-time';
 import { ticketPath } from '@/shared/lib/paths';
 import { Button, Card, Checkbox, Table, type TableColumn } from '@/shared/ui';
+import { fieldValueDisplay } from '../../lib/field-value';
+import { DisplayedValue } from '../TicketFieldValues';
 import { BatchAdvanceDialog } from './BatchAdvanceDialog';
 import styles from './Batch.module.css';
 
 type BatchTicket = TicketBatchGroup['tickets'][number];
 
-/** One step's tickets with a box each, and its decisions for the ones chosen (up to the step's limit). */
+/** The tray shows only fields whose value reads without the ticket's names of people and sites. */
+const NO_NAMES: TicketValueNamesResponse = { users: {}, sites: {}, companies: {}, departments: {}, positions: {} };
+
+interface Section {
+  readonly key: string | null;
+  readonly name: string;
+  readonly tickets: readonly BatchTicket[];
+}
+
+/** The parts of the tray under the step's grouping, in the order their first ticket arrived; "none" goes last. */
+function sectionsOf(group: TicketBatchGroup): readonly Section[] {
+  if (group.groupBy === null) return [{ key: null, name: '', tickets: group.tickets }];
+  const sections = new Map<string, { key: string; name: string; tickets: BatchTicket[] }>();
+  for (const ticket of group.tickets) {
+    const key = ticket.subgroup?.key ?? '';
+    let section = sections.get(key);
+    if (section === undefined) {
+      section = { key, name: ticket.subgroup?.name ?? '', tickets: [] };
+      sections.set(key, section);
+    }
+    section.tickets.push(ticket);
+  }
+  return [...sections.values()].sort((left, right) => Number(left.key === '') - Number(right.key === ''));
+}
+
+/**
+ * One step's tickets with a box each, and its decisions for the ones chosen (up to the step's limit). The step can name
+ * its tray, show some of each ticket's data beside it and split the tickets in parts, each chosen at once.
+ */
 export function BatchGroupCard({ group, timeZone }: { readonly group: TicketBatchGroup; readonly timeZone: string | undefined }) {
   const { t } = useTranslation('tickets');
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
@@ -18,37 +48,69 @@ export function BatchGroupCard({ group, timeZone }: { readonly group: TicketBatc
   // A ticket that left the group (moved here or elsewhere) is no longer chosen.
   const ids = group.tickets.map((ticket) => ticket.id).filter((id) => chosen.has(id));
   const all = ids.length === group.tickets.length;
-  const toggle = (id: string, on: boolean) =>
+  const setMany = (tickets: readonly BatchTicket[], on: boolean) =>
     setChosen((current) => {
       const next = new Set(current);
-      if (on) next.add(id);
-      else next.delete(id);
+      for (const ticket of tickets) {
+        if (on) next.add(ticket.id);
+        else next.delete(ticket.id);
+      }
       return next;
     });
   const tooMany = ids.length > group.maxTickets;
+  const title = group.title ?? group.stepName;
+  const sectionName = (section: Section) => (section.key === '' && group.groupBy !== null ? t(`batch.none.${group.groupBy}`) : section.name);
 
   const columns: readonly TableColumn<BatchTicket>[] = [
     {
       key: 'pick',
       header: '',
       width: '44px',
-      cell: (ticket) => <input type="checkbox" className={styles.box} aria-label={t('batch.pick', { number: ticket.number })} checked={chosen.has(ticket.id)} onChange={(event) => toggle(ticket.id, event.target.checked)} />,
+      cell: (ticket) => <input type="checkbox" className={styles.box} aria-label={t('batch.pick', { number: ticket.number })} checked={chosen.has(ticket.id)} onChange={(event) => setMany([ticket], event.target.checked)} />,
     },
     { key: 'number', header: t('columns.number'), cell: (ticket) => ticket.number, code: true, width: '112px' },
     { key: 'title', header: t('columns.title'), cell: (ticket) => <Link to={ticketPath(ticket.id)}>{ticket.title}</Link> },
+    ...group.shownFields.map(
+      (field): TableColumn<BatchTicket> => ({
+        key: `field:${field.code}`,
+        header: field.label,
+        cell: (ticket) => {
+          const display = fieldValueDisplay(field, ticket.values[field.code], NO_NAMES, timeZone);
+          return display === undefined ? '—' : <DisplayedValue display={display} />;
+        },
+      }),
+    ),
     { key: 'requester', header: t('batch.requester'), cell: (ticket) => ticket.requester.name },
-    { key: 'company', header: t('batch.company'), cell: (ticket) => ticket.companyName },
+    ...(group.groupBy === 'COMPANY' ? [] : [{ key: 'company', header: t('batch.company'), cell: (ticket: BatchTicket) => ticket.companyName }]),
     { key: 'due', header: t('batch.due'), cell: (ticket) => (ticket.dueAt === null ? '—' : formatDateTime(ticket.dueAt, timeZone)) },
   ];
 
   return (
-    <Card title={t('batch.groupTitle', { step: group.stepName, workflow: group.workflowName })}>
+    <Card title={t('batch.groupTitle', { step: title, workflow: group.workflowName })}>
       <div className={styles.stack}>
         <div className={styles.bar}>
           <Checkbox label={t('batch.all', { count: group.tickets.length })} checked={all} onChange={(event) => setChosen(event.target.checked ? new Set(group.tickets.map((ticket) => ticket.id)) : new Set())} />
           <span className={styles.note}>{t('batch.chosen', { count: ids.length, max: group.maxTickets })}</span>
         </div>
-        <Table label={t('batch.tableLabel', { step: group.stepName })} columns={columns} rows={group.tickets} rowKey={(ticket) => ticket.id} empty={t('batch.emptyGroup')} />
+        {sectionsOf(group).map((section) => {
+          if (section.key === null) {
+            return <Table key="all" label={t('batch.tableLabel', { step: title })} columns={columns} rows={section.tickets} rowKey={(ticket) => ticket.id} empty={t('batch.emptyGroup')} />;
+          }
+          const name = sectionName(section);
+          return (
+            <section key={section.key} className={styles.section} aria-label={name}>
+              <div className={styles.bar}>
+                <h4 className={styles.sectionTitle}>{name}</h4>
+                <Checkbox
+                  label={t('batch.allIn', { count: section.tickets.length })}
+                  checked={section.tickets.every((ticket) => chosen.has(ticket.id))}
+                  onChange={(event) => setMany(section.tickets, event.target.checked)}
+                />
+              </div>
+              <Table label={t('batch.sectionLabel', { step: title, part: name })} columns={columns} rows={section.tickets} rowKey={(ticket) => ticket.id} empty={t('batch.emptyGroup')} />
+            </section>
+          );
+        })}
         {tooMany && <p className={styles.error}>{t('batch.tooMany', { max: group.maxTickets })}</p>}
         <div className={styles.bar} role="group" aria-label={t('batch.decisions')}>
           {group.decisions.map((option) => (
