@@ -77,6 +77,7 @@ export function NewTicketPage() {
               companies={companies}
               categories={catalog.data?.categories}
               catalogFailed={catalog.isError}
+              recent={catalog.data?.recent ?? []}
               priorities={priorities.data ?? []}
               priorityId={priorityId}
               value={{ ...type, companyId }}

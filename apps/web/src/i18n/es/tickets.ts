@@ -151,6 +151,8 @@ export const tickets = {
       loading: 'Cargando…',
       catalogFailed: 'No se pudo cargar la lista',
       noCategories: 'No hay solicitudes disponibles para ti',
+      recent: 'Usadas hace poco',
+      recentItem: '{{category}} › {{subcategory}}',
     },
     data: {
       title: 'Datos de la solicitud',

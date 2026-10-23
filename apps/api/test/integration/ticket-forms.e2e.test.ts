@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
-import { type FlowSpec, type Member, type PublishedFlow, publishFlow, TicketWorld, unique } from '../support/ticket-world.js';
+import { type FlowSpec, type Member, type PublishedFlow, publishFlow, simpleFlow, TicketWorld, unique } from '../support/ticket-world.js';
 
 useTestEnvironment();
 
@@ -83,6 +83,20 @@ describe('ticket forms', () => {
 
       await member.client.get(`/subcategories/${flow.subcategoryId}/creation-form?requesterId=${colleague.userId}`).expect(403);
       await member.client.get(`/catalog/available?requesterId=${colleague.userId}`).expect(403);
+    });
+
+    it('offers the subcategories of the person\'s latest tickets as a shortcut, the most recent first, while they can still pick them', async () => {
+      const opener = await world.member([grant('create'), grant('read_created')]);
+      const [first, second] = [await publishFlow(world.admin, simpleFlow()), await publishFlow(world.admin, simpleFlow())];
+      const recent = async () => (await opener.client.get('/catalog/available').expect(200)).body.recent as string[];
+      expect(await recent()).toEqual([]);
+      for (const target of [first, second, first]) await opener.client.post('/tickets', { subcategoryId: target.subcategoryId, title: unique('T'), values: {} }).expect(201);
+      await opener.client.post('/tickets', { subcategoryId: second.subcategoryId, title: unique('T'), values: {} }).expect(201);
+      expect(await recent()).toEqual([second.subcategoryId, first.subcategoryId]);
+      // Someone else's tickets are theirs, and a subcategory switched off drops out.
+      expect((await colleague.client.get('/catalog/available').expect(200)).body.recent).not.toContain(second.subcategoryId);
+      await world.admin.post(`/subcategories/${second.subcategoryId}/deactivate`).expect(200);
+      expect(await recent()).toEqual([first.subcategoryId]);
     });
 
     it('needs the create permission and an existing subcategory', async () => {
