@@ -20,6 +20,15 @@ describe('validateCapturedValues', () => {
     expect(codes(run([required], { A: '   ' }))).toEqual(['A:REQUIRED']);
   });
 
+  it('fills an empty date with «fecha actual» when the field asks for it, even read-only, but never over a value', () => {
+    const now = { today: '2026-10-05', now: '2026-10-05T14:30:00.000Z' };
+    const fields = [field('d', 's', 'D', { type: 'DATE', config: { defaultNow: true }, isRequired: true }), field('t', 's', 'T', { type: 'DATETIME', config: { defaultNow: true }, isReadOnly: true }), field('p', 's', 'P', { type: 'DATE' })];
+    expect(validateCapturedValues({ fields, input: {}, existing: {}, context: now })).toEqual({ values: { D: '2026-10-05', T: '2026-10-05T14:30:00.000Z' }, issues: [], references: [] });
+    expect(validateCapturedValues({ fields, input: { D: '2026-09-30' }, existing: {}, context: now }).values.D).toBe('2026-09-30');
+    // Already filled on an earlier step: kept as it was.
+    expect(validateCapturedValues({ fields, input: {}, existing: { D: '2026-09-01', T: '2026-09-01T10:00:00.000Z' }, context: now }).values).toEqual({});
+  });
+
   it('rejects codes the step does not capture', () => expect(codes(run([field('a', 's', 'A')], { OTHER: 'x' }))).toEqual(['OTHER:UNKNOWN_FIELD']));
 
   it('does not demand a read-only field', () => expect(codes(run([field('a', 's', 'A', { isReadOnly: true, isRequired: true })], {}))).toEqual([]));

@@ -445,6 +445,8 @@ export const tickets = {
     fixFields: 'Revisa los datos marcados.',
     choose: 'Elige una opción',
     daysHint: 'Número entero de días',
+    defaultToday: 'Si lo dejas vacío, queda la fecha de hoy.',
+    defaultNow: 'Si lo dejas vacío, queda la fecha y la hora del envío.',
     choices: {
       search: 'Buscar en «{{field}}»',
       loading: 'Cargando…',

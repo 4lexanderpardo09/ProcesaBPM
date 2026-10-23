@@ -100,6 +100,8 @@ export function FieldConfigEditor({ type, config, dataSource, fields, onChange }
           <DateBound label={label('dateMin')} value={config.min} onChange={(value) => set({ min: value })} />
           <DateBound label={label('dateMax')} value={config.max} onChange={(value) => set({ max: value })} />
           <p className={styles.note}>{label('dateHint')}</p>
+          <Checkbox label={label(type === 'DATE' ? 'defaultToday' : 'defaultNow')} checked={config.defaultNow === true} onChange={(event) => set({ defaultNow: event.target.checked ? true : undefined })} />
+          <p className={styles.note}>{label('defaultNowHint')}</p>
         </>
       );
     case 'DAYS':
