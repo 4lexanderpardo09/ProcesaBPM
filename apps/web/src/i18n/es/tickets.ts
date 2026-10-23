@@ -290,6 +290,23 @@ export const tickets = {
       download: 'Descargar {{name}}',
       downloadFailed: 'No se pudo descargar el archivo. Intenta de nuevo.',
     },
+    documentJobs: {
+      title: 'Documentos del flujo',
+      generating: 'Generando…',
+      failed: 'No se pudo generar',
+      regenerate: 'Volver a generar',
+      regenerateNamed: 'Volver a generar «{{name}}»',
+      regenerateFailed: 'No se pudo pedir el documento. Intenta de nuevo.',
+    },
+    stepFiles: {
+      title: 'Archivos de apoyo del paso',
+      download: 'Descargar {{label}}',
+    },
+    parallel: {
+      title: 'Firmas del paso',
+      progress: '{{signed}} de {{total}} firmaron.',
+      status: { PENDING: 'Pendiente', SIGNED: 'Firmó', REJECTED: 'Rechazó', CANCELLED: 'Ya no firma' },
+    },
     tags: {
       title: 'Mis etiquetas',
       add: 'Agregar',

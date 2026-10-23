@@ -12,7 +12,8 @@ export const documentGeneratePayloadSchema = z
     workflowDocumentId: uuidSchema,
     role: z.enum(['MAIN_DOCUMENT', 'STEP_DOCUMENT']),
     stepId: uuidSchema.nullable(),
-    trigger: z.enum(['BLOCK', 'CREATION', 'EACH_STEP', 'CLOSING']),
+    /** `MANUAL`: somebody asked for it again from the ticket. */
+    trigger: z.enum(['BLOCK', 'CREATION', 'EACH_STEP', 'CLOSING', 'MANUAL']),
   })
   .strict()
   .refine((payload) => (payload.role === 'STEP_DOCUMENT') === (payload.stepId !== null), 'A step document names its step; the main document does not');

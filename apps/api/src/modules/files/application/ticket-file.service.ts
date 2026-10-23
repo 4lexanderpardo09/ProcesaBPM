@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type DownloadUrlResponse, NotFoundError, type TicketDocumentResponse } from '@procesabpm/shared';
+import { type DownloadUrlResponse, NotFoundError, type TicketDocumentResponse, type TicketStepFileResponse } from '@procesabpm/shared';
 import { Clock } from '../../../infrastructure/clock.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { ObjectStorage } from '../../../infrastructure/storage/object-storage.js';
@@ -37,7 +37,12 @@ export class TicketFileService {
     }));
   }
 
-  /** The file, if it really is a document of this ticket. Signing happens after the transaction (`signDownload`). */
+  async stepFiles(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<TicketStepFileResponse[]> {
+    const rows = await this.documents.currentStepFiles(tx, tenantId, ticketId);
+    return rows.map((row) => ({ label: row.label, file: toStoredFileResponse(row.file) }));
+  }
+
+  /** The file, if it really is a document of this ticket or a support file of its current step. Signing happens after the transaction (`signDownload`). */
   async locate(tx: TenantTransaction, tenantId: string, ticketId: string, fileId: string): Promise<StoredFileRow> {
     const file = await this.documents.findFile(tx, tenantId, ticketId, fileId);
     if (file === null) throw new NotFoundError();
