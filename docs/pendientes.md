@@ -29,7 +29,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Formularios:** columnas de tabla de tipo archivo y de tipo fórmula; fuente «fecha actual»; texto con formato en comentarios y descripción.
   - **Bandeja:** ~~búsqueda en los mensajes~~ (hecho: `searchMessages`; sin índice de texto, medir con datos reales y, si hace falta, `pg_trgm`); atajo a las subcategorías donde ya participé.
   - **Procesar en lote:** la configuración de la bandeja por paso (título, agrupar por un dato de la persona o por corte de plano, nombre y montos que se muestran) y «Procesar sus tickets» desde un archivo del plano.
-  - **Flujos:** el probador de «quién puede crear» (persona + empresa → ✔/✘ con cada regla).
+  - ~~**Flujos:** el probador de «quién puede crear» (persona + empresa → ✔/✘ con cada regla)~~ (hecho, arquitectura «Pestaña «Quién puede crear»»; el permiso del rol no entra).
   - **Formatos PDF:** plantillas de inicio (arqueo F23), ~~duplicar un formato, copiar y pegar elementos~~ (hecho, arquitectura §15); la casilla de firma «aprobador del solicitante» (el jefe inmediato de la mesa).
   - ~~**Personas:** que el administrador cargue la firma de otra persona~~ (hecho, arquitectura §4 «Firma de otra persona»).
     - **Decidido (con criterio, el usuario delegó):** lo puede quien tiene `update Membership`; la imagen se sube por `/files/uploads`, que pide además un permiso de tickets que permita subir archivos (un administrador lo tiene).

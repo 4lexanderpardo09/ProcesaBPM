@@ -44,6 +44,46 @@ export interface CreationFormResponse {
   readonly starts: readonly CreationFormStart[];
 }
 
+/** `GET /workflows/:id/creation-check`: may this person open a ticket of the workflow for this company? */
+export const creationCheckQuerySchema = z.object({ userId: uuidSchema, companyId: uuidSchema });
+export type CreationCheckQuery = z.infer<typeof creationCheckQuerySchema>;
+
+export type InitiatorKind = 'USER' | 'POSITION' | 'GROUP' | 'DEPARTMENT' | 'COMPANY' | 'SITE';
+
+/**
+ * Why a person may or may not open a ticket of a workflow, rule by rule, as creating it would decide (the role's
+ * permission to create tickets is not part of it: the role is checked on its own screen).
+ */
+export interface CreationCheckResponse {
+  readonly canCreate: boolean;
+  /** An active member of the organization. */
+  readonly activeMember: boolean;
+  /** The company is active and one of the person's. */
+  readonly companyAllowed: boolean;
+  /** The subcategory and its category are active and shown to that company and the person's department. */
+  readonly subcategoryVisible: boolean;
+  /** The workflow is active and has a published version the engine can run. */
+  readonly published: boolean;
+  /** Each START block: open to everyone (no initiators), or each rule and whether the person meets it. */
+  readonly starts: ReadonlyArray<{
+    readonly stepId: string;
+    readonly name: string;
+    readonly allowed: boolean;
+    readonly rules: ReadonlyArray<{ readonly kind: InitiatorKind; readonly targetId: string; readonly matches: boolean }>;
+  }>;
+}
+
+const initiatorKindSchema = z.enum(['USER', 'POSITION', 'GROUP', 'DEPARTMENT', 'COMPANY', 'SITE']);
+
+export const creationCheckResponseSchema = z.object({
+  canCreate: z.boolean(),
+  activeMember: z.boolean(),
+  companyAllowed: z.boolean(),
+  subcategoryVisible: z.boolean(),
+  published: z.boolean(),
+  starts: z.array(z.object({ stepId: z.string(), name: z.string(), allowed: z.boolean(), rules: z.array(z.object({ kind: initiatorKindSchema, targetId: z.string(), matches: z.boolean() })) })),
+}) satisfies z.ZodType<CreationCheckResponse>;
+
 /** A decision the people on the step can take: the `transitionId` of `POST /tickets/:id/transition`. */
 export interface FormDecisionResponse {
   readonly transitionId: string;

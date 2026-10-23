@@ -62,6 +62,12 @@ export class TicketContextRepository {
     return memberships.map(toMemberRow);
   }
 
+  /** The subcategory a workflow serves, or null when the workflow is not there. */
+  async workflowSubcategory(tx: TenantTransaction, tenantId: string, workflowId: string): Promise<string | null> {
+    const workflow = await tx.workflow.findFirst({ where: { tenantId, id: workflowId }, select: { subcategoryId: true } });
+    return workflow?.subcategoryId ?? null;
+  }
+
   /**
    * The subcategory when a person of the company and department may pick it: both it and its category are
    * active, and a category with no visibility rows on an axis is open on that axis (as in the catalog).
