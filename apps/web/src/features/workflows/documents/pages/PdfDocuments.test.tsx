@@ -168,6 +168,23 @@ describe('PDF documents', () => {
     expect(await screen.findByRole('button', { name: 'Elemento Título' })).toBeInTheDocument();
   });
 
+  it('duplicates a format with its design, description and file name, and opens the copy', async () => {
+    const design = { ...emptyCanvasDesign(), calculations: [{ code: 'CALC_1', name: 'Doble', formula: 'AMOUNT * 2', decimals: 2 }] };
+    const original = format(design, { description: 'La de compras', fileNamePattern: 'orden-{{ticket.number}}' });
+    const { fake, router } = renderRoute(`/workflows/${FLOW}?tab=documents`, {
+      handlers: api({ [`/workflows/${FLOW}/pdf-formats`]: (options) => (options.method === 'POST' ? format((options.body as { design: AnyPdfDesign }).design, { name: 'Copia' }) : page([original])) }, design),
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Duplicar el formato «Orden de compra»' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Duplicar «Orden de compra»' });
+    expect(within(dialog).getByRole('textbox', { name: /Nombre/ })).toHaveValue('Copia de Orden de compra');
+    expect(router.state.location.pathname).toBe(`/workflows/${FLOW}`);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Crear y diseñar' }));
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe(designerUrl));
+    expect(fake.calls.find((call) => call.options.method === 'POST' && call.path.endsWith('/pdf-formats'))?.options.body).toEqual({ name: 'Copia de Orden de compra', design, description: 'La de compras', fileNamePattern: 'orden-{{ticket.number}}' });
+  });
+
   it('creates a format by blocks when asked', async () => {
     const created = (options: { body?: unknown }) => format((options.body as { design: AnyPdfDesign }).design, { name: 'Acta' });
     const { fake } = renderRoute(`/workflows/${FLOW}?tab=documents`, { handlers: api({ [`/workflows/${FLOW}/pdf-formats`]: (options) => (options.method === 'POST' ? created(options) : page([])) }) });
@@ -372,6 +389,28 @@ describe('PDF documents', () => {
       await userEvent.click(screen.getByRole('checkbox', { name: 'Cartera' }));
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
       await vi.waitFor(() => expect(canvasPatch(fake).elements.at(-1)).not.toHaveProperty('positionIds'));
+    }, 20_000);
+
+    it('copies elements and pastes them on another sheet, and the copy is still there for another format', async () => {
+      window.localStorage.clear();
+      const { fake } = renderRoute(designerUrl, { handlers: api({}, emptyCanvasDesign()) });
+
+      expect(await screen.findByRole('button', { name: 'Elemento Título' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Pegar' })).toBeNull();
+      await userEvent.click(screen.getByRole('button', { name: 'Elemento Título' }));
+      screen.getByRole('button', { name: 'Elemento Título' }).focus();
+      await userEvent.keyboard('{Control>}c{/Control}');
+      await userEvent.click(screen.getByRole('button', { name: '+ Hoja' }));
+      expect(screen.queryByRole('button', { name: 'Elemento Título' })).toBeNull();
+      await userEvent.click(screen.getByRole('button', { name: 'Pegar' }));
+      expect(screen.getByRole('button', { name: 'Elemento Título' })).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+      await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
+      const saved = canvasPatch(fake).elements.filter((element) => element.name === 'Título');
+      expect(saved.map((element) => element.sheet)).toEqual([0, 1]);
+      expect(saved[1]!.id).not.toBe(saved[0]!.id);
+      expect(JSON.parse(window.localStorage.getItem('procesabpm.canvas.clipboard')!)).toHaveLength(1);
     }, 20_000);
 
     it('keeps elements on their sheet, and a repeated one on every sheet', async () => {

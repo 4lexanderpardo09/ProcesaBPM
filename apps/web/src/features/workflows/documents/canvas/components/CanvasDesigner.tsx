@@ -12,7 +12,8 @@ import { DocumentError } from '../../components/DocumentError';
 import { FormatSettingsDialog } from '../../components/designer/FormatSettingsDialog';
 import { PreviewPane } from '../../components/designer/PreviewPane';
 import { fieldPlaceholder } from '../../lib/data-choices';
-import { addSheet, type Alignment, alignElements, createElement, duplicateElements, isOnSheet, moveLayer, PX_PER_MM, removeElements, roundMm, sheetSizeOf, updateElements } from '../lib/canvas-doc';
+import { copiedElements, copyElements } from '../lib/canvas-clipboard';
+import { addSheet, type Alignment, alignElements, createElement, duplicateElements, isOnSheet, moveLayer, pasteElements, PX_PER_MM, removeElements, roundMm, sheetSizeOf, updateElements } from '../lib/canvas-doc';
 import { type CanvasImages, CanvasImagesContext } from '../lib/canvas-images';
 import { type CanvasProblem, canvasProblems } from '../lib/canvas-problems';
 import { useHistory } from '../lib/use-history';
@@ -65,6 +66,8 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
   const [grid, setGrid] = useState<number | null>(2);
   const [showGrid, setShowGrid] = useState(true);
   const [settings, setSettings] = useState(false);
+  // Whether something copied (here, or earlier in another format) is waiting to be pasted.
+  const [canPaste, setCanPaste] = useState(() => copiedElements() !== null);
   const scroller = useRef<HTMLDivElement>(null);
   const dirty = design !== savedDesign;
   const logo = useQuery(tenantLogoQueryOptions(client));
@@ -142,7 +145,22 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
     setSelection(result.copies);
   }, [design, history, selection]);
 
-  // Keys: save, undo and redo, delete, duplicate, select all, deselect, and the arrows nudge the selection.
+  const copySelected = useCallback(() => {
+    const chosen = design.elements.filter((element) => selection.includes(element.id));
+    if (chosen.length === 0) return;
+    copyElements(chosen);
+    setCanPaste(true);
+  }, [design, selection]);
+
+  const paste = useCallback(() => {
+    const copied = copiedElements();
+    if (copied === null) return;
+    const result = pasteElements(design, copied, sheet);
+    history.change(() => result.design);
+    setSelection(result.copies);
+  }, [design, history, sheet]);
+
+  // Keys: save, undo and redo, copy, cut and paste, delete, duplicate, select all, deselect, and the arrows nudge the selection.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const command = event.ctrlKey || event.metaKey;
@@ -163,6 +181,16 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
       } else if (command && key === 'd') {
         event.preventDefault();
         duplicateSelected();
+      } else if (command && key === 'c' && selection.length > 0) {
+        event.preventDefault();
+        copySelected();
+      } else if (command && key === 'x' && selection.length > 0) {
+        event.preventDefault();
+        copySelected();
+        removeSelected();
+      } else if (command && key === 'v') {
+        event.preventDefault();
+        paste();
       } else if (command && key === 'a') {
         event.preventDefault();
         setSelection(design.elements.filter((element) => isOnSheet(element, sheet)).map((element) => element.id));
@@ -263,6 +291,20 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
                     {t(`documents.canvas.alignmentIcons.${alignment}`)}
                   </button>
                 ))}
+              </div>
+            )}
+            {!readOnly && (selection.length > 0 || canPaste) && (
+              <div className={styles.toolbarGroup}>
+                {selection.length > 0 && (
+                  <Button variant="ghost" title={t('documents.canvas.copyHint')} onClick={copySelected}>
+                    {t('documents.canvas.copy')}
+                  </Button>
+                )}
+                {canPaste && (
+                  <Button variant="ghost" title={t('documents.canvas.pasteHint')} onClick={paste}>
+                    {t('documents.canvas.paste')}
+                  </Button>
+                )}
               </div>
             )}
             {selection.length > 0 && !readOnly && (

@@ -141,6 +141,17 @@ export function duplicateElements(design: PdfCanvasDesign, ids: ReadonlySet<stri
   return { design: { ...design, elements: [...design.elements, ...copies] }, copies: copies.map((copy) => copy.id) };
 }
 
+/**
+ * Puts copied elements on a sheet: new ids, unlocked, a little down and to the right of where they were (so a paste on
+ * the same format does not hide the originals), kept inside the sheet and on the sheet being edited.
+ */
+export function pasteElements(design: PdfCanvasDesign, copied: readonly CanvasElement[], sheet: number): { design: PdfCanvasDesign; copies: string[] } {
+  const size = sheetSizeOf(design);
+  const place = (at: number, length: number, limit: number) => roundMm(Math.max(0, Math.min(Math.max(0, limit - length), at + 5)));
+  const copies = copied.map((element) => ({ ...element, id: newElementId(), x: place(element.x, element.width, size.width), y: place(element.y, element.height, size.height), locked: false, sheet }) as CanvasElement);
+  return { design: { ...design, elements: [...design.elements, ...copies] }, copies: copies.map((copy) => copy.id) };
+}
+
 /** One layer up (`1`, drawn later), down (`-1`), to the top (`'top'`) or to the bottom (`'bottom'`). */
 export function moveLayer(design: PdfCanvasDesign, id: string, to: 1 | -1 | 'top' | 'bottom'): PdfCanvasDesign {
   const index = design.elements.findIndex((element) => element.id === id);
