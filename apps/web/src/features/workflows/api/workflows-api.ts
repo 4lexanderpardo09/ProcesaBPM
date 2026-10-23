@@ -1,4 +1,4 @@
-import { type AddObserverRequest, categoryResponseSchema, companyResponseSchema, type CreateCutoffRequest, type UpdateCutoffRequest, type CreateVersionRequest, pageResponseSchema, subcategoryResponseSchema, versionStatusSchema } from '@procesabpm/shared';
+import { type AddObserverRequest, categoryResponseSchema, companyResponseSchema, creationCheckResponseSchema, type CreateCutoffRequest, type UpdateCutoffRequest, type CreateVersionRequest, pageResponseSchema, subcategoryResponseSchema, versionStatusSchema } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
@@ -164,4 +164,10 @@ export function companiesQueryOptions(client: HttpClient) {
     select: (page) => page.items,
     staleTime: 5 * 60_000,
   });
+}
+
+/** Why a person can or cannot open a ticket of the workflow for a company, rule by rule. Asked on demand. */
+export function checkCreation(client: HttpClient, workflowId: string, userId: string, companyId: string) {
+  const query = new URLSearchParams({ userId, companyId });
+  return client.request(`${workflowUrl(workflowId)}/creation-check?${query.toString()}`, { schema: creationCheckResponseSchema });
 }

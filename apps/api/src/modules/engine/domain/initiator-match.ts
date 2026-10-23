@@ -13,7 +13,8 @@ export interface Requester {
   readonly siteAncestry: ReadonlySet<string>;
 }
 
-const matches = (initiator: InitiatorDocument, requester: Requester): boolean => {
+/** Whether the requester meets one initiator rule. */
+export const matchesInitiator = (initiator: InitiatorDocument, requester: Requester): boolean => {
   switch (initiator.participantType) {
     case 'USER':
       return initiator.userId === requester.userId;
@@ -32,4 +33,8 @@ const matches = (initiator: InitiatorDocument, requester: Requester): boolean =>
 
 /** Who may start a workflow: a START block without initiators is open to everyone, otherwise any one match is enough. */
 export const isAllowedInitiator = (initiators: readonly InitiatorDocument[], requester: Requester): boolean =>
-  initiators.length === 0 || initiators.some((initiator) => matches(initiator, requester));
+  initiators.length === 0 || initiators.some((initiator) => matchesInitiator(initiator, requester));
+
+/** The record a rule names (the user, position, group, department, company or site). */
+export const initiatorTarget = (initiator: InitiatorDocument): string =>
+  initiator.userId ?? initiator.positionId ?? initiator.groupId ?? initiator.departmentId ?? initiator.companyId ?? initiator.siteId ?? '';

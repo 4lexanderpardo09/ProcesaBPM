@@ -196,6 +196,37 @@ describe('assignment, pool, reassignment', () => {
       expect((await create(flow, {}, requester).expect(403)).body.error.code).toBe('INITIATOR_NOT_ALLOWED');
       await create(flow, {}, allowed).expect(201);
     });
+
+    it('explains, rule by rule, why a person can or cannot open a ticket, as creating it decides', async () => {
+      const position = await world.position();
+      const site = await insertReturningId(db.platform, `INSERT INTO sites (tenant_id, parent_id, level, name) VALUES ($1, NULL, 1, $2) RETURNING id`, [world.tenant.tenantId, unique('Region')]);
+      const branch = await insertReturningId(db.platform, `INSERT INTO sites (tenant_id, parent_id, level, name) VALUES ($1, $2, 2, $3) RETURNING id`, [world.tenant.tenantId, site, unique('Branch')]);
+      const byPosition = await world.member(REQUESTER_GRANTS, { positionId: position });
+      const bySite = await world.member(REQUESTER_GRANTS, { siteId: branch });
+      const flow = await publishFlow(world.admin, {
+        ...simpleFlow(),
+        steps: simpleFlow().steps.map((step) => (step.key === 'start' ? { ...step, initiators: [{ participantType: 'POSITION', positionId: position }, { participantType: 'SITE', siteId: site }] } : step)),
+      });
+      const check = async (member: Member, companyId = world.tenant.companyId) =>
+        (await world.admin.get(`/workflows/${flow.workflowId}/creation-check?userId=${member.userId}&companyId=${companyId}`).expect(200)).body as { canCreate: boolean; companyAllowed: boolean; starts: Array<{ allowed: boolean; rules: Array<{ kind: string; targetId: string; matches: boolean }> }> };
+
+      const positioned = await check(byPosition);
+      expect(positioned).toMatchObject({ canCreate: true, activeMember: true, companyAllowed: true, subcategoryVisible: true, published: true });
+      expect(positioned.starts[0]!.rules).toEqual([{ kind: 'POSITION', targetId: position, matches: true }, { kind: 'SITE', targetId: site, matches: false }]);
+      // A site under the rule's site counts: the same answer as creating the ticket.
+      expect((await check(bySite)).starts[0]!.rules.map((rule) => rule.matches)).toEqual([false, true]);
+      await create(flow, {}, bySite).expect(201);
+
+      const refused = await check(requester);
+      expect(refused).toMatchObject({ canCreate: false, companyAllowed: true, starts: [{ allowed: false }] });
+      expect((await create(flow, {}, requester).expect(403)).body.error.code).toBe('INITIATOR_NOT_ALLOWED');
+
+      // A company that is not the person's is said apart from the rules.
+      const other = await insertReturningId(db.platform, `INSERT INTO companies (tenant_id, name, country_code, currency_code, time_zone) VALUES ($1, $2, 'CO', 'COP', 'America/Bogota') RETURNING id`, [world.tenant.tenantId, unique('Co')]);
+      expect(await check(byPosition, other)).toMatchObject({ canCreate: false, companyAllowed: false });
+      await requester.client.get(`/workflows/${flow.workflowId}/creation-check?userId=${byPosition.userId}&companyId=${world.tenant.companyId}`).expect(403);
+      await world.admin.get(`/workflows/${crypto.randomUUID()}/creation-check?userId=${byPosition.userId}&companyId=${world.tenant.companyId}`).expect(404);
+    });
   });
 
   describe('taking from a pool and reassigning', () => {

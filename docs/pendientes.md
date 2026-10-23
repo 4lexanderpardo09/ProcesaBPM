@@ -28,7 +28,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Formularios:** columnas de tabla de tipo archivo y de tipo fórmula; fuente «fecha actual»; texto con formato en comentarios y descripción.
   - **Bandeja:** búsqueda en los mensajes; atajo a las subcategorías donde ya participé.
   - **Procesar en lote:** la configuración de la bandeja por paso (título, agrupar por un dato de la persona o por corte de plano, nombre y montos que se muestran) y «Procesar sus tickets» desde un archivo del plano.
-  - **Flujos:** el probador de «quién puede crear» (persona + empresa → ✔/✘ con cada regla).
+  - ~~**Flujos:** el probador de «quién puede crear» (persona + empresa → ✔/✘ con cada regla)~~ (hecho, arquitectura «Pestaña «Quién puede crear»»; el permiso del rol no entra).
   - **Formatos PDF:** plantillas de inicio (arqueo F23), duplicar un formato, copiar y pegar elementos; la casilla de firma «aprobador del solicitante» (el jefe inmediato de la mesa).
   - **Personas:** que el administrador cargue la firma de otra persona.
   - **Consola de la plataforma en la web** (mantenimiento y notas de cambios de la mesa están en los avisos de la plataforma, que hoy solo tienen API).
