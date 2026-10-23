@@ -5,14 +5,14 @@ import { templatesQueryOptions } from '@/features/profile';
 import { ApiError, genericErrorMessage } from '@/shared/api';
 import { htmlToPlainText } from '@/shared/lib/plain-text-html';
 import { useApiClient } from '@/shared/session';
-import { Button, Select, TextArea } from '@/shared/ui';
+import { Button, FormattedTextArea, Select } from '@/shared/ui';
 import { useCommentOnTicket } from '../hooks/use-comment-on-ticket';
 import styles from './CommentForm.module.css';
 
 const FORBIDDEN = 403;
 
 /**
- * A plain-text comment for everyone who can see the ticket; it shows up in the activity once saved. The person's text
+ * A comment, with light formatting (bold, italics, lists), for everyone who can see the ticket; it shows up in the activity once saved. The person's text
  * templates (their own and the ones shared with them) can be inserted, to edit before sending.
  */
 export function CommentForm({ ticketId }: { readonly ticketId: string }) {
@@ -42,14 +42,14 @@ export function CommentForm({ ticketId }: { readonly ticketId: string }) {
 
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
-      <TextArea
+      <FormattedTextArea
         label={t('detail.comment.label')}
         placeholder={t('detail.comment.placeholder')}
         value={text}
         maxLength={5000}
         error={failure()}
-        onChange={(event) => {
-          setText(event.target.value);
+        onValueChange={(next) => {
+          setText(next);
           setMissing(false);
         }}
       />

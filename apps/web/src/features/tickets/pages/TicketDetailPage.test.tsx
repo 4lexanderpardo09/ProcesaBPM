@@ -261,12 +261,29 @@ describe('TicketDetailPage', () => {
     expect(box).toHaveValue('');
   });
 
+  it('formats a comment with the toolbar: bold and a list, sent as HTML', async () => {
+    const { fake } = renderRoute(base, { handlers: ticketHandlers({ [`${base}/comments`]: () => ({ eventId: id(399) }) }) });
+
+    const box = await screen.findByRole('textbox', { name: 'Agregar un comentario' });
+    await userEvent.type(box, 'Revisado');
+    (box as HTMLTextAreaElement).setSelectionRange(0, 8);
+    await userEvent.click(screen.getByRole('button', { name: 'Negrita' }));
+    expect(box).toHaveValue('**Revisado**');
+    await userEvent.type(box, '{End}{Enter}la cédula{Enter}el RUT');
+    (box as HTMLTextAreaElement).setSelectionRange(13, 29);
+    await userEvent.click(screen.getByRole('button', { name: 'Lista' }));
+    expect(box).toHaveValue('**Revisado**\n\n- la cédula\n- el RUT');
+    await userEvent.click(screen.getByRole('button', { name: 'Comentar' }));
+
+    await vi.waitFor(() => expect(fake.callsTo(`${base}/comments`)[0]?.options.body).toEqual({ comment: '<p><strong>Revisado</strong></p><ul><li>la cédula</li><li>el RUT</li></ul>' }));
+  });
+
   it('asks for the comment instead of sending an empty one', async () => {
     const { fake } = renderRoute(base, { handlers: ticketHandlers() });
 
     await userEvent.click(await screen.findByRole('button', { name: 'Comentar' }));
 
-    expect(screen.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveAccessibleDescription('Escribe un comentario.');
+    expect(screen.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveAccessibleDescription(/Escribe un comentario\./);
     expect(fake.callsTo(`${base}/comments`)).toHaveLength(0);
   });
 
@@ -678,7 +695,8 @@ describe('TicketDetailPage', () => {
 
       await userEvent.click(await screen.findByRole('button', { name: 'Editar' }));
       const dialog = screen.getByRole('dialog', { name: 'Editar ticket' });
-      expect(within(dialog).getByRole('textbox', { name: /Descripción/ })).toHaveValue('Adjunto el comprobante del pago del 1 de octubre.');
+      // The bold of the saved description comes back as its marks, so editing keeps it.
+      expect(within(dialog).getByRole('textbox', { name: /Descripción/ })).toHaveValue('Adjunto el comprobante del pago del **1 de octubre**.');
       const subject = within(dialog).getByRole('textbox', { name: /Asunto/ });
       await userEvent.clear(subject);
       await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));

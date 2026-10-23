@@ -6,6 +6,18 @@ export const common = {
     backHome: 'Volver al inicio',
   },
   underConstruction: 'Esta sección está en construcción.',
+  formatting: {
+    toolbar: 'Formato de «{{field}}»',
+    bold: 'Negrita',
+    boldHint: 'Negrita: **texto**',
+    italic: 'Cursiva',
+    italicHint: 'Cursiva: _texto_',
+    list: 'Lista',
+    listHint: 'Lista: líneas que empiezan con «- »',
+    numbered: 'Lista numerada',
+    numberedHint: 'Lista numerada: líneas que empiezan con «1. »',
+    hint: '**negrita**, _cursiva_, líneas con «- » o «1. » para listas; las direcciones web quedan como enlaces.',
+  },
   pagination: {
     label: 'Paginación',
     range: 'Mostrando {{from}}–{{to}} de {{total}}',

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { paths, ticketPath } from '@/shared/lib/paths';
 import { plainTextToHtml } from '@/shared/lib/plain-text-html';
-import { Button, ButtonLink, Card, TextArea, TextField } from '@/shared/ui';
+import { Button, ButtonLink, Card, FormattedTextArea, TextField } from '@/shared/ui';
 import { createTicket } from '../../api/new-ticket-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
 import { typedFields, useStepFields } from '../../hooks/use-step-fields';
@@ -105,7 +105,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
           {fields.map((field) => (
             <StepFieldInput key={field.id} field={field} knownLabels={{}} knownFiles={{}} {...stepFields.inputProps(field)} />
           ))}
-          <TextArea label={t('new.data.description')} value={description} maxLength={DESCRIPTION_MAX} rows={5} placeholder={t('new.data.descriptionPlaceholder')} onChange={(event) => setDescription(event.target.value)} />
+          <FormattedTextArea label={t('new.data.description')} value={description} maxLength={DESCRIPTION_MAX} rows={5} placeholder={t('new.data.descriptionPlaceholder')} onValueChange={setDescription} />
           <FilePicker label={t('new.data.attachments')} required={false} value={attachments} knownNames={{}} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
           <NextAssigneeField next={next} />
         </div>
