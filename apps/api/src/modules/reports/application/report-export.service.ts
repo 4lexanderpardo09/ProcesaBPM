@@ -4,8 +4,10 @@ import {
   PermissionDeniedError,
   rankingFiltersSchema,
   reportFiltersSchema,
+  reportTicketsFiltersSchema,
   ReportTooLargeError,
   type ReportName,
+  siteReportFiltersSchema,
   userDetailExportSchema,
   ValidationFailedError,
 } from '@procesabpm/shared';
@@ -16,7 +18,24 @@ import { SpreadsheetWriter, type Sheet } from '../../../infrastructure/spreadshe
 import { AuditTrail } from '../../audit/application/audit-trail.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
 import { reportsEs as es } from '../i18n/es.js';
-import { backlogSheets, categoriesSheets, distributionSheets, incidentsSheets, rankingSheets, responsiblesSheets, rowCount, stepsSheets, summarySheets, userDetailSheets } from '../domain/report-sheets.js';
+import {
+  backlogSheets,
+  categoriesSheets,
+  commentsSheets,
+  distributionSheets,
+  heatmapSheets,
+  incidentsSheets,
+  rankingSheets,
+  responsiblesSheets,
+  rowCount,
+  sitesSheets,
+  stepsSheets,
+  summarySheets,
+  ticketsSheets,
+  userDetailSheets,
+  workflowUsageSheets,
+} from '../domain/report-sheets.js';
+import { SiteReportsService } from './site-reports.service.js';
 import { BreakdownReportsService } from './breakdown-reports.service.js';
 import { PerformanceReportsService } from './performance-reports.service.js';
 import { exportAccess } from './report-runner.js';
@@ -46,6 +65,7 @@ export class ReportExportService {
   constructor(
     @Inject(PerformanceReportsService) private readonly performance: PerformanceReportsService,
     @Inject(BreakdownReportsService) private readonly breakdown: BreakdownReportsService,
+    @Inject(SiteReportsService) private readonly sites: SiteReportsService,
     @Inject(SpreadsheetWriter) private readonly writer: SpreadsheetWriter,
     @Inject(Clock) private readonly clock: Clock,
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
@@ -81,6 +101,31 @@ export class ReportExportService {
         return categoriesSheets(await this.breakdown.categories(access, parse(reportFiltersSchema, query)));
       case 'backlog':
         return backlogSheets(await this.breakdown.backlog(access, parse(backlogFiltersSchema, query)));
+      case 'sites':
+        return sitesSheets(await this.sites.sites(access, parse(siteReportFiltersSchema, query)));
+      case 'heatmap':
+        return heatmapSheets(await this.sites.heatmap(access, parse(siteReportFiltersSchema, query)));
+      case 'tickets':
+        return ticketsSheets(await this.sites.ticketRows(access, parse(reportTicketsFiltersSchema, query), EXPORT_ROW_CAP + 1));
+      case 'comments':
+        return commentsSheets(await this.sites.comments(access, parse(reportFiltersSchema, query), EXPORT_ROW_CAP + 1));
+      case 'workflow-usage':
+        return workflowUsageSheets(await this.sites.workflowUsage(access, parse(reportFiltersSchema, query)));
+      case 'complete': {
+        // The help desk's "complete report": the dashboard's reports of the period, one sheet each.
+        const filters = parse(reportFiltersSchema, query);
+        const site = parse(siteReportFiltersSchema, query);
+        return [
+          ...summarySheets(await this.performance.summary(access, filters)),
+          ...rankingSheets(await this.performance.ranking(access, parse(rankingFiltersSchema, query))),
+          ...sitesSheets(await this.sites.sites(access, site)),
+          ...heatmapSheets(await this.sites.heatmap(access, site)),
+          ...categoriesSheets(await this.breakdown.categories(access, filters)),
+          ...stepsSheets(await this.performance.steps(access, filters)),
+          ...distributionSheets(await this.performance.timeDistribution(access, filters)),
+          ...incidentsSheets(await this.breakdown.incidentsReport(access, filters)),
+        ];
+      }
       case 'user-detail': {
         const { userId } = parse(userDetailExportSchema, { userId: query.userId });
         const { userId: _selected, ...period } = query;

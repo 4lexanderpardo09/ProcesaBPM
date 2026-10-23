@@ -1,5 +1,8 @@
 import type {
   BacklogReport,
+  HeatmapReport,
+  ReportTicketRow,
+  SiteReport,
   CategoryRow,
   IncidentGroupRow,
   IncidentsReport,
@@ -12,6 +15,7 @@ import type {
   UserDetailReport,
 } from '@procesabpm/shared';
 import type { Sheet, SheetCell } from '../../../infrastructure/spreadsheet/spreadsheet-writer.js';
+import type { CommentRow, WorkflowUsageRow } from '../data/report-tickets.repository.js';
 import { reportsEs as es } from '../i18n/es.js';
 
 const result = (value: 'ON_TIME' | 'LATE' | null): string | null => (value === 'ON_TIME' ? es.user.onTime : value === 'LATE' ? es.user.late : null);
@@ -100,6 +104,59 @@ export const userDetailSheets = (report: UserDetailReport): Sheet[] => [
     name: es.user.clocksSheet,
     headers: [es.user.ticket, es.user.workflow, es.user.step, es.user.loop, es.user.startedAt, es.user.completedAt, es.user.dueAt, es.user.business, es.user.paused, es.user.result, es.user.reason],
     rows: report.clocks.items.map((row) => [row.ticketNumber, row.workflowName, row.stepName, row.loop, new Date(row.startedAt), row.completedAt === null ? null : new Date(row.completedAt), row.dueAt === null ? null : new Date(row.dueAt), row.businessMin, row.pausedMin, result(row.result), row.completionReason]),
+  },
+];
+
+export const sitesSheets = (report: SiteReport): Sheet[] => [
+  {
+    name: es.sites.sheet,
+    headers: [es.sites.site, es.sites.tickets, es.sites.responsibles, es.sites.delivered, es.sites.onTime, es.sites.late, es.sites.compliance, es.sites.processErrors, es.sites.otherErrors, es.sites.errorPct, es.sites.avg],
+    rows: report.rows.map((row) => [row.siteName ?? es.sites.noSite, row.tickets, row.responsibles, row.delivered, row.onTime, row.late, row.compliancePct, row.processErrors, row.otherErrors, row.errorPct, row.avgMin]),
+  },
+];
+
+export const heatmapSheets = (report: HeatmapReport): Sheet[] => [
+  {
+    name: es.heatmap.sheet,
+    headers: [es.heatmap.site, es.heatmap.user, es.heatmap.delivered, es.heatmap.processErrors, es.heatmap.otherErrors, es.heatmap.avg, es.heatmap.siteAvg, es.heatmap.vsPeers],
+    rows: report.sites.flatMap((site) => site.users.map((user): SheetCell[] => [site.siteName ?? es.sites.noSite, user.name, user.delivered, user.processErrors, user.otherErrors, user.avgMin, site.avgMin, user.vsPeersPct])),
+  },
+];
+
+export const ticketsSheets = (rows: readonly ReportTicketRow[]): Sheet[] => [
+  {
+    name: es.tickets.sheet,
+    headers: [es.tickets.number, es.tickets.title, es.tickets.status, es.tickets.workflow, es.tickets.category, es.tickets.subcategory, es.tickets.step, es.tickets.site, es.tickets.creator, es.tickets.createdAt, es.tickets.closedAt],
+    rows: rows.map((row) => [row.number, row.title, es.tickets.statuses[row.status], row.workflowName, row.categoryName, row.subcategoryName, row.currentStepName, row.siteName, row.creatorName, new Date(row.createdAt), row.closedAt === null ? null : new Date(row.closedAt)]),
+  },
+];
+
+const ENTITIES: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
+
+/** A comment as the plain text a spreadsheet cell holds: paragraphs and line breaks kept, tags and entities gone. */
+export function commentText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_, name: string) => ENTITIES[name] ?? '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export const commentsSheets = (rows: readonly CommentRow[]): Sheet[] => [
+  {
+    name: es.comments.sheet,
+    headers: [es.comments.ticket, es.comments.workflow, es.comments.step, es.comments.author, es.comments.createdAt, es.comments.text],
+    rows: rows.map((row) => [row.ticketNumber, row.workflowName, row.stepName, row.authorName, row.createdAt, commentText(row.commentHtml)]),
+  },
+];
+
+export const workflowUsageSheets = (rows: readonly WorkflowUsageRow[]): Sheet[] => [
+  {
+    name: es.usage.sheet,
+    headers: [es.usage.workflow, es.usage.active, es.usage.created, es.usage.open, es.usage.closed, es.usage.last, es.usage.inUse],
+    rows: rows.map((row) => [row.workflowName, row.isActive ? es.usage.yes : es.usage.no, row.created, row.open, row.closed, row.lastCreatedAt, row.created > 0 ? es.usage.inUse : es.usage.unused]),
   },
 ];
 
