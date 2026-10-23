@@ -153,14 +153,34 @@ describe('PDF documents', () => {
     expect(fake.calls.filter((call) => call.path === `/workflows/${FLOW}/pdf-templates` && call.options.method === 'POST').at(-1)?.options.body).toEqual({ fileId: FILE_ID, name: 'banco', companyId: COMPANY });
   });
 
-  it('creates a format on a free canvas by default and opens its designer', async () => {
+  it('starts a format already drawn with the published version’s data by default', async () => {
+    const created = (options: { body?: unknown }) => format((options.body as { design: AnyPdfDesign }).design, { name: 'Acta' });
+    const { fake } = renderRoute(`/workflows/${FLOW}?tab=documents`, { handlers: api({ [`/workflows/${FLOW}/pdf-formats`]: (options) => (options.method === 'POST' ? created(options) : page([])) }, emptyCanvasDesign()) });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Nuevo formato' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo formato' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Nombre/ }), 'Acta');
+    expect(within(dialog).getByRole('combobox', { name: 'Cómo se diseña' })).toHaveValue('STARTER');
+    await vi.waitFor(() => expect(within(dialog).getByRole('button', { name: 'Crear y diseñar' })).toBeEnabled());
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Crear y diseñar' }));
+
+    await vi.waitFor(() => expect(fake.calls.some((call) => call.options.method === 'POST' && call.path.endsWith('/pdf-formats'))).toBe(true));
+    const design = (fake.calls.find((call) => call.options.method === 'POST' && call.path.endsWith('/pdf-formats'))!.options.body as { design: Extract<AnyPdfDesign, { version: 2 }> }).design;
+    const texts = design.elements.flatMap((element) => (element.type === 'text' ? [element.content] : []));
+    expect(texts).toEqual(expect.arrayContaining(['ACTA', '{{field.AMOUNT|currency}}']));
+    expect(texts.join(' ')).not.toContain('SUPPLIER');
+    expect(design.elements.find((element) => element.type === 'table')).toMatchObject({ fieldCode: 'ITEMS' });
+    expect(design.elements.filter((element) => element.type === 'signature').map((element) => element.type === 'signature' && element.stepName)).toEqual([null, 'Aprobar compra']);
+  });
+
+  it('creates a format on a free canvas and opens its designer', async () => {
     const created = (options: { body?: unknown }) => format((options.body as { design: AnyPdfDesign }).design, { name: 'Acta' });
     const { fake, router } = renderRoute(`/workflows/${FLOW}?tab=documents`, { handlers: api({ [`/workflows/${FLOW}/pdf-formats`]: (options) => (options.method === 'POST' ? created(options) : page([])) }, emptyCanvasDesign()) });
 
     await userEvent.click(await screen.findByRole('button', { name: 'Nuevo formato' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo formato' });
     await userEvent.type(within(dialog).getByRole('textbox', { name: /Nombre/ }), 'Acta');
-    expect(within(dialog).getByRole('combobox', { name: 'Cómo se diseña' })).toHaveValue('CANVAS');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Cómo se diseña' }), 'Lienzo libre');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Crear y diseñar' }));
 
     await vi.waitFor(() => expect(router.state.location.pathname).toBe(designerUrl));

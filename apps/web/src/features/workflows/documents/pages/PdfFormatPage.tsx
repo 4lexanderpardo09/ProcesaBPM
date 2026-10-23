@@ -7,8 +7,6 @@ import { ApiError } from '@/shared/api';
 import { paths, workflowPath } from '@/shared/lib/paths';
 import { useApiClient, usePermissions } from '@/shared/session';
 import { Alert, Breadcrumb, Button, Dialog, PageHeader } from '@/shared/ui';
-import { workflowQueryOptions } from '../../api/workflows-api';
-import { versionDetailQueryOptions } from '../../builder/api/builder-api';
 import { documentQueryKeys, type PdfFormat, pdfFormatQueryOptions, updatePdfFormat } from '../api/documents-api';
 import { CanvasDesigner } from '../canvas/components/CanvasDesigner';
 import { DocumentError } from '../components/DocumentError';
@@ -20,9 +18,9 @@ import { ProblemText } from '../components/designer/ProblemText';
 import styles from '../components/designer/Designer.module.css';
 import { BANDS, type BlockRef } from '../lib/design-doc';
 import { designProblems } from '../lib/design-problems';
+import { useVersionDocuments } from '../lib/use-version-documents';
 
 const NOT_FOUND = 404;
-const EMPTY_DOCUMENT: WorkflowVersionDocument = { steps: [], transitions: [], fields: [], amountRules: [] };
 
 /** The documents tab of the workflow, where formats are listed. */
 const documentsTab = (workflowId: string) => `${workflowPath(workflowId)}?tab=documents`;
@@ -36,12 +34,9 @@ export function PdfFormatPage() {
   const { workflowId = '', formatId = '' } = useParams();
   const { t } = useTranslation('workflows');
   const client = useApiClient();
-  const workflow = useQuery(workflowQueryOptions(client, workflowId));
   const format = useQuery(pdfFormatQueryOptions(client, workflowId, formatId));
-  const published = workflow.data?.versions.find((version) => version.status === 'PUBLISHED');
-  const draft = workflow.data?.versions.find((version) => version.status === 'DRAFT');
-  const publishedDoc = useQuery({ ...versionDetailQueryOptions(client, workflowId, published?.id ?? ''), enabled: published !== undefined });
-  const draftDoc = useQuery({ ...versionDetailQueryOptions(client, workflowId, draft?.id ?? ''), enabled: draft !== undefined });
+  // Tickets run on the published version; while there is none, the draft is all there is.
+  const { workflow, ready, current, upcoming } = useVersionDocuments(workflowId);
 
   const breadcrumb = (name: string) => (
     <Breadcrumb
@@ -58,11 +53,7 @@ export function PdfFormatPage() {
       </>
     );
   }
-  const versionsReady = workflow.data !== undefined && (published === undefined || publishedDoc.data !== undefined) && (draft === undefined || draftDoc.data !== undefined);
-  if (format.data === undefined || !versionsReady) return <p className={styles.note}>{t('loading')}</p>;
-  // Tickets run on the published version; while there is none, the draft is all there is.
-  const current = publishedDoc.data?.document ?? draftDoc.data?.document ?? EMPTY_DOCUMENT;
-  const upcoming = publishedDoc.data === undefined ? undefined : draftDoc.data?.document;
+  if (format.data === undefined || !ready) return <p className={styles.note}>{t('loading')}</p>;
   const loaded = format.data;
   if (loaded.design.version === 2) return <CanvasDesigner key={loaded.id} workflowId={workflowId} format={{ ...loaded, design: loaded.design }} current={current} upcoming={upcoming} breadcrumb={breadcrumb} />;
   return <Designer key={loaded.id} workflowId={workflowId} format={{ ...loaded, design: loaded.design }} current={current} upcoming={upcoming} breadcrumb={breadcrumb} />;

@@ -7,8 +7,6 @@ import { ApiError } from '@/shared/api';
 import { paths, workflowPath } from '@/shared/lib/paths';
 import { useApiClient, usePermissions } from '@/shared/session';
 import { Alert, Breadcrumb, Button, Dialog, PageHeader, PlusIcon } from '@/shared/ui';
-import { workflowQueryOptions } from '../../api/workflows-api';
-import { versionDetailQueryOptions } from '../../builder/api/builder-api';
 import { documentQueryKeys, type PdfTemplate, pdfTemplateQueryOptions, previewPdfTemplate, saveTemplateMapping, templateFileUrl, templateMappingQueryOptions } from '../api/documents-api';
 import { DocumentError } from '../components/DocumentError';
 import { MappedFieldEditor, MappedSignatureEditor } from '../components/mapping/MappingItemEditor';
@@ -17,9 +15,9 @@ import styles from '../components/mapping/Mapping.module.css';
 import { type ItemKind, type ItemRef, type MappingProblem, mappingProblems, newField, newSignature, placeAt, sameItem } from '../lib/mapping-doc';
 import { openPdf } from '../lib/open-pdf';
 import { loadPdf } from '../lib/pdf-pages';
+import { useVersionDocuments } from '../lib/use-version-documents';
 
 const NOT_FOUND = 404;
-const EMPTY_DOCUMENT: WorkflowVersionDocument = { steps: [], transitions: [], fields: [], amountRules: [] };
 const documentsTab = (workflowId: string) => `${workflowPath(workflowId)}?tab=documents`;
 
 /**
@@ -30,13 +28,9 @@ export function PdfTemplatePage() {
   const { workflowId = '', templateId = '' } = useParams();
   const { t } = useTranslation('workflows');
   const client = useApiClient();
-  const workflow = useQuery(workflowQueryOptions(client, workflowId));
+  const { workflow, ready, current, upcoming } = useVersionDocuments(workflowId);
   const template = useQuery(pdfTemplateQueryOptions(client, workflowId, templateId));
   const mapping = useQuery(templateMappingQueryOptions(client, workflowId, templateId));
-  const published = workflow.data?.versions.find((version) => version.status === 'PUBLISHED');
-  const draft = workflow.data?.versions.find((version) => version.status === 'DRAFT');
-  const publishedDoc = useQuery({ ...versionDetailQueryOptions(client, workflowId, published?.id ?? ''), enabled: published !== undefined });
-  const draftDoc = useQuery({ ...versionDetailQueryOptions(client, workflowId, draft?.id ?? ''), enabled: draft !== undefined });
   const pdf = useQuery({
     queryKey: ['pdf-template-file', workflowId, templateId],
     queryFn: async () => loadPdf((await templateFileUrl(client, workflowId, templateId)).url),
@@ -59,10 +53,7 @@ export function PdfTemplatePage() {
       </>
     );
   }
-  const versionsReady = workflow.data !== undefined && (published === undefined || publishedDoc.data !== undefined) && (draft === undefined || draftDoc.data !== undefined);
-  if (template.data === undefined || mapping.data === undefined || !versionsReady) return <p className={styles.note}>{t('loading')}</p>;
-  const current = publishedDoc.data?.document ?? draftDoc.data?.document ?? EMPTY_DOCUMENT;
-  const upcoming = publishedDoc.data === undefined ? undefined : draftDoc.data?.document;
+  if (template.data === undefined || mapping.data === undefined || !ready) return <p className={styles.note}>{t('loading')}</p>;
   return (
     <Mapper
       key={template.data.id}
