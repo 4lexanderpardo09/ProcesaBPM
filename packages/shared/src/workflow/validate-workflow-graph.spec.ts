@@ -310,6 +310,18 @@ describe('validateWorkflowGraph: fields', () => {
     expect(codes(withParts({ fields: [formula('1', 'A', '1 +')] }))).toContain('FORMULA_INVALID');
     expect(codes(withParts({ fields: [formula('1', 'A', '"text"')] }))).toContain('FORMULA_RESULT_TYPE_MISMATCH');
   });
+
+  it('formula columns of a table read the other columns of the row and give a number; a field formula can add them up', () => {
+    const formula = (id: string, code: string, expression: string) => field(id, 'start', code, { type: 'FORMULA', config: { expression, resultType: 'NUMBER' } });
+    const table = (expression: string) =>
+      field('t', 'start', 'ITEMS', { type: 'TABLE', config: { columns: [{ code: 'QTY', label: 'Cantidad', type: 'NUMBER' }, { code: 'NAME', label: 'Nombre', type: 'TEXT' }, { code: 'SUB', label: 'Subtotal', type: 'FORMULA', expression, showTotal: true }] } });
+    expect(codes(withParts({ fields: [table('QTY * 2'), formula('1', 'TOTAL', 'SUM(ITEMS.SUB)')] }))).toEqual([]);
+    expect(codes(withParts({ fields: [table('PRICE * 2')] }))).toContain('TABLE_FORMULA_INVALID');
+    expect(codes(withParts({ fields: [table('NAME')] }))).toContain('TABLE_FORMULA_NOT_NUMBER');
+    // A formula column takes no options or required flag, and only it takes an expression.
+    const wrong = field('t', 'start', 'ITEMS', { type: 'TABLE', config: { columns: [{ code: 'QTY', label: 'Cantidad', type: 'NUMBER', expression: 'QTY' }] } });
+    expect(codes(withParts({ fields: [wrong] }))).toContain('FIELD_CONFIG_INVALID');
+  });
 });
 
 describe('validateWorkflowGraph: conditions read earlier fields', () => {

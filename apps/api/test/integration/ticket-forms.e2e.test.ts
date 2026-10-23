@@ -105,6 +105,29 @@ describe('ticket forms', () => {
     });
   });
 
+  describe('formula columns of a table', () => {
+    it('computes each row and the total from the other columns, ignoring what the client sends for them', async () => {
+      const counted = await publishFlow(world.admin, {
+        ...simpleFlow(),
+        fields: [
+          {
+            step: 'start',
+            code: 'COUNT',
+            type: 'TABLE',
+            capture: 'CREATION',
+            config: { columns: [{ code: 'QTY', label: 'Cantidad', type: 'NUMBER' }, { code: 'VALUE', label: 'Valor', type: 'CURRENCY' }, { code: 'SUB', label: 'Subtotal', type: 'FORMULA', expression: 'QTY * VALUE', showTotal: true }] },
+          },
+          { step: 'start', code: 'TOTAL', type: 'FORMULA', capture: 'CREATION', config: { expression: 'SUM(COUNT.SUB)', resultType: 'CURRENCY' } },
+        ],
+      });
+      const created = (await member.client.post('/tickets', { subcategoryId: counted.subcategoryId, title: unique('T'), values: { COUNT: [{ QTY: 3, VALUE: '50000', SUB: 1 }, { QTY: 2, VALUE: '500.50' }] } }).expect(201)).body.id as string;
+      const detail = (await member.client.get(`/tickets/${created}`).expect(200)).body as { values: { COUNT: Array<Record<string, unknown>>; TOTAL: unknown }; totals: Record<string, Record<string, string>> };
+      expect(detail.values.COUNT.map((row) => row.SUB)).toEqual([150000, 1001]);
+      expect(detail.totals.COUNT).toEqual({ SUB: '151001' });
+      expect(Number(detail.values.TOTAL)).toBe(151001);
+    });
+  });
+
   describe('«fecha actual»', () => {
     it('fills an empty date and date-time with the moment of the submission, even read-only, and keeps a typed one', async () => {
       const dated = await publishFlow(world.admin, {
