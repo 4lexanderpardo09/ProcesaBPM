@@ -84,4 +84,31 @@ describe('own profile and signature', () => {
     // No signature: an empty body (Nest serializes the null of the contract as `{}`).
     expect((await member.client.get('/auth/me/signature').expect(200)).body).toEqual({});
   });
+
+  it('lets whoever manages members set and clear another member’s signature with an image they uploaded', async () => {
+    // The image travels like any upload (`/files/uploads`), which asks for a ticket permission that allows uploading.
+    const manager = await world.member([grant('create'), { action: 'read', subject: 'Membership' }, { action: 'update', subject: 'Membership' }]);
+    const reader = await world.member([{ action: 'read', subject: 'Membership' }]);
+    const signer = await world.member([grant('create')]);
+    const signature = `/members/${signer.userId}/signature`;
+    const image = await uploadFile(manager, { name: 'firma.png', content: png() });
+
+    await reader.client.put(signature, { fileId: image }).expect(403);
+    // Only an image the manager uploaded, and only one the PDFs can draw.
+    await manager.client.put(signature, { fileId: await uploadFile(other, { name: 'ajena.png', content: png() }) }).expect(404);
+    await manager.client.put(signature, { fileId: await uploadFile(manager, { name: 'doc.pdf', content: pdf() }) }).expect(422);
+    await manager.client.put(`/members/${crypto.randomUUID()}/signature`, { fileId: image }).expect(404);
+
+    await manager.client.put(signature, { fileId: image }).expect(204);
+    expect((await signer.client.get('/auth/me').expect(200)).body.membership.signatureFileId).toBe(image);
+    expect((await reader.client.get(signature).expect(200)).body).toMatchObject({ url: expect.any(String), expiresAt: expect.any(String) });
+
+    await reader.client.delete(signature).expect(403);
+    await manager.client.delete(signature).expect(204);
+    expect((await signer.client.get('/auth/me').expect(200)).body.membership.signatureFileId).toBeNull();
+    expect((await manager.client.get(signature).expect(200)).body).toEqual({});
+
+    const trail = await db.owner.query<{ action: string; actor_id: string }>(`SELECT action, actor_id FROM audit_logs WHERE tenant_id = $1 AND entity_id = $2 AND action LIKE 'member.signature_%' ORDER BY created_at`, [world.tenant.tenantId, signer.userId]);
+    expect(trail.rows).toEqual([{ action: 'member.signature_updated', actor_id: manager.userId }, { action: 'member.signature_removed', actor_id: manager.userId }]);
+  });
 });

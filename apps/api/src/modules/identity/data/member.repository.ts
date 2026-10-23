@@ -58,6 +58,12 @@ export interface DirectoryRow {
 const DIRECTORY_SELECT = { userId: true, user: { select: { firstName: true, lastName: true } } } as const;
 
 /** Every query carries the tenant explicitly on top of row-level security. */
+export interface SignatureFile {
+  readonly id: string;
+  readonly storageKey: string;
+  readonly mimeType: string;
+}
+
 @Injectable()
 export class MemberRepository {
   async list(tx: TenantTransaction, tenantId: string, query: MembersQuery): Promise<{ rows: MemberRow[]; total: number }> {
@@ -144,5 +150,20 @@ export class MemberRepository {
       select: { id: true },
     });
     return role !== null;
+  }
+
+  /** The member's signature image, or null when they have none (or are not a member here). */
+  async signatureFile(tx: TenantTransaction, tenantId: string, userId: string): Promise<SignatureFile | null> {
+    const membership = await tx.membership.findUnique({ where: { tenantId_userId: { tenantId, userId } }, select: { signatureFile: { select: { id: true, storageKey: true, mimeType: true } } } });
+    return membership?.signatureFile ?? null;
+  }
+
+  /** A confirmed image the given person uploaded here, to become somebody's signature. */
+  uploadedImage(tx: TenantTransaction, tenantId: string, uploaderId: string, fileId: string): Promise<SignatureFile | null> {
+    return tx.storedFile.findFirst({ where: { tenantId, id: fileId, uploadedById: uploaderId, origin: 'USER', status: 'CONFIRMED' }, select: { id: true, storageKey: true, mimeType: true } });
+  }
+
+  async linkSignature(tx: TenantTransaction, tenantId: string, userId: string, fileId: string | null): Promise<void> {
+    await tx.membership.update({ where: { tenantId_userId: { tenantId, userId } }, data: { signatureFileId: fileId } });
   }
 }

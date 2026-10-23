@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import { fakeProfile } from '@/test/fake-profile';
 import type { FakeHandler } from '@/test/fake-transport';
@@ -65,6 +65,8 @@ function handlers(extra: Record<string, FakeHandler> = {}): Record<string, FakeH
 }
 
 const open = (path: string, extra: Record<string, FakeHandler> = {}) => renderRoute(path, { handlers: handlers(extra) });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('PeoplePage', () => {
   it('lists the members with their role, position, department and state, and never offers to deactivate the owner or oneself', async () => {
@@ -141,6 +143,37 @@ describe('PeoplePage', () => {
     await vi.waitFor(() =>
       expect(fake.callsTo(`/members/${OWNER}`)[0]?.options).toMatchObject({ method: 'PATCH', body: { roleId: AGENT_ROLE, positionId: ANALISTA, departmentId: null, siteId: null, companyIds: [MAIN, BRANCH] } }),
     );
+  });
+
+  it('uploads the signature of a member, which is theirs at once, and removes it', async () => {
+    const FILE_ID = id(95);
+    const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/key?sig=1', method: 'PUT', headers: { 'content-type': 'image/png' }, expiresAt: at };
+    const stored = { id: FILE_ID, name: 'firma.png', kind: 'IMAGE', mimeType: 'image/png', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at };
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
+    let signature: { url: string; expiresAt: string } | null = null;
+    const { fake } = open('/people', {
+      [`/members/${OWNER}`]: () => member(OWNER, 'Olga'),
+      [`/members/${OWNER}/signature`]: (options) => {
+        if (options.method === 'PUT') signature = { url: 'https://files.test/firma-olga.png', expiresAt: at };
+        if (options.method === 'DELETE') signature = null;
+        return options.method === undefined || options.method === 'GET' ? signature : undefined;
+      },
+      '/files/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }),
+      [`/files/${FILE_ID}/confirm`]: () => stored,
+    });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar a Olga Pérez' }));
+    const dialog = screen.getByRole('dialog', { name: 'Editar miembro' });
+    expect(await within(dialog).findByText('Todavía no tiene firma.')).toBeInTheDocument();
+    await userEvent.upload(within(dialog).getByLabelText('Imagen de la firma'), new File(['png!'], 'firma.png', { type: 'image/png' }));
+
+    expect(await within(dialog).findByRole('img', { name: 'Firma de Olga Pérez' })).toHaveAttribute('src', 'https://files.test/firma-olga.png');
+    expect(fake.callsTo(`/members/${OWNER}/signature`).find((call) => call.options.method === 'PUT')?.options.body).toEqual({ fileId: FILE_ID });
+    // The member's own data is not sent again: the signature does not wait for «Guardar».
+    expect(fake.callsTo(`/members/${OWNER}`).filter((call) => call.options.method === 'PATCH')).toHaveLength(0);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Quitar firma' }));
+    expect(await within(dialog).findByText('Todavía no tiene firma.')).toBeInTheDocument();
   });
 
   it('sends an invitation again and deactivates a member', async () => {
