@@ -42,6 +42,8 @@ export type InboxFilters = { readonly [K in IdFilter]: string | undefined } & {
   readonly status: TicketStatus | undefined;
   /** The ticket number, its title or the requester's name. */
   readonly search: string;
+  /** The search also looks in the description and the comments. */
+  readonly searchMessages: boolean;
   /** Local dates (`YYYY-MM-DD`), both included: the API gets the instants of the person's own days. */
   readonly createdFrom: string | undefined;
   readonly createdTo: string | undefined;
@@ -60,6 +62,7 @@ export interface InboxParams extends InboxFilters {
 export const NO_FILTERS: InboxFilters = {
   status: undefined,
   search: '',
+  searchMessages: false,
   ...(Object.fromEntries(ID_FILTERS.map(({ key }) => [key, undefined])) as { [K in IdFilter]: undefined }),
   createdFrom: undefined,
   createdTo: undefined,
@@ -87,6 +90,7 @@ export function readInboxParams(search: URLSearchParams): InboxParams {
     view: oneOf(INBOX_VIEWS, search.get('view')) ?? DEFAULT_VIEW,
     status: oneOf(TICKET_STATUSES, search.get('status')),
     search: (search.get('q') ?? '').trim().slice(0, SEARCH_MAX),
+    searchMessages: search.get('msgs') === '1',
     ...(Object.fromEntries(ID_FILTERS.map(({ key, url }) => [key, idOf(search.get(url))])) as { [K in IdFilter]: string | undefined }),
     createdFrom,
     // A range that ends before it starts is dropped at its end, like any other value the API would refuse.
@@ -110,6 +114,7 @@ export function writeInboxParams(params: InboxParams): URLSearchParams {
   if (params.view !== DEFAULT_VIEW) query.set('view', params.view);
   if (params.status !== undefined) query.set('status', params.status);
   if (params.search !== '') query.set('q', params.search);
+  if (params.searchMessages) query.set('msgs', '1');
   for (const { key, url } of ID_FILTERS) {
     const value = params[key];
     if (value !== undefined) query.set(url, value);
@@ -129,6 +134,7 @@ export function filterQuery(filters: InboxFilters): URLSearchParams {
   const query = new URLSearchParams();
   if (filters.status !== undefined) query.set('status', filters.status);
   if (filters.search !== '') query.set('search', filters.search);
+  if (filters.search !== '' && filters.searchMessages) query.set('searchMessages', 'true');
   for (const { key } of ID_FILTERS) {
     const value = filters[key];
     if (value !== undefined) query.set(key, value);

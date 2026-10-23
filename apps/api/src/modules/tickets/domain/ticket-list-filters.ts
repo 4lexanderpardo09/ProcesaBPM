@@ -20,10 +20,13 @@ const requesterNamed = (search: string): Condition => ({
   creator: { user: { AND: search.split(/\s+/).map((word) => ({ OR: [{ firstName: insensitive(word) }, { lastName: insensitive(word) }] })) } },
 });
 
-/** The number, the title or the requester's name. */
-export function searchFilter(search: string): Condition {
+/** What people wrote on the ticket: its description and its comments (stored as sanitized HTML, searched as it is). */
+const messagesContaining = (search: string): Condition[] => [{ descriptionHtml: insensitive(search) }, { events: { some: { commentHtml: insensitive(search) } } }];
+
+/** The number, the title or the requester's name; with `inMessages`, also the description and the comments. */
+export function searchFilter(search: string, inMessages = false): Condition {
   const number = ticketNumberOf(search);
-  return { OR: [...(number === undefined ? [] : [{ number }]), { title: insensitive(search) }, requesterNamed(search)] };
+  return { OR: [...(number === undefined ? [] : [{ number }]), { title: insensitive(search) }, requesterNamed(search), ...(inMessages ? messagesContaining(search) : [])] };
 }
 
 /**
@@ -44,7 +47,7 @@ export function ticketFilters(query: TicketFiltersQuery, callerId: string): Cond
     ...(query.tagId === undefined ? [] : [{ tags: { some: { tagId: query.tagId, userId: callerId } } }]),
     ...(query.createdFrom === undefined ? [] : [{ createdAt: { gte: new Date(query.createdFrom) } }]),
     ...(query.createdTo === undefined ? [] : [{ createdAt: { lt: new Date(query.createdTo) } }]),
-    ...(query.search === undefined ? [] : [searchFilter(query.search)]),
+    ...(query.search === undefined ? [] : [searchFilter(query.search, query.searchMessages === true)]),
     ...(query.fieldCode === undefined || query.fieldOperator === undefined
       ? []
       : [fieldFilter({ code: query.fieldCode, operator: query.fieldOperator, value: query.fieldValue, valueTo: query.fieldValueTo })]),
