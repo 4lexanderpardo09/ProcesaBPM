@@ -38,6 +38,10 @@ describe('field config', () => {
     expect(parseFieldConfig('TABLE', { columns: [{ code: 'A', label: 'A', type: 'TEXT' }, { code: 'A', label: 'B', type: 'TEXT' }] }, null).valid).toBe(false);
     expect(parseFieldConfig('FILE', { maxFiles: 16 }, null).valid).toBe(false);
     expect(parseFieldConfig('FILE', { accept: ['SVG'] }, null).valid).toBe(false);
+    const fileColumn = (extra: Record<string, unknown>) => parseFieldConfig('TABLE', { columns: [{ code: 'PROOF', label: 'Soporte', type: 'FILE', ...extra }] }, null).valid;
+    expect([fileColumn({}), fileColumn({ maxFiles: 3, accept: ['PDF', 'IMAGE'] })]).toEqual([true, true]);
+    expect([fileColumn({ maxFiles: 6 }), fileColumn({ accept: [] }), fileColumn({ options: [{ value: 'a', label: 'A' }] }), fileColumn({ showTotal: true })]).toEqual([false, false, false, false]);
+    expect(parseFieldConfig('TABLE', { columns: [{ code: 'A', label: 'A', type: 'TEXT', maxFiles: 2 }] }, null).valid).toBe(false);
     expect(parseFieldConfig('FILE', {}, null)).toMatchObject({ valid: true, config: { maxFiles: 1 } });
   });
 

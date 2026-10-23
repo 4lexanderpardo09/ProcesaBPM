@@ -2,9 +2,13 @@ import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, PlusIcon, Select, TextField } from '@/shared/ui';
 import { codeFromLabel } from '../../lib/content-doc';
 import { ListTextField } from '../ListTextField';
+import { WholeNumberField } from '../WholeNumberField';
 import styles from '../Builder.module.css';
 
-const COLUMN_TYPES = ['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA'] as const;
+const COLUMN_TYPES = ['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA', 'FILE'] as const;
+const FILE_KINDS = ['PDF', 'IMAGE', 'OFFICE', 'ZIP'] as const;
+/** A file cell holds one file unless the column says otherwise. */
+const MAX_FILES_PER_CELL = 5;
 export type ColumnType = (typeof COLUMN_TYPES)[number];
 
 export interface TableColumn {
@@ -16,6 +20,9 @@ export interface TableColumn {
   readonly options?: ReadonlyArray<{ readonly value: string; readonly label: string }>;
   /** FORMULA columns: computed from the other columns of the row. */
   readonly expression?: string;
+  /** FILE columns: files per cell (one when absent) and accepted kinds (any when absent). */
+  readonly maxFiles?: number;
+  readonly accept?: readonly string[];
 }
 
 const isNumeric = (type: ColumnType) => type === 'NUMBER' || type === 'CURRENCY' || type === 'FORMULA';
@@ -51,7 +58,7 @@ export function TableColumnsEditor({ columns, onChange }: { readonly columns: re
               onChange={(event) => {
                 const type = event.target.value as ColumnType;
                 // Totals and options only belong to some types (the schema refuses them elsewhere).
-                const { showTotal: _showTotal, options: _options, expression: _expression, required: _required, ...rest } = column;
+                const { showTotal: _showTotal, options: _options, expression: _expression, required: _required, maxFiles: _maxFiles, accept: _accept, ...rest } = column;
                 replace(index, {
                   ...rest,
                   type,
@@ -80,6 +87,7 @@ export function TableColumnsEditor({ columns, onChange }: { readonly columns: re
             ) : (
               <Checkbox label={t('builder.fields.config.columnRequired')} checked={column.required === true} onChange={(event) => replace(index, { ...column, required: event.target.checked })} />
             )}
+            {column.type === 'FILE' && <FileColumnSettings column={column} onChange={(changed) => replace(index, changed)} />}
             {isNumeric(column.type) && <Checkbox label={t('builder.fields.config.columnTotal')} checked={column.showTotal === true} onChange={(event) => replace(index, { ...column, showTotal: event.target.checked })} />}
             <Button variant="ghost" onClick={() => onChange(columns.filter((_column, at) => at !== index))}>
               {t('builder.fields.config.removeColumn', { index: index + 1 })}
@@ -91,5 +99,41 @@ export function TableColumnsEditor({ columns, onChange }: { readonly columns: re
         {t('builder.fields.config.addColumn')}
       </Button>
     </fieldset>
+  );
+}
+
+/** How many files a cell of a file column holds and of which kinds; all kinds unchecked would accept none, so one stays. */
+function FileColumnSettings({ column, onChange }: { readonly column: TableColumn; readonly onChange: (column: TableColumn) => void }) {
+  const { t } = useTranslation('workflows');
+  const accept = column.accept ?? [...FILE_KINDS];
+  const setAccept = (kinds: readonly string[]) => {
+    const { accept: _accept, ...rest } = column;
+    onChange(kinds.length === FILE_KINDS.length ? rest : { ...rest, accept: kinds });
+  };
+  return (
+    <>
+      <WholeNumberField
+        label={t('builder.fields.config.columnMaxFiles')}
+        min={1}
+        max={MAX_FILES_PER_CELL}
+        value={column.maxFiles ?? 1}
+        onChange={(value) => {
+          const { maxFiles: _maxFiles, ...rest } = column;
+          onChange(value === null || value <= 1 ? rest : { ...rest, maxFiles: Math.min(value, MAX_FILES_PER_CELL) });
+        }}
+      />
+      <fieldset className={styles.choices}>
+        <legend>{t('builder.fields.config.accept')}</legend>
+        {FILE_KINDS.map((kind) => (
+          <Checkbox
+            key={kind}
+            label={t(`builder.fields.config.acceptKinds.${kind}`)}
+            checked={accept.includes(kind)}
+            disabled={accept.length === 1 && accept.includes(kind)}
+            onChange={(event) => setAccept(event.target.checked ? [...accept.filter((value) => value !== kind), kind] : accept.filter((value) => value !== kind))}
+          />
+        ))}
+      </fieldset>
+    </>
   );
 }

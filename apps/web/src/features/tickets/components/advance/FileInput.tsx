@@ -44,30 +44,8 @@ type Refusal = { readonly key: 'tooMany'; readonly count: number } | { readonly 
  */
 export function FilePicker({ label, required, kinds = ALL_KINDS, maxFiles = MAX_FILES_PER_SUBMISSION, value, knownNames, error, onChange, onBusyChange }: FilePickerProps) {
   const { t } = useTranslation('tickets');
-  const client = useApiClient();
   const inputId = useId();
-  const [names, setNames] = useState<Readonly<Record<string, string>>>({});
-  const [refusal, setRefusal] = useState<Refusal>();
-  const upload = useMutation({
-    mutationFn: (files: readonly File[]) => uploadFiles(client, files),
-    onMutate: () => onBusyChange(true),
-    onSettled: () => onBusyChange(false),
-    onSuccess: (uploaded: readonly UploadedFile[]) => {
-      setNames((current) => ({ ...current, ...Object.fromEntries(uploaded.map((file) => [file.id, file.name])) }));
-      onChange([...value, ...uploaded.map((file) => file.id)]);
-    },
-  });
-
-  const choose = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = [...(event.target.files ?? [])];
-    event.target.value = '';
-    if (files.length === 0) return;
-    const problem = refusalOf(files, kinds, maxFiles - value.length);
-    setRefusal(problem);
-    if (problem === undefined) upload.mutate(files);
-  };
-  const nameOf = (id: string) => names[id] ?? knownNames[id] ?? t('advance.files.current');
-  const message = refusal === undefined ? undefined : refusal.key === 'tooMany' ? t('advance.files.tooMany', { count: refusal.count }) : refusal.key === 'tooBig' ? t('advance.files.tooBig', { name: refusal.name, size: formatFileSize(MAX_FILE_BYTES) }) : t('advance.files.notAllowed', { name: refusal.name });
+  const { upload, choose, nameOf, message } = useFilePicking({ kinds, maxFiles, value, knownNames, onChange, onBusyChange });
 
   return (
     <fieldset className={styles.choices} aria-invalid={error !== undefined}>
@@ -103,6 +81,46 @@ export function FilePicker({ label, required, kinds = ALL_KINDS, maxFiles = MAX_
       {error !== undefined && <span className={styles.pendingError}>{error}</span>}
     </fieldset>
   );
+}
+
+interface FilePicking {
+  readonly kinds: readonly FileKind[];
+  readonly maxFiles: number;
+  readonly value: readonly string[];
+  readonly knownNames: Readonly<Record<string, string>>;
+  readonly onChange: (value: readonly string[]) => void;
+  readonly onBusyChange: (busy: boolean) => void;
+}
+
+/**
+ * Choosing files for a list of ids: what the browser can tell beforehand (type, size, how many) is refused with a
+ * message, the rest is uploaded at once and added. Shared by a FILE field and a file cell of a table.
+ */
+export function useFilePicking({ kinds, maxFiles, value, knownNames, onChange, onBusyChange }: FilePicking) {
+  const { t } = useTranslation('tickets');
+  const client = useApiClient();
+  const [names, setNames] = useState<Readonly<Record<string, string>>>({});
+  const [refusal, setRefusal] = useState<Refusal>();
+  const upload = useMutation({
+    mutationFn: (files: readonly File[]) => uploadFiles(client, files),
+    onMutate: () => onBusyChange(true),
+    onSettled: () => onBusyChange(false),
+    onSuccess: (uploaded: readonly UploadedFile[]) => {
+      setNames((current) => ({ ...current, ...Object.fromEntries(uploaded.map((file) => [file.id, file.name])) }));
+      onChange([...value, ...uploaded.map((file) => file.id)]);
+    },
+  });
+  const choose = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = '';
+    if (files.length === 0) return;
+    const problem = refusalOf(files, kinds, maxFiles - value.length);
+    setRefusal(problem);
+    if (problem === undefined) upload.mutate(files);
+  };
+  const nameOf = (id: string) => names[id] ?? knownNames[id] ?? t('advance.files.current');
+  const message = refusal === undefined ? undefined : refusal.key === 'tooMany' ? t('advance.files.tooMany', { count: refusal.count }) : refusal.key === 'tooBig' ? t('advance.files.tooBig', { name: refusal.name, size: formatFileSize(MAX_FILE_BYTES) }) : t('advance.files.notAllowed', { name: refusal.name });
+  return { upload, choose, nameOf, message, accept: acceptOf(kinds) };
 }
 
 function acceptedKinds(field: FormFieldResponse): readonly FileKind[] {

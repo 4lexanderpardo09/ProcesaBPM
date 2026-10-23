@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { FieldDocument } from '@procesabpm/shared';
+import { type FieldDocument, fileIdsOf } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { RenderFactsRepository } from '../data/render-facts.repository.js';
 import { ApproverSnapshotRepository } from '../../approvals/data/approver-snapshot.repository.js';
@@ -58,7 +58,7 @@ export class RenderFactsLoader {
     const names: NameLookups = {
       users: await this.repository.userNames(tx, tenantId, [...new Set(ids(fields, values, 'USER'))]),
       sites: await this.repository.siteNames(tx, tenantId, [...new Set(ids(fields, values, 'SITE'))]),
-      files: await this.repository.fileNames(tx, tenantId, [...new Set(ids(fields, values, 'FILE'))]),
+      files: await this.repository.fileNames(tx, tenantId, [...new Set(fields.flatMap((field) => fileIdsOf(field, values[field.code])))]),
     };
     const approvers = await this.approvers(tx, tenantId, { creatorId: base.ticket.creatorId, companyId: base.companyId, at: now }, approverAsks);
     return { facts: { ticket: base.ticket, timeZone: base.timeZone, currencyCode: base.currencyCode, fields, values, names, signers, approvers, now }, workflowId: base.workflowId, companyId: base.companyId, imageStorageKeys };

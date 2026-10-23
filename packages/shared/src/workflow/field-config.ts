@@ -11,11 +11,13 @@ const options = z
   .max(500)
   .refine((list) => new Set(list.map((entry) => entry.value)).size === list.length, 'Option values must be unique');
 
+const fileKinds = z.array(z.enum(['PDF', 'IMAGE', 'OFFICE', 'ZIP'])).min(1);
+
 const tableColumn = z
   .object({
     code,
     label: z.string().min(1).max(200),
-    type: z.enum(['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA']),
+    type: z.enum(['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA', 'FILE']),
     required: z.boolean().default(false),
     /** FORMULA columns: a number computed from the other columns of the same row (`QTY * PRICE`). */
     expression: z.string().min(1).max(500).optional(),
@@ -26,9 +28,14 @@ const tableColumn = z
     max: z.number().optional(),
     /** NUMBER and CURRENCY columns: the ticket shows the total of the column under the table. */
     showTotal: z.boolean().default(false),
+    /** FILE columns: how many files a cell holds (one by default) and of which kinds (any by default). */
+    maxFiles: z.number().int().min(1).max(5).optional(),
+    accept: fileKinds.optional(),
   })
   .strict()
   .superRefine((column, context) => {
+    if (column.type !== 'FILE' && (column.maxFiles !== undefined || column.accept !== undefined)) context.addIssue({ code: 'custom', message: 'maxFiles and accept only apply to file columns' });
+    if (column.type === 'FILE' && column.options !== undefined) context.addIssue({ code: 'custom', message: 'a file column has no options' });
     const formula = column.type === 'FORMULA';
     const numeric = column.type === 'NUMBER' || column.type === 'CURRENCY' || formula;
     if (!numeric && (column.showTotal || column.min !== undefined || column.max !== undefined)) context.addIssue({ code: 'custom', message: 'min, max and showTotal only apply to number and currency columns' });
@@ -62,7 +69,7 @@ export const FIELD_CONFIG_SCHEMAS: Readonly<Record<FieldType, z.ZodType<Record<s
       maxRows: z.number().int().min(1).max(200).default(200),
     })
     .strict(),
-  FILE: z.object({ maxFiles: z.number().int().min(1).max(15).default(1), accept: z.array(z.enum(['PDF', 'IMAGE', 'OFFICE', 'ZIP'])).min(1).default(['PDF', 'IMAGE', 'OFFICE', 'ZIP']) }).strict(),
+  FILE: z.object({ maxFiles: z.number().int().min(1).max(15).default(1), accept: fileKinds.default(['PDF', 'IMAGE', 'OFFICE', 'ZIP']) }).strict(),
   FORMULA: z.object({ expression: z.string().min(1).max(2000), resultType: z.enum(['NUMBER', 'CURRENCY', 'DATE', 'TEXT']), decimals: z.number().int().min(0).max(6).optional() }).strict(),
   CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100), inputs: z.record(z.string().min(1).max(100), code).default({}) }).strict(),
 };

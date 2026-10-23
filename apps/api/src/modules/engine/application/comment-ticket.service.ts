@@ -37,7 +37,7 @@ export class CommentTicketService {
       const commentHtml = sanitizeRichText(request.comment);
       if (commentHtml === '') throw new CommentRequiredError();
 
-      const { files } = await this.fileChecker.check(tx, { tenantId, uploaderId: actor.userId, attachmentIds: request.attachments, fileFieldCodes: [], capturedValues: {}, existing: {}, references: [] });
+      const { files } = await this.fileChecker.check(tx, { tenantId, uploaderId: actor.userId, attachmentIds: request.attachments, fileFields: [], capturedValues: {}, existing: {}, references: [] });
       const eventId = await this.writes.insertEvent(tx, tenantId, ticket.id, at, {
         type: 'COMMENTED',
         stepId: ticket.currentStepId,

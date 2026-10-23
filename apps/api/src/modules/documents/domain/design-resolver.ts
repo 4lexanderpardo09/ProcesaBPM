@@ -34,6 +34,7 @@ export interface ResolvedDesign {
 
 interface TableColumnDefinition {
   readonly code?: unknown;
+  readonly type?: unknown;
   readonly options?: ReadonlyArray<{ readonly value?: unknown; readonly label?: unknown }>;
 }
 
@@ -207,6 +208,11 @@ export class DesignResolver {
         if (row === undefined) return undefined;
         const definition = (Array.isArray(tableField?.config.columns) ? (tableField.config.columns as TableColumnDefinition[]) : []).find((column) => column.code === path.code);
         const raw = row[path.code];
+        // A file column reads as the names of its files, like a FILE field.
+        if (definition?.type === 'FILE') {
+          const names = Array.isArray(raw) ? raw.flatMap((id) => (typeof id === 'string' && this.facts.names.files.has(id) ? [this.facts.names.files.get(id)!] : [])) : [];
+          return names.length === 0 ? null : names.join(', ');
+        }
         const label = definition?.options?.find((option) => option.value === raw)?.label;
         const value = label ?? raw;
         return value === undefined || value === null ? null : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : String(value);

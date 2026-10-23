@@ -34,7 +34,7 @@ export function StepFieldInput({ field, value, error, knownLabels, knownFiles, o
 
   const source = choiceSourceOf(field);
   if (field.type === 'FILE') return <FileInput field={field} value={Array.isArray(value) ? (value as readonly string[]) : []} knownNames={knownFiles} error={error} onChange={onChange} onBusyChange={onBusyChange} />;
-  if (field.type === 'TABLE') return <TableInput field={field} rows={Array.isArray(value) ? (value as readonly TableRow[]) : []} error={error} onChange={onChange} />;
+  if (field.type === 'TABLE') return <TableInput field={field} rows={Array.isArray(value) ? (value as readonly TableRow[]) : []} error={error} onChange={onChange} knownFiles={knownFiles} onBusyChange={onBusyChange} />;
   if (source === 'DATASET' && field.type === 'TEXT') return <DatasetText field={field} value={text} error={error} onChange={onChange} />;
   if (source !== undefined) {
     const chosen = field.type === 'MULTI_SELECT' ? (Array.isArray(value) ? (value as readonly string[]) : []) : text;
