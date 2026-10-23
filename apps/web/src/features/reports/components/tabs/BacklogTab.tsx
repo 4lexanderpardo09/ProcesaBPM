@@ -110,7 +110,7 @@ export function BacklogTab({ filters }: { readonly filters: ReportFilters }) {
                 { key: 'open', header: t('backlog.open'), width: '100px', cell: (row) => <Badge tone={countTone(row.open + row.paused)}>{formatCount(row.open + row.paused)}</Badge> },
                 { key: 'paused', header: t('backlog.paused'), code: true, width: '90px', cell: (row) => formatCount(row.paused) },
                 { key: 'overdue', header: t('backlog.overdue'), code: true, width: '90px', cell: (row) => formatCount(row.overdue) },
-                { key: 'age', header: t('backlog.avgAge'), width: '120px', cell: (row) => (row.avgAgeDays === null ? t('none') : t('backlog.days', { count: Math.round(row.avgAgeDays) })) },
+                { key: 'age', header: t('backlog.avgAge'), width: '190px', cell: (row) => (row.avgAgeDays === null ? t('none') : t('backlog.days', { count: Math.round(row.avgAgeDays) })) },
                 {
                   key: 'buckets',
                   header: t('backlog.buckets'),

@@ -79,8 +79,8 @@ export function SitesTab({ filters, level, onLevel }: { readonly filters: Report
                   },
                 },
                 { key: 'errors', header: t('sites.errors'), width: '150px', cell: (row) => t('sites.errorDetail', { process: row.processErrors, other: row.otherErrors }) },
-                { key: 'errorPct', header: t('sites.errorPct'), code: true, width: '110px', cell: (row) => formatPct(row.errorPct) },
-                { key: 'avg', header: t('sites.avg'), width: '120px', cell: (row) => minutes(row.avgMin) },
+                { key: 'errorPct', header: t('sites.errorPct'), code: true, width: '170px', cell: (row) => formatPct(row.errorPct) },
+                { key: 'avg', header: t('sites.avg'), width: '150px', cell: (row) => minutes(row.avgMin) },
               ]}
             />
           </div>

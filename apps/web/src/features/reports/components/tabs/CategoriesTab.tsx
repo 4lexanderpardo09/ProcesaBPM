@@ -63,7 +63,7 @@ export function CategoriesTab({ filters }: { readonly filters: ReportFilters }) 
                 { key: 'created', header: t('categories.created'), width: '200px', cell: (row) => (row.subcategoryId === null ? <Bar share={row.created / most} label={formatCount(row.created)} /> : formatCount(row.created)) },
                 { key: 'open', header: t('categories.open'), code: true, width: '90px', cell: (row) => formatCount(row.open) },
                 { key: 'closed', header: t('categories.closed'), code: true, width: '90px', cell: (row) => formatCount(row.closed) },
-                { key: 'avg', header: t('categories.avg'), width: '140px', cell: (row) => minutes(row.avgResolutionMin) },
+                { key: 'avg', header: t('categories.avg'), width: '190px', cell: (row) => minutes(row.avgResolutionMin) },
               ]}
             />
           );
