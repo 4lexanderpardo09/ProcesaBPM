@@ -1,12 +1,14 @@
-import type { TicketDocumentResponse } from '@procesabpm/shared';
-import { useMutation, type UseQueryResult } from '@tanstack/react-query';
+import type { TicketDocumentJobsResponse, TicketDocumentResponse } from '@procesabpm/shared';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatFileSize } from '@/shared/lib/format-file-size';
 import { formatShortDate } from '@/shared/lib/format-date-time';
-import { openDownload } from '@/shared/lib/open-download';
 import { useApiClient } from '@/shared/session';
-import { Alert, Button, Card, DownloadIcon } from '@/shared/ui';
-import { ticketFileDownloadUrl } from '../api/ticket-detail-api';
+import { Alert, Badge, Button, Card, DownloadIcon } from '@/shared/ui';
+import { regenerateTicketDocument, ticketDocumentJobsQueryOptions } from '../api/ticket-detail-api';
+import { ticketQueryKeys } from '../api/tickets-api';
+import { useTicketFileDownload } from '../hooks/use-ticket-file-download';
 import { LoadError } from './LoadError';
 import styles from './TicketAttachments.module.css';
 
@@ -16,14 +18,10 @@ export interface TicketAttachmentsProps {
   readonly timeZone: string | undefined;
 }
 
-/** The current version of every file on the ticket; the download link is asked for when the person clicks. */
+/** The current version of every file on the ticket, and the workflow's documents being drawn or that failed. */
 export function TicketAttachments({ ticketId, documents, timeZone }: TicketAttachmentsProps) {
   const { t } = useTranslation('tickets');
-  const client = useApiClient();
-  const download = useMutation({
-    mutationFn: (fileId: string) => ticketFileDownloadUrl(client, ticketId, fileId),
-    onSuccess: ({ url }) => openDownload(url),
-  });
+  const download = useTicketFileDownload(ticketId);
   const current = documents.data?.filter((document) => document.isCurrent);
 
   return (
@@ -60,6 +58,63 @@ export function TicketAttachments({ ticketId, documents, timeZone }: TicketAttac
           <Alert tone="danger">{t('detail.attachments.downloadFailed')}</Alert>
         </div>
       )}
+      <DocumentJobs ticketId={ticketId} />
     </Card>
   );
+}
+
+type JobDocument = TicketDocumentJobsResponse['documents'][number];
+
+/**
+ * The workflow's documents for this ticket: one being drawn or that failed says so, and whoever may edit the ticket can
+ * draw one again (its data changed, or it failed). When a drawing ends, the list of files is asked for again.
+ */
+function DocumentJobs({ ticketId }: { readonly ticketId: string }) {
+  const { t } = useTranslation('tickets');
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  const jobs = useQuery(ticketDocumentJobsQueryOptions(client, ticketId));
+  const regenerate = useMutation({
+    mutationFn: (workflowDocumentId: string) => regenerateTicketDocument(client, ticketId, workflowDocumentId),
+    onSuccess: (data) => queryClient.setQueryData(ticketQueryKeys.documentJobs(ticketId), data),
+  });
+  const generating = jobs.data?.documents.filter((document) => document.state === 'GENERATING').length ?? 0;
+  const wasGenerating = useRef(generating);
+  useEffect(() => {
+    if (generating < wasGenerating.current) void queryClient.invalidateQueries({ queryKey: ticketQueryKeys.documents(ticketId) });
+    wasGenerating.current = generating;
+  }, [generating, queryClient, ticketId]);
+
+  const data = jobs.data;
+  if (data === undefined) return null;
+  const shown = data.documents.filter((document) => document.state !== null || data.canRegenerate);
+  if (shown.length === 0) return null;
+  return (
+    <div className={styles.jobs}>
+      <h4 className={styles.jobsTitle}>{t('detail.documentJobs.title')}</h4>
+      <ul className={styles.files}>
+        {shown.map((document) => (
+          <li key={document.workflowDocumentId} className={styles.file}>
+            <div className={styles.fileText}>
+              <span className={styles.label}>{document.name}</span>
+            </div>
+            <JobState document={document} />
+            {data.canRegenerate && document.state !== 'GENERATING' && (
+              <Button variant="ghost" disabled={regenerate.isPending} aria-label={t('detail.documentJobs.regenerateNamed', { name: document.name })} onClick={() => regenerate.mutate(document.workflowDocumentId)}>
+                {t('detail.documentJobs.regenerate')}
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {regenerate.isError && <Alert tone="danger">{t('detail.documentJobs.regenerateFailed')}</Alert>}
+    </div>
+  );
+}
+
+function JobState({ document }: { readonly document: JobDocument }) {
+  const { t } = useTranslation('tickets');
+  if (document.state === 'GENERATING') return <Badge tone="accent">{t('detail.documentJobs.generating')}</Badge>;
+  if (document.state === 'FAILED') return <Badge tone="danger">{t('detail.documentJobs.failed')}</Badge>;
+  return null;
 }

@@ -59,6 +59,33 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
     await db.close();
   });
 
+  describe('support files of the step', () => {
+    it('lists the files of the step the ticket is on and lets whoever reads the ticket download them, until it leaves the step', async () => {
+      const adminMember: Member = { userId: '', client: world.admin };
+      const guide = await upload(adminMember, 'guia.pdf');
+      const format = await upload(adminMember, 'formato.pdf');
+      const supported = await publishFlow(world.admin, {
+        ...simpleFlow({ assignmentMode: 'USERS' }, { candidates: [user(worker)], files: [{ fileId: format, label: 'Formato a llenar', sortOrder: 2 }, { fileId: guide, label: 'Guía del paso', sortOrder: 1 }] }),
+      });
+      const ticket = (await create({}, requester, supported).expect(201)).body as { id: string; openVisitId: string };
+
+      const files = (await requester.client.get(`/tickets/${ticket.id}/step-files`).expect(200)).body as Array<{ label: string; file: { id: string; name: string } }>;
+      expect(files.map((entry) => [entry.label, entry.file.id])).toEqual([['Guía del paso', guide], ['Formato a llenar', format]]);
+      const url = (await worker.client.get(`/tickets/${ticket.id}/files/${guide}/download-url`).expect(200)).body.url as string;
+      expectStatus(await fetch(url), 200);
+      await stranger.client.get(`/tickets/${ticket.id}/step-files`).expect(404);
+      await stranger.client.get(`/tickets/${ticket.id}/files/${guide}/download-url`).expect(404);
+      // A support file of another workflow is not this ticket's.
+      const other = (await create({}, requester).expect(201)).body as { id: string };
+      await requester.client.get(`/tickets/${other.id}/files/${guide}/download-url`).expect(404);
+      expect((await requester.client.get(`/tickets/${other.id}/step-files`).expect(200)).body).toEqual([]);
+
+      await worker.client.post(`/tickets/${ticket.id}/transition`, { transitionId: supported.transition.Done!, visitId: ticket.openVisitId, values: {} }).expect(200);
+      expect((await requester.client.get(`/tickets/${ticket.id}/step-files`).expect(200)).body).toEqual([]);
+      await requester.client.get(`/tickets/${ticket.id}/files/${guide}/download-url`).expect(404);
+    });
+  });
+
   describe('creating a ticket with files', () => {
     it('links loose attachments and FILE field values to the CREATED event, and marks the uploads as linked', async () => {
       const [loose, contract] = [await upload(requester, 'brief.pdf'), await upload(requester, 'contract.pdf')];

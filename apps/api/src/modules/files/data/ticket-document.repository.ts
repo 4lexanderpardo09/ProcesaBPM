@@ -32,6 +32,11 @@ export interface TicketDocumentRow {
   readonly file: StoredFileRow;
 }
 
+export interface StepFileRow {
+  readonly label: string;
+  readonly file: StoredFileRow;
+}
+
 @Injectable()
 export class TicketDocumentRepository {
   async insertMany(tx: TenantTransaction, tenantId: string, ticketId: string, documents: readonly NewTicketDocument[]): Promise<void> {
@@ -80,12 +85,25 @@ export class TicketDocumentRepository {
     });
   }
 
-  /** The stored file behind a document of this ticket, if the ticket really has it. */
+  /** The stored file behind a document of this ticket, or a support file of the step it is on, if the ticket really has it. */
   async findFile(tx: TenantTransaction, tenantId: string, ticketId: string, fileId: string): Promise<StoredFileRow | null> {
     const document = await tx.ticketDocument.findFirst({
       where: { tenantId, ticketId, fileId, deletedAt: null, file: { status: 'CONFIRMED' } },
       select: { file: { select: STORED_FILE_SELECT } },
     });
-    return document?.file ?? null;
+    if (document !== null) return document.file;
+    const support = (await this.currentStepFiles(tx, tenantId, ticketId)).find((row) => row.file.id === fileId);
+    return support?.file ?? null;
+  }
+
+  /** The support files the workflow attaches to the step the ticket is on; none once it is closed. */
+  async currentStepFiles(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<StepFileRow[]> {
+    const ticket = await tx.ticket.findFirst({ where: { tenantId, id: ticketId, deletedAt: null }, select: { status: true, currentStepId: true } });
+    if (ticket === null || ticket.status === 'CLOSED' || ticket.currentStepId === null) return [];
+    return tx.stepFile.findMany({
+      where: { tenantId, stepId: ticket.currentStepId, file: { status: 'CONFIRMED' } },
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      select: { label: true, file: { select: STORED_FILE_SELECT } },
+    });
   }
 }

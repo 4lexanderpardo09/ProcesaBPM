@@ -13,6 +13,8 @@ import { TicketAttachments } from '../components/TicketAttachments';
 import { TicketDetailHeader } from '../components/TicketDetailHeader';
 import { TicketFacts } from '../components/TicketFacts';
 import { TicketFieldValues } from '../components/TicketFieldValues';
+import { TicketParallelSignatures } from '../components/TicketParallelSignatures';
+import { TicketStepFiles } from '../components/TicketStepFiles';
 import { TicketTagsCard } from '../components/TicketTagsCard';
 import { TicketActions } from '../components/actions/TicketActions';
 import { TicketFlow } from '../components/flow/TicketFlow';
@@ -22,11 +24,11 @@ import styles from './TicketDetailPage.module.css';
 
 const NOT_FOUND = 404;
 
-/** One ticket: its facts, its progress through the workflow, description, activity with comments, captured values, attachments and the caller's tags. */
+/** One ticket: its facts, its progress through the workflow, description, activity with comments, the signatures of a parallel step, the step's support files, captured values, attachments and the caller's tags. */
 export function TicketDetailPage() {
   const { ticketId = '' } = useParams();
   const { t } = useTranslation('tickets');
-  const { detail, form, timeline, documents, flow } = useTicketDetail(ticketId);
+  const { detail, form, timeline, documents, flow, stepFiles } = useTicketDetail(ticketId);
   const user = useCurrentUser().data?.user;
   const timeZone = user?.timeZone ?? undefined;
 
@@ -50,6 +52,8 @@ export function TicketDetailPage() {
           <TicketActivity ticketId={ticket.id} timeline={timeline} canComment={ticket.actions.comment} timeZone={timeZone} fields={form.data?.fields ?? []} valueNames={ticket.valueNames} />
         </div>
         <aside className={styles.side}>
+          <TicketParallelSignatures tasks={ticket.parallelTasks} timeZone={timeZone} />
+          <TicketStepFiles ticketId={ticket.id} stepFiles={stepFiles} />
           <TicketFieldValues values={ticket.values} valueNames={ticket.valueNames} form={form} timeZone={timeZone} />
           <TicketAttachments ticketId={ticket.id} documents={documents} timeZone={timeZone} />
           <TicketTagsCard ticket={ticket} />

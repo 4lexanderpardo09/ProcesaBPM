@@ -9,6 +9,7 @@ import {
   type CommentTicketResponse,
   type DownloadUrlResponse,
   type TicketDocumentResponse,
+  type TicketStepFileResponse,
   closeTicketRequestSchema,
   type CreateTicketRequest,
   type IncidentMutationResponse,
@@ -150,6 +151,12 @@ export class TicketsController {
   @Get(':id/documents')
   listDocuments(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketDocumentResponse[]> {
     return this.documents.list(ability, id);
+  }
+
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Get(':id/step-files')
+  stepFiles(@CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string): Promise<TicketStepFileResponse[]> {
+    return this.documents.stepFiles(ability, id);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)

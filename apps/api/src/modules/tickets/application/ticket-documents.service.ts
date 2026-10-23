@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type DownloadUrlResponse, NotFoundError, type TicketDocumentResponse } from '@procesabpm/shared';
+import { type DownloadUrlResponse, NotFoundError, type TicketDocumentResponse, type TicketStepFileResponse } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { AppAbility } from '../../authorization/domain/build-ability.js';
@@ -10,7 +10,8 @@ import { readableTickets } from './ticket-access.js';
 
 /**
  * The files of a ticket, for whoever may read the ticket (decided by the database, per record). A ticket the
- * caller cannot read answers exactly like one that does not exist, and so does a file that is not the ticket's.
+ * caller cannot read answers exactly like one that does not exist, and so does a file that is not the ticket's. The support
+ * files of the step the ticket is on count as the ticket's while it is there.
  */
 @Injectable()
 export class TicketDocumentsService {
@@ -24,6 +25,10 @@ export class TicketDocumentsService {
 
   list(ability: AppAbility, ticketId: string): Promise<TicketDocumentResponse[]> {
     return this.readable(ability, ticketId, (tx, tenantId) => this.files.list(tx, tenantId, ticketId));
+  }
+
+  stepFiles(ability: AppAbility, ticketId: string): Promise<TicketStepFileResponse[]> {
+    return this.readable(ability, ticketId, (tx, tenantId) => this.files.stepFiles(tx, tenantId, ticketId));
   }
 
   downloadUrl(ability: AppAbility, ticketId: string, fileId: string): Promise<DownloadUrlResponse> {
