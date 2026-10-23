@@ -1,4 +1,6 @@
 import { FIELD_CODE_PATTERN, isAutomaticStep } from '../constants.js';
+import { rowFormulaSchema } from '../../engine/fields/table-formulas.js';
+import type { TableColumn } from '../../engine/fields/normalize-value.js';
 import { buildFormulaSchema, compileFormula, formulaResultType } from '../../engine/formulas/index.js';
 import { checkFieldDataSource, parseFieldConfig } from '../field-config.js';
 import { type RuleContext } from './context.js';
@@ -23,6 +25,17 @@ export function checkFields({ doc, stepById, fieldByCode, problems }: RuleContex
     if (!config.valid) problems.error('FIELD_CONFIG_INVALID', { ...at, params: { issues: config.issues } });
     const dataSource = checkFieldDataSource(field.type, field.dataSource);
     if (!dataSource.valid) problems.error('FIELD_DATA_SOURCE_INVALID', { ...at, params: { issues: dataSource.issues } });
+  }
+
+  // Formula columns of tables: a number from the other columns of the same row.
+  for (const field of doc.fields.filter((candidate) => candidate.type === 'TABLE')) {
+    const columns = Array.isArray(field.config.columns) ? (field.config.columns as TableColumn[]) : [];
+    const schema = rowFormulaSchema(columns);
+    for (const column of columns.filter((candidate) => candidate.type === 'FORMULA')) {
+      const compiled = compileFormula(column.expression ?? '', schema);
+      if (!compiled.ok) problems.error('TABLE_FORMULA_INVALID', { fieldId: field.id, params: { column: column.code, issue: compiled.issues[0]!.code, detail: compiled.issues[0]!.detail ?? '' } });
+      else if (compiled.formula.type !== 'NUMBER') problems.error('TABLE_FORMULA_NOT_NUMBER', { fieldId: field.id, params: { column: column.code } });
+    }
   }
 
   const isComputed = (code: string): boolean => ['FORMULA', 'CALCULATOR'].includes(fieldByCode.get(code)?.type ?? '');

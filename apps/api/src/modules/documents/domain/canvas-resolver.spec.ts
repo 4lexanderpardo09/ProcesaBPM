@@ -116,6 +116,17 @@ describe('CanvasResolver', () => {
     expect(names).toEqual({ cartera: ['Ana'], sistemas: ['Luis'], both: ['Ana', 'Luis'], nobody: [null] });
   });
 
+  it('keeps only the signature of the requester’s approver (or delegate) in a box that asks for them', () => {
+    const BOSS = '018f3c1e-7b2a-7c3d-9e4f-0000000000b0';
+    const elements = [signature('boss', { signers: 'ALL', approverOf: { typeId: BOSS, level: 1 } }), signature('second', { approverOf: { typeId: BOSS, level: 2 } })];
+    const namesWith = (approvers: RenderFacts['approvers']) => {
+      const resolved = new CanvasResolver({ ...facts(), ...(approvers === undefined ? {} : { approvers }) }).resolve({ ...emptyCanvasDesign(), elements });
+      return Object.fromEntries(resolved.content.elements.map((element) => [element.id, element.type === 'signature' ? element.signers.map((one) => one?.name ?? null) : undefined]));
+    };
+    expect(namesWith(new Map([[`${BOSS}:1`, new Set(['u-luis'])], [`${BOSS}:2`, new Set()]]))).toEqual({ boss: ['Luis'], second: [null] });
+    expect(namesWith(undefined)).toEqual({ boss: [null], second: [null] });
+  });
+
   it('fills signature boxes with the last, every or the n-th signer of a step, the requester, or nobody', () => {
     const resolved = resolve({
       elements: [

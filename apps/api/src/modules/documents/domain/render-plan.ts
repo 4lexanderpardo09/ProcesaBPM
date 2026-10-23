@@ -5,7 +5,7 @@ import { documentsEs as es } from '../i18n/es.js';
 import { CanvasResolver } from './canvas-resolver.js';
 import { DesignResolver } from './design-resolver.js';
 import { generatedFileName } from './generated-file-name.js';
-import type { RenderFacts } from './render-facts.js';
+import { type ApproverAsk, approverKey, type RenderFacts } from './render-facts.js';
 import { resolveTemplateFields, resolveTemplateSignatures } from './template-resolver.js';
 
 /** Everything to draw one document except the bytes (images, the template PDF) and the deadline, which the renderer step adds. */
@@ -18,6 +18,15 @@ export type RenderPlan = {
   | { readonly kind: 'CANVAS'; readonly job: Omit<CanvasJob, 'images' | 'deadlineAt' | 'meta'> }
   | { readonly kind: 'TEMPLATE'; readonly templateStorageKey: string; readonly job: Pick<TemplateJob, 'fields' | 'signatures'> }
 );
+
+/** The approvers the source's signature boxes keep, so the facts can bring them; none when the design does not parse. */
+export function approverAsksOf(source: WorkflowDocumentSource): ApproverAsk[] {
+  if (source.kind !== 'DESIGNED' || source.format === null) return [];
+  const design = anyPdfDesignSchema.safeParse(source.format.design);
+  if (!design.success || design.data.version !== 2) return [];
+  const asks = design.data.elements.flatMap((element) => (element.type === 'signature' && element.approverOf !== undefined ? [element.approverOf] : []));
+  return [...new Map(asks.map((ask) => [approverKey(ask), ask])).values()];
+}
 
 /** Evaluates a workflow document's source against a ticket's facts. Throws `PdfDesignInvalidError` when the stored design is unusable. */
 export function planRender(source: WorkflowDocumentSource, facts: RenderFacts): RenderPlan {

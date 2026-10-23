@@ -1,4 +1,4 @@
-import type { FormFieldResponse } from '@procesabpm/shared';
+import { compileRowFormulas, type FormFieldResponse, withRowFormulas } from '@procesabpm/shared';
 
 /** One row of a TABLE field as typed: text per column code. */
 export type TableRow = Readonly<Record<string, string>>;
@@ -13,9 +13,12 @@ const INTEGER = /^-?\d+$/;
 export interface TableColumn {
   readonly code: string;
   readonly label: string;
-  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT';
+  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT' | 'FORMULA';
   readonly required?: boolean;
   readonly options?: readonly Option[];
+  /** FORMULA columns: computed from the row, never typed nor sent. */
+  readonly expression?: string;
+  readonly decimals?: number;
 }
 
 /** Where a list or a person/site field takes its choices from, when they are not `config.options`. */
@@ -52,7 +55,11 @@ export function columnsOf(field: FormFieldResponse): readonly TableColumn[] {
 /** The value already on the ticket, as the input shows it. */
 export function initialInput(field: FormFieldResponse, value: unknown): InputValue {
   if (field.type === 'MULTI_SELECT' || field.type === 'FILE') return Array.isArray(value) ? value.map(String) : [];
-  if (field.type === 'TABLE') return Array.isArray(value) ? value.map(tableRowOf) : [];
+  if (field.type === 'TABLE') {
+    // Formula cells are computed on screen from the rest of the row: they are not part of what is typed.
+    const computed = new Set(columnsOf(field).filter((column) => column.type === 'FORMULA').map((column) => column.code));
+    return Array.isArray(value) ? value.map((row) => Object.fromEntries(Object.entries(tableRowOf(row)).filter(([code]) => !computed.has(code)))) : [];
+  }
   if (value === null || value === undefined) return '';
   if (field.type === 'DATETIME' && typeof value === 'string') return toLocalDateTime(value);
   return String(value);
@@ -114,6 +121,7 @@ function tableValue(columns: readonly TableColumn[], rows: readonly TableRow[]):
     if (isBlankRow(row)) continue;
     const cells: Record<string, string> = {};
     for (const column of columns) {
+      if (column.type === 'FORMULA') continue;
       const text = (row[column.code] ?? '').trim();
       if (text === '') continue;
       if (column.type === 'NUMBER' || column.type === 'CURRENCY') {
@@ -140,4 +148,21 @@ function toLocalDateTime(iso: string): string {
   if (Number.isNaN(date.getTime())) return '';
   const pad = (part: number) => String(part).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * The formula cells of a typed row, computed as the API will (the same engine), for the person to see them as they type.
+ * A cell the row cannot give yet (an empty or wrong number) is absent.
+ */
+export function formulaCellsOf(columns: readonly TableColumn[], row: TableRow, today: string): Readonly<Record<string, number | string>> {
+  const formulas = compileRowFormulas(columns);
+  if (formulas.length === 0) return {};
+  const values: Record<string, unknown> = {};
+  for (const column of columns) {
+    const text = (row[column.code] ?? '').trim();
+    if (text === '' || column.type === 'FORMULA') continue;
+    values[column.code] = column.type === 'NUMBER' || column.type === 'CURRENCY' ? decimalText(text) : text;
+  }
+  const computed = withRowFormulas(values, formulas, today);
+  return Object.fromEntries(formulas.flatMap((formula) => (computed[formula.code] === undefined ? [] : [[formula.code, computed[formula.code] as number | string]])));
 }

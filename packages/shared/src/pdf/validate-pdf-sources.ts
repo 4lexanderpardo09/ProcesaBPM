@@ -19,6 +19,7 @@ export interface PdfProblem {
     | 'DOCUMENT_FORMULA_INVALID'
     | 'DOCUMENT_IMAGE_UNKNOWN'
     | 'DOCUMENT_POSITION_UNKNOWN'
+    | 'DOCUMENT_APPROVAL_TYPE_UNKNOWN'
     | 'PAGE_AND_PAGES_OUTSIDE_BAND'
     | 'ACROFORM_FIELD_UNKNOWN'
     | 'COORDINATE_OUT_OF_PAGE'
@@ -121,12 +122,14 @@ export interface DesignContext {
   readonly imageIds?: ReadonlySet<string>;
   /** The organization's positions; without it, the positions a signature box keeps are not checked. */
   readonly positionIds?: ReadonlySet<string>;
+  /** The organization's approval types; without it, the approver a signature box keeps is not checked. */
+  readonly approvalTypeIds?: ReadonlySet<string>;
 }
 
 /**
  * Checks a designer format against a workflow version: every field, table column, step and calculation it names must
- * exist, every uploaded image it shows must still be one of the workflow's, and every position a signature box keeps
- * one of the organization's.
+ * exist, every uploaded image it shows must still be one of the workflow's, and every position or approval type a
+ * signature box keeps one of the organization's.
  */
 export function validateDesign(design: AnyPdfDesign, doc: WorkflowVersionDocument, context: DesignContext = {}): PdfProblem[] {
   if (design.version === 2) return validateCanvasDesign(design, doc, context);
@@ -150,6 +153,9 @@ function validateCanvasDesign(design: PdfCanvasDesign, doc: WorkflowVersionDocum
       for (const [at, positionId] of (element.positionIds ?? []).entries()) {
         if (!context.positionIds.has(positionId)) problems.push({ code: 'DOCUMENT_POSITION_UNKNOWN', path: `elements[${index}].positionIds[${at}]`, detail: positionId });
       }
+    }
+    if (context.approvalTypeIds !== undefined && element.type === 'signature' && element.approverOf !== undefined && !context.approvalTypeIds.has(element.approverOf.typeId)) {
+      problems.push({ code: 'DOCUMENT_APPROVAL_TYPE_UNKNOWN', path: `elements[${index}].approverOf.typeId`, detail: element.approverOf.typeId });
     }
   }
   return problems;

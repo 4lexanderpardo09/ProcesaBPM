@@ -59,3 +59,12 @@
   font-size: 12.5px;
   line-height: 18px;
 }
+
+.computed {
+  display: block;
+  min-width: 80px;
+  padding: 0 var(--space-2);
+  color: var(--slate);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

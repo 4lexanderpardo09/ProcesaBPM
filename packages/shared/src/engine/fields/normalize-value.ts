@@ -1,5 +1,6 @@
 import type { FieldDocument } from '../../workflow/document.js';
 import { decimalPlaces } from '../money/decimal.js';
+import { compileRowFormulas, withRowFormulas } from './table-formulas.js';
 import type { FieldIssueCode, ReferenceToVerify, ValidationContext } from './types.js';
 
 type Config = Record<string, unknown>;
@@ -108,7 +109,8 @@ function normalizeFiles(raw: unknown, config: Config): Normalized {
 
 export interface TableColumn {
   readonly code: string;
-  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT';
+  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT' | 'FORMULA';
+  readonly expression?: string;
   readonly required?: boolean;
   readonly options?: unknown;
   readonly decimals?: number;
@@ -125,7 +127,10 @@ export interface TableCell {
 
 export type TableResult = { readonly ok: true; readonly value: ReadonlyArray<Record<string, unknown>> } | { readonly ok: false; readonly code: FieldIssueCode; readonly cells: readonly TableCell[] };
 
-/** Rows of a TABLE field: every cell is normalized with its column's type; unknown columns are rejected. */
+/**
+ * Rows of a TABLE field: every cell is normalized with its column's type; unknown columns are rejected. Formula columns
+ * are computed from the row (what the client sent for them is ignored, as for FORMULA fields).
+ */
 export function normalizeTable(raw: unknown, config: Config, context: ValidationContext): TableResult {
   if (!Array.isArray(raw)) return { ok: false, code: 'INVALID_TYPE', cells: [] };
   const columns = (config.columns as TableColumn[] | undefined) ?? [];
@@ -144,6 +149,7 @@ export function normalizeTable(raw: unknown, config: Config, context: Validation
     for (const name of Object.keys(input)) if (!columns.some((column) => column.code === name)) cells.push({ rowIndex, column: name, code: 'UNKNOWN_FIELD' });
     const row: Record<string, unknown> = {};
     for (const column of columns) {
+      if (column.type === 'FORMULA') continue;
       const cell = input[column.code];
       if (isBlankValue(cell)) {
         if (column.required === true) cells.push({ rowIndex, column: column.code, code: 'REQUIRED' });
@@ -155,7 +161,9 @@ export function normalizeTable(raw: unknown, config: Config, context: Validation
     }
     rows.push(row);
   });
-  return cells.length > 0 ? { ok: false, code: 'INVALID_TYPE', cells } : { ok: true, value: rows };
+  if (cells.length > 0) return { ok: false, code: 'INVALID_TYPE', cells };
+  const formulas = compileRowFormulas(columns);
+  return { ok: true, value: rows.map((row) => withRowFormulas(row, formulas, context.today)) };
 }
 
 /** Canonical value of one non-blank input for a field type. FORMULA and CALCULATOR never take client input. */

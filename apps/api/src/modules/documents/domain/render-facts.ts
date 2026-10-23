@@ -43,5 +43,18 @@ export interface RenderFacts {
   readonly names: NameLookups;
   /** By step name: who signed it, in the order they did. */
   readonly signers: ReadonlyMap<string, readonly SignerRecord[]>;
+  /**
+   * By `approverKey`: the requester's approver of that type and level and their delegate, for the signature boxes that
+   * keep only that signature. Absent (or without the key), such a box finds nobody.
+   */
+  readonly approvers?: ReadonlyMap<string, ReadonlySet<string>>;
   readonly now: Date;
 }
+
+/** An approver a signature box asks for: the requester's approver of an approval type at a level. */
+export interface ApproverAsk {
+  readonly typeId: string;
+  readonly level: number;
+}
+
+export const approverKey = ({ typeId, level }: ApproverAsk): string => `${typeId}:${String(level)}`;

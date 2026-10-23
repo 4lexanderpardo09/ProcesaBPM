@@ -14,7 +14,7 @@ const FIELD_TYPE_TO_FORMULA: Readonly<Partial<Record<FieldDocument['type'], Scal
   DATE: 'DATE',
 };
 
-const COLUMN_TYPE_TO_FORMULA: Readonly<Record<string, ScalarType>> = { TEXT: 'TEXT', SELECT: 'TEXT', NUMBER: 'NUMBER', CURRENCY: 'NUMBER', DATE: 'DATE' };
+const COLUMN_TYPE_TO_FORMULA: Readonly<Record<string, ScalarType>> = { TEXT: 'TEXT', SELECT: 'TEXT', NUMBER: 'NUMBER', CURRENCY: 'NUMBER', DATE: 'DATE', FORMULA: 'NUMBER' };
 
 /** What a FORMULA field produces, from its `resultType`. */
 export function formulaResultType(field: FieldDocument): ScalarType {

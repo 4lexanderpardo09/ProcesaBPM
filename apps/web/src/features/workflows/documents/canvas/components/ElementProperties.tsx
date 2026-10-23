@@ -1,7 +1,7 @@
-import type { CanvasElement, PdfCanvasDesign, WorkflowVersionDocument } from '@procesabpm/shared';
+import { type CanvasElement, MAX_APPROVAL_LEVEL, type PdfCanvasDesign, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { positionsQueryOptions } from '@/features/people';
+import { approvalTypesQueryOptions, positionsQueryOptions } from '@/features/people';
 import { useApiClient } from '@/shared/session';
 import { Button, Checkbox, PlusIcon, Select, TextField } from '@/shared/ui';
 import { DecimalField } from '../../../builder/components/DecimalField';
@@ -259,6 +259,7 @@ function SignatureProperties({ element, document, onChange }: { readonly element
             {element.signers === 'POSITION' && <WholeNumberField label={t('documents.canvas.props.position')} min={1} max={50} value={element.position} onChange={(position) => set({ position: Math.max(1, Math.min(50, position ?? 1)) })} />}
           </div>
           <PositionFilter selected={element.positionIds ?? []} onChange={(positionIds) => onChange(positionIds.length === 0 ? withoutPositions(element) : { ...element, positionIds })} />
+          <ApproverFilter value={element.approverOf} onChange={(approverOf) => onChange(approverOf === undefined ? withoutApprover(element) : { ...element, approverOf })} />
         </>
       )}
       <TextField label={t('documents.canvas.props.signatureLabel')} maxLength={100} value={element.label} onChange={(event) => set({ label: event.target.value }, `label-${element.id}`)} />
@@ -273,6 +274,49 @@ function SignatureProperties({ element, document, onChange }: { readonly element
 function withoutPositions(element: Of<'signature'>): Of<'signature'> {
   const { positionIds: _unused, ...rest } = element;
   return rest;
+}
+
+function withoutApprover(element: Of<'signature'>): Of<'signature'> {
+  const { approverOf: _unused, ...rest } = element;
+  return rest;
+}
+
+type ApproverOf = NonNullable<Of<'signature'>['approverOf']>;
+const LEVELS = Array.from({ length: MAX_APPROVAL_LEVEL }, (_, index) => index + 1);
+
+/**
+ * Only the signature of the requester's approver of a type and level (or of their delegate): the help desk's "jefe
+ * inmediato" box, for a step many sign. The approval type starts at the organization's default.
+ */
+function ApproverFilter({ value, onChange }: { readonly value: ApproverOf | undefined; readonly onChange: (value: ApproverOf | undefined) => void }) {
+  const { t } = useTranslation('workflows');
+  const types = useQuery(approvalTypesQueryOptions(useApiClient()));
+  const first = types.data?.find((type) => type.isDefault) ?? types.data?.[0];
+  const known = value === undefined || types.data === undefined || types.data.some((type) => type.id === value.typeId);
+  return (
+    <fieldset className={styles.choiceList}>
+      <legend className={styles.sectionTitle}>{t('documents.canvas.props.approver')}</legend>
+      <p className={styles.note}>{t('documents.canvas.props.approverHint')}</p>
+      <Checkbox
+        label={t('documents.canvas.props.approverOnly')}
+        checked={value !== undefined}
+        disabled={value === undefined && first === undefined}
+        onChange={(event) => onChange(event.target.checked && first !== undefined ? { typeId: first.id, level: 1 } : undefined)}
+      />
+      {types.isError && <p className={styles.note}>{t('documents.canvas.props.approvalTypesFailed')}</p>}
+      {value !== undefined && (
+        <div className={styles.row2}>
+          <Select
+            label={t('documents.canvas.props.approvalType')}
+            options={[...(types.data ?? []).map((type) => ({ value: type.id, label: type.name })), ...(known ? [] : [{ value: value.typeId, label: t('documents.canvas.props.approvalTypeGone') }])]}
+            value={value.typeId}
+            onChange={(event) => onChange({ ...value, typeId: event.target.value })}
+          />
+          <Select label={t('documents.canvas.props.approvalLevel')} options={LEVELS.map((level) => ({ value: String(level), label: t('documents.canvas.props.approvalLevelN', { level }) }))} value={String(value.level)} onChange={(event) => onChange({ ...value, level: Number(event.target.value) })} />
+        </div>
+      )}
+    </fieldset>
+  );
 }
 
 /** The positions whose signatures the box keeps (none: anybody's), so each area of a step many sign gets its own box. */
