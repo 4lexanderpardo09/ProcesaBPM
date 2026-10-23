@@ -27,6 +27,7 @@ describe('formula columns of a table', () => {
         { NAME: 'Billete 50.000', QTY: 3, PRICE: 50000, SUBTOTAL: 150000, SHARE: 1 },
         { NAME: 'Moneda 500', QTY: 7, PRICE: 500.5, SUBTOTAL: 3503.5, SHARE: 2.3333 },
       ],
+      references: [],
     });
     if (result.ok) expect(tableColumnTotals({ columns }, result.value)).toEqual({ SUBTOTAL: '153503.5' });
   });

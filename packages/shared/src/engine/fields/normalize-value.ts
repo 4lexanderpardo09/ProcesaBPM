@@ -109,7 +109,7 @@ function normalizeFiles(raw: unknown, config: Config): Normalized {
 
 export interface TableColumn {
   readonly code: string;
-  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT' | 'FORMULA';
+  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT' | 'FORMULA' | 'FILE';
   readonly expression?: string;
   readonly required?: boolean;
   readonly options?: unknown;
@@ -117,6 +117,8 @@ export interface TableColumn {
   readonly min?: number;
   readonly max?: number;
   readonly showTotal?: boolean;
+  readonly maxFiles?: number;
+  readonly accept?: readonly string[];
 }
 
 export interface TableCell {
@@ -125,11 +127,14 @@ export interface TableCell {
   readonly code: FieldIssueCode;
 }
 
-export type TableResult = { readonly ok: true; readonly value: ReadonlyArray<Record<string, unknown>> } | { readonly ok: false; readonly code: FieldIssueCode; readonly cells: readonly TableCell[] };
+export type TableResult =
+  | { readonly ok: true; readonly value: ReadonlyArray<Record<string, unknown>>; readonly references: readonly Omit<ReferenceToVerify, 'fieldCode'>[] }
+  | { readonly ok: false; readonly code: FieldIssueCode; readonly cells: readonly TableCell[] };
 
 /**
  * Rows of a TABLE field: every cell is normalized with its column's type; unknown columns are rejected. Formula columns
- * are computed from the row (what the client sent for them is ignored, as for FORMULA fields).
+ * are computed from the row (what the client sent for them is ignored, as for FORMULA fields). A file column holds file
+ * ids like a FILE field, and its references are checked the same way.
  */
 export function normalizeTable(raw: unknown, config: Config, context: ValidationContext): TableResult {
   if (!Array.isArray(raw)) return { ok: false, code: 'INVALID_TYPE', cells: [] };
@@ -140,6 +145,7 @@ export function normalizeTable(raw: unknown, config: Config, context: Validation
   if (raw.length < minRows) return { ok: false, code: 'TOO_FEW_ROWS', cells: [] };
   const cells: TableCell[] = [];
   const rows: Array<Record<string, unknown>> = [];
+  const references: Array<Omit<ReferenceToVerify, 'fieldCode'>> = [];
   raw.forEach((rawRow: unknown, rowIndex) => {
     if (typeof rawRow !== 'object' || rawRow === null || Array.isArray(rawRow)) {
       cells.push({ rowIndex, column: '', code: 'INVALID_TYPE' });
@@ -155,15 +161,31 @@ export function normalizeTable(raw: unknown, config: Config, context: Validation
         if (column.required === true) cells.push({ rowIndex, column: column.code, code: 'REQUIRED' });
         continue;
       }
-      const result = normalizeValue(column.type, { options: column.options, decimals: column.decimals, min: column.min, max: column.max }, null, cell, context);
-      if (result.ok) row[column.code] = result.value;
-      else cells.push({ rowIndex, column: column.code, code: result.code });
+      const result = normalizeValue(column.type, { options: column.options, decimals: column.decimals, min: column.min, max: column.max, maxFiles: column.maxFiles, accept: column.accept }, null, cell, context);
+      if (result.ok) {
+        row[column.code] = result.value;
+        references.push(...result.references);
+      } else cells.push({ rowIndex, column: column.code, code: result.code });
     }
     rows.push(row);
   });
   if (cells.length > 0) return { ok: false, code: 'INVALID_TYPE', cells };
   const formulas = compileRowFormulas(columns);
-  return { ok: true, value: rows.map((row) => withRowFormulas(row, formulas, context.today)) };
+  return { ok: true, value: rows.map((row) => withRowFormulas(row, formulas, context.today)), references };
+}
+
+/** The file ids a field's value holds: a FILE field's list, or every cell of a TABLE's file columns. */
+export function fileIdsOf(field: Pick<FieldDocument, 'type' | 'config'>, value: unknown): string[] {
+  const ids = (cell: unknown): string[] => (Array.isArray(cell) ? cell.filter((item): item is string => typeof item === 'string') : []);
+  if (field.type === 'FILE') return ids(value);
+  if (field.type !== 'TABLE' || !Array.isArray(value)) return [];
+  const columns = ((field.config.columns as TableColumn[] | undefined) ?? []).filter((column) => column.type === 'FILE');
+  return value.flatMap((row: unknown) => (typeof row === 'object' && row !== null ? columns.flatMap((column) => ids((row as Record<string, unknown>)[column.code])) : []));
+}
+
+/** Whether a field's value can hold files (a FILE field, or a TABLE with a file column). */
+export function holdsFiles(field: Pick<FieldDocument, 'type' | 'config'>): boolean {
+  return field.type === 'FILE' || (field.type === 'TABLE' && ((field.config.columns as TableColumn[] | undefined) ?? []).some((column) => column.type === 'FILE'));
 }
 
 /** Canonical value of one non-blank input for a field type. FORMULA and CALCULATOR never take client input. */

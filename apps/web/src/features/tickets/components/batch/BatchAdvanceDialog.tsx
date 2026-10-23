@@ -1,4 +1,4 @@
-import type { BatchTransitionResult, TicketBatchGroup } from '@procesabpm/shared';
+import { type BatchTransitionResult, holdsFiles, type TicketBatchGroup } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +40,7 @@ export function BatchAdvanceDialog({ group, ticketIds, decision, onClose }: Batc
   const { t } = useTranslation('tickets');
   const form = useQuery(ticketFormQueryOptions(useApiClient(), ticketIds[0]!));
   const editable = new Set(form.data?.editableFieldCodes ?? []);
-  const fields = typedFields((form.data?.fields ?? []).filter((field) => editable.has(field.code) && field.type !== 'FILE'));
+  const fields = typedFields((form.data?.fields ?? []).filter((field) => editable.has(field.code) && !holdsFiles(field)));
   if (form.data === undefined) {
     return (
       <ActionDialog open title={t('batch.dialogTitle', { decision: decision.label, count: ticketIds.length })} submitLabel={decision.label} pending error={null} onClose={onClose} onSubmit={() => undefined}>

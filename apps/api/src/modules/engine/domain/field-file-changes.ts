@@ -1,4 +1,4 @@
-import type { FieldValueIssue } from '@procesabpm/shared';
+import { type FieldDocument, type FieldValueIssue, fileIdsOf } from '@procesabpm/shared';
 
 export interface FieldFileChange {
   readonly fieldCode: string;
@@ -6,19 +6,21 @@ export interface FieldFileChange {
   readonly removed: readonly string[];
 }
 
-const asIds = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+/** A field whose value holds files: a FILE field, or a TABLE with file columns (`holdsFiles`). */
+export type FileField = Pick<FieldDocument, 'code' | 'type' | 'config'>;
 
 /**
- * What a submission does to the FILE fields it carries: ids that appear are added, ids that were stored and no
- * longer appear are removed (they stay in the ticket's history). Fields the submission did not carry are untouched.
+ * What a submission does to the fields with files it carries: ids that appear are added, ids that were stored and no
+ * longer appear are removed (they stay in the ticket's history). Fields the submission did not carry are untouched. A
+ * table's files, whatever their row, belong to the table's code.
  */
-export function diffFieldFiles(fileFieldCodes: readonly string[], submitted: Readonly<Record<string, unknown>>, existing: Readonly<Record<string, unknown>>): FieldFileChange[] {
-  return fileFieldCodes
-    .filter((code) => Object.hasOwn(submitted, code))
-    .map((code) => {
-      const now = asIds(submitted[code]);
-      const before = asIds(existing[code]);
-      return { fieldCode: code, added: now.filter((id) => !before.includes(id)), removed: before.filter((id) => !now.includes(id)) };
+export function diffFieldFiles(fileFields: readonly FileField[], submitted: Readonly<Record<string, unknown>>, existing: Readonly<Record<string, unknown>>): FieldFileChange[] {
+  return fileFields
+    .filter((field) => Object.hasOwn(submitted, field.code))
+    .map((field) => {
+      const now = fileIdsOf(field, submitted[field.code]);
+      const before = fileIdsOf(field, existing[field.code]);
+      return { fieldCode: field.code, added: now.filter((id) => !before.includes(id)), removed: before.filter((id) => !now.includes(id)) };
     })
     .filter((change) => change.added.length > 0 || change.removed.length > 0);
 }

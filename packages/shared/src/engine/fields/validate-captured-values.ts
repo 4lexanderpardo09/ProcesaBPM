@@ -64,8 +64,10 @@ export function validateCapturedValues({ fields, input, existing, context }: Cap
     }
     if (field.type === 'TABLE') {
       const table = normalizeTable(raw, field.config, context);
-      if (table.ok) values[field.code] = table.value;
-      else if (table.cells.length === 0) issues.push({ code: table.code, fieldCode: field.code });
+      if (table.ok) {
+        values[field.code] = table.value;
+        for (const reference of table.references) references.push({ ...reference, fieldCode: field.code });
+      } else if (table.cells.length === 0) issues.push({ code: table.code, fieldCode: field.code });
       else for (const cell of table.cells) issues.push({ code: cell.code, fieldCode: field.code, row: cell.rowIndex, column: cell.column });
       continue;
     }

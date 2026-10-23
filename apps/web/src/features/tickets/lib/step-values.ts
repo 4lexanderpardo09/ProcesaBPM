@@ -1,7 +1,19 @@
 import { compileRowFormulas, type FormFieldResponse, withRowFormulas } from '@procesabpm/shared';
 
-/** One row of a TABLE field as typed: text per column code. */
-export type TableRow = Readonly<Record<string, string>>;
+/** One row of a TABLE field as typed: text per column code, or the ids of the files of a file column. */
+export type TableRow = Readonly<Record<string, string | readonly string[]>>;
+
+/** A typed cell as text (a file cell has none). */
+export const cellText = (row: TableRow, code: string): string => {
+  const cell = row[code];
+  return typeof cell === 'string' ? cell : '';
+};
+
+/** The file ids of a file cell. */
+export const cellFiles = (row: TableRow, code: string): readonly string[] => {
+  const cell = row[code];
+  return Array.isArray(cell) ? cell : [];
+};
 
 /** What the person types, per field: text for single inputs, a list for multiple choice, rows for a table. */
 export type InputValue = string | readonly string[] | readonly TableRow[];
@@ -13,8 +25,11 @@ const INTEGER = /^-?\d+$/;
 export interface TableColumn {
   readonly code: string;
   readonly label: string;
-  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT' | 'FORMULA';
+  readonly type: 'TEXT' | 'NUMBER' | 'CURRENCY' | 'DATE' | 'SELECT' | 'FORMULA' | 'FILE';
   readonly required?: boolean;
+  /** FILE columns: how many files a cell holds and of which kinds. */
+  readonly maxFiles?: number;
+  readonly accept?: readonly string[];
   readonly options?: readonly Option[];
   /** FORMULA columns: computed from the row, never typed nor sent. */
   readonly expression?: string;
@@ -116,13 +131,18 @@ export function requestValue(field: FormFieldResponse, input: InputValue): Reque
  * row limits are checked by the API, which marks the field.
  */
 function tableValue(columns: readonly TableColumn[], rows: readonly TableRow[]): RequestValue {
-  const value: Record<string, string>[] = [];
+  const value: Record<string, string | string[]>[] = [];
   for (const row of rows) {
     if (isBlankRow(row)) continue;
-    const cells: Record<string, string> = {};
+    const cells: Record<string, string | string[]> = {};
     for (const column of columns) {
       if (column.type === 'FORMULA') continue;
-      const text = (row[column.code] ?? '').trim();
+      if (column.type === 'FILE') {
+        const files = cellFiles(row, column.code);
+        if (files.length > 0) cells[column.code] = [...files];
+        continue;
+      }
+      const text = cellText(row, column.code).trim();
       if (text === '') continue;
       if (column.type === 'NUMBER' || column.type === 'CURRENCY') {
         const decimal = decimalText(text);
@@ -135,11 +155,11 @@ function tableValue(columns: readonly TableColumn[], rows: readonly TableRow[]):
   return { ok: true, value };
 }
 
-const isBlankRow = (row: TableRow): boolean => Object.values(row).every((cell) => cell.trim() === '');
+const isBlankRow = (row: TableRow): boolean => Object.values(row).every((cell) => (typeof cell === 'string' ? cell.trim() === '' : cell.length === 0));
 
 function tableRowOf(row: unknown): TableRow {
   if (typeof row !== 'object' || row === null) return {};
-  return Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([code, cell]) => [code, cell === null || cell === undefined ? '' : String(cell)]));
+  return Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([code, cell]) => [code, Array.isArray(cell) ? cell.map(String) : cell === null || cell === undefined ? '' : String(cell)]));
 }
 
 /** `2026-10-20T19:30:00.000Z` as a `datetime-local` value in the browser's time zone. */
@@ -159,7 +179,7 @@ export function formulaCellsOf(columns: readonly TableColumn[], row: TableRow, t
   if (formulas.length === 0) return {};
   const values: Record<string, unknown> = {};
   for (const column of columns) {
-    const text = (row[column.code] ?? '').trim();
+    const text = cellText(row, column.code).trim();
     if (text === '' || column.type === 'FORMULA') continue;
     values[column.code] = column.type === 'NUMBER' || column.type === 'CURRENCY' ? decimalText(text) : text;
   }

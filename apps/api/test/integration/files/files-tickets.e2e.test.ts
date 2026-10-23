@@ -168,6 +168,29 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
     });
   });
 
+  describe('a table with a file column', () => {
+    it('links the files of every row under the table, checks their kind, and refuses an upload already attached', async () => {
+      const table = await publishFlow(world.admin, {
+        ...simpleFlow({ assignmentMode: 'USERS' }, { candidates: [user(worker)] }),
+        fields: [{ step: 'start', code: 'RECEIPTS', type: 'TABLE', capture: 'CREATION', config: { columns: [{ code: 'ITEM', label: 'Ítem', type: 'TEXT' }, { code: 'PROOF', label: 'Soporte', type: 'FILE', accept: ['PDF'] }] } }],
+      });
+      const [taxi, lunch, image] = [await upload(requester, 'taxi.pdf'), await upload(requester, 'lunch.pdf'), await upload(requester, 'photo.png', png())];
+
+      const wrongKind = await create({ values: { RECEIPTS: [{ ITEM: 'Foto', PROOF: [image] }] } }, requester, table);
+      expect(wrongKind.body.error.details.issues).toEqual([{ code: 'FILE_TYPE_NOT_ACCEPTED', fieldCode: 'RECEIPTS' }]);
+
+      const created = await create({ values: { RECEIPTS: [{ ITEM: 'Taxi', PROOF: [taxi] }, { ITEM: 'Almuerzo', PROOF: [lunch] }] } }, requester, table);
+      expectStatus(created, 201);
+      const documents = await documentsOf(created.body.id);
+      expect(documents.map((document) => [document.file.id, document.fieldCode, document.isCurrent])).toEqual(expect.arrayContaining([[taxi, 'RECEIPTS', true], [lunch, 'RECEIPTS', true]]));
+      expect((await fileRow(taxi)).linked_at).not.toBeNull();
+
+      // The same upload cannot go into another ticket's table.
+      const again = await create({ values: { RECEIPTS: [{ ITEM: 'Taxi', PROOF: [taxi] }] } }, requester, table);
+      expect(again.body.error.details.issues).toEqual([{ code: 'FILE_NOT_ATTACHABLE', fieldCode: 'RECEIPTS' }]);
+    });
+  });
+
   describe('advancing, commenting and closing', () => {
     let ticketId: string;
     let visitId: string;

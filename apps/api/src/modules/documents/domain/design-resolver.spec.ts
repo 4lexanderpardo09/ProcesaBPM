@@ -64,6 +64,16 @@ describe('DesignResolver', () => {
     expect(body[0]).toMatchObject({ type: 'table', headers: ['Nombre', 'Cant.'], rows: [['Mesa', '2.5'], ['Silla', '4']], totals: ['Total', '6,5'] });
   });
 
+  it('writes a file column as the names of its files', () => {
+    const receipts = field('RECEIPTS', 'TABLE', 'Soportes', { columns: [{ code: 'ITEM', label: 'Ítem', type: 'TEXT' }, { code: 'PROOF', label: 'Soporte', type: 'FILE' }] });
+    const { body } = resolve([{ type: 'table', fieldCode: 'RECEIPTS', repeatHeader: true, columns: [{ header: 'Ítem', value: '{{row.ITEM}}', width: { fr: 1 } }, { header: 'Soporte', value: '{{row.PROOF|default:Sin soporte}}', width: { fr: 1 } }] }], {
+      fields: [receipts],
+      values: { RECEIPTS: [{ ITEM: 'Taxi', PROOF: ['f-1', 'f-2'] }, { ITEM: 'Almuerzo' }] },
+      names: { users: new Map(), sites: new Map(), files: new Map([['f-1', 'taxi.pdf'], ['f-2', 'recibo.jpg']]) },
+    });
+    expect(body[0]).toMatchObject({ rows: [['Taxi', 'taxi.pdf, recibo.jpg'], ['Almuerzo', 'Sin soporte']] });
+  });
+
   it('puts the page numbers only in the header and footer, resolved per page', () => {
     const resolved = resolve([{ type: 'text', text: 'x' }], {}, { footer: { height: 20, blocks: [{ type: 'text', text: 'Página {{page}} de {{pages}}' }] } });
     expect((resolved.footer!.resolve(2, 5)[0] as { text: string }).text).toBe('Página 2 de 5');

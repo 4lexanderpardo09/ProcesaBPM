@@ -3,7 +3,7 @@ import { AttachmentsInvalidError, type FieldValueIssue, type FileKind, kindOfMim
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { FileAttachmentService } from '../../files/application/file-attachment.service.js';
 import type { AttachmentsPlan } from '../domain/plan.js';
-import { diffFieldFiles, type FieldFileChange, findRepeatedFiles } from '../domain/field-file-changes.js';
+import { diffFieldFiles, type FieldFileChange, type FileField, findRepeatedFiles } from '../domain/field-file-changes.js';
 
 export interface SubmissionFiles {
   readonly attachmentIds: readonly string[];
@@ -14,7 +14,8 @@ export interface FilesCheckRequest {
   readonly tenantId: string;
   readonly uploaderId: string;
   readonly attachmentIds: readonly string[];
-  readonly fileFieldCodes: readonly string[];
+  /** The fields of the submission that can hold files (`holdsFiles`). */
+  readonly fileFields: readonly FileField[];
   readonly capturedValues: Readonly<Record<string, unknown>>;
   readonly existing: Readonly<Record<string, unknown>>;
   /** The FILE references `validateCapturedValues` produced: they carry each field's accepted kinds. */
@@ -31,7 +32,7 @@ export class SubmissionFilesChecker {
   constructor(@Inject(FileAttachmentService) private readonly attachments: FileAttachmentService) {}
 
   async check(tx: TenantTransaction, request: FilesCheckRequest): Promise<{ files: SubmissionFiles; issues: FieldValueIssue[] }> {
-    const fieldFiles = diffFieldFiles(request.fileFieldCodes, request.capturedValues, request.existing);
+    const fieldFiles = diffFieldFiles(request.fileFields, request.capturedValues, request.existing);
     const repeated = findRepeatedFiles(fieldFiles, request.attachmentIds);
     if (repeated.length > 0) return { files: { attachmentIds: request.attachmentIds, fieldFiles }, issues: repeated };
 

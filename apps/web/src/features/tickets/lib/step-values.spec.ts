@@ -92,6 +92,13 @@ describe('tables', () => {
     expect(initialInput(table, [{ item: 'Papel', price: 1200.5 }])).toEqual([{ item: 'Papel', price: '1200.5' }]);
     expect(initialInput(table, null)).toEqual([]);
   });
+
+  it('keeps the files of a file cell as a list, and a row with only files is not blank', () => {
+    const receipts = field('TABLE', { columns: [{ code: 'item', label: 'Ítem', type: 'TEXT' }, { code: 'proof', label: 'Soporte', type: 'FILE' }] });
+    expect(initialInput(receipts, [{ item: 'Taxi', proof: ['f-1'] }])).toEqual([{ item: 'Taxi', proof: ['f-1'] }]);
+    expect(requestValue(receipts, [{ item: '', proof: ['f-1'] }, { item: 'Sin soporte', proof: [] }])).toEqual({ ok: true, value: [{ proof: ['f-1'] }, { item: 'Sin soporte' }] });
+    expect(isBlankInput([{ item: '', proof: [] }])).toBe(true);
+  });
 });
 
 describe('initialInput', () => {
