@@ -193,6 +193,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - **Firmas del paso paralelo** (`TicketParallelSignatures`): con `parallelTasks` del detalle, quién firmó, rechazó, falta o ya no firma, y cuántos van.
   - **Archivos de apoyo del paso** (`TicketStepFiles`): `GET /tickets/:id/step-files` da los archivos que el flujo pone en el paso donde está el ticket (`StepFilesEditor` del constructor), por orden y etiqueta; nada si está cerrado. Se descargan con el mismo `…/files/:fileId/download-url`, que ahora acepta también un archivo de apoyo del paso actual (y solo de ese paso).
   - **Documentos del flujo** (en la tarjeta de adjuntos): `GET /tickets/:id/document-jobs` dice qué documento se está generando o falló (base-de-datos.md §8.18); mientras hay uno generándose se vuelve a preguntar cada 5 s y, al terminar, se recargan los adjuntos. Quien puede editar el ticket (`update Ticket`) ve «Volver a generar» en cada documento (`POST …/document-jobs`, 422 `INVALID_STATE` si ya se está generando). Un documento general reemplazado por el de la empresa del ticket, o que solo dibuja un bloque nunca alcanzado, no se ofrece.
+  - **Todo en un PDF (2026-10-23, `feat/ticket-combined-pdf`):** `GET /tickets/:id/documents/combined` (lectura del ticket, auditado como `ticket.documents_combined`) une en un PDF los archivos vigentes que son PDF o imagen PNG/JPEG: primero los documentos del flujo (principal, de paso, de cierre) y luego los adjuntos, del más viejo al más nuevo (`infrastructure/pdf/pdf-combiner`, con pdf-lib; cada imagen en una hoja A4). Un archivo que no se puede leer (PDF cifrado o dañado) se deja fuera y `X-Documents-Skipped` dice cuántos; más de 40 MB en total da 422 `DOCUMENTS_TOO_LARGE`. En la tarjeta de adjuntos, «Todo en un PDF» aparece con dos o más archivos que se puedan unir.
 
 ### 4.5 Acciones del detalle (parte 1, 2a y 2b menos archivos, hechas, 2026-10-20)
 - **Qué se ofrece:** solo lo que dice `actions` del detalle (el API calcula cada bandera con las mismas reglas que la ruta de la acción). Botones a la derecha del título: Resolver novedad y Tomar (`primary`), Reasignar, Abrir novedad y Cerrar ticket. Sin `actions.comment` no aparece el cuadro de comentario.
@@ -416,7 +417,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
       - texto con largo y, opcional, el valor de un Excel;
       - número y moneda con mínimo, máximo, decimales o moneda;
       - listas con opciones propias, una lista de la organización (`PRESET`) o la columna de un Excel (`DATASET`, con búsqueda por clave);
-      - fechas con «Hoy» o una fecha;
+      - fechas con «Hoy» o una fecha; «Fecha actual» (`defaultNow`, 2026-10-23): si el campo de fecha (o fecha y hora) queda vacío al capturarse y no tenía valor, el motor (`validateCapturedValues`) pone la fecha del día en la zona de la empresa (o el instante del envío), también si es de solo lectura; un obligatorio con esta opción no se exige y el formulario lo dice debajo del campo;
       - días, nivel de sede y cargos de una persona;
       - tabla con sus columnas (código, tipo, obligatoria, total y opciones);
       - archivos con máximo y tipos;

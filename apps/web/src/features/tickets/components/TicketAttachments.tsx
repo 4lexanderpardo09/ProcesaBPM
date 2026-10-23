@@ -2,30 +2,48 @@ import type { TicketDocumentJobsResponse, TicketDocumentResponse } from '@proces
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '@/shared/api';
 import { formatFileSize } from '@/shared/lib/format-file-size';
 import { formatShortDate } from '@/shared/lib/format-date-time';
 import { useApiClient } from '@/shared/session';
 import { Alert, Badge, Button, Card, DownloadIcon } from '@/shared/ui';
-import { regenerateTicketDocument, ticketDocumentJobsQueryOptions } from '../api/ticket-detail-api';
+import { downloadCombinedDocuments, regenerateTicketDocument, ticketDocumentJobsQueryOptions } from '../api/ticket-detail-api';
 import { ticketQueryKeys } from '../api/tickets-api';
 import { useTicketFileDownload } from '../hooks/use-ticket-file-download';
 import { LoadError } from './LoadError';
 import styles from './TicketAttachments.module.css';
 
+/** What the combined PDF takes: PDFs and the images a PDF can draw. */
+const COMBINABLE = new Set(['application/pdf', 'image/png', 'image/jpeg']);
+
 export interface TicketAttachmentsProps {
   readonly ticketId: string;
+  /** The ticket's number, for the name of the combined PDF. */
+  readonly number: string;
   readonly documents: UseQueryResult<readonly TicketDocumentResponse[]>;
   readonly timeZone: string | undefined;
 }
 
 /** The current version of every file on the ticket, and the workflow's documents being drawn or that failed. */
-export function TicketAttachments({ ticketId, documents, timeZone }: TicketAttachmentsProps) {
+export function TicketAttachments({ ticketId, number, documents, timeZone }: TicketAttachmentsProps) {
   const { t } = useTranslation('tickets');
   const download = useTicketFileDownload(ticketId);
   const current = documents.data?.filter((document) => document.isCurrent);
+  const client = useApiClient();
+  const combined = useMutation({ mutationFn: () => downloadCombinedDocuments(client, ticketId, number) });
+  const combinable = (current ?? []).filter((document) => COMBINABLE.has(document.file.mimeType)).length;
 
   return (
-    <Card title={t('detail.attachments.title')}>
+    <Card
+      title={t('detail.attachments.title')}
+      actions={
+        combinable > 1 ? (
+          <Button variant="ghost" icon={<DownloadIcon size={15} />} title={t('detail.attachments.combinedHint')} disabled={combined.isPending} onClick={() => combined.mutate()}>
+            {combined.isPending ? t('detail.attachments.combining') : t('detail.attachments.combined')}
+          </Button>
+        ) : undefined
+      }
+    >
       {documents.isError ? (
         <LoadError error={documents.error} onRetry={() => void documents.refetch()} />
       ) : current === undefined ? (
@@ -56,6 +74,11 @@ export function TicketAttachments({ ticketId, documents, timeZone }: TicketAttac
       {download.isError && (
         <div className={styles.error}>
           <Alert tone="danger">{t('detail.attachments.downloadFailed')}</Alert>
+        </div>
+      )}
+      {combined.isError && (
+        <div className={styles.error}>
+          <Alert tone="danger">{combined.error instanceof ApiError && combined.error.code === 'DOCUMENTS_TOO_LARGE' ? t('detail.attachments.combinedTooLarge') : t('detail.attachments.combinedFailed')}</Alert>
         </div>
       )}
       <DocumentJobs ticketId={ticketId} />

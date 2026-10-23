@@ -120,6 +120,12 @@ export class TicketQueryRepository {
   }
 
   /** Whether the access filter lets the caller see the ticket. */
+  /** The ticket's number as people write it. */
+  async numberOf(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<string> {
+    const ticket = await tx.ticket.findFirst({ where: { tenantId, id: ticketId }, select: { number: true } });
+    return ticket === null ? '' : String(ticket.number);
+  }
+
   async isAccessible(tx: TenantTransaction, tenantId: string, ticketId: string, access: Where): Promise<boolean> {
     return (await tx.ticket.count({ where: { AND: [{ tenantId, id: ticketId, deletedAt: null }, access] } as never })) > 0;
   }

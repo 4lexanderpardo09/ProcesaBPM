@@ -54,7 +54,8 @@ export function useStepFields(fields: readonly FormFieldResponse[], initialValue
       const values: Record<string, unknown> = {};
       for (const field of fields) {
         const input = sent[field.code] ?? '';
-        if (field.isRequired && isBlankInput(input)) issues.set(field.code, 'REQUIRED');
+        // «Fecha actual»: left empty, the API puts the moment it is sent.
+        if (field.isRequired && isBlankInput(input) && field.config['defaultNow'] !== true) issues.set(field.code, 'REQUIRED');
         const value = requestValue(field, input);
         if (value.ok) values[field.code] = value.value;
         else issues.set(field.code, 'INVALID_TYPE');

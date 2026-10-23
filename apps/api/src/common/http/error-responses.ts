@@ -84,6 +84,7 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.datasetFileInvalid]: { status: 422, message: 'The spreadsheet cannot be loaded as a dataset' },
   [ERROR_CODES.datasetInUse]: { status: 409, message: 'A workflow field uses this dataset' },
   [ERROR_CODES.reportTooLarge]: { status: 422, message: 'The report is too large to export: narrow the filters' },
+  [ERROR_CODES.documentsTooLarge]: { status: 422, message: 'The documents are too large to combine: download them one by one' },
   [ERROR_CODES.reportTimeout]: { status: 422, message: 'The report took too long: narrow the filters' },
   [ERROR_CODES.temporarilyUnavailable]: { status: 503, message: 'The service is busy: try again' },
   [ERROR_CODES.maintenance]: { status: 503, message: 'The service is under maintenance' },

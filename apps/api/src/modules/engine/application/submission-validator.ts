@@ -81,7 +81,7 @@ export class SubmissionValidator {
   async validate(tx: TenantTransaction, request: SubmissionRequest): Promise<Submission> {
     const { document, step } = request;
     const fields = captureFieldsFor(document.fields, request.stage, step.id);
-    const captured = validateCapturedValues({ fields, input: request.input, existing: request.existing, context: { today: localDateIn(request.company.timeZone, request.at) } });
+    const captured = validateCapturedValues({ fields, input: request.input, existing: request.existing, context: { today: localDateIn(request.company.timeZone, request.at), now: request.at.toISOString() } });
     const issues: FieldValueIssue[] = [...captured.issues];
     if (issues.length === 0) {
       for (const code of await this.references.findInvalid(tx, request.tenantId, captured.references.filter(isDataReference))) issues.push({ code: 'NOT_FOUND', fieldCode: code });

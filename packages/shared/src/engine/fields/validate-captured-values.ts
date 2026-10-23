@@ -15,6 +15,14 @@ export interface CaptureInput {
   readonly context: ValidationContext;
 }
 
+/** The date (or date and time) a field with `defaultNow` takes when it is captured empty; `undefined` for any other field. */
+function currentValueFor(field: FieldDocument, context: ValidationContext): string | undefined {
+  if (field.config.defaultNow !== true) return undefined;
+  if (field.type === 'DATE') return context.today;
+  if (field.type === 'DATETIME') return context.now;
+  return undefined;
+}
+
 /** The fields captured when a ticket is created (CREATION or BOTH of the chosen START) or when a step is answered (STEP or BOTH). */
 export function captureFieldsFor(fields: readonly FieldDocument[], stage: 'CREATION' | 'STEP', stepId: string): readonly FieldDocument[] {
   const accepted = stage === 'CREATION' ? ['CREATION', 'BOTH'] : ['STEP', 'BOTH'];
@@ -39,6 +47,12 @@ export function validateCapturedValues({ fields, input, existing, context }: Cap
   for (const field of fields) {
     if (COMPUTED_FIELD_TYPES.has(field.type)) continue;
     const raw = input[field.code];
+    const now = isBlankValue(raw) && isBlankValue(existing[field.code]) ? currentValueFor(field, context) : undefined;
+    if (now !== undefined) {
+      // «Fecha actual»: what nobody typed is the moment it was captured, even on a read-only field.
+      values[field.code] = now;
+      continue;
+    }
     if (isBlankValue(raw)) {
       // A read-only field is never typed by the person, so it cannot be demanded of them either.
       if (field.isRequired && !field.isReadOnly && isBlankValue(existing[field.code])) issues.push({ code: 'REQUIRED', fieldCode: field.code });

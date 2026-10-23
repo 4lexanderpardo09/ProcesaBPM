@@ -292,6 +292,11 @@ export const tickets = {
       empty: 'Sin adjuntos.',
       download: 'Descargar {{name}}',
       downloadFailed: 'No se pudo descargar el archivo. Intenta de nuevo.',
+      combined: 'Todo en un PDF',
+      combining: 'Armando el PDF…',
+      combinedHint: 'Los documentos del flujo y los PDF e imágenes adjuntos, en un solo PDF. Las hojas de cálculo y los comprimidos no entran.',
+      combinedTooLarge: 'Los archivos pesan demasiado para unirlos: descárgalos uno por uno.',
+      combinedFailed: 'No se pudo armar el PDF. Intenta de nuevo.',
     },
     documentJobs: {
       title: 'Documentos del flujo',
@@ -448,6 +453,8 @@ export const tickets = {
     fixFields: 'Revisa los datos marcados.',
     choose: 'Elige una opción',
     daysHint: 'Número entero de días',
+    defaultToday: 'Si lo dejas vacío, queda la fecha de hoy.',
+    defaultNow: 'Si lo dejas vacío, queda la fecha y la hora del envío.',
     choices: {
       search: 'Buscar en «{{field}}»',
       loading: 'Cargando…',

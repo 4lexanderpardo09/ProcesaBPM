@@ -105,6 +105,32 @@ describe('ticket forms', () => {
     });
   });
 
+  describe('«fecha actual»', () => {
+    it('fills an empty date and date-time with the moment of the submission, even read-only, and keeps a typed one', async () => {
+      const dated = await publishFlow(world.admin, {
+        ...simpleFlow(),
+        fields: [
+          { step: 'start', code: 'RECEIVED_ON', type: 'DATE', capture: 'CREATION', isReadOnly: true, config: { defaultNow: true } },
+          { step: 'start', code: 'PAID_ON', type: 'DATE', capture: 'CREATION', isRequired: true, config: { defaultNow: true } },
+          { step: 'start', code: 'STAMP', type: 'DATETIME', capture: 'CREATION', config: { defaultNow: true } },
+        ],
+      });
+      const before = Date.now();
+      const empty = (await member.client.post('/tickets', { subcategoryId: dated.subcategoryId, title: unique('T'), values: {} }).expect(201)).body.id as string;
+      const values = (await member.client.get(`/tickets/${empty}`).expect(200)).body.values as Record<string, string>;
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
+      expect(values.RECEIVED_ON).toBe(today);
+      expect(values.PAID_ON).toBe(today);
+      expect(Date.parse(values.STAMP!)).toBeGreaterThanOrEqual(before - 1000);
+
+      const typed = (await member.client.post('/tickets', { subcategoryId: dated.subcategoryId, title: unique('T'), values: { PAID_ON: '2026-01-15' } }).expect(201)).body.id as string;
+      expect((await member.client.get(`/tickets/${typed}`).expect(200)).body.values.PAID_ON).toBe('2026-01-15');
+      // Read-only is still read-only: nobody types it.
+      const refused = await member.client.post('/tickets', { subcategoryId: dated.subcategoryId, title: unique('T'), values: { RECEIVED_ON: '2026-01-15' } }).expect(422);
+      expect(refused.body.error.details.issues).toEqual([{ code: 'NOT_EDITABLE', fieldCode: 'RECEIVED_ON' }]);
+    });
+  });
+
   describe('GET /tickets/:id/form', () => {
     let ticketId: string;
 
