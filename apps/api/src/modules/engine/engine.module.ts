@@ -11,6 +11,7 @@ import { CommentTicketService } from './application/comment-ticket.service.js';
 import { TicketBatchService } from './application/ticket-batch.service.js';
 import { BatchTicketsRepository } from './data/batch-tickets.repository.js';
 import { EditTicketService } from './application/edit-ticket.service.js';
+import { CreationCheckService } from './application/creation-check.service.js';
 import { CreationFormService } from './application/creation-form.service.js';
 import { CreationGate } from './application/creation-gate.js';
 import { CreateTicketService } from './application/create-ticket.service.js';
@@ -56,6 +57,7 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     TicketMutationApplier,
     CreationGate,
     CreationFormService,
+    CreationCheckService,
     CreateTicketService,
     TransitionTicketService,
     ReassignTicketService,
@@ -75,6 +77,6 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     TicketCandidatesService,
     FieldOptionsService,
   ],
-  exports: [CreateTicketService, CreationFormService, CreationGate, CommentTicketService, TicketBatchService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ReportTicketErrorService, EditTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository, TicketActionStateReader, TicketCandidatesService, FieldOptionsService],
+  exports: [CreateTicketService, CreationFormService, CreationCheckService, CreationGate, CommentTicketService, TicketBatchService, TransitionTicketService, ReassignTicketService, TakeTicketService, CloseTicketService, OpenIncidentService, ResolveIncidentService, ReopenTicketService, ReportTicketErrorService, EditTicketService, ParallelTaskService, DispatchRepository, ResumeWaitService, AssignmentResolver, TicketWriteRepository, TicketActionStateReader, TicketCandidatesService, FieldOptionsService],
 })
 export class EngineModule {}

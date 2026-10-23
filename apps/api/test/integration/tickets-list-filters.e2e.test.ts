@@ -107,6 +107,21 @@ describe('GET /tickets filters and GET /tickets/counts', () => {
       expect(await ids(reader, `view=all&search=${encodeURIComponent('zoe díaz')}`)).toEqual([]);
     });
 
+    it('looks in the description and the comments only when asked to', async () => {
+      const described = await create(colleague, flowA, 'Pedido', { description: '<p>Cambiar el cartucho de la impresora del tercer piso</p>' });
+      await world.admin.post(`/tickets/${ticket.colleague.id}/comments`, { comment: '<p>Se acabó el <strong>tóner</strong> otra vez</p>' }).expect(201);
+
+      expect(await ids(reader, `view=all&search=${encodeURIComponent('TÓNER')}`)).toEqual([]);
+      expect(await ids(reader, `view=all&search=${encodeURIComponent('TÓNER')}&searchMessages=true`)).toEqual(idsOf('colleague'));
+      expect(await ids(reader, `view=all&search=cartucho&searchMessages=true`)).toEqual([described.id]);
+      // The title still counts, and nothing the caller cannot read shows up.
+      expect(await ids(reader, 'view=all&search=network&searchMessages=true')).toEqual(idsOf('colleague'));
+      expect((await list(stranger, 'view=all&search=cartucho&searchMessages=true')).total).toBe(0);
+      await reader.client.get('/tickets?search=x&searchMessages=yes').expect(400);
+      // The other tests count the tickets of the setup.
+      await db.platform.query('UPDATE tickets SET deleted_at = now() WHERE id = $1', [described.id]);
+    });
+
     it('never shows what the caller cannot read, whatever it matches', async () => {
       expect((await list(stranger, 'view=all&search=zoe')).total).toBe(0);
       expect((await list(stranger, `view=all&search=${ticket.percent.number}`)).total).toBe(0);

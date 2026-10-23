@@ -27,11 +27,12 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Ticket:** ~~el estado de las firmas paralelas (quién firmó y quién falta) no se muestra; los archivos de apoyo del paso se configuran en el flujo pero nunca se ofrecen en el ticket; el documento no dice «se está generando» ni muestra su error, y no se puede regenerar~~ (hecho, arquitectura §4.4 «Paridad con la mesa»); falta un PDF con todos los documentos.
     - **Decidido (con criterio, el usuario delegó):** volver a generar pide `update Ticket` sobre ese ticket; la versión nueva apunta al último evento del ticket; se ofrecen solo los documentos que el ticket tiene (los de un momento para su empresa y los que un bloque ya pidió).
   - **Formularios:** columnas de tabla de tipo archivo y de tipo fórmula; ~~fuente «fecha actual»~~ (hecho: `defaultNow` en campos de fecha); texto con formato en comentarios y descripción.
-  - **Bandeja:** búsqueda en los mensajes; atajo a las subcategorías donde ya participé.
+  - **Bandeja:** ~~búsqueda en los mensajes~~ (hecho: `searchMessages`; sin índice de texto, medir con datos reales y, si hace falta, `pg_trgm`); atajo a las subcategorías donde ya participé.
   - **Procesar en lote:** la configuración de la bandeja por paso (título, agrupar por un dato de la persona o por corte de plano, nombre y montos que se muestran) y «Procesar sus tickets» desde un archivo del plano.
-  - **Flujos:** el probador de «quién puede crear» (persona + empresa → ✔/✘ con cada regla).
+  - ~~**Flujos:** el probador de «quién puede crear» (persona + empresa → ✔/✘ con cada regla)~~ (hecho, arquitectura «Pestaña «Quién puede crear»»; el permiso del rol no entra).
   - **Formatos PDF:** plantillas de inicio (arqueo F23), ~~duplicar un formato, copiar y pegar elementos~~ (hecho, arquitectura §15); la casilla de firma «aprobador del solicitante» (el jefe inmediato de la mesa).
-  - **Personas:** que el administrador cargue la firma de otra persona.
+  - ~~**Personas:** que el administrador cargue la firma de otra persona~~ (hecho, arquitectura §4 «Firma de otra persona»).
+    - **Decidido (con criterio, el usuario delegó):** lo puede quien tiene `update Membership`; la imagen se sube por `/files/uploads`, que pide además un permiso de tickets que permita subir archivos (un administrador lo tiene).
   - **Consola de la plataforma en la web** (mantenimiento y notas de cambios de la mesa están en los avisos de la plataforma, que hoy solo tienen API).
 - **Acceso a la cuenta en la web (2026-10-21, `feat/web-account-access`):** recuperar contraseña, aceptar invitaciones, cambiar de organización y enlaces de correo con `?tenant=`. Detalle en arquitectura.md §4.21.
   - **API nueva:** `GET /auth/me/organizations`.
