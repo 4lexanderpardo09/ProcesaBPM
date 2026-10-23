@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { field } from '../../workflow/test-builders.js';
+import { fileIdsOf, holdsFiles } from './normalize-value.js';
 import { captureFieldsFor, validateCapturedValues } from './validate-captured-values.js';
 
 const context = { today: '2026-10-05' };
@@ -131,6 +132,21 @@ describe('validateCapturedValues', () => {
     });
     it('bounds the number of rows', () => {
       expect(codes(run([table], { ROWS: [{ KIND: 'a' }, { KIND: 'b' }, { KIND: 'c' }] }))).toEqual(['ROWS:TOO_MANY_ROWS']);
+    });
+
+    it('keeps the files of a file column like a FILE field, with their references, and bounds them per cell', () => {
+      const [first, second] = ['0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f90', '0192f3a0-7c1b-7d2e-8a3f-4b5c6d7e8f91'];
+      const receipts = field('r', 's', 'RECEIPTS', { type: 'TABLE', config: { columns: [{ code: 'ITEM', label: 'Item', type: 'TEXT' }, { code: 'PROOF', label: 'Proof', type: 'FILE', required: true, accept: ['PDF'] }] } });
+      const result = run([receipts], { RECEIPTS: [{ ITEM: 'Taxi', PROOF: [first.toUpperCase()] }, { ITEM: 'Lunch', PROOF: [second] }] });
+      expect(result.values).toEqual({ RECEIPTS: [{ ITEM: 'Taxi', PROOF: [first] }, { ITEM: 'Lunch', PROOF: [second] }] });
+      expect(result.references).toEqual([
+        { kind: 'FILE', value: first, config: { accept: ['PDF'] }, fieldCode: 'RECEIPTS' },
+        { kind: 'FILE', value: second, config: { accept: ['PDF'] }, fieldCode: 'RECEIPTS' },
+      ]);
+      expect(fileIdsOf(receipts, result.values.RECEIPTS)).toEqual([first, second]);
+      expect(run([receipts], { RECEIPTS: [{ ITEM: 'Taxi', PROOF: [first, second] }] }).issues).toEqual([{ code: 'TOO_MANY_FILES', fieldCode: 'RECEIPTS', row: 0, column: 'PROOF' }]);
+      expect(run([receipts], { RECEIPTS: [{ ITEM: 'Taxi' }] }).issues).toEqual([{ code: 'REQUIRED', fieldCode: 'RECEIPTS', row: 0, column: 'PROOF' }]);
+      expect([holdsFiles(receipts), holdsFiles(table)]).toEqual([true, false]);
     });
   });
 

@@ -8,6 +8,8 @@ import { pdfFormatPath } from '@/shared/lib/paths';
 import { useApiClient } from '@/shared/session';
 import { Badge, Button, Card, Dialog, PlusIcon, Select, Table, type TableColumn, TextField } from '@/shared/ui';
 import { createPdfFormat, deletePdfFormat, documentQueryKeys, type PdfFormat, pdfFormatsQueryOptions } from '../api/documents-api';
+import { starterCanvasDesign } from '../canvas/lib/starter-design';
+import { useVersionDocuments } from '../lib/use-version-documents';
 import { DocumentError } from './DocumentError';
 import type { DocumentPermissions } from './GeneratedDocumentsCard';
 import styles from './Documents.module.css';
@@ -104,13 +106,36 @@ interface NewFormatDialogProps {
   readonly onCreated: (formatId: string) => void;
 }
 
-/** A format starts as a free canvas with the ticket's title and number, as blocks with every field of the ticket, or as a copy of another one. */
+type FormatKind = 'STARTER' | 'CANVAS' | 'BLOCKS';
+const KINDS: readonly FormatKind[] = ['STARTER', 'CANVAS', 'BLOCKS'];
+
+/**
+ * A format starts as a canvas already drawn with the workflow's data (the help desk's starter templates), as a free
+ * canvas with the ticket's title and number, as blocks with every field of the ticket, or as a copy of another one.
+ */
 function NewFormatDialog({ workflowId, source, onClose, onCreated }: NewFormatDialogProps) {
   const { t } = useTranslation('workflows');
   const client = useApiClient();
   const queryClient = useQueryClient();
   const [name, setName] = useState(source === undefined ? '' : t('documents.formats.copyName', { name: source.name }).slice(0, NAME_MAX));
-  const [kind, setKind] = useState<'CANVAS' | 'BLOCKS'>('CANVAS');
+  const [kind, setKind] = useState<FormatKind>('STARTER');
+  const versions = useVersionDocuments(workflowId);
+  const designOf = (chosen: FormatKind) => {
+    if (chosen === 'BLOCKS') return emptyDesign();
+    if (chosen === 'CANVAS') return emptyCanvasDesign();
+    return starterCanvasDesign(versions.current, name.trim(), {
+      requestData: t('documents.formats.starter.requestData'),
+      company: t('documents.formats.starter.company'),
+      requester: t('documents.formats.starter.requester'),
+      createdAt: t('documents.formats.starter.createdAt'),
+      status: t('documents.formats.starter.status'),
+      signatures: t('documents.formats.starter.signatures'),
+      requesterSignature: t('documents.formats.starter.requesterSignature'),
+      total: t('documents.formats.starter.total'),
+      noRows: t('documents.formats.starter.noRows'),
+      page: t('documents.formats.starter.page'),
+    });
+  };
   const [submitted, setSubmitted] = useState(false);
   const create = useMutation({
     mutationFn: () =>
@@ -118,7 +143,7 @@ function NewFormatDialog({ workflowId, source, onClose, onCreated }: NewFormatDi
         client,
         workflowId,
         source === undefined
-          ? { name: name.trim(), design: kind === 'CANVAS' ? emptyCanvasDesign() : emptyDesign() }
+          ? { name: name.trim(), design: designOf(kind) }
           : { name: name.trim(), design: source.design, ...(source.description === null ? {} : { description: source.description }), ...(source.fileNamePattern === null ? {} : { fileNamePattern: source.fileNamePattern }) },
       ),
     onSuccess: async (format) => {
@@ -142,7 +167,7 @@ function NewFormatDialog({ workflowId, source, onClose, onCreated }: NewFormatDi
       footer={
         <>
           <Button onClick={onClose}>{t('cancel')}</Button>
-          <Button type="submit" variant="brand" disabled={create.isPending}>
+          <Button type="submit" variant="brand" disabled={create.isPending || (source === undefined && kind === 'STARTER' && !versions.ready)}>
             {create.isPending ? t('saving') : t('documents.formats.create')}
           </Button>
         </>
@@ -152,8 +177,8 @@ function NewFormatDialog({ workflowId, source, onClose, onCreated }: NewFormatDi
         <TextField label={t('documents.formats.name')} required maxLength={NAME_MAX} error={nameError} value={name} onChange={(event) => setName(event.target.value)} />
         {source === undefined ? (
           <>
-            <Select label={t('documents.formats.kind')} options={(['CANVAS', 'BLOCKS'] as const).map((value) => ({ value, label: t(`documents.formats.kinds.${value}`) }))} value={kind} onChange={(event) => setKind(event.target.value as 'CANVAS' | 'BLOCKS')} />
-            <p className={styles.note}>{kind === 'CANVAS' ? t('documents.formats.canvasHint') : t('documents.formats.newHint')}</p>
+            <Select label={t('documents.formats.kind')} options={KINDS.map((value) => ({ value, label: t(`documents.formats.kinds.${value}`) }))} value={kind} onChange={(event) => setKind(event.target.value as FormatKind)} />
+            <p className={styles.note}>{kind === 'STARTER' ? t('documents.formats.starterHint') : kind === 'CANVAS' ? t('documents.formats.canvasHint') : t('documents.formats.newHint')}</p>
           </>
         ) : (
           <p className={styles.note}>{t('documents.formats.duplicateHint')}</p>

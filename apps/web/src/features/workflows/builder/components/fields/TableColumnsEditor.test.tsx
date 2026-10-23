@@ -31,4 +31,19 @@ describe('TableColumnsEditor', () => {
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Tipo' })[1]!, 'Número');
     expect(onChange).toHaveBeenLastCalledWith([{ code: 'QTY', label: 'Cantidad', type: 'NUMBER' }, { code: 'SUB', label: 'Subtotal', type: 'NUMBER' }]);
   });
+
+  it('makes a file column with files per cell and accepted kinds, and drops them when it changes type', async () => {
+    const onChange = vi.fn();
+    render(<Editor initial={[{ code: 'PROOF', label: 'Soporte', type: 'TEXT' }]} onChange={onChange} />);
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Tipo' }), 'Archivo');
+    const perCell = screen.getByRole('textbox', { name: 'Archivos por celda' });
+    await userEvent.clear(perCell);
+    await userEvent.type(perCell, '3');
+    await userEvent.click(screen.getByRole('checkbox', { name: /Comprimidos|ZIP/ }));
+    expect(onChange).toHaveBeenLastCalledWith([{ code: 'PROOF', label: 'Soporte', type: 'FILE', maxFiles: 3, accept: ['PDF', 'IMAGE', 'OFFICE'] }]);
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Tipo' }), 'Texto');
+    expect(onChange).toHaveBeenLastCalledWith([{ code: 'PROOF', label: 'Soporte', type: 'TEXT' }]);
+  });
 });

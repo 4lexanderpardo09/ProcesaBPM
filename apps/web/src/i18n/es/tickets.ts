@@ -503,6 +503,7 @@ export const tickets = {
       cell: '{{column}}, fila {{row}}',
       removeRow: 'Quitar la fila {{row}}',
       addRow: 'Agregar fila',
+      attach: 'Adjuntar',
       cellIssue: 'Fila {{row}}, «{{column}}»: {{issue}}',
     },
     issues: {

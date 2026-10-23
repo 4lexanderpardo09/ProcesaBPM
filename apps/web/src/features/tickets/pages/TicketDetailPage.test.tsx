@@ -957,5 +957,30 @@ describe('TicketDetailPage', () => {
       await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ values: { receipt: [FILE_ID] } }));
       vi.unstubAllGlobals();
     });
+
+    it('uploads a file into a table cell and sends it in its row', async () => {
+      const FILE_ID = id(901);
+      const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/key?sig=2', method: 'PUT', headers: { 'content-type': 'application/pdf', 'content-length': '4' }, expiresAt: at };
+      const stored = { id: FILE_ID, name: 'taxi.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at };
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
+      const receipts = { ...field(9, 'receipts', 'Gastos', 'TABLE', { columns: [{ code: 'ITEM', label: 'Gasto', type: 'TEXT' }, { code: 'PROOF', label: 'Soporte', type: 'FILE', accept: ['PDF'] }] }) };
+      const { fake } = renderRoute(base, {
+        handlers: handlers({ '/files/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }), [`/files/${FILE_ID}/confirm`]: () => stored, [`${base}/transition`]: () => mutation }, { fields: [receipts], editableFieldCodes: ['receipts'] }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Agregar fila' }));
+      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Gasto, fila 1' }), 'Taxi');
+      const cell = within(dialog).getByLabelText('Soporte, fila 1');
+      expect(cell).toHaveAttribute('accept', '.pdf');
+      await userEvent.upload(cell, new File(['%PDF'], 'taxi.pdf', { type: 'application/pdf' }));
+      expect(await within(dialog).findByText('taxi.pdf')).toBeInTheDocument();
+      expect(within(dialog).queryByLabelText('Soporte, fila 1')).toBeNull();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ values: { receipts: [{ ITEM: 'Taxi', PROOF: [FILE_ID] }] } }));
+      vi.unstubAllGlobals();
+    });
   });
 });
