@@ -483,6 +483,13 @@ describe('validateWorkflowGraph: block config', () => {
     expect(codes(task(false))).toContain('BATCH_CONFIG_WITHOUT_ALLOWS_BATCH');
     expect(codes(task(true))).toEqual([]);
   });
+
+  it('the batch tray shows only fields of the version', () => {
+    const task = (showFields: string[]) =>
+      withParts({ fields: [field('f', 'start', 'AMOUNT')], steps: [step('start', 'START'), step('task', 'TASK', { allowsBatch: true, config: { batch: { maxTickets: 10, showFields, groupBy: 'COMPANY' } } }), step('end', 'END')] });
+    expect(codes(task(['AMOUNT']))).toEqual([]);
+    expect(codes(task(['AMOUNT', 'GHOST']))).toContain('BATCH_FIELD_UNKNOWN');
+  });
 });
 
 describe('validateWorkflowGraph: close_rule REQUIRED', () => {

@@ -3,11 +3,11 @@ import { queryOptions } from '@tanstack/react-query';
 import type { HttpClient } from '@/shared/api';
 import { ticketQueryKeys } from './tickets-api';
 
-/** Under the tickets key: any action on a ticket reads the groups again. */
-export function ticketBatchGroupsQueryOptions(client: HttpClient) {
+/** Under the tickets key: any action on a ticket reads the groups again. With `cutoffId`, only that export file's tickets. */
+export function ticketBatchGroupsQueryOptions(client: HttpClient, cutoffId?: string) {
   return queryOptions({
-    queryKey: [...ticketQueryKeys.all, 'batches'] as const,
-    queryFn: ({ signal }) => client.request('/ticket-batches', { schema: ticketBatchGroupsResponseSchema, signal }),
+    queryKey: [...ticketQueryKeys.all, 'batches', cutoffId ?? null] as const,
+    queryFn: ({ signal }) => client.request(cutoffId === undefined ? '/ticket-batches' : `/ticket-batches?${new URLSearchParams({ cutoffId }).toString()}`, { schema: ticketBatchGroupsResponseSchema, signal }),
   });
 }
 

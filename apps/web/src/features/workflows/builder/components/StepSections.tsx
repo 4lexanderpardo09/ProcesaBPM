@@ -21,6 +21,7 @@ import { documentChoicesQueryOptions } from '../api/builder-api';
 import { exportsQueryOptions } from '../../exports/api/exports-api';
 import { patchConfig } from '../lib/numbers';
 import { fromRecipients } from '../lib/participants';
+import { BatchSettings, type BatchConfig } from './BatchSettings';
 import { ParticipantList } from './participants/ParticipantList';
 import { WholeNumberField } from './WholeNumberField';
 import styles from './Builder.module.css';
@@ -146,11 +147,10 @@ export function AssignmentSection({ step, steps, readOnly, onChange }: SectionPr
 }
 
 /** Deadline, closing, loops, instructions and what each kind of person's step adds. */
-export function PeopleSection({ step, readOnly, onChange, workflowId }: SectionProps) {
+export function PeopleSection({ step, fields, readOnly, onChange, workflowId }: SectionProps) {
   const { t } = useTranslation('workflows');
   const config = step.config;
   const setConfig = (patch: Record<string, unknown>) => onChange({ config: patchConfig(config, patch) });
-  const batch = (config.batch as { maxTickets?: number } | undefined)?.maxTickets ?? null;
   return (
     <>
       <Section title={t('builder.sla.title')}>
@@ -202,9 +202,7 @@ export function PeopleSection({ step, readOnly, onChange, workflowId }: SectionP
               checked={step.allowsBatch}
               onChange={(event) => onChange(event.target.checked ? { allowsBatch: true } : { allowsBatch: false, config: patchConfig(config, { batch: undefined }) })}
             />
-            {step.allowsBatch && (
-              <WholeNumberField label={t('builder.batch.max')} min={1} max={500} disabled={readOnly} value={batch} onChange={(value) => setConfig({ batch: value === null ? undefined : { maxTickets: value } })} />
-            )}
+            {step.allowsBatch && <BatchSettings batch={config.batch as BatchConfig | undefined} fields={fields} readOnly={readOnly} onChange={(batch) => setConfig({ batch })} />}
             <ExportChoice
               label={t('builder.export.required')}
               hint={t('builder.export.requiredHint')}

@@ -41,3 +41,20 @@
   height: 16px;
   accent-color: var(--accent);
 }
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.filter {
+  margin-bottom: var(--space-4);
+}

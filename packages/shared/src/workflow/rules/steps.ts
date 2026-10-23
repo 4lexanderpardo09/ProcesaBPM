@@ -57,6 +57,8 @@ export function checkSteps({ doc, graph, stepById, fieldByCode, problems }: Rule
     if (!config.valid) problems.error('BLOCK_CONFIG_INVALID', { ...at, params: { issues: config.issues } });
     else {
       if ('batch' in config.config && config.config.batch !== undefined && !step.allowsBatch) problems.error('BATCH_CONFIG_WITHOUT_ALLOWS_BATCH', at);
+      const shown = ((config.config.batch as { showFields?: string[] } | undefined)?.showFields ?? []).filter((code) => !fieldByCode.has(code));
+      if (shown.length > 0) problems.error('BATCH_FIELD_UNKNOWN', { ...at, params: { codes: shown } });
       const codes = templateCodes(config.config.bodyTemplate);
       const unknown = [...new Set(codes.filter((code) => !fieldByCode.has(code)))];
       if (unknown.length > 0) problems.warning('TEMPLATE_UNKNOWN_FIELD', { ...at, params: { codes: unknown } });

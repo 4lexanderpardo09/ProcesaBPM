@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/shared/lib/format-date-time';
 import { openDownload } from '@/shared/lib/open-download';
+import { cutoffBatchPath } from '@/shared/lib/paths';
 import { useApiClient, useCurrentUser, usePermissions } from '@/shared/session';
-import { Alert, Badge, Button, Table, type TableColumn } from '@/shared/ui';
+import { Alert, Badge, Button, ButtonLink, Table, type TableColumn } from '@/shared/ui';
 import { WorkflowError } from '../../components/WorkflowError';
 import { cutoffDownloadUrl, exportCutoffsQueryOptions, exportQueryKeys, generateCutoff } from '../api/exports-api';
 import styles from './Exports.module.css';
@@ -46,6 +47,16 @@ export function ExportFilesTab({ exportId }: { readonly exportId: string }) {
             {t('exports.files.download')}
           </Button>
         ),
+    },
+    {
+      key: 'process',
+      header: '',
+      width: '150px',
+      cell: (row) => (
+        <ButtonLink variant="ghost" to={cutoffBatchPath(row.id)} aria-label={t('exports.files.processNamed', { date: dayMonthYear(row.cutoffDate) })}>
+          {t('exports.files.process')}
+        </ButtonLink>
+      ),
     },
   ];
   const result = generate.data;

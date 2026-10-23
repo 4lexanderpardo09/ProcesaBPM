@@ -50,6 +50,7 @@ export const workflowProblems = {
   DEADLINE_FIELD_NOT_DATE: 'El campo {{code}} del plazo debe ser una fecha.',
   BLOCK_CONFIG_INVALID: 'La configuración del bloque está incompleta: {{issues}}.',
   BATCH_CONFIG_WITHOUT_ALLOWS_BATCH: 'Hay un límite por lote pero el paso no permite atender en lote.',
+  BATCH_FIELD_UNKNOWN: 'La bandeja de lote muestra campos que no existen en esta versión: {{codes}}.',
   TEMPLATE_UNKNOWN_FIELD: 'El texto usa campos que no existen en esta versión: {{codes}}. Quedarán vacíos.',
   CALCULATOR_UNKNOWN: 'La calculadora {{code}} no existe.',
   CALCULATOR_INPUT_UNKNOWN: 'La calculadora no tiene un dato llamado {{name}}.',
