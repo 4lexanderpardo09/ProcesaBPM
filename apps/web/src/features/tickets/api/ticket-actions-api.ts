@@ -47,8 +47,9 @@ export function reassignTicket(client: HttpClient, ticketId: string, body: { vis
   return client.request(`${ticketUrl(ticketId)}/reassign`, { method: 'POST', body, schema: ticketMutationResponseSchema });
 }
 
-export function closeTicket(client: HttpClient, ticketId: string, body: { visitId: string; comment?: string }) {
-  return client.request(`${ticketUrl(ticketId)}/close`, { method: 'POST', body: { ...body, values: {}, attachments: [] }, schema: ticketMutationResponseSchema });
+/** Closes the ticket, with an optional note and closing documents (ids of confirmed uploads). */
+export function closeTicket(client: HttpClient, ticketId: string, { attachments = [], ...body }: { visitId: string; comment?: string; attachments?: readonly string[] }) {
+  return client.request(`${ticketUrl(ticketId)}/close`, { method: 'POST', body: { ...body, values: {}, attachments: [...attachments] }, schema: ticketMutationResponseSchema });
 }
 
 export function openIncident(client: HttpClient, ticketId: string, body: { visitId: string; assignedToId: string; description: string }) {
@@ -59,9 +60,13 @@ export function resolveIncident(client: HttpClient, ticketId: string, incidentId
   return client.request(`${ticketUrl(ticketId)}/incidents/${encodeURIComponent(incidentId)}/resolve`, { method: 'POST', body: { resolution }, schema: incidentMutationResponseSchema });
 }
 
-/** Answers the current step with one of its decisions, the values captured on it and an optional comment. */
-export function transitionTicket(client: HttpClient, ticketId: string, body: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string; assigneeId?: string }) {
-  return client.request(`${ticketUrl(ticketId)}/transition`, { method: 'POST', body: { ...body, attachments: [] }, schema: ticketMutationResponseSchema });
+/** Answers the current step with one of its decisions, the values captured on it, an optional comment and loose attachments. */
+export function transitionTicket(
+  client: HttpClient,
+  ticketId: string,
+  { attachments = [], ...body }: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string; assigneeId?: string; signatureFileId?: string; attachments?: readonly string[] },
+) {
+  return client.request(`${ticketUrl(ticketId)}/transition`, { method: 'POST', body: { ...body, attachments: [...attachments] }, schema: ticketMutationResponseSchema });
 }
 
 /** Where a decision would take the ticket and who would get it, with the values typed so far: nothing changes. */

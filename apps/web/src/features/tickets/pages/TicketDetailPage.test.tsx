@@ -303,7 +303,39 @@ describe('TicketDetailPage', () => {
     typeInEditor(box, 'la cédula\nel RUT');
     await userEvent.click(screen.getByRole('button', { name: 'Comentar' }));
 
-    await vi.waitFor(() => expect(fake.callsTo(`${base}/comments`)[0]?.options.body).toEqual({ comment: '<p><strong>Revisado</strong></p><ul><li><p>la cédula</p></li><li><p>el RUT</p></li></ul>' }));
+    await vi.waitFor(() => expect(fake.callsTo(`${base}/comments`)[0]?.options.body).toEqual({ comment: '<p><strong>Revisado</strong></p><ul><li><p>la cédula</p></li><li><p>el RUT</p></li></ul>', attachments: [] }));
+  });
+
+  it('sends the files chosen with a comment and shows them under it in the activity', async () => {
+    const FILE_ID = id(910);
+    const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/key?sig=2', method: 'PUT', headers: { 'content-type': 'application/pdf', 'content-length': '4' }, expiresAt: at };
+    const stored = { id: FILE_ID, name: 'extracto.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at };
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
+    const linked = { id: id(411), role: 'ATTACHMENT', eventId: id(310), stepId: STEP, fieldCode: null, version: 1, isCurrent: true, createdAt: at, file: stored };
+    let commented = false;
+    const { fake } = renderRoute(base, {
+      handlers: ticketHandlers({
+        '/files/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }),
+        [`/files/${FILE_ID}/confirm`]: () => stored,
+        [`${base}/comments`]: () => {
+          commented = true;
+          return { eventId: id(310) };
+        },
+        [`${base}/timeline`]: () => (commented ? [...timeline, event(10, 'COMMENTED', ME, '<p>Va el extracto</p>')] : timeline),
+        [`${base}/documents`]: () => (commented ? [...documents, linked] : documents),
+      }),
+    });
+
+    typeInEditor(await screen.findByRole('textbox', { name: 'Agregar un comentario' }), 'Va el extracto');
+    await userEvent.upload(screen.getByLabelText(/^Adjuntar archivos \(hasta/), new File(['%PDF'], 'extracto.pdf', { type: 'application/pdf' }));
+    expect(await screen.findByRole('list', { name: 'Archivos de «Adjuntar archivos»' })).toHaveTextContent('extracto.pdf');
+    await userEvent.click(screen.getByRole('button', { name: 'Comentar' }));
+
+    await vi.waitFor(() => expect(fake.callsTo(`${base}/comments`)[0]?.options.body).toEqual({ comment: '<p>Va el extracto</p>', attachments: [FILE_ID] }));
+    const files = await screen.findByRole('list', { name: 'Archivos adjuntos' });
+    expect(within(files).getByRole('button', { name: 'Descargar extracto.pdf' })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Archivos de «Adjuntar archivos»' })).toBeNull();
+    vi.unstubAllGlobals();
   });
 
   it('asks for the comment instead of sending an empty one', async () => {
@@ -606,6 +638,25 @@ describe('TicketDetailPage', () => {
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/incidents`)[0]?.options.body).toEqual({ visitId: VISIT, assignedToId: OTHER, description: '<p>Falta el extracto</p>' }));
       expect(fake.callsTo(`${base}/candidates`)[0]?.path).toBe(`${base}/candidates?for=incident`);
+    });
+
+    it('closes the ticket with closing documents uploaded in the dialog', async () => {
+      const FILE_ID = id(920);
+      const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/key?sig=3', method: 'PUT', headers: { 'content-type': 'application/pdf', 'content-length': '4' }, expiresAt: at };
+      const stored = { id: FILE_ID, name: 'paz-y-salvo.pdf', kind: 'PDF', mimeType: 'application/pdf', sizeBytes: 4, status: 'CONFIRMED', createdAt: at, confirmedAt: at };
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
+      const { fake } = renderRoute(base, {
+        handlers: withActions(allowed('close'), { '/files/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }), [`/files/${FILE_ID}/confirm`]: () => stored, [`${base}/close`]: () => mutation }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Cerrar ticket' }));
+      const dialog = screen.getByRole('dialog', { name: 'Cerrar ticket' });
+      await userEvent.upload(within(dialog).getByLabelText(/^Adjuntar archivos \(hasta/), new File(['%PDF'], 'paz-y-salvo.pdf', { type: 'application/pdf' }));
+      expect(await within(dialog).findByRole('list', { name: 'Archivos de «Documentos de cierre (opcional)»' })).toHaveTextContent('paz-y-salvo.pdf');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar ticket' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/close`)[0]?.options.body).toEqual({ visitId: VISIT, values: {}, attachments: [FILE_ID] }));
+      vi.unstubAllGlobals();
     });
 
     it('closes the ticket and keeps the dialog open with the reason when the API refuses', async () => {
