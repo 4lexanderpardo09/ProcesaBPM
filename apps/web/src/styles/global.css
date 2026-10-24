@@ -41,3 +41,20 @@ textarea {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Printing a page: what is only for working on screen (navigation, buttons, forms) is marked `data-print="hide"`. */
+@media print {
+  html,
+  body,
+  #root {
+    height: auto;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  [data-print='hide'] {
+    display: none !important;
+  }
+}

@@ -22,6 +22,7 @@ const flow = (overrides: Partial<TicketFlowResponse> = {}): TicketFlowResponse =
     { id: id(22), fromStepId: FIX, toStepId: REVIEW, type: 'DECISION', label: 'Reintentar', points: [{ x: 300, y: 150 }], takenCount: 1 },
     { id: id(23), fromStepId: REVIEW, toStepId: END, type: 'DECISION', label: 'Aprobar', points: null, takenCount: 0 },
   ],
+  visits: [],
   ...overrides,
 });
 

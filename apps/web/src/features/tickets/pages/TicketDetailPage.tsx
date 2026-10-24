@@ -6,7 +6,7 @@ import { ApiError } from '@/shared/api';
 import { formatDateTime } from '@/shared/lib/format-date-time';
 import { paths } from '@/shared/lib/paths';
 import { useCurrentUser } from '@/shared/session';
-import { Alert, ButtonLink, Card, PageHeader, RichText } from '@/shared/ui';
+import { Alert, Button, ButtonLink, Card, PageHeader, RichText } from '@/shared/ui';
 import { LoadError } from '../components/LoadError';
 import { TicketActivity } from '../components/TicketActivity';
 import { TicketAttachments } from '../components/TicketAttachments';
@@ -16,6 +16,7 @@ import { TicketFieldValues } from '../components/TicketFieldValues';
 import { TicketParallelSignatures } from '../components/TicketParallelSignatures';
 import { TicketStepFiles } from '../components/TicketStepFiles';
 import { TicketStepInstructions } from '../components/TicketStepInstructions';
+import { TicketStepTimes } from '../components/TicketStepTimes';
 import { TicketTagsCard } from '../components/TicketTagsCard';
 import { TicketActions } from '../components/actions/TicketActions';
 import { TicketFlow } from '../components/flow/TicketFlow';
@@ -39,7 +40,15 @@ export function TicketDetailPage() {
 
   return (
     <>
-      <TicketDetailHeader ticket={ticket} sla={ticket.status === 'CLOSED' ? undefined : slaBadge(ticket.sla, new Date())} actions={<TicketActions ticket={ticket} form={form.data} />} />
+      <TicketDetailHeader ticket={ticket} sla={ticket.status === 'CLOSED' ? undefined : slaBadge(ticket.sla, new Date())} actions={
+          <div className={styles.headerActions} data-print="hide">
+            <Button variant="ghost" onClick={() => window.print()}>
+              {t('detail.print')}
+            </Button>
+            <TicketActions ticket={ticket} form={form.data} />
+          </div>
+        }
+      />
       <TicketFacts ticket={ticket} userId={user?.id} timeZone={timeZone} />
       <TicketNotices ticket={ticket} userId={user?.id} timeZone={timeZone} />
       <div className={styles.flow}>
@@ -66,6 +75,7 @@ export function TicketDetailPage() {
             timeZone={timeZone}
           />
           <TicketAttachments ticketId={ticket.id} number={ticket.number} documents={documents} timeZone={timeZone} />
+          <TicketStepTimes flow={flow} timeZone={timeZone} />
           <TicketTagsCard ticket={ticket} />
         </aside>
       </div>

@@ -13,7 +13,7 @@ export function Sidebar({ open = false }: { readonly open?: boolean }) {
   const { canAny } = usePermissions();
 
   return (
-    <aside id="app-sidebar" className={cx(styles.sidebar, open && styles.open)}>
+    <aside id="app-sidebar" className={cx(styles.sidebar, open && styles.open)} data-print="hide">
       <div className={styles.brand}>
         <Logo />
       </div>

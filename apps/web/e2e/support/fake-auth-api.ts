@@ -212,6 +212,7 @@ export async function installFakeAuthApi(context: BrowserContext, options: FakeA
             { id: '018f0000-0000-7000-8000-0000000000d3', fromStepId: '018f0000-0000-7000-8000-0000000000d0', toStepId: STEP_ID, type: 'DEFAULT', label: '', points: null, takenCount: 1 },
             { id: '018f0000-0000-7000-8000-0000000000d4', fromStepId: STEP_ID, toStepId: '018f0000-0000-7000-8000-0000000000d2', type: 'DECISION', label: 'Aprobar', points: null, takenCount: 0 },
           ],
+          visits: [],
         });
       case 'GET candidates':
         return json(route, 200, [{ id: '018f0000-0000-7000-8000-0000000000f1', name: 'Marta Ruiz' }]);

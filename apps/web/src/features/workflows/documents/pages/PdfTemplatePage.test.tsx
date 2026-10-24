@@ -7,7 +7,7 @@ import { renderRoute } from '@/test/render-route';
 import { at, field, FLOW, id, link, page, START, step } from '../../test/builder-fixtures';
 
 // jsdom draws nothing: the PDF is a Letter page and a second one, and rendering does nothing.
-vi.mock('../lib/pdf-pages', () => ({
+vi.mock('@/shared/lib/pdf-pages', () => ({
   loadPdf: vi.fn(() =>
     Promise.resolve({
       pages: [

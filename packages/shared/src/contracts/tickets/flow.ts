@@ -37,6 +37,20 @@ export interface TicketFlowTransitionResponse {
   readonly takenCount: number;
 }
 
+/** One time the ticket was on a people step or a WAIT block, with its deadline and whether it was left in time. */
+export interface TicketFlowVisitResponse {
+  readonly stepId: string;
+  /** 1 the first time; each loop back or reopening adds one. */
+  readonly loop: number;
+  readonly enteredAt: string;
+  /** `null` while the ticket is still there. */
+  readonly exitedAt: string | null;
+  /** `null` when the step has no deadline. */
+  readonly dueAt: string | null;
+  /** Set when the visit ends on a step with a deadline. */
+  readonly result: 'ON_TIME' | 'LATE' | null;
+}
+
 export interface TicketFlowResponse {
   readonly ticketId: string;
   readonly versionId: string;
@@ -45,6 +59,8 @@ export interface TicketFlowResponse {
   readonly currentStepId: string | null;
   readonly steps: readonly TicketFlowStepResponse[];
   readonly transitions: readonly TicketFlowTransitionResponse[];
+  /** Every visit, oldest first: the times per step ("a tiempo" / "tarde"). */
+  readonly visits: readonly TicketFlowVisitResponse[];
 }
 
 const flowPointSchema = z.object({ x: z.number(), y: z.number() }) satisfies z.ZodType<FlowPoint>;
@@ -65,6 +81,16 @@ export const ticketFlowResponseSchema = z.object({
       label: z.string(),
       points: z.array(flowPointSchema).nullable(),
       takenCount: z.number().int().min(0),
+    }),
+  ),
+  visits: z.array(
+    z.object({
+      stepId: uuidSchema,
+      loop: z.number().int(),
+      enteredAt: z.string(),
+      exitedAt: z.string().nullable(),
+      dueAt: z.string().nullable(),
+      result: z.enum(['ON_TIME', 'LATE']).nullable(),
     }),
   ),
 }) satisfies z.ZodType<TicketFlowResponse>;

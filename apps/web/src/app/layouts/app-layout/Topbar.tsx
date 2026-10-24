@@ -12,7 +12,7 @@ export interface TopbarProps {
 
 export function Topbar({ menu, start, end }: TopbarProps) {
   return (
-    <header className={styles.topbar}>
+    <header className={styles.topbar} data-print="hide">
       {menu}
       <div className={styles.start}>{start}</div>
       <div className={styles.end}>{end}</div>

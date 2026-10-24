@@ -18,7 +18,7 @@ export interface LoadedPdf {
 const ROTATIONS = [0, 90, 180, 270] as const;
 
 /**
- * Opens a PDF with pdf.js, loaded only when a template is being mapped (it is large) and run in its worker.
+ * Opens a PDF with pdf.js, loaded only when a PDF is shown (a template being mapped, a ticket file) and run in its worker.
  * The file comes from a presigned URL, so the bucket must allow the web origin to read it.
  */
 export async function loadPdf(url: string): Promise<LoadedPdf> {

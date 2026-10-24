@@ -1,6 +1,6 @@
 import type { WorkflowVersionDocument } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { type TicketProgress, ticketFlowOf } from './ticket-flow.js';
+import { type TicketProgress, ticketFlowOf, type VisitRecord } from './ticket-flow.js';
 
 const step = (id: string, type: string, x = 0) => ({
   id,
@@ -36,12 +36,22 @@ const document = {
   amountRules: [{ id: 'r', fieldCode: 'AMOUNT', maxAmount: '10.00' }],
 } as unknown as WorkflowVersionDocument;
 
+const visit = (stepId: string, overrides: Partial<VisitRecord> = {}): VisitRecord => ({
+  stepId,
+  loop: 1,
+  enteredAt: new Date('2026-10-01T13:00:00Z'),
+  exitedAt: null,
+  dueAt: null,
+  result: null,
+  ...overrides,
+});
+
 const progress = (overrides: Partial<TicketProgress> = {}): TicketProgress => ({
   ticketId: 'ticket',
   versionId: 'version',
   status: 'OPEN',
   currentStepId: 'review',
-  visitedStepIds: ['review'],
+  visits: [visit('review')],
   takenTransitionIds: ['t-start', 't-hook'],
   ...overrides,
 });
@@ -60,9 +70,10 @@ describe('ticketFlowOf', () => {
 
   it('exposes nothing of the version but the diagram: no configuration, rules, conditions, candidates or fields', () => {
     const flow = ticketFlowOf(document, progress());
-    expect(Object.keys(flow).sort()).toEqual(['currentStepId', 'status', 'steps', 'ticketId', 'transitions', 'versionId']);
+    expect(Object.keys(flow).sort()).toEqual(['currentStepId', 'status', 'steps', 'ticketId', 'transitions', 'versionId', 'visits']);
     for (const entry of flow.steps) expect(Object.keys(entry).sort()).toEqual(['id', 'name', 'passCount', 'position', 'type']);
     for (const entry of flow.transitions) expect(Object.keys(entry).sort()).toEqual(['fromStepId', 'id', 'label', 'points', 'takenCount', 'toStepId', 'type']);
+    for (const entry of flow.visits) expect(Object.keys(entry).sort()).toEqual(['dueAt', 'enteredAt', 'exitedAt', 'loop', 'result', 'stepId']);
     expect(JSON.stringify(flow)).not.toMatch(/secret|hooks\.example|AMOUNT|internal notes|someone/);
   });
 
@@ -73,7 +84,7 @@ describe('ticketFlowOf', () => {
   });
 
   it('a loop counts the step and the transition again', () => {
-    const flow = ticketFlowOf(document, progress({ visitedStepIds: ['review', 'review', 'review'], takenTransitionIds: ['t-start', 't-hook', 't-back', 't-back'] }));
+    const flow = ticketFlowOf(document, progress({ visits: [visit('review'), visit('review', { loop: 2 }), visit('review', { loop: 3 })], takenTransitionIds: ['t-start', 't-hook', 't-back', 't-back'] }));
     expect(passes(flow).review).toBe(3);
     expect(taken(flow)['t-back']).toBe(2);
   });
@@ -85,7 +96,7 @@ describe('ticketFlowOf', () => {
   });
 
   it('a reopening (a visit without a transition into the step) still counts the pass', () => {
-    const flow = ticketFlowOf(document, progress({ visitedStepIds: ['review', 'review'], takenTransitionIds: ['t-start', 't-hook', 't-approve'] }));
+    const flow = ticketFlowOf(document, progress({ visits: [visit('review'), visit('review', { loop: 2 })], takenTransitionIds: ['t-start', 't-hook', 't-approve'] }));
     expect(passes(flow)).toMatchObject({ review: 2, end: 1 });
   });
 
@@ -95,5 +106,13 @@ describe('ticketFlowOf', () => {
 
   it('ignores a transition id that is not of the version', () => {
     expect(passes(ticketFlowOf(document, progress({ takenTransitionIds: ['t-start', 'elsewhere'] })))).toEqual({ start: 1, hook: 1, review: 1, end: 0 });
+  });
+
+  it('lists the visits with their deadlines and results, as dates in ISO', () => {
+    const flow = ticketFlowOf(document, progress({ visits: [visit('review', { exitedAt: new Date('2026-10-02T13:00:00Z'), dueAt: new Date('2026-10-01T21:00:00Z'), result: 'LATE' }), visit('review', { loop: 2 })] }));
+    expect(flow.visits).toEqual([
+      { stepId: 'review', loop: 1, enteredAt: '2026-10-01T13:00:00.000Z', exitedAt: '2026-10-02T13:00:00.000Z', dueAt: '2026-10-01T21:00:00.000Z', result: 'LATE' },
+      { stepId: 'review', loop: 2, enteredAt: '2026-10-01T13:00:00.000Z', exitedAt: null, dueAt: null, result: null },
+    ]);
   });
 });

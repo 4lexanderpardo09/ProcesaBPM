@@ -18,6 +18,10 @@ const flow = {
     { id: id(7), fromStepId: id(4), toStepId: id(4), type: 'DECISION', label: 'Devolver', points: [{ x: 300, y: -80 }], takenCount: 1 },
     { id: id(8), fromStepId: id(4), toStepId: id(5), type: 'DECISION', label: 'Aprobar', points: null, takenCount: 0 },
   ],
+  visits: [
+    { stepId: id(4), loop: 1, enteredAt: '2026-10-01T13:00:00.000Z', exitedAt: '2026-10-02T13:00:00.000Z', dueAt: '2026-10-01T21:00:00.000Z', result: 'LATE' },
+    { stepId: id(4), loop: 2, enteredAt: '2026-10-02T13:00:00.000Z', exitedAt: null, dueAt: null, result: null },
+  ],
 };
 
 describe('ticketFlowResponseSchema', () => {
