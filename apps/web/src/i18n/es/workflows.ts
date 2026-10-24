@@ -434,6 +434,17 @@ export const workflows = {
       fullScreen: 'Pantalla completa',
       exitFullScreen: 'Salir de pantalla completa',
     },
+    sections: { label: 'Secciones del bloque', foldAll: 'Plegar todas', goTo: 'Ir a {{title}}', unfoldAll: 'Desplegar todas' },
+    tabs: {
+      label: 'Bloques abiertos',
+      back: 'Anterior abierto',
+      forward: 'Siguiente abierto',
+      close: 'Cerrar {{name}}',
+      closeAll: 'Cerrar todas las pestañas',
+      wide: 'Ensanchar el panel',
+      narrow: 'Angostar el panel',
+      connection: 'Conexión «{{label}}»',
+    },
     list: { type: 'Tipo', name: 'Nombre', who: 'Quién y plazo', exits: 'Salidas', carries: 'Lleva', problems: 'Problemas' },
     node: {
       errors_one: '{{count}} error',

@@ -74,6 +74,45 @@ function api(initial: WorkflowVersionDocument = startingDoc(), options: { status
 const outline = () => screen.getByRole('navigation', { name: 'Bloques del flujo' });
 
 describe('workflow builder', () => {
+  it('opens blocks as tabs over the inspector, goes back and closes them, and folds sections', async () => {
+    const PAY = id(43);
+    const doc: WorkflowVersionDocument = {
+      ...startingDoc(),
+      steps: [step(START, 'START', 'Inicio'), step(PAY, 'TASK', 'Pagar', { ui: { x: 240, y: 0 } }), step(END, 'END', 'Fin', { ui: { x: 480, y: 0 } })],
+      transitions: [link(id(50), START, PAY), link(id(51), PAY, END, { type: 'DECISION', label: 'Pagado' })],
+    };
+    renderRoute(url, { handlers: api(doc) });
+    await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
+    window.sessionStorage.clear();
+
+    await userEvent.click(within(outline()).getByRole('button', { name: /Pagar/ }));
+    await userEvent.click(within(outline()).getByRole('button', { name: /Fin/ }));
+    const tabs = screen.getByRole('navigation', { name: 'Bloques abiertos' });
+    expect(within(tabs).getAllByRole('button').filter((button) => !button.getAttribute('aria-label')?.startsWith('Cerrar')).map((button) => button.textContent)).toEqual(['Pagar', 'Fin']);
+    expect(within(tabs).getByRole('button', { name: 'Fin' })).toHaveAttribute('aria-current', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Anterior abierto' }));
+    const inspector = screen.getByRole('complementary', { name: 'Propiedades' });
+    expect(within(inspector).getByRole('heading', { level: 2, name: 'Pagar' })).toBeInTheDocument();
+
+    // Sections fold from their title and from the bar; folded content is hidden, not lost.
+    const bar = within(inspector).getByRole('navigation', { name: 'Secciones del bloque' });
+    const general = within(inspector).getByRole('button', { name: 'General' });
+    expect(general).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(general);
+    expect(general).toHaveAttribute('aria-expanded', 'false');
+    expect(within(inspector).getAllByRole('textbox', { name: /^Nombre/, hidden: true })[0]).not.toBeVisible();
+    await userEvent.click(within(bar).getByRole('button', { name: 'Ir a General' }));
+    expect(within(inspector).getAllByRole('textbox', { name: /^Nombre/ })[0]).toBeVisible();
+    await userEvent.click(within(bar).getByRole('button', { name: 'Plegar todas' }));
+    expect(within(bar).getByRole('button', { name: 'Desplegar todas' })).toBeInTheDocument();
+
+    await userEvent.click(within(tabs).getByRole('button', { name: 'Cerrar Pagar' }));
+    expect(within(inspector).getByRole('heading', { level: 2, name: 'Fin' })).toBeInTheDocument();
+    await userEvent.click(within(tabs).getByRole('button', { name: 'Cerrar Fin' }));
+    expect(within(inspector).getByRole('heading', { name: 'Propiedades' })).toBeInTheDocument();
+  }, 15_000);
+
   it('shows on the canvas who can create and what each step carries, and lists the blocks in a table', async () => {
     const PAY = id(42);
     const CARTERA = id(80);

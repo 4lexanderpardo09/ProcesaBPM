@@ -358,6 +358,16 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
     - «Lienzo / Lista» (la preferencia se recuerda en el navegador). La lista (`StepsTable`) da tipo, nombre, quién y plazo, salidas, lo que lleva y problemas; una fila abre el bloque en el inspector.
     - «Ordenar» (`layeredPositions`) pone los bloques en columnas por su distancia al inicio, sin seguir los regresos, y deja al final lo que no se alcanza.
     - «Minimapa» y «Pantalla completa» (API del navegador sobre el constructor).
+  - **Pestañas del inspector, como los paneles de la mesa (2026-10-23, `feat/builder-tabs`, `lib/open-tabs`, `InspectorTabs`):**
+    - Lo que se selecciona (lienzo, lista, contorno o validación) queda abierto como pestaña, con la franja del color de su tipo.
+    - «‹ ›» recorren lo visitado. Cerrar la pestaña mostrada muestra la última visitada que sigue abierta. «Cerrar todas» las cierra.
+    - Se guardan hasta 8, en `sessionStorage` por versión. Un bloque borrado cierra su pestaña.
+    - «Ensanchar el panel» lleva el inspector a 560 px (45 % como mucho).
+    - No hay marca de «sin guardar» por pestaña: el borrador se guarda entero.
+  - **Secciones plegables** (`Section` con `SectionsContext`, `SectionNav`):
+    - Cada sección se pliega desde su título. Plegada, su contenido sigue montado y oculto, así no se pierde lo que se escribe.
+    - Una barra de chips («Ir a …») despliega y lleva a cada sección, con «Plegar / Desplegar todas».
+    - Lo plegado se recuerda al pasar de un bloque a otro.
 - **Conectar** (`lib/builder-doc.ts`, `connect`):
   - El tipo sale del bloque de origen. Uno con persona sale por decisiones: «Aprobar», luego «Rechazar» y luego «Opción N» en una aprobación; «Continuar» y luego opciones en un paso.
   - Uno automático sale por su única salida por defecto. Una condición sale primero por «En otro caso» y luego por ramas con regla.

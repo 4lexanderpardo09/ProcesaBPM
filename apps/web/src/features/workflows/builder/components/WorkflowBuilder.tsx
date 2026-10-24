@@ -7,6 +7,7 @@ import { useBlocker, useNavigate } from 'react-router';
 import { ApiError } from '@/shared/api';
 import { paths, workflowPath, workflowVersionPath } from '@/shared/lib/paths';
 import { useApiClient, usePermissions } from '@/shared/session';
+import { cx } from '@/shared/lib/cx';
 import { Alert, Badge, Breadcrumb, Button, ButtonLink, Dialog } from '@/shared/ui';
 import { createVersion, workflowQueryKeys, workflowQueryOptions } from '../../api/workflows-api';
 import { builderQueryKeys, publishVersion, type VersionDetail } from '../api/builder-api';
@@ -24,6 +25,9 @@ import { ProblemsPanel } from './ProblemsPanel';
 import { PublishDialog } from './PublishDialog';
 import { StepInspector } from './StepInspector';
 import { StepsTable } from './StepsTable';
+import { InspectorTabs } from './InspectorTabs';
+import { SectionNav, SectionsContext, useSectionsState } from './SectionNav';
+import { closeTab, emptyTabs, keepExisting, moveInHistory, openTab, type OpenTab, type OpenTabs, shownTab } from '../lib/open-tabs';
 import { TransitionInspector } from './TransitionInspector';
 import styles from './Builder.module.css';
 
@@ -36,6 +40,24 @@ function readView(): 'canvas' | 'list' {
     return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'canvas';
   } catch {
     return 'canvas';
+  }
+}
+
+/** The tabs of a version opened in this browser session; nothing (or anything unreadable) is no tabs. */
+function readTabs(key: string): OpenTabs {
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(key) ?? 'null') as OpenTabs | null;
+    return stored !== null && Array.isArray(stored.tabs) && Array.isArray(stored.history) && typeof stored.cursor === 'number' ? stored : emptyTabs;
+  } catch {
+    return emptyTabs;
+  }
+}
+
+function saveTabs(key: string, tabs: OpenTabs) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(tabs));
+  } catch {
+    // Only a convenience.
   }
 }
 
@@ -73,6 +95,22 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
   const [amountRulesOpen, setAmountRulesOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const [view, setView] = useState<'canvas' | 'list'>(() => readView());
+  const tabsKey = `procesabpm.builder.tabs.${detail.version.id}`;
+  const [tabs, setTabs] = useState<OpenTabs>(() => readTabs(tabsKey));
+  const [wide, setWide] = useState(false);
+  const sections = useSectionsState();
+  const inspectorRef = useRef<HTMLElement>(null);
+  // What gets selected (canvas, list, outline, problems) opens as a tab; a block that is removed closes its tab.
+  useEffect(() => {
+    if (selection !== null) setTabs((current) => openTab(current, selection));
+  }, [selection]);
+  useEffect(() => setTabs((current) => keepExisting(current, doc)), [doc]);
+  useEffect(() => saveTabs(tabsKey, tabs), [tabsKey, tabs]);
+  /** Shows what a tab action leaves shown (or nothing). */
+  const showTabs = (next: OpenTabs) => {
+    setTabs(next);
+    setSelection(shownTab(next) ?? null);
+  };
   const [miniMap, setMiniMap] = useState(false);
   const builderRef = useRef<HTMLDivElement>(null);
   const [fullScreen, setFullScreen] = useState(false);
@@ -306,7 +344,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
         </Button>
       </div>
 
-      <div className={readOnly ? styles.workspaceReadOnly : styles.workspace}>
+      <div className={cx(readOnly ? styles.workspaceReadOnly : styles.workspace, wide && styles.workspaceWide)}>
         {!readOnly && <BlockPalette onAdd={(type) => addBlock(type)} />}
         <div ref={canvasRef} className={styles.canvasWrap}>
           {view === 'list' ? (
@@ -327,7 +365,21 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
           )}
           {panelOpen && <ProblemsPanel validation={validation} nameOf={problemOwner} onGoTo={goTo} onOpenAmountRules={() => setAmountRulesOpen(true)} onClose={() => setPanelOpen(false)} />}
         </div>
-        <aside className={styles.inspector} aria-label={t('builder.inspector.label')}>
+        <SectionsContext.Provider value={sections}>
+        <aside ref={inspectorRef} className={styles.inspector} aria-label={t('builder.inspector.label')}>
+          {tabs.tabs.length > 0 && (
+            <InspectorTabs
+              state={tabs}
+              doc={doc}
+              wide={wide}
+              onShow={(tab: OpenTab) => showTabs(openTab(tabs, tab))}
+              onClose={(tab: OpenTab) => showTabs(closeTab(tabs, tab))}
+              onCloseAll={() => showTabs(emptyTabs)}
+              onHistory={(step) => showTabs(moveInHistory(tabs, step))}
+              onToggleWide={() => setWide((on) => !on)}
+            />
+          )}
+          {selection !== null && <SectionNav container={inspectorRef} />}
           {selectedStep !== undefined ? (
             <StepInspector
               key={selectedStep.id}
@@ -381,6 +433,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
             </ul>
           </nav>
         </aside>
+        </SectionsContext.Provider>
       </div>
       <p className={styles.visuallyHidden} role="status" aria-live="polite">
         {announcement}
