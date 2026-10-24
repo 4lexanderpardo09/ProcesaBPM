@@ -39,7 +39,7 @@ function setUp(row: Awaited<ReturnType<TicketFlowRepository['findProgress']>>) {
 
 describe('TicketFlowService', () => {
   it('reads the ticket under the access filter and maps its progress on the version it runs on, in one transaction', async () => {
-    const row = { id: TICKET, status: 'OPEN' as const, workflowVersionId: VERSION, currentStepId: 'task', stepVisits: [{ stepId: 'task' }], events: [{ transitionId: 't1' }] };
+    const row = { id: TICKET, status: 'OPEN' as const, workflowVersionId: VERSION, currentStepId: 'task', stepVisits: [{ stepId: 'task', loop: 1, enteredAt: new Date('2026-10-01T13:00:00Z'), exitedAt: null, dueAt: null, result: null }], events: [{ transitionId: 't1' }] };
     const { service, tickets, versions, tx, inTenant } = setUp(row);
     const flow = await inTenant(() => service.flow(ability, TICKET));
     expect(tickets.findProgress).toHaveBeenCalledWith(tx, TENANT, TICKET, readableTickets(ability));

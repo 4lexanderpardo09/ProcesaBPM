@@ -33,7 +33,7 @@ export class TicketFlowService {
         versionId: ticket.workflowVersionId,
         status: ticket.status,
         currentStepId: ticket.currentStepId,
-        visitedStepIds: ticket.stepVisits.map((visit) => visit.stepId),
+        visits: ticket.stepVisits,
         takenTransitionIds: ticket.events.flatMap((event) => (event.transitionId === null ? [] : [event.transitionId])),
       });
     });

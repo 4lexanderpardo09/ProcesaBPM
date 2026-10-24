@@ -54,3 +54,16 @@
     padding: var(--space-4);
   }
 }
+
+/* On paper only the page prints, at full height. */
+@media print {
+  .shell {
+    display: block;
+    height: auto;
+  }
+
+  .content {
+    overflow: visible;
+    padding: 0;
+  }
+}

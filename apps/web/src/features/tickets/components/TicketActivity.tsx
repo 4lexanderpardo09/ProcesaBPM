@@ -1,5 +1,6 @@
 import type { FormFieldResponse, TicketDocumentResponse, TicketEventResponse, TicketValueNamesResponse } from '@procesabpm/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/shared/lib/format-date-time';
 import { useApiClient } from '@/shared/session';
@@ -11,6 +12,7 @@ import { type FieldChange, fieldChanges } from '../lib/field-changes';
 import type { FieldValueDisplay } from '../lib/field-value';
 import { CommentForm } from './CommentForm';
 import { LoadError } from './LoadError';
+import { PdfViewerDialog } from './PdfViewerDialog';
 import styles from './TicketActivity.module.css';
 
 const EVENT_TYPES = [
@@ -33,6 +35,11 @@ type EventType = (typeof EVENT_TYPES)[number];
 
 const eventTypeOf = (type: string): EventType => EVENT_TYPES.find((known) => known === type) ?? 'SYSTEM';
 
+/** The events that move the ticket or change who has it. */
+const MOVEMENTS: ReadonlySet<EventType> = new Set(['CREATED', 'TRANSITIONED', 'ASSIGNED', 'REASSIGNED', 'CLOSED', 'REOPENED', 'PARALLEL_TASK_COMPLETED']);
+const FILTERS = ['all', 'comments', 'movements', 'files'] as const;
+type ActivityFilter = (typeof FILTERS)[number];
+
 export interface TicketActivityProps {
   readonly ticketId: string;
   readonly timeline: UseQueryResult<readonly TicketEventResponse[]>;
@@ -50,11 +57,26 @@ export interface TicketActivityProps {
 export function TicketActivity({ ticketId, timeline, canComment, timeZone, fields, valueNames, documents }: TicketActivityProps) {
   const { t } = useTranslation('tickets');
   const download = useTicketFileDownload(ticketId);
+  const [filter, setFilter] = useState<ActivityFilter>('all');
+  const [viewing, setViewing] = useState<{ readonly id: string; readonly name: string } | undefined>(undefined);
   const changesOf = (event: TicketEventResponse) => (event.type === 'FIELDS_UPDATED' ? fieldChanges(event.data, fields, valueNames, timeZone) : []);
   const filesByEvent = new Map<string, TicketDocumentResponse[]>();
   for (const document of documents) {
     if (document.eventId !== null) filesByEvent.set(document.eventId, [...(filesByEvent.get(document.eventId) ?? []), document]);
   }
+  const matches = (event: TicketEventResponse, which: ActivityFilter) => {
+    switch (which) {
+      case 'all':
+        return true;
+      case 'comments':
+        return event.commentHtml !== null;
+      case 'movements':
+        return MOVEMENTS.has(eventTypeOf(event.type));
+      case 'files':
+        return filesByEvent.has(event.id);
+    }
+  };
+  const shown = (timeline.data ?? []).filter((event) => matches(event, filter));
   return (
     <Card title={t('detail.activity.title')}>
       {timeline.isError ? (
@@ -64,15 +86,29 @@ export function TicketActivity({ ticketId, timeline, canComment, timeZone, field
       ) : timeline.data.length === 0 ? (
         <p className={styles.muted}>{t('detail.activity.empty')}</p>
       ) : (
-        <ol className={styles.events}>
-          {timeline.data.map((event) => (
-            <ActivityEvent key={event.id} event={event} changes={changesOf(event)} files={filesByEvent.get(event.id) ?? []} downloading={download.isPending} onDownload={(fileId) => download.mutate(fileId)} timeZone={timeZone} />
-          ))}
-        </ol>
+        <>
+          <div className={styles.filters} role="group" aria-label={t('detail.activity.filters.label')} data-print="hide">
+            {FILTERS.map((which) => (
+              <button key={which} type="button" className={styles.filter} aria-pressed={filter === which} onClick={() => setFilter(which)}>
+                {t(`detail.activity.filters.${which}`)} <span className={styles.filterCount}>{timeline.data.filter((event) => matches(event, which)).length}</span>
+              </button>
+            ))}
+          </div>
+          {shown.length === 0 ? (
+            <p className={styles.muted}>{t('detail.activity.filters.empty')}</p>
+          ) : (
+            <ol className={styles.events}>
+              {shown.map((event) => (
+                <ActivityEvent key={event.id} event={event} changes={changesOf(event)} files={filesByEvent.get(event.id) ?? []} downloading={download.isPending} onDownload={(fileId) => download.mutate(fileId)} onView={setViewing} timeZone={timeZone} />
+              ))}
+            </ol>
+          )}
+        </>
       )}
       {download.isError && <Alert tone="danger">{t('detail.attachments.downloadFailed')}</Alert>}
+      {viewing !== undefined && <PdfViewerDialog ticketId={ticketId} file={viewing} onClose={() => setViewing(undefined)} />}
       {canComment && (
-        <div className={styles.comment}>
+        <div className={styles.comment} data-print="hide">
           <CommentForm ticketId={ticketId} />
         </div>
       )}
@@ -86,11 +122,12 @@ interface ActivityEventProps {
   readonly files: readonly TicketDocumentResponse[];
   readonly downloading: boolean;
   readonly onDownload: (fileId: string) => void;
+  readonly onView: (file: { readonly id: string; readonly name: string }) => void;
   readonly timeZone: string | undefined;
 }
 
 /** Who did what, to whom, on which step and with which decision, and the files that came with it. */
-function ActivityEvent({ event, changes, files, downloading, onDownload, timeZone }: ActivityEventProps) {
+function ActivityEvent({ event, changes, files, downloading, onDownload, onView, timeZone }: ActivityEventProps) {
   const { t } = useTranslation('tickets');
   const actor = event.actor?.name ?? t('detail.activity.system');
   const type = eventTypeOf(event.type);
@@ -114,6 +151,11 @@ function ActivityEvent({ event, changes, files, downloading, onDownload, timeZon
               <li key={document.id} className={styles.file}>
                 <span className={styles.fileName}>{document.file.name}</span>
                 <span className={styles.fileSize}>{formatFileSize(document.file.sizeBytes)}</span>
+                {document.file.mimeType === 'application/pdf' && (
+                  <Button variant="ghost" aria-label={t('detail.viewer.view', { name: document.file.name })} onClick={() => onView({ id: document.file.id, name: document.file.name })}>
+                    {t('detail.attachments.view')}
+                  </Button>
+                )}
                 <Button variant="ghost" icon={<DownloadIcon size={14} />} aria-label={t('detail.attachments.download', { name: document.file.name })} disabled={downloading} onClick={() => onDownload(document.file.id)} />
               </li>
             ))}

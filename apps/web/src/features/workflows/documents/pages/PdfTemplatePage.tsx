@@ -14,7 +14,7 @@ import { PageCanvas } from '../components/mapping/PageCanvas';
 import styles from '../components/mapping/Mapping.module.css';
 import { type ItemKind, type ItemRef, type MappingProblem, mappingProblems, newField, newSignature, placeAt, sameItem } from '../lib/mapping-doc';
 import { openPdf } from '../lib/open-pdf';
-import { loadPdf } from '../lib/pdf-pages';
+import { loadPdf } from '@/shared/lib/pdf-pages';
 import { useVersionDocuments } from '../lib/use-version-documents';
 
 const NOT_FOUND = 404;

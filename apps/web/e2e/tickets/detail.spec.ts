@@ -24,7 +24,7 @@ test.describe('ticket detail', () => {
     await expect(diagram.getByText('Aprobar')).toBeVisible();
 
     await page.getByRole('textbox', { name: 'Agregar un comentario' }).fill('Ya lo revisé <ok>');
-    await page.getByRole('button', { name: 'Comentar' }).click();
+    await page.getByRole('button', { name: 'Comentar', exact: true }).click();
 
     await expect(page.getByText('Ya lo revisé <ok>')).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveText('');

@@ -1,6 +1,6 @@
 import type { TicketDocumentJobsResponse, TicketDocumentResponse } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '@/shared/api';
 import { formatFileSize } from '@/shared/lib/format-file-size';
@@ -11,6 +11,7 @@ import { downloadCombinedDocuments, regenerateTicketDocument, ticketDocumentJobs
 import { ticketQueryKeys } from '../api/tickets-api';
 import { useTicketFileDownload } from '../hooks/use-ticket-file-download';
 import { LoadError } from './LoadError';
+import { PdfViewerDialog } from './PdfViewerDialog';
 import styles from './TicketAttachments.module.css';
 
 /** What the combined PDF takes: PDFs and the images a PDF can draw. */
@@ -28,6 +29,7 @@ export interface TicketAttachmentsProps {
 export function TicketAttachments({ ticketId, number, documents, timeZone }: TicketAttachmentsProps) {
   const { t } = useTranslation('tickets');
   const download = useTicketFileDownload(ticketId);
+  const [viewing, setViewing] = useState<{ readonly id: string; readonly name: string } | undefined>(undefined);
   const current = documents.data?.filter((document) => document.isCurrent);
   const client = useApiClient();
   const combined = useMutation({ mutationFn: () => downloadCombinedDocuments(client, ticketId, number) });
@@ -60,6 +62,11 @@ export function TicketAttachments({ ticketId, number, documents, timeZone }: Tic
                   {formatFileSize(document.file.sizeBytes)} · {formatShortDate(document.createdAt, timeZone)}
                 </span>
               </div>
+              {document.file.mimeType === 'application/pdf' && (
+                <Button variant="ghost" aria-label={t('detail.viewer.view', { name: document.file.name })} onClick={() => setViewing({ id: document.file.id, name: document.file.name })}>
+                  {t('detail.attachments.view')}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 icon={<DownloadIcon size={15} />}
@@ -82,6 +89,7 @@ export function TicketAttachments({ ticketId, number, documents, timeZone }: Tic
         </div>
       )}
       <DocumentJobs ticketId={ticketId} />
+      {viewing !== undefined && <PdfViewerDialog ticketId={ticketId} file={viewing} onClose={() => setViewing(undefined)} />}
     </Card>
   );
 }

@@ -3,12 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import { openDownload } from '@/shared/lib/open-download';
+import { loadPdf } from '@/shared/lib/pdf-pages';
 import { fakeProfile } from '@/test/fake-profile';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
 import { selectAllInEditor, typeInEditor } from '@/test/rich-text-editor';
 
 vi.mock('@/shared/lib/open-download', () => ({ openDownload: vi.fn() }));
+vi.mock('@/shared/lib/pdf-pages', () => ({ loadPdf: vi.fn(() => Promise.resolve({ pages: [{ width: 600, height: 800 }], render: vi.fn(() => Promise.resolve()), destroy: vi.fn() })) }));
 
 const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 /** The signed-in person of the test session (`fakeProfile`). */
@@ -141,6 +143,7 @@ const flow = {
     { id: id(610), fromStepId: id(600), toStepId: STEP, type: 'DEFAULT', label: '', points: null, takenCount: 1 },
     { id: id(611), fromStepId: STEP, toStepId: id(601), type: 'DECISION', label: 'Aprobar', points: null, takenCount: 0 },
   ],
+  visits: [{ stepId: STEP, loop: 1, enteredAt: at, exitedAt: null, dueAt: null, result: null }],
 };
 
 const base = `/tickets/${TICKET}`;
@@ -336,6 +339,46 @@ describe('TicketDetailPage', () => {
     expect(within(files).getByRole('button', { name: 'Descargar extracto.pdf' })).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Archivos de «Adjuntar archivos»' })).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it('filters the activity by comments, movements and files', async () => {
+    renderRoute(base, { handlers: ticketHandlers() });
+
+    const filters = await screen.findByRole('group', { name: 'Mostrar en la actividad' });
+    expect(within(filters).getByRole('button', { name: 'Todo 3' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(filters).getByRole('button', { name: 'Comentarios 1' }));
+    expect(screen.getByText('Estoy cruzando el comprobante.')).toBeInTheDocument();
+    expect(screen.queryByText('creó el ticket', { exact: false })).toBeNull();
+    await userEvent.click(within(filters).getByRole('button', { name: 'Movimientos 2' }));
+    expect(screen.queryByText('Estoy cruzando el comprobante.')).toBeNull();
+    await userEvent.click(within(filters).getByRole('button', { name: 'Con archivos 0' }));
+    expect(screen.getByText('Nada de esto en la actividad todavía.')).toBeInTheDocument();
+  });
+
+  it('opens a PDF of the ticket in a window, read from its short-lived link', async () => {
+    renderRoute(base, { handlers: ticketHandlers({ [`${base}/files/${FILE}/download-url`]: () => ({ url: 'https://files.example/comprobante?sig=1', expiresAt: at }) }) });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver comprobante-pago.pdf' }));
+
+    expect(screen.getByRole('dialog', { name: 'comprobante-pago.pdf' })).toBeInTheDocument();
+    await vi.waitFor(() => expect(loadPdf).toHaveBeenCalledWith('https://files.example/comprobante?sig=1'));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'comprobante-pago.pdf' })).getByRole('button', { name: 'Cerrar' }));
+    expect(screen.queryByRole('dialog', { name: 'comprobante-pago.pdf' })).toBeNull();
+  });
+
+  it('says per step when the ticket got there and left, and whether in time', async () => {
+    const visits = [
+      { stepId: STEP, loop: 1, enteredAt: '2026-10-01T13:00:00.000Z', exitedAt: '2026-10-03T13:00:00.000Z', dueAt: '2026-10-02T13:00:00.000Z', result: 'LATE' },
+      { stepId: STEP, loop: 2, enteredAt: '2026-10-03T13:00:00.000Z', exitedAt: null, dueAt: '2026-10-04T13:00:00.000Z', result: null },
+    ];
+    renderRoute(base, { handlers: ticketHandlers({ [`${base}/flow`]: () => ({ ...flow, visits }) }) });
+
+    const times = await screen.findByRole('list', { name: 'Tiempos por paso' });
+    const rows = within(times).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('Revisión');
+    expect(rows[0]).toHaveTextContent('Tarde');
+    expect(rows[1]).toHaveTextContent('Revisión (vuelta 2)');
+    expect(rows[1]).toHaveTextContent('Vencido');
   });
 
   it('asks for the comment instead of sending an empty one', async () => {

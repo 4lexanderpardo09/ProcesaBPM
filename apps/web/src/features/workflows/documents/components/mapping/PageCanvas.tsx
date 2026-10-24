@@ -1,9 +1,9 @@
 import type { TemplateMapping } from '@procesabpm/shared';
 import { type MouseEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { LoadedPdf } from '@/shared/lib/pdf-pages';
 import { Button } from '@/shared/ui';
 import { type ItemRef, sameItem } from '../../lib/mapping-doc';
-import type { LoadedPdf } from '../../lib/pdf-pages';
 import styles from './Mapping.module.css';
 
 export interface PageCanvasProps {
