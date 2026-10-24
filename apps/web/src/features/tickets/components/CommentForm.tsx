@@ -7,19 +7,23 @@ import { ApiError, genericErrorMessage } from '@/shared/api';
 import { useApiClient } from '@/shared/session';
 import { Button, isBlankRichText, RichTextEditor, type RichTextEditorHandle, Select } from '@/shared/ui';
 import { useCommentOnTicket } from '../hooks/use-comment-on-ticket';
+import { FilePicker } from './advance/FileInput';
 import styles from './CommentForm.module.css';
 
 const FORBIDDEN = 403;
 
 /**
  * A comment, written in the rich text editor, for everyone who can see the ticket; it shows up in the activity once saved. The person's text
- * templates (their own and the ones shared with them) are inserted where the cursor is, with their formatting, to edit before sending.
+ * templates (their own and the ones shared with them) are inserted where the cursor is, with their formatting, to edit before sending. Files can
+ * go with it: they are uploaded as they are chosen and appear under the comment in the activity.
  */
 export function CommentForm({ ticketId }: { readonly ticketId: string }) {
   const { t } = useTranslation('tickets');
   const { t: tCommon } = useTranslation();
   const [text, setText] = useState('');
   const [missing, setMissing] = useState(false);
+  const [attachments, setAttachments] = useState<readonly string[]>([]);
+  const [attaching, setAttaching] = useState(false);
   const editor = useRef<RichTextEditorHandle>(null);
   const comment = useCommentOnTicket(ticketId);
   const templates = useQuery(templatesQueryOptions(useApiClient()));
@@ -30,7 +34,15 @@ export function CommentForm({ ticketId }: { readonly ticketId: string }) {
       setMissing(true);
       return;
     }
-    comment.mutate(text, { onSuccess: () => setText('') });
+    comment.mutate(
+      { html: text, attachments },
+      {
+        onSuccess: () => {
+          setText('');
+          setAttachments([]);
+        },
+      },
+    );
   };
 
   const failure = (): string | undefined => {
@@ -71,8 +83,9 @@ export function CommentForm({ ticketId }: { readonly ticketId: string }) {
           />
         </div>
       )}
+      <FilePicker label={t('detail.comment.attachments')} required={false} value={attachments} knownNames={{}} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
       <div>
-        <Button type="submit" disabled={comment.isPending}>
+        <Button type="submit" disabled={comment.isPending || attaching}>
           {comment.isPending ? t('detail.comment.sending') : t('detail.comment.submit')}
         </Button>
       </div>

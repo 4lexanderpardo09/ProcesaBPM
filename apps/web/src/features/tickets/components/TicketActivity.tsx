@@ -1,10 +1,12 @@
-import type { FormFieldResponse, TicketEventResponse, TicketValueNamesResponse } from '@procesabpm/shared';
+import type { FormFieldResponse, TicketDocumentResponse, TicketEventResponse, TicketValueNamesResponse } from '@procesabpm/shared';
 import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/shared/lib/format-date-time';
 import { useApiClient } from '@/shared/session';
-import { Avatar, Card, RichText } from '@/shared/ui';
+import { formatFileSize } from '@/shared/lib/format-file-size';
+import { Alert, Avatar, Button, Card, DownloadIcon, RichText } from '@/shared/ui';
 import { prioritiesQueryOptions } from '../api/new-ticket-api';
+import { useTicketFileDownload } from '../hooks/use-ticket-file-download';
 import { type FieldChange, fieldChanges } from '../lib/field-changes';
 import type { FieldValueDisplay } from '../lib/field-value';
 import { CommentForm } from './CommentForm';
@@ -40,12 +42,19 @@ export interface TicketActivityProps {
   /** The fields of the ticket's version and the names its values point to, to read what a `FIELDS_UPDATED` changed. */
   readonly fields: readonly FormFieldResponse[];
   readonly valueNames: TicketValueNamesResponse;
+  /** The ticket's files: each event shows the ones attached with it (a comment's files, a step's, the closing documents). */
+  readonly documents: readonly TicketDocumentResponse[];
 }
 
-/** What happened on the ticket, oldest first, and a box to add a comment for whoever may. */
-export function TicketActivity({ ticketId, timeline, canComment, timeZone, fields, valueNames }: TicketActivityProps) {
+/** What happened on the ticket, oldest first, with the files that came with each event, and a box to add a comment for whoever may. */
+export function TicketActivity({ ticketId, timeline, canComment, timeZone, fields, valueNames, documents }: TicketActivityProps) {
   const { t } = useTranslation('tickets');
+  const download = useTicketFileDownload(ticketId);
   const changesOf = (event: TicketEventResponse) => (event.type === 'FIELDS_UPDATED' ? fieldChanges(event.data, fields, valueNames, timeZone) : []);
+  const filesByEvent = new Map<string, TicketDocumentResponse[]>();
+  for (const document of documents) {
+    if (document.eventId !== null) filesByEvent.set(document.eventId, [...(filesByEvent.get(document.eventId) ?? []), document]);
+  }
   return (
     <Card title={t('detail.activity.title')}>
       {timeline.isError ? (
@@ -57,10 +66,11 @@ export function TicketActivity({ ticketId, timeline, canComment, timeZone, field
       ) : (
         <ol className={styles.events}>
           {timeline.data.map((event) => (
-            <ActivityEvent key={event.id} event={event} changes={changesOf(event)} timeZone={timeZone} />
+            <ActivityEvent key={event.id} event={event} changes={changesOf(event)} files={filesByEvent.get(event.id) ?? []} downloading={download.isPending} onDownload={(fileId) => download.mutate(fileId)} timeZone={timeZone} />
           ))}
         </ol>
       )}
+      {download.isError && <Alert tone="danger">{t('detail.attachments.downloadFailed')}</Alert>}
       {canComment && (
         <div className={styles.comment}>
           <CommentForm ticketId={ticketId} />
@@ -73,11 +83,14 @@ export function TicketActivity({ ticketId, timeline, canComment, timeZone, field
 interface ActivityEventProps {
   readonly event: TicketEventResponse;
   readonly changes: readonly FieldChange[];
+  readonly files: readonly TicketDocumentResponse[];
+  readonly downloading: boolean;
+  readonly onDownload: (fileId: string) => void;
   readonly timeZone: string | undefined;
 }
 
-/** Who did what, to whom, on which step and with which decision. */
-function ActivityEvent({ event, changes, timeZone }: ActivityEventProps) {
+/** Who did what, to whom, on which step and with which decision, and the files that came with it. */
+function ActivityEvent({ event, changes, files, downloading, onDownload, timeZone }: ActivityEventProps) {
   const { t } = useTranslation('tickets');
   const actor = event.actor?.name ?? t('detail.activity.system');
   const type = eventTypeOf(event.type);
@@ -95,6 +108,17 @@ function ActivityEvent({ event, changes, timeZone }: ActivityEventProps) {
         </p>
         {changes.length > 0 && <ChangeList changes={changes} />}
         {event.commentHtml !== null && <RichText html={event.commentHtml} />}
+        {files.length > 0 && (
+          <ul className={styles.files} aria-label={t('detail.activity.files')}>
+            {files.map((document) => (
+              <li key={document.id} className={styles.file}>
+                <span className={styles.fileName}>{document.file.name}</span>
+                <span className={styles.fileSize}>{formatFileSize(document.file.sizeBytes)}</span>
+                <Button variant="ghost" icon={<DownloadIcon size={14} />} aria-label={t('detail.attachments.download', { name: document.file.name })} disabled={downloading} onClick={() => onDownload(document.file.id)} />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </li>
   );

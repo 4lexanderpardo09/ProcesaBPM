@@ -81,8 +81,9 @@ export function ticketFlowQueryOptions(client: HttpClient, ticketId: string) {
   });
 }
 
-export function commentOnTicket(client: HttpClient, ticketId: string, commentHtml: string) {
-  return client.request(`${ticketUrl(ticketId)}/comments`, { method: 'POST', body: { comment: commentHtml }, schema: commentTicketResponseSchema });
+/** A comment, with the ids of confirmed uploads to attach to it. */
+export function commentOnTicket(client: HttpClient, ticketId: string, commentHtml: string, attachments: readonly string[] = []) {
+  return client.request(`${ticketUrl(ticketId)}/comments`, { method: 'POST', body: { comment: commentHtml, attachments: [...attachments] }, schema: commentTicketResponseSchema });
 }
 
 /** A short-lived link to the stored file; asked for at the moment of downloading. */

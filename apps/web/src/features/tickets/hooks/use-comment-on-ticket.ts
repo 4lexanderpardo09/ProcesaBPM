@@ -3,12 +3,12 @@ import { useApiClient } from '@/shared/session';
 import { commentOnTicket } from '../api/ticket-detail-api';
 import { ticketQueryKeys } from '../api/tickets-api';
 
-/** Adds the editor's HTML as a comment and reloads the activity. */
+/** Adds the editor's HTML as a comment, with its attachments, and reloads the activity and the ticket's files. */
 export function useCommentOnTicket(ticketId: string) {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (html: string) => commentOnTicket(client, ticketId, html),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ticketQueryKeys.timeline(ticketId) }),
+    mutationFn: ({ html, attachments }: { readonly html: string; readonly attachments: readonly string[] }) => commentOnTicket(client, ticketId, html, attachments),
+    onSuccess: () => Promise.all([queryClient.invalidateQueries({ queryKey: ticketQueryKeys.timeline(ticketId) }), queryClient.invalidateQueries({ queryKey: ticketQueryKeys.documents(ticketId) })]),
   });
 }

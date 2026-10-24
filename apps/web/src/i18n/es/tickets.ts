@@ -259,6 +259,7 @@ export const tickets = {
       empty: 'Sin descripción.',
     },
     activity: {
+      files: 'Archivos adjuntos',
       title: 'Actividad',
       loading: 'Cargando actividad…',
       empty: 'Todavía no hay actividad.',
@@ -299,6 +300,7 @@ export const tickets = {
       sending: 'Enviando…',
       required: 'Escribe un comentario.',
       forbidden: 'No tienes permiso para comentar en este ticket.',
+      attachments: 'Adjuntar archivos',
     },
     fields: {
       title: 'Datos de la solicitud',
@@ -363,6 +365,8 @@ export const tickets = {
     dismiss: 'Cerrar',
     sending: 'Enviando…',
     optionalComment: 'Comentario (opcional)',
+    attachments: 'Adjuntos (opcional)',
+    closingAttachments: 'Documentos de cierre (opcional)',
     people: {
       placeholder: 'Elige una persona',
       loading: 'Cargando personas…',

@@ -1,5 +1,4 @@
-import type { FormDecisionResponse, TicketDetailResponse, TicketFormResponse } from '@procesabpm/shared';
-import { RICH_TEXT_MAX } from '@procesabpm/shared';
+import { type FormDecisionResponse, RICH_TEXT_MAX, type TicketDetailResponse, type TicketFormResponse } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +15,7 @@ import { NextAssigneeField } from '../actions/NextAssigneeField';
 import { SignatureChoice, useSignatureChoice } from '../actions/SignatureChoice';
 import { NextStepSummary } from '../next-step/NextStepSummary';
 import styles from './AdvanceDialog.module.css';
+import { FilePicker } from './FileInput';
 import { StepFieldInput } from './StepFieldInput';
 
 export interface AdvanceDialogProps {
@@ -29,11 +29,12 @@ export interface AdvanceDialogProps {
 interface AdvanceArgs {
   readonly values: Record<string, unknown>;
   readonly comment: string;
+  readonly attachments: readonly string[];
   readonly assigneeId: string | undefined;
 }
 
 /**
- * Answers the step with one of its decisions: the fields captured on this step, and an optional note. Before sending,
+ * Answers the step with one of its decisions: the fields captured on this step, an optional note and loose files. Before sending,
  * it says what follows (the next step, who gets it, what is filled there, or that the ticket ends or cannot go on) and,
  * when the next step needs its assignee chosen, asks for that person among its candidates.
  */
@@ -42,6 +43,8 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const editable = new Set(form.editableFieldCodes);
   const fields = typedFields(form.fields.filter((field) => editable.has(field.code)));
   const [comment, setComment] = useState('');
+  const [attachments, setAttachments] = useState<readonly string[]>([]);
+  const [attaching, setAttaching] = useState(false);
   const client = useApiClient();
   const timeZone = useCurrentUser().data?.user.timeZone ?? undefined;
   // A signature step is signed: with the profile signature, or one drawn now.
@@ -57,6 +60,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       visitId,
       values: args.values,
       ...(isBlankRichText(args.comment) ? {} : { comment: args.comment }),
+      attachments: args.attachments,
       ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
       ...(signs && signature.fileId !== undefined ? { signatureFileId: signature.fileId } : {}),
     }),
@@ -70,7 +74,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
     if (signs && signature.missing) return;
     const collected = stepFields.collect();
     const assignee = next.request();
-    if (collected.ok && assignee.ok) advance.mutate({ values: collected.values, comment, assigneeId: assignee.assigneeId }, { onSuccess: onClose, onError: next.onError });
+    if (collected.ok && assignee.ok) advance.mutate({ values: collected.values, comment, attachments, assigneeId: assignee.assigneeId }, { onSuccess: onClose, onError: next.onError });
   };
 
   return (
@@ -78,7 +82,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       open
       title={t('advance.title', { decision: decision.label })}
       submitLabel={decision.label}
-      pending={advance.isPending || stepFields.busy}
+      pending={advance.isPending || stepFields.busy || attaching}
       error={stepFields.rejected ? null : next.shownError(advance.error)}
       onClose={onClose}
       onSubmit={submit}
@@ -89,6 +93,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
         <StepFieldInput key={field.id} field={field} knownLabels={knownLabels} knownFiles={knownFiles} {...stepFields.inputProps(field)} />
       ))}
       <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} onValueChange={setComment} />
+      <FilePicker label={t('actions.attachments')} required={false} value={attachments} knownNames={knownFiles} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
       {signs && <SignatureChoice choice={signature} showMissing={submitted} />}
       <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />
       <NextAssigneeField next={next} />
