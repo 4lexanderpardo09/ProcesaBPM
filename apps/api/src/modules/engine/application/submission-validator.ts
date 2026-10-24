@@ -71,12 +71,28 @@ export class SubmissionValidator {
     @Inject(ComputeEnvironment) private readonly environments: ComputeEnvironment,
   ) {}
 
-  private async recompute(tx: TenantTransaction, request: SubmissionRequest, capturedValues: Readonly<Record<string, unknown>>) {
+  private async recompute(tx: TenantTransaction, request: Omit<SubmissionRequest, 'uploaderId' | 'attachmentIds'>, capturedValues: Readonly<Record<string, unknown>>) {
     const { document, company } = request;
     if (!document.fields.some((field) => field.type === 'FORMULA' || field.type === 'CALCULATOR')) return { values: {}, failures: [] };
     const calendar = await this.people.findBusinessCalendar(tx, request.tenantId, company.timeZone, company.calendarId, request.at);
     const environment = await this.environments.build(tx, request.tenantId, document, { timeZone: company.timeZone, calendar, at: request.at });
     return computeFieldValues(document.fields, { ...request.existing, ...capturedValues }, { ...environment, captured: new Set(Object.keys(capturedValues)) });
+  }
+
+  /**
+   * The values a submission would leave, for a preview of where it goes: only what is valid so far counts (a missing or
+   * wrong value is left out instead of refused), formulas are recomputed and the amount rules evaluated (to follow a
+   * diversion), but nothing is checked against the database and no limit refuses it.
+   */
+  async previewValues(tx: TenantTransaction, request: Omit<SubmissionRequest, 'uploaderId' | 'attachmentIds'>): Promise<Pick<Submission, 'merged' | 'amounts'>> {
+    const { document, step } = request;
+    const fields = captureFieldsFor(document.fields, request.stage, step.id);
+    const captured = validateCapturedValues({ fields, input: request.input, existing: request.existing, context: { today: localDateIn(request.company.timeZone, request.at), now: request.at.toISOString() } });
+    const computed = await this.recompute(tx, request, captured.values);
+    const merged = { ...request.existing, ...captured.values, ...computed.values };
+    const fieldByCode = new Map<string, FieldDocument>(document.fields.map((field) => [field.code, field]));
+    const amounts = evaluateAmountRules(document.amountRules, fieldByCode, merged, { stepId: step.id, companyId: request.company.id, positionId: request.positionId, companyCurrency: request.company.currencyCode });
+    return { merged, amounts };
   }
 
   async validate(tx: TenantTransaction, request: SubmissionRequest): Promise<Submission> {

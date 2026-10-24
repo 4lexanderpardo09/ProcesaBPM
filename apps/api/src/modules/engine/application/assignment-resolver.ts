@@ -52,6 +52,16 @@ export class AssignmentResolver {
     return [...people];
   }
 
+  /** The names of active members, in the order given (a person no longer active is left out). */
+  async named(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<AssigneeCandidate[]> {
+    const people: AssigneeCandidate[] = [];
+    for (const userId of userIds) {
+      const member = await this.context.findActiveMember(tx, tenantId, userId);
+      if (member !== null) people.push({ userId: member.userId, name: member.name });
+    }
+    return people;
+  }
+
   private async signerUser(tx: TenantTransaction, step: StepDocument, signer: StepDocument['signers'][number], ticket: AssignmentContext): Promise<string | undefined> {
     switch (signer.signerType) {
       case 'USER':

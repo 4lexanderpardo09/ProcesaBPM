@@ -1,5 +1,10 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Patch, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import {
+  type CreationPreviewRequest,
+  creationPreviewRequestSchema,
+  type TransitionPreviewRequest,
+  transitionPreviewRequestSchema,
+  type TransitionPreviewResponse,
   type CloseTicketRequest,
   type CommentTicketRequest,
   commentTicketRequestSchema,
@@ -98,6 +103,14 @@ export class TicketsController {
   @Post()
   create(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Body(new ZodValidationPipe(createTicketRequestSchema)) body: CreateTicketRequest): Promise<TicketMutationResponse> {
     return this.creation.create(ticketCreatorOf(principal, ability), body);
+  }
+
+  /** Where a ticket being created would go and who would get it, with the form as it is so far: nothing is created. */
+  @RequireAnyPermission(['create', 'create_for_others'], TICKET_SUBJECT)
+  @Post('creation-preview')
+  @HttpCode(HttpStatus.OK)
+  creationPreview(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Body(new ZodValidationPipe(creationPreviewRequestSchema)) body: CreationPreviewRequest): Promise<TransitionPreviewResponse> {
+    return this.creation.preview(ticketCreatorOf(principal, ability), body);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
@@ -199,6 +212,14 @@ export class TicketsController {
   @HttpCode(HttpStatus.OK)
   transition(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(transitionTicketRequestSchema)) body: TransitionTicketRequest): Promise<TicketMutationResponse> {
     return this.transitions.transition(this.actor(principal, ability), id, body);
+  }
+
+  /** Where a decision would take the ticket and who would get it, with the step's form as it is so far: nothing changes. */
+  @RequirePermission('transition', TICKET_SUBJECT)
+  @Post(':id/transition-preview')
+  @HttpCode(HttpStatus.OK)
+  transitionPreview(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(transitionPreviewRequestSchema)) body: TransitionPreviewRequest): Promise<TransitionPreviewResponse> {
+    return this.transitions.preview(this.actor(principal, ability), id, body);
   }
 
   @RequirePermission('reassign', TICKET_SUBJECT)

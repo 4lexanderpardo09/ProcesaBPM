@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { cutoffDeadline, type CutoffTerm, type FormulaFailure, InvalidCalendarError, type RouteHop, routeThroughAutomaticBlocks, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { type AssigneeCandidate, AssigneeSelectionRequiredError, cutoffDeadline, type CutoffTerm, type FormulaFailure, InvalidCalendarError, type NextAssignment, type RouteHop, routeThroughAutomaticBlocks, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type OpenedSla, openSla, type SlaTerms } from '../../sla/domain/clock-math.js';
 import { type ResolvedCalendar, TicketContextRepository } from '../data/ticket-context.repository.js';
@@ -49,6 +49,12 @@ export type Arrival =
   | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly plan: ArrivalPlan; readonly assigneeType: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; readonly computed: ArrivalComputed }
   /** The ticket is parked on a WAIT block until `resumeAt`: a visit with nobody assigned and no clocks. */
   | { readonly kind: 'WAIT'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly plan: ArrivalPlan; readonly resumeAt: Date; readonly computed: ArrivalComputed };
+
+/** What `preview` says about where a submission goes; `people` are the ones the assignment names (see `NextAssignment`). */
+export type ArrivalPreview =
+  | { readonly kind: 'END'; readonly hops: readonly RouteHop[] }
+  | { readonly kind: 'WAIT'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly resumeAt: Date }
+  | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly assignment: NextAssignment; readonly people: readonly AssigneeCandidate[] };
 
 const SIDE_EFFECT_OUTBOX: Readonly<Record<string, string>> = { DOCUMENT: 'block.document', NOTIFICATION: 'block.notification', WEBHOOK: 'block.webhook', EXPORT: 'block.export' };
 
@@ -138,10 +144,45 @@ export class ArrivalPlanner {
     return { kind: 'WAIT', hops, step, resumeAt, computed, plan: { visit, clocks: [], assignees: [], parallelTasks: [] } };
   }
 
-  async plan(tx: TenantTransaction, request: ArrivalRequest): Promise<Arrival> {
+  /** The automatic blocks from the entry step to where the ticket stops, with the cutoffs a deadline may need. */
+  private async route(tx: TenantTransaction, request: ArrivalRequest) {
     const environment = await this.environments.build(tx, request.tenantId, request.document, { timeZone: request.timeZone, calendar: request.calendar, at: request.at });
     const cutoffs = usesCutoffs(request.document) ? await this.context.cutoffsOf(tx, request.tenantId, request.workflowVersionId, request.companyId) : [];
     const route = routeThroughAutomaticBlocks(request.document, request.entryStepId, request.values, { ...environment, calendar: request.calendar?.calendar ?? null, at: request.at, cutoffs });
+    return { route, cutoffs };
+  }
+
+  /**
+   * Where a submission would take the ticket and who would get it, without deciding anything: the same route and the
+   * same candidates as `plan`, but a step with manual selection and several candidates answers `CHOOSE` with them
+   * instead of refusing. The errors `plan` would raise (no branch, max loops, nobody to assign) are raised too.
+   */
+  async preview(tx: TenantTransaction, request: ArrivalRequest): Promise<ArrivalPreview> {
+    const { route } = await this.route(tx, request);
+    if (route.arrival.kind === 'END') return { kind: 'END', hops: route.hops };
+    const step = request.document.steps.find((candidate) => candidate.id === route.arrival.stepId)!;
+    if (route.arrival.kind === 'WAIT') return { kind: 'WAIT', hops: route.hops, step, resumeAt: route.arrival.resumeAt };
+    const previousLoops = request.ticketId === null ? [] : await this.tickets.loopsOf(tx, request.tenantId, request.ticketId, step.id);
+    nextLoop(previousLoops, step.maxLoops, step.id);
+    const ticket = { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, ticketId: request.ticketId, at: request.at };
+    if (step.assignmentMode === 'PARALLEL') {
+      const signers = await this.resolver.signersFor(tx, step, ticket);
+      return { kind: 'PEOPLE', hops: route.hops, step, assignment: 'PARALLEL', people: await this.resolver.named(tx, request.tenantId, signers) };
+    }
+    const candidates = await this.resolver.candidatesFor(tx, step, ticket);
+    try {
+      const decision = decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: undefined });
+      const assignment = decision.type === 'PRIMARY' ? 'PERSON' : decision.type;
+      const people = decision.type === 'DISPATCH' ? candidates : candidates.filter((candidate) => decision.userIds.includes(candidate.userId));
+      return { kind: 'PEOPLE', hops: route.hops, step, assignment, people };
+    } catch (error) {
+      if (error instanceof AssigneeSelectionRequiredError) return { kind: 'PEOPLE', hops: route.hops, step, assignment: 'CHOOSE', people: candidates };
+      throw error;
+    }
+  }
+
+  async plan(tx: TenantTransaction, request: ArrivalRequest): Promise<Arrival> {
+    const { route, cutoffs } = await this.route(tx, request);
     const computed = computedOf(request, route);
     if (route.arrival.kind === 'END') return { kind: 'END', hops: route.hops, endStepId: route.arrival.stepId, computed };
 

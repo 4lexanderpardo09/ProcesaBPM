@@ -5,13 +5,17 @@ import { type AssigneeChoice, assigneeChoicesOf } from '../lib/assignee-choices'
 export type NextAssigneeRequest = { readonly ok: true; readonly assigneeId?: string } | { readonly ok: false };
 
 /**
- * The choice of who receives the next step, asked only after the API says the step needs it. The offered people are
- * kept in state (not read from the mutation's error), so the field stays while the retry is in flight.
+ * The choice of who receives the next step: asked as soon as a preview says the step needs it (`offered`), or when the
+ * answer is refused for it. The people the API refused with are kept in state (not read from the mutation's error), so
+ * the field stays while the retry is in flight, and they win over the preview's: they are the latest word.
  */
-export function useNextAssignee() {
-  const [choices, setChoices] = useState<readonly AssigneeChoice[]>();
-  const [assigneeId, setAssigneeId] = useState('');
+export function useNextAssignee(offered?: readonly AssigneeChoice[]) {
+  const [refusedWith, setChoices] = useState<readonly AssigneeChoice[]>();
+  const [chosenId, setAssigneeId] = useState('');
   const [missing, setMissing] = useState(false);
+  const choices = refusedWith ?? offered;
+  // A pick that is no longer offered (the values typed sent the ticket elsewhere) is no pick.
+  const assigneeId = choices?.some((choice) => choice.id === chosenId) === true ? chosenId : '';
   return {
     choices,
     assigneeId,

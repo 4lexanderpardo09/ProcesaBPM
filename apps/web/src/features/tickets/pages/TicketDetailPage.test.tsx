@@ -868,6 +868,65 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/transition`)[1]?.options.body).toEqual({ transitionId: APPROVE, visitId: VISIT, values: {}, assigneeId: id(51), attachments: [] });
     });
 
+    const preview = (overrides: Record<string, unknown>) => ({ outcome: 'STEP', via: [], step: { id: id(601), name: 'Tesorería', type: 'TASK' }, assignment: 'PERSON', people: [], fields: [], resumeAt: null, blocked: null, ...overrides });
+
+    it('says before sending who receives the next step and asks to choose at once when that step needs it', async () => {
+      const previews = () => preview({ assignment: 'CHOOSE', people: [{ id: OTHER, name: 'Luis Gómez' }, { id: id(51), name: 'Marta Ruiz' }], fields: ['Número de pago'], via: [{ name: 'Monto alto', blockType: 'CONDITION' }] });
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition-preview`]: previews, [`${base}/transition`]: () => mutation }, { fields: [], editableFieldCodes: [] }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      const summary = await within(dialog).findByRole('region', { name: 'Qué sigue' });
+      expect(summary).toHaveTextContent('Antes pasa por: Monto alto.');
+      expect(summary).toHaveTextContent('Pasa a «Tesorería».');
+      expect(summary).toHaveTextContent('Ese paso pide elegir quién lo recibe, entre 2 personas.');
+      expect(summary).toHaveTextContent('Allá se llena: Número de pago.');
+      expect(fake.callsTo(`${base}/transition-preview`)[0]?.options.body).toEqual({ transitionId: APPROVE, visitId: VISIT, values: {} });
+
+      const next = within(dialog).getByRole('combobox', { name: /Quién recibe el siguiente paso/ });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      expect(next).toHaveAccessibleDescription(/Elige quién recibe el siguiente paso\./);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+
+      await userEvent.selectOptions(next, 'Marta Ruiz');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ assigneeId: id(51) });
+    });
+
+    it('names the parallel signers, a hand-out in turns, the end, and warns when the workflow cannot go on', async () => {
+      let answer: Record<string, unknown> = preview({ assignment: 'PARALLEL', people: [{ id: OTHER, name: 'Luis Gómez' }, { id: id(51), name: 'Marta Ruiz' }] });
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition-preview`]: () => answer }, { fields: [], editableFieldCodes: [] }) });
+      const open = async () => {
+        await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+        return screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      };
+      const close = async (dialog: HTMLElement) => {
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+        await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      };
+
+      let dialog = await open();
+      expect(await within(dialog).findByText('Firman en paralelo: Luis Gómez, Marta Ruiz.')).toBeInTheDocument();
+      expect(within(dialog).queryByRole('combobox', { name: /Quién recibe/ })).toBeNull();
+      await close(dialog);
+
+      answer = preview({ assignment: 'DISPATCH', people: Array.from({ length: 7 }, (_, index) => ({ id: id(900 + index), name: `Persona ${index + 1}` })) });
+      dialog = await open();
+      expect(await within(dialog).findByText('El sistema lo reparte por turnos entre 7 personas: Persona 1, Persona 2, Persona 3, Persona 4, Persona 5 y 2 más.')).toBeInTheDocument();
+      await close(dialog);
+
+      answer = preview({ outcome: 'END', step: null, assignment: null });
+      dialog = await open();
+      expect(await within(dialog).findByText('Con esta decisión el ticket se cierra.')).toBeInTheDocument();
+      await close(dialog);
+
+      answer = preview({ outcome: 'BLOCKED', step: null, assignment: null, blocked: { code: 'NO_ASSIGNEE_CANDIDATES', details: null } });
+      dialog = await open();
+      expect(await within(dialog).findByRole('status')).toHaveTextContent(/Con esta decisión el ticket no puede seguirNadie puede recibir el paso siguiente\./);
+      expect(fake.callsTo(`${base}/transition-preview`).length).toBeGreaterThanOrEqual(4);
+    });
+
     it('picks a person among what the API offers for the field, searching a long list by name, and sends the id', async () => {
       const AUDITOR = id(7 + 200);
       const people = (path: string) => {

@@ -1,4 +1,4 @@
-import { availableCatalogResponseSchema, type CreateTicketRequest, creationFormResponseSchema, pageResponseSchema, priorityResponseSchema, ticketMutationResponseSchema } from '@procesabpm/shared';
+import { availableCatalogResponseSchema, type CreateTicketRequest, type CreationPreviewRequest, creationFormResponseSchema, pageResponseSchema, priorityResponseSchema, ticketMutationResponseSchema, transitionPreviewResponseSchema } from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import type { HttpClient } from '@/shared/api';
 
@@ -50,4 +50,9 @@ export function prioritiesQueryOptions(client: HttpClient) {
 
 export function createTicket(client: HttpClient, body: CreateTicketRequest) {
   return client.request('/tickets', { method: 'POST', body, schema: ticketMutationResponseSchema });
+}
+
+/** Where the ticket being created would go and who would get its first step, with the form as it is so far: nothing is created. */
+export function previewCreation(client: HttpClient, body: CreationPreviewRequest) {
+  return client.request('/tickets/creation-preview', { method: 'POST', body, schema: transitionPreviewResponseSchema });
 }

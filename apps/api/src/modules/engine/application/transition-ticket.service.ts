@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ExportCutoffPendingError, InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionTicketRequest } from '@procesabpm/shared';
+import { ExportCutoffPendingError, InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionPreviewRequest, type TransitionPreviewResponse, type TransitionTicketRequest } from '@procesabpm/shared';
 import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -11,6 +11,7 @@ import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { assertMayLeaveByDecision } from '../domain/close-policy.js';
 import { decisionExits } from '../domain/ticket-action-rules.js';
+import { previewOrBlocked, previewResponse } from './next-step-preview.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { SignatureCapture } from './signature-capture.js';
 import { attachmentsPlanOf } from './submission-files.js';
@@ -131,6 +132,56 @@ export class TransitionTicketService {
           : { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, mutation);
       return { id: ticket.id, number: ticket.number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId: arrival.kind === 'END' ? arrival.endStepId : arrival.step.id, openVisitId };
+    });
+  }
+
+  /**
+   * Where a decision would take the ticket and who would get it, before answering: the same checks as `transition` (the
+   * caller may act, the decision leaves this step) and the same route, read with the values typed so far. Nothing is
+   * written and the ticket is not taken from a pool.
+   */
+  preview(actor: TicketActor, ticketId: string, request: TransitionPreviewRequest): Promise<TransitionPreviewResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      const { tenantId } = this.context.require();
+      const at = this.clock.now();
+      const current = await this.loader.load(tx, tenantId, ticketId, request.visitId, actor);
+      await this.loader.assertMayAct(tx, current, actor, 'transition');
+      const { ticket } = current;
+      const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
+      const step = document.steps.find((candidate) => candidate.id === ticket.currentStepId);
+      const chosen = step === undefined ? undefined : decisionExits(document, step.id).find((transition) => transition.id === request.transitionId);
+      if (chosen === undefined || step === undefined) throw new InvalidTransitionError();
+      assertMayLeaveByDecision(step);
+      return previewOrBlocked(async () => {
+        const requiredExportId = step.config.requiredExportId;
+        if (typeof requiredExportId === 'string') {
+          const waitingFor = await this.writes.pendingExportLine(tx, tenantId, ticket.id, requiredExportId);
+          if (waitingFor !== undefined) throw new ExportCutoffPendingError(waitingFor);
+        }
+        const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
+        const actorMember = await this.people.findActiveMember(tx, tenantId, actor.userId);
+        const existing = await this.loader.valuesOf(tx, tenantId, ticket.id, document);
+        const submission = await this.submissions.previewValues(tx, { tenantId, document, stage: 'STEP', step, input: request.values, existing, company, positionId: actorMember?.positionId ?? null, at });
+        const diversion = diversionEdge(document, submission.amounts, step.id);
+        const diverted = diversion !== undefined && !(await this.writes.hasVisited(tx, tenantId, ticket.id, diversion.toStepId));
+        const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, company.calendarId, at);
+        const arrival = await this.planner.preview(tx, {
+          tenantId,
+          ticketId: ticket.id,
+          workflowVersionId: ticket.workflowVersionId,
+          document,
+          entryStepId: diverted ? diversion.toStepId : chosen.toStepId,
+          values: submission.merged,
+          companyId: ticket.companyId,
+          siteId: ticket.siteId,
+          creatorId: ticket.creatorId,
+          calendar,
+          timeZone: company.timeZone,
+          at,
+          chosenAssigneeId: undefined,
+        });
+        return previewResponse(arrival, document);
+      });
     });
   }
 
