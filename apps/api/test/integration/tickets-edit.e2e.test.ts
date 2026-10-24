@@ -89,4 +89,55 @@ describe('editing what a ticket says', () => {
     expect((await editor.client.get(`/tickets/${ticket.id}`).expect(200)).body.actions.edit).toBe(true);
     expect((await worker.client.get(`/tickets/${ticket.id}`).expect(200)).body.actions.edit).toBe(false);
   });
+
+  describe('correcting the recorded values', () => {
+    let withFields: PublishedFlow;
+    const values = async (ticketId: string) =>
+      Object.fromEntries(
+        (await db.platform.query<{ code: string; value: unknown }>(`SELECT f.code, v.value FROM ticket_field_values v JOIN fields f ON f.tenant_id = v.tenant_id AND f.id = v.field_id WHERE v.tenant_id = $1 AND v.ticket_id = $2`, [world.tenant.tenantId, ticketId])).rows.map((row) => [row.code, row.value]),
+      );
+
+    beforeAll(async () => {
+      withFields = await publishFlow(world.admin, {
+        ...simpleFlow({ assignmentMode: 'USERS' }, { candidates: [{ participantType: 'USER', userId: worker.userId }] }),
+        fields: [
+          { step: 'start', code: 'AMOUNT', type: 'CURRENCY', capture: 'CREATION', isRequired: true },
+          { step: 'start', code: 'BRANCH', type: 'TEXT', capture: 'CREATION' },
+          { step: 'start', code: 'FIXED', type: 'TEXT', capture: 'CREATION', isReadOnly: true },
+          { step: 'task', code: 'NOTE', type: 'TEXT', capture: 'STEP' },
+        ],
+        rules: [{ step: 'start', fieldCode: 'AMOUNT', maxAmount: '100000.00', action: 'BLOCK', message: 'Over the absolute limit' }],
+      });
+    });
+
+    const createWithValues = async () =>
+      (await requester.client.post('/tickets', { subcategoryId: withFields.subcategoryId, title: 'Refund', values: { AMOUNT: '1500', BRANCH: 'North' } }).expect(201)).body as { id: string; openVisitId: string };
+
+    it('changes a recorded value, validated like an answer, and keeps the previous one in the timeline', async () => {
+      const ticket = await createWithValues();
+
+      await editor.client.patch(`/tickets/${ticket.id}`, { values: { AMOUNT: '1800.50' } }).expect(200);
+
+      expect(await values(ticket.id)).toMatchObject({ AMOUNT: 1800.5, BRANCH: 'North' });
+      const edited = (await world.events(ticket.id)).filter((event) => event.type === 'FIELDS_UPDATED' && (event.data as { source?: string }).source === 'EDIT');
+      expect(edited).toHaveLength(1);
+      expect(edited[0]).toMatchObject({ actor_id: editor.userId, data: { changes: [{ code: 'AMOUNT', before: 1500, after: 1800.5 }] } });
+    });
+
+    it('refuses a field without a value, a read-only or unknown one, a wrong value and an amount over its cap', async () => {
+      const ticket = await createWithValues();
+      const refused = async (body: Record<string, unknown>) => {
+        const response = await editor.client.patch(`/tickets/${ticket.id}`, { values: body });
+        expect({ body, status: response.status }).toEqual({ body, status: 422 });
+        return response.body.error;
+      };
+
+      expect((await refused({ NOTE: 'later' })).details.issues).toEqual([{ code: 'NOT_EDITABLE', fieldCode: 'NOTE' }]);
+      expect((await refused({ NOPE: 'x' })).details.issues).toEqual([{ code: 'NOT_EDITABLE', fieldCode: 'NOPE' }]);
+      expect((await refused({ AMOUNT: 'abc' })).details.issues).toEqual([expect.objectContaining({ fieldCode: 'AMOUNT' })]);
+      expect((await refused({ AMOUNT: '200000' })).code).toBe('AMOUNT_LIMIT_EXCEEDED');
+      expect(await values(ticket.id)).toMatchObject({ AMOUNT: 1500 });
+    });
+  });
 });
+

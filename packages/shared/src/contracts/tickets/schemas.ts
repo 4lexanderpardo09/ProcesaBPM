@@ -33,13 +33,17 @@ export const createTicketRequestSchema = z.object({
 });
 export type CreateTicketRequest = z.infer<typeof createTicketRequestSchema>;
 
-/** Edits what the ticket says (`update`): its subject, its description (an HTML fragment, sanitized) and its priority. */
+/**
+ * Edits what the ticket says (`update`): its subject, its description (an HTML fragment, sanitized), its priority and
+ * the values recorded so far (only `correctableFields`, validated like an answer; a blank value leaves it as it was).
+ */
 export const editTicketRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(300),
     description: z.string().trim().max(DESCRIPTION_HTML_MAX),
     /** `null` takes the priority off. */
     priorityId: uuidSchema.nullable(),
+    values: z.record(z.string(), z.unknown()),
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');

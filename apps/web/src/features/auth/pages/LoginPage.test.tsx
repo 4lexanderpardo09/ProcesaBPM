@@ -160,8 +160,9 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Organizaciones' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/platform');
     expect(fake.callsTo('/auth/platform/select')[0]?.options.headers).toMatchObject({ Authorization: 'Bearer selection-token' });
-    expect(fake.callsTo('/platform/tenants')[0]?.options.headers).toMatchObject({ Authorization: 'Bearer platform-token' });
+    // The heading shows before the list is asked for: wait for the list, then read how it was asked.
     expect(await screen.findByRole('cell', { name: 'Pro' })).toBeInTheDocument();
+    expect(fake.callsTo('/platform/tenants')[0]?.options.headers).toMatchObject({ Authorization: 'Bearer platform-token' });
   });
 
   it('explains an account without organizations', async () => {

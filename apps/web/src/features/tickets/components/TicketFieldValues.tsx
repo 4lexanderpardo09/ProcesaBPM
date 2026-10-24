@@ -2,8 +2,9 @@ import type { FormFieldResponse, TicketFormResponse, TicketValueNamesResponse } 
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@/shared/ui';
+import { Button, Card } from '@/shared/ui';
 import { type FieldValueDisplay, fieldValueDisplay } from '../lib/field-value';
+import { EditValuesDialog } from './actions/EditValuesDialog';
 import { LoadError } from './LoadError';
 import { TableValueDialog } from './TableValueDialog';
 import styles from './TicketFieldValues.module.css';
@@ -19,15 +20,18 @@ export interface TicketFieldValuesProps {
   readonly fileNames: Readonly<Record<string, string>>;
   readonly form: UseQueryResult<TicketFormResponse>;
   readonly timeZone: string | undefined;
+  /** Whoever may edit the ticket corrects the values here. */
+  readonly canEdit?: boolean;
 }
 
 /**
  * The values captured so far, labelled by the fields of the ticket's workflow version, in the builder's order. A table
  * reads as its number of rows, which opens the rows themselves.
  */
-export function TicketFieldValues({ ticketId, values, valueNames, totals, fileNames, form, timeZone }: TicketFieldValuesProps) {
+export function TicketFieldValues({ ticketId, values, valueNames, totals, fileNames, form, timeZone, canEdit = false }: TicketFieldValuesProps) {
   const { t } = useTranslation('tickets');
   const [table, setTable] = useState<FormFieldResponse>();
+  const [editing, setEditing] = useState(false);
   const rows = [...(form.data?.fields ?? [])]
     .sort((left, right) => left.sortOrder - right.sortOrder)
     .flatMap((field) => {
@@ -36,7 +40,16 @@ export function TicketFieldValues({ ticketId, values, valueNames, totals, fileNa
     });
 
   return (
-    <Card title={t('detail.fields.title')}>
+    <Card
+      title={t('detail.fields.title')}
+      actions={
+        canEdit && form.data !== undefined ? (
+          <Button variant="ghost" onClick={() => setEditing(true)}>
+            {t('actions.editValues.open')}
+          </Button>
+        ) : undefined
+      }
+    >
       {form.isError ? (
         <LoadError error={form.error} onRetry={() => void form.refetch()} />
       ) : form.data === undefined ? (
@@ -72,6 +85,7 @@ export function TicketFieldValues({ ticketId, values, valueNames, totals, fileNa
           onClose={() => setTable(undefined)}
         />
       )}
+      {editing && form.data !== undefined && <EditValuesDialog ticketId={ticketId} form={form.data} values={values} valueNames={valueNames} fileNames={fileNames} onClose={() => setEditing(false)} />}
     </Card>
   );
 }

@@ -458,6 +458,13 @@ export const tickets = {
         submit: 'Rechazar',
       },
     },
+    editValues: {
+      open: 'Editar datos',
+      title: 'Editar datos registrados',
+      body: 'Corrige los datos que ya tiene el ticket. Los calculados se vuelven a calcular y el cambio queda en la actividad con los valores de antes.',
+      none: 'No hay datos escritos a mano para corregir.',
+      submit: 'Guardar datos',
+    },
     edit: {
       open: 'Editar',
       title: 'Editar ticket',

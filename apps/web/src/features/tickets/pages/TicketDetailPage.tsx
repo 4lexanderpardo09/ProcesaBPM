@@ -73,6 +73,7 @@ export function TicketDetailPage() {
             fileNames={Object.fromEntries((documents.data ?? []).map((document) => [document.file.id, document.file.name]))}
             form={form}
             timeZone={timeZone}
+            canEdit={ticket.actions.edit}
           />
           <TicketAttachments ticketId={ticket.id} number={ticket.number} documents={documents} timeZone={timeZone} />
           <TicketStepTimes flow={flow} timeZone={timeZone} />
