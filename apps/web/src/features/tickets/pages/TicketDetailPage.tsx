@@ -15,6 +15,7 @@ import { TicketFacts } from '../components/TicketFacts';
 import { TicketFieldValues } from '../components/TicketFieldValues';
 import { TicketParallelSignatures } from '../components/TicketParallelSignatures';
 import { TicketStepFiles } from '../components/TicketStepFiles';
+import { TicketStepInstructions } from '../components/TicketStepInstructions';
 import { TicketTagsCard } from '../components/TicketTagsCard';
 import { TicketActions } from '../components/actions/TicketActions';
 import { TicketFlow } from '../components/flow/TicketFlow';
@@ -24,7 +25,7 @@ import styles from './TicketDetailPage.module.css';
 
 const NOT_FOUND = 404;
 
-/** One ticket: its facts, its progress through the workflow, description, activity with comments, the signatures of a parallel step, the step's support files, captured values, attachments and the caller's tags. */
+/** One ticket: its facts, its progress through the workflow, the current step's instructions, description, activity with comments, the signatures of a parallel step, the step's support files, captured values, attachments and the caller's tags. */
 export function TicketDetailPage() {
   const { ticketId = '' } = useParams();
   const { t } = useTranslation('tickets');
@@ -46,6 +47,7 @@ export function TicketDetailPage() {
       </div>
       <div className={styles.columns}>
         <div className={styles.main}>
+          {ticket.status !== 'CLOSED' && <TicketStepInstructions form={form.data} />}
           <Card title={t('detail.description.title')}>
             {ticket.descriptionHtml === '' ? <p className={styles.muted}>{t('detail.description.empty')}</p> : <RichText html={ticket.descriptionHtml} />}
           </Card>

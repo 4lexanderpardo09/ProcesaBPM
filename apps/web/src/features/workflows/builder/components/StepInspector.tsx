@@ -1,8 +1,9 @@
-import { isNewRef, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { isNewRef, RICH_TEXT_MAX, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cx } from '@/shared/lib/cx';
-import { Alert, Button, Select, TextArea, TextField } from '@/shared/ui';
+import { textAsHtml } from '@/shared/lib/text-as-html';
+import { Alert, Button, isBlankRichText, RichTextEditor, Select, TextField } from '@/shared/ui';
 import { BLOCK_COLOR, isPeopleStep, NOT_AVAILABLE_TYPES } from '../lib/block-catalog';
 import type { Selection } from '../lib/builder-doc';
 import type { DraftContent } from '../hooks/use-draft-content';
@@ -64,7 +65,15 @@ export function StepInspector({ step, doc, workflowId, readOnly, problems, onCha
           }}
           onBlur={() => setName(step.name)}
         />
-        <TextArea label={t('builder.inspector.description')} maxLength={2000} rows={2} disabled={readOnly} value={step.description ?? ''} onChange={(event) => onChange({ description: event.target.value === '' ? null : event.target.value })} />
+        <RichTextEditor
+          label={t('builder.inspector.description')}
+          hint={t('builder.inspector.descriptionHint')}
+          maxLength={RICH_TEXT_MAX}
+          minHeight={80}
+          disabled={readOnly}
+          value={textAsHtml(step.description ?? '')}
+          onValueChange={(html) => onChange({ description: isBlankRichText(html) ? null : html })}
+        />
         {step.type === 'START' && <p className={styles.note}>{t('builder.start')}</p>}
         {step.type === 'END' && <p className={styles.note}>{t('builder.end')}</p>}
         {fieldsHere > 0 && <p className={styles.note}>{t('builder.inspector.fieldsCount', { count: fieldsHere })}</p>}

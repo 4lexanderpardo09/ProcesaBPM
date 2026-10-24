@@ -12,6 +12,7 @@ import {
   type WorkflowValidation,
 } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
+import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
 import { WorkflowRepository } from '../data/workflow.repository.js';
@@ -58,6 +59,8 @@ export class WorkflowGraphService {
       const steps: StepRow[] = request.steps.map((step) => ({
         ...step,
         id: stepIds.get(step.id)!,
+        // The instructions are shown on the ticket and copied into answers: only the formatting the API allows is kept.
+        description: sanitizeOptionalRichText(step.description ?? undefined),
         sameAssigneeStepId: step.sameAssigneeStepId === null ? null : (stepIds.get(step.sameAssigneeStepId) ?? null),
         config: this.normalizedConfig(step),
       }));

@@ -229,6 +229,16 @@ describe('workflows API (builder backend)', () => {
       await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [edge('new:x', c.start, 'new:ghost', 'DEFAULT')] }).expect(422);
     });
 
+    it('keeps the instructions of a block as sanitized HTML; empty ones are none', async () => {
+      const c = await newWorkflow();
+      const graph = taskGraph(c);
+      const steps = [{ ...graph.steps[0]!, description: '<p></p>' }, { ...graph.steps[1]!, description: '<h2>Revisa</h2><p onclick="x()">el <strong>extracto</strong><script>alert(1)</script></p>' }, graph.steps[2]!];
+      const saved = (await putGraph(admin, version(c), { ...graph, steps }).expect(200)).body;
+      const after = await detail(c);
+      expect(after.document.steps.find((step) => step.id === saved.idMap['new:task'])?.description).toBe('<h2>Revisa</h2><p>el <strong>extracto</strong></p>');
+      expect(after.document.steps.find((step) => step.id === c.start)?.description).toBeNull();
+    });
+
     it('a graph with problems is saved (only publishing needs a valid one) and reports them', async () => {
       const c = await newWorkflow();
       const saved = (await putGraph(admin, version(c), { steps: [stepInput(c.start, 'START'), stepInput(c.end, 'END')], transitions: [] }).expect(200)).body;
