@@ -258,6 +258,9 @@ export const tickets = {
       title: 'Descripción',
       empty: 'Sin descripción.',
     },
+    instructions: {
+      title: 'Instrucciones del paso «{{step}}»',
+    },
     activity: {
       files: 'Archivos adjuntos',
       title: 'Actividad',

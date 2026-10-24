@@ -2,6 +2,7 @@ import { type FormDecisionResponse, RICH_TEXT_MAX, type TicketDetailResponse, ty
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { textAsHtml } from '@/shared/lib/text-as-html';
 import { useApiClient, useCurrentUser } from '@/shared/session';
 import { isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { previewTransition, transitionTicket } from '../../api/ticket-actions-api';
@@ -34,7 +35,8 @@ interface AdvanceArgs {
 }
 
 /**
- * Answers the step with one of its decisions: the fields captured on this step, an optional note and loose files. Before sending,
+ * Answers the step with one of its decisions: the fields captured on this step, an optional note (it starts with the
+ * step's instructions, to complete or clear) and loose files. Before sending,
  * it says what follows (the next step, who gets it, what is filled there, or that the ticket ends or cannot go on) and,
  * when the next step needs its assignee chosen, asks for that person among its candidates.
  */
@@ -42,7 +44,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const { t } = useTranslation('tickets');
   const editable = new Set(form.editableFieldCodes);
   const fields = typedFields(form.fields.filter((field) => editable.has(field.code)));
-  const [comment, setComment] = useState('');
+  const [comment, setComment] = useState(() => textAsHtml(form.step?.description ?? ''));
   const [attachments, setAttachments] = useState<readonly string[]>([]);
   const [attaching, setAttaching] = useState(false);
   const client = useApiClient();
@@ -86,13 +88,14 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       error={stepFields.rejected ? null : next.shownError(advance.error)}
       onClose={onClose}
       onSubmit={submit}
+      size="wide"
     >
       {form.step !== null && <p className={styles.step}>{t('advance.step', { step: form.step.name })}</p>}
       {stepFields.rejected && <p className={styles.summary}>{t('advance.fixFields')}</p>}
       {fields.map((field) => (
         <StepFieldInput key={field.id} field={field} knownLabels={knownLabels} knownFiles={knownFiles} {...stepFields.inputProps(field)} />
       ))}
-      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} onValueChange={setComment} />
+      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} minHeight={180} onValueChange={setComment} />
       <FilePicker label={t('actions.attachments')} required={false} value={attachments} knownNames={knownFiles} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
       {signs && <SignatureChoice choice={signature} showMissing={submitted} />}
       <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />

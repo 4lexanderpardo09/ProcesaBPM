@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { paths, ticketPath } from '@/shared/lib/paths';
+import { textAsHtml } from '@/shared/lib/text-as-html';
 import { useApiClient, useCurrentUser } from '@/shared/session';
-import { Button, ButtonLink, Card, isBlankRichText, RichTextEditor, TextField } from '@/shared/ui';
+import { Button, ButtonLink, Card, isBlankRichText, RichText, RichTextEditor, TextField } from '@/shared/ui';
 import { createTicket, previewCreation } from '../../api/new-ticket-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
 import { choicesOfPreview, useNextStepPreview } from '../../hooks/use-next-step-preview';
@@ -98,7 +99,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
     >
       <Card title={<SectionTitle number={2} title={t('new.data.title')} />} actions={<span className={styles.hint}>{t('new.data.hint')}</span>}>
         <div className={styles.fields}>
-          {start.description !== null && start.description !== '' && <p className={styles.note}>{start.description}</p>}
+          {start.description !== null && start.description !== '' && <RichText html={textAsHtml(start.description)} />}
           {stepFields.rejected && <p className={styles.fix}>{t('advance.fixFields')}</p>}
           <TextField
             label={t('new.data.subject')}

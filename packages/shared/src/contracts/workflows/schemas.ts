@@ -17,7 +17,7 @@ import {
 import { NEW_REF_PATTERN, type AmountRuleDocument, type FieldDocument, type StepDocument, type TransitionDocument, type WorkflowVersionDocument } from '../../workflow/document.js';
 import type { WorkflowValidation } from '../../workflow/problems.js';
 import { transitionConditionSchema } from '../../workflow/transition-condition.js';
-import { nameSchema, pageQuerySchema } from '../common.js';
+import { nameSchema, pageQuerySchema, RICH_TEXT_MAX } from '../common.js';
 import { uuidSchema } from '../ids.js';
 
 /** An existing row (uuid) or one drawn on the canvas and not saved yet (`new:<name>`). */
@@ -101,7 +101,8 @@ export const stepGraphInputSchema = z
     id: blockRefSchema,
     type: z.enum(STEP_TYPES),
     name: nameSchema,
-    description: z.string().max(2000).nullable().default(null),
+    /** The step's instructions, as HTML (the API sanitizes it): shown on the ticket and put in the answer as a start. */
+    description: z.string().max(RICH_TEXT_MAX).nullable().default(null),
     assignmentMode: z.enum(ASSIGNMENT_MODES).default('NONE'),
     manualSelection: z.boolean().default(false),
     siteScope: z.enum(SITE_SCOPES).default('SAME_SITE'),

@@ -854,6 +854,22 @@ describe('TicketDetailPage', () => {
       expect(within(group).getAllByRole('button').map((button) => button.textContent)).toEqual(['Devolver', 'Aprobar y avanzar']);
     });
 
+    it('shows the step instructions on the ticket and starts the answer with them, to complete', async () => {
+      const instructions = 'Revisa el extracto\n\nLuego aprueba';
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: () => mutation }, { editableFieldCodes: [], step: { ...form.step, description: instructions } }) });
+
+      const card = (await screen.findByText('Instrucciones del paso «Validación de cartera»')).closest('section');
+      expect(card).toHaveTextContent('Revisa el extractoLuego aprueba');
+      await userEvent.click(screen.getByRole('button', { name: 'Devolver' }));
+      const dialog = screen.getByRole('dialog', { name: 'Devolver' });
+      const answer = within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' });
+      expect(Array.from(answer.querySelectorAll('p'), (paragraph) => paragraph.textContent)).toEqual(['Revisa el extracto', 'Luego aprueba']);
+      typeInEditor(answer, ': listo', { at: 'end' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ comment: '<p>Revisa el extracto</p><p>Luego aprueba: listo</p>' }));
+    });
+
     it('asks for the required data before sending, then sends the step values with the decision', async () => {
       const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: () => mutation }) });
 
