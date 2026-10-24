@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useRef } from 'react';
+import { type KeyboardEvent, useEffect, useRef } from 'react';
 import styles from './Tabs.module.css';
 
 export interface TabItem<T extends string> {
@@ -19,6 +19,16 @@ const STEP_BY_KEY: Readonly<Record<string, number>> = { ArrowRight: 1, ArrowLeft
 /** Controlled tab bar (WAI-ARIA tabs pattern: arrow keys move between tabs, only the selected one is focusable). */
 export function Tabs<T extends string>({ label, items, value, onChange }: TabsProps<T>) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
+  // On a narrow screen the row scrolls: the selected tab is kept in view (sideways only, the page does not move).
+  const selectedIndex = items.findIndex((item) => item.value === value);
+  useEffect(() => {
+    const list = listRef.current;
+    const tab = tabRefs.current[selectedIndex];
+    if (list === null || tab == null) return;
+    if (tab.offsetLeft < list.scrollLeft) list.scrollLeft = tab.offsetLeft;
+    else if (tab.offsetLeft + tab.offsetWidth > list.scrollLeft + list.clientWidth) list.scrollLeft = tab.offsetLeft + tab.offsetWidth - list.clientWidth;
+  }, [selectedIndex]);
 
   const selectAt = (index: number) => {
     const item = items[index];
@@ -37,7 +47,7 @@ export function Tabs<T extends string>({ label, items, value, onChange }: TabsPr
   };
 
   return (
-    <div role="tablist" aria-label={label} className={styles.list}>
+    <div ref={listRef} role="tablist" aria-label={label} className={styles.list}>
       {items.map((item, index) => {
         const selected = item.value === value;
         return (

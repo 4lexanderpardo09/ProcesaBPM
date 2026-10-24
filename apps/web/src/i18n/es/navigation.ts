@@ -1,5 +1,6 @@
 export const navigation = {
   mainLabel: 'Navegación principal',
+  openMenu: 'Abrir el menú',
   sections: {
     operation: 'Operación',
     configuration: 'Configuración',

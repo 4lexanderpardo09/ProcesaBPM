@@ -7,12 +7,13 @@ import { Logo } from '@/shared/ui';
 import { navigationSections } from './navigation';
 import styles from './Sidebar.module.css';
 
-export function Sidebar() {
+/** `open` matters only on narrow screens, where the sidebar is a drawer. */
+export function Sidebar({ open = false }: { readonly open?: boolean }) {
   const { t } = useTranslation('navigation');
   const { canAny } = usePermissions();
 
   return (
-    <aside className={styles.sidebar}>
+    <aside id="app-sidebar" className={cx(styles.sidebar, open && styles.open)}>
       <div className={styles.brand}>
         <Logo />
       </div>

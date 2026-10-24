@@ -1,11 +1,18 @@
 .list {
+  position: relative;
   display: flex;
   gap: 2px;
   border-bottom: 1px solid var(--line);
+  /* More tabs than fit (a phone) scroll sideways instead of widening the page. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .tab {
   display: flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   gap: 7px;
   min-height: 36px;
