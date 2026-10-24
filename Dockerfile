@@ -4,6 +4,7 @@
 #   docker build --target api     -t procesabpm-api .      the HTTP API
 #   docker build --target worker  -t procesabpm-worker .   the outbox worker and the schedulers
 #   docker build --target migrate -t procesabpm-migrate .  applies the migrations (and loads the global catalog)
+#   docker build --target web     -t procesabpm-web .      the web app: static files served by Caddy, behind the proxy that sends /api to the API
 #   docker build -f Dockerfile.test-unit -t procesabpm-test-unit .  the unit tests (Dockerfile.test-unit, deploy/verify.sh); never deployed
 #
 # The Node image is pinned by version and digest: a tag can move, a digest cannot. Update both together.
@@ -46,6 +47,22 @@ RUN cd /out/api/node_modules/.pnpm \
 FROM build AS deploy-migrate
 RUN --mount=type=secret,id=extra-ca,required=false --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm --filter @procesabpm/migrate --prod --legacy deploy /out/migrate \
  && cp /out/migrate/node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines/schema-engine-* /out/migrate/schema-engine
+
+# --- Build of the web: its own install (web and shared only), so the API layers do not depend on the web's ------------
+FROM ${NODE_IMAGE} AS build-web
+ENV CI=true PNPM_HOME=/pnpm PATH=/pnpm:$PATH NODE_EXTRA_CA_CERTS=/run/secrets/extra-ca
+RUN --mount=type=secret,id=extra-ca,required=false npm install --global --no-fund --no-audit pnpm@11.20.0
+WORKDIR /repo
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/
+COPY packages/shared/package.json packages/shared/
+RUN --mount=type=secret,id=extra-ca,required=false --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --filter '@procesabpm/web...'
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+# The design tokens and logos the web imports through its `@design` alias.
+COPY docs/diseno docs/diseno
+COPY apps/web apps/web
+RUN pnpm --filter @procesabpm/web build
 
 # --- Runtime base: no package manager, no shell tooling beyond the image's, a non-root user -------------------------
 FROM ${NODE_IMAGE} AS runtime
@@ -96,3 +113,17 @@ COPY --from=build --chown=root:root /repo/dist/seed ./seed
 # DATABASE_URL must be the login of the schema owner. To load the global catalog instead (with an app_platform login):
 #   docker run --rm -e DATABASE_URL=... procesabpm-migrate node seed/seed.js (or seed/create-platform-admin.js)
 CMD ["./node_modules/.bin/prisma", "migrate", "deploy"]
+
+# --- web -----------------------------------------------------------------------------------------------------------
+# Static files only: no Node at run time. Caddy is pinned by version and digest, like Node.
+FROM caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d AS web
+# Caddy keeps nothing between runs here (no certificates: TLS is the outer proxy's), so its folders live in /tmp.
+ENV XDG_CONFIG_HOME=/tmp XDG_DATA_HOME=/tmp
+# The image's binary carries the file capability to bind ports below 1024, which no-new-privileges refuses to exec. This one
+# listens on 8080 and needs none: a plain copy drops it.
+RUN cp /usr/bin/caddy /usr/bin/caddy.plain && mv /usr/bin/caddy.plain /usr/bin/caddy
+COPY --chown=root:root deploy/web.Caddyfile /etc/caddy/Caddyfile
+COPY --from=build-web --chown=root:root /repo/apps/web/dist /srv
+USER nobody
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]

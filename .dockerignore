@@ -15,6 +15,9 @@
 **/*.test.ts
 **/vitest.config.ts
 docs
+# …except the design tokens and logos the web build imports.
+!docs/diseno
+docs/diseno/mockups
 **/*.md
 !apps/api/assets/**/*.md
 docker-compose*.yml

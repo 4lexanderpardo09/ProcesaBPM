@@ -7,7 +7,7 @@
 #   cp deploy/example.env .env && $EDITOR .env      # every ${VAR:?} below must be set
 #   docker compose -f docker-compose.prod.example.yml up -d
 #
-# Order of startup, enforced with depends_on:  postgres -> migrate -> roles -> seed -> api, worker.
+# Order of startup, enforced with depends_on:  postgres -> migrate -> roles -> seed -> api, worker. The web has no dependency.
 #
 # Upgrading a running deployment: `up -d` alone runs migrate while the OLD worker is still working. Stop it first
 # (docs/despliegue.md §5; required for migration 20261017000000, which changes the outbox claim protocol):
@@ -119,6 +119,14 @@ services:
     depends_on:
       seed: { condition: service_completed_successfully }
     stop_grace_period: 30s
+
+  # The web app (static files). The reverse proxy sends /api/* (and the /api/realtime WebSocket) to the API and the rest
+  # here, on one origin: the refresh cookie (Path=/api/auth) only works that way. Example Caddyfile: deploy/Caddyfile.example.
+  web:
+    image: procesabpm-web:${IMAGE_TAG:-latest}
+    build: { context: ., target: web }
+    <<: *hardening
+    ports: ['127.0.0.1:8080:8080']
 
   worker:
     image: procesabpm-worker:${IMAGE_TAG:-latest}

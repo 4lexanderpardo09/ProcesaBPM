@@ -19,11 +19,14 @@
 #   MAILPIT_URL      the mail catcher, as seen from the compose network (default http://mailpit:8025)
 #   SMOKE_PLAN_CODE  plan of the smoke organization            (default professional)
 #   TEST_IMAGE       tag of the unit test image                (default procesabpm-test-unit)
+#   WEB_URL          where the web answers; the web container from the host by default. Use the public https address to
+#                    test the reverse proxy too                (default http://127.0.0.1:8080)
 set -uo pipefail
 
 COMPOSE_FILE=${COMPOSE_FILE:-docker-compose.prod.example.yml}
 ENV_FILE=${ENV_FILE:-.env}
 BASE_URL=${BASE_URL:-http://api:3000}
+WEB_URL=${WEB_URL:-http://127.0.0.1:8080}
 MAILPIT_URL=${MAILPIT_URL:-http://mailpit:8025}
 TEST_IMAGE=${TEST_IMAGE:-procesabpm-test-unit}
 run_unit=1
@@ -81,6 +84,18 @@ if [ "$run_smoke" -eq 1 ]; then
       result "smoke test" $?
     fi
   fi
+fi
+
+if [ "$run_smoke" -eq 1 ]; then
+  section "Web at $WEB_URL"
+  index=$(curl -fsS --max-time 10 "$WEB_URL/" 2>&1)
+  grep -q '<div id="root">' <<<"$index"
+  result "the app's index.html" $?
+  curl -fsS --max-time 10 "$WEB_URL/tickets/verify" 2>&1 | grep -q '<div id="root">'
+  result "a route of the app opens the app" $?
+  bundle=$(grep -o '/assets/[^"]*\.js' <<<"$index" | head -n 1)
+  [ -n "$bundle" ] && curl -fsS --max-time 10 -o /dev/null "$WEB_URL$bundle"
+  result "the app's bundle${bundle:+ ($bundle)}" $?
 fi
 
 section "Disk"

@@ -159,6 +159,22 @@ jobs:
           cache-from: type=gha,scope=images-migrate
           cache-to: type=gha,scope=images-migrate,mode=max
 
+      - name: Build web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          load: true
+          push: false
+          tags: procesabpm-web:ci
+          cache-from: type=gha,scope=images-web
+          cache-to: type=gha,scope=images-web,mode=max
+
+      - name: Smoke test the web image
+        run: scripts/smoke-web-image.sh
+        env:
+          WEB_IMAGE: procesabpm-web:ci
+
       # The image deploy/verify.sh runs on the server: the unit tests of shared and the API inside a 2 GB container.
       - name: Build the unit test image and check it holds the tests
         run: |
