@@ -1,4 +1,4 @@
-export { type AccessToken, type SessionIdentity } from './access-token';
+export { type AccessToken, decodeIdentity, type SessionIdentity } from './access-token';
 export { createInProcessLock, createWebLock, type ExclusiveLock } from './exclusive-lock';
 export { createRefreshCoordinator, type RefreshCoordinator } from './refresh-coordinator';
 export { SessionProvider, useSessionManager } from './react/SessionContext';
@@ -6,7 +6,7 @@ export { type Permission, type PermissionCheck } from './permissions';
 export { useApiClient, useCurrentUser, usePermissions, useSessionState } from './react/use-session';
 export { createBroadcastSessionChannel, type SessionChannel } from './session-channel';
 export { currentUserQueryKey, myPermissionsQueryKey } from './session-api';
-export { type MaintenanceDetails, type SessionBlock, type SignOutReason } from './session-errors';
+export { type MaintenanceDetails, type SessionBlock, SessionEndedError, type SignOutReason } from './session-errors';
 export { createSessionManager, type SessionManager } from './session-manager';
 export { setSwitchDestination, takeSwitchDestination } from './switch-destination';
 export { type SessionState } from './session-state';

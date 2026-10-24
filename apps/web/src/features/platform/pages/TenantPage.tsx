@@ -11,6 +11,7 @@ import { PlatformError } from '../components/PlatformError';
 import { formatStorage } from '../lib/storage-units';
 import { TenantStatusBadge } from '../components/TenantStatusBadge';
 import { usePlatformClient } from '../session/PlatformSessionContext';
+import { SupportVisitCard } from '../visit/SupportVisitCard';
 import styles from './Platform.module.css';
 
 const bytes = (text: string) => formatStorage(text);
@@ -53,6 +54,7 @@ export function TenantPage() {
             <Fact label={t('tenant.storage')} value={`${t('tenant.storageUsed', { used: bytes(data.storage.usedBytes), limit: bytes(data.storage.limitBytes) })} · ${t(`tenant.storageStates.${data.storage.state}`)}`} />
           </dl>
         </Card>
+        <SupportVisitCard tenant={data} />
         <TenantActions tenant={data} />
       </div>
     </>

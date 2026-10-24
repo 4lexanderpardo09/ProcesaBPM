@@ -1,0 +1,28 @@
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  min-width: 0;
+}
+
+.name {
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.until {
+  color: var(--slate);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .until {
+    display: none;
+  }
+}

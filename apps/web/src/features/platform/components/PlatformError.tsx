@@ -3,7 +3,7 @@ import { ApiError, genericErrorMessage } from '@/shared/api';
 import { Alert, Button } from '@/shared/ui';
 
 /** The API's refusals the console explains; anything else reads as the generic message (no connection, unexpected). */
-const KNOWN = ['DUPLICATE', 'INVALID_STATE', 'NOT_FOUND', 'VALIDATION_FAILED', 'INVALID_REFERENCE'] as const;
+const KNOWN = ['DUPLICATE', 'INVALID_STATE', 'NOT_FOUND', 'VALIDATION_FAILED', 'INVALID_REFERENCE', 'SUPPORT_ACCESS_NOT_GRANTED'] as const;
 type Known = (typeof KNOWN)[number];
 const isKnown = (code: string): code is Known => (KNOWN as readonly string[]).includes(code);
 
