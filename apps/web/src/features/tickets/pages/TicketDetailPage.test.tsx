@@ -838,6 +838,24 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo('/error-types')[0]?.path).toBe('/error-types?pageSize=100');
     });
 
+    it('corrects a recorded value, sending only what changed, and offers only the values typed by people', async () => {
+      const { fake } = renderRoute(base, {
+        handlers: ticketHandlers({ [base]: (options) => (options.method === 'PATCH' ? { eventId: id(741) } : detail({ actions: allowed('edit') })) }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Editar datos' }));
+      const dialog = screen.getByRole('dialog', { name: 'Editar datos registrados' });
+      // «Observaciones» has no value: there is nothing recorded to correct.
+      expect(within(dialog).queryByRole('textbox', { name: /Observaciones/ })).toBeNull();
+      const amount = within(dialog).getByRole('textbox', { name: /Monto/ });
+      await userEvent.clear(amount);
+      await userEvent.type(amount, '1.300.000');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar datos' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(base).find((call) => call.options.method === 'PATCH')?.options.body).toEqual({ values: { amount: '1300000' } }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Editar datos registrados' })).toBeNull());
+    });
+
     it('edits the subject and the priority, sending only what changed and keeping the rich description untouched', async () => {
       const priorities = { items: [{ id: id(730), name: 'Alta', sortOrder: 1, color: null, isActive: true }, { id: id(731), name: 'Retirada', sortOrder: 2, color: null, isActive: false }], page: 1, pageSize: 100, total: 2 };
       const { fake } = renderRoute(base, {

@@ -30,6 +30,8 @@ export interface SubmissionRequest {
   readonly stage: 'CREATION' | 'STEP';
   /** The block being answered (the START block when the ticket is created). */
   readonly step: StepDocument;
+  /** The fields this submission may fill, when not the ones the stage captures on `step` (a correction of recorded values). */
+  readonly fields?: readonly FieldDocument[];
   readonly input: Readonly<Record<string, unknown>>;
   /** What the ticket already holds, by field code. */
   readonly existing: Readonly<Record<string, unknown>>;
@@ -97,7 +99,7 @@ export class SubmissionValidator {
 
   async validate(tx: TenantTransaction, request: SubmissionRequest): Promise<Submission> {
     const { document, step } = request;
-    const fields = captureFieldsFor(document.fields, request.stage, step.id);
+    const fields = request.fields ?? captureFieldsFor(document.fields, request.stage, step.id);
     const captured = validateCapturedValues({ fields, input: request.input, existing: request.existing, context: { today: localDateIn(request.company.timeZone, request.at), now: request.at.toISOString() } });
     const issues: FieldValueIssue[] = [...captured.issues];
     if (issues.length === 0) {

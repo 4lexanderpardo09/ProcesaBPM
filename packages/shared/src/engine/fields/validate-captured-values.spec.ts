@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { field } from '../../workflow/test-builders.js';
 import { fileIdsOf, holdsFiles } from './normalize-value.js';
-import { captureFieldsFor, validateCapturedValues } from './validate-captured-values.js';
+import { captureFieldsFor, correctableFields, validateCapturedValues } from './validate-captured-values.js';
 
 const context = { today: '2026-10-05' };
 const run = (fields: ReturnType<typeof field>[], input: Record<string, unknown>, existing: Record<string, unknown> = {}) => validateCapturedValues({ fields, input, existing, context });
@@ -172,5 +172,20 @@ describe('validateCapturedValues', () => {
       expect(codes(run([required], { F: [] }))).toEqual(['F:REQUIRED']);
       expect(codes(run([required], { F: [] }, { F: [first] }))).toEqual([]);
     });
+  });
+});
+
+describe('correctableFields', () => {
+  it('keeps the typed fields with a value: not computed, file, read-only or empty ones', () => {
+    const fields = [
+      field('a', 's', 'AMOUNT', { type: 'CURRENCY' }),
+      field('b', 's', 'TOTAL', { type: 'FORMULA' }),
+      field('c', 's', 'RECEIPT', { type: 'FILE' }),
+      field('d', 's', 'FIXED', { isReadOnly: true }),
+      field('e', 's', 'NOTE'),
+      field('f', 's', 'EMPTY'),
+    ];
+    const values = { AMOUNT: 10, TOTAL: 20, RECEIPT: ['x'], FIXED: 'y', NOTE: 'ok', EMPTY: '' };
+    expect(correctableFields(fields, values).map((entry) => entry.code)).toEqual(['AMOUNT', 'NOTE']);
   });
 });

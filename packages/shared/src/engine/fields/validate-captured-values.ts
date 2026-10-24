@@ -1,6 +1,6 @@
 import type { FieldValueIssue } from '../../errors/domain-error.js';
 import type { FieldDocument } from '../../workflow/document.js';
-import { isBlankValue, normalizeTable, normalizeValue } from './normalize-value.js';
+import { holdsFiles, isBlankValue, normalizeTable, normalizeValue } from './normalize-value.js';
 import type { CapturedValues, ReferenceToVerify, ValidationContext } from './types.js';
 
 /** Fields whose value the engine computes: a client value is ignored, never stored. */
@@ -27,6 +27,15 @@ function currentValueFor(field: FieldDocument, context: ValidationContext): stri
 export function captureFieldsFor(fields: readonly FieldDocument[], stage: 'CREATION' | 'STEP', stepId: string): readonly FieldDocument[] {
   const accepted = stage === 'CREATION' ? ['CREATION', 'BOTH'] : ['STEP', 'BOTH'];
   return fields.filter((field) => field.stepId === stepId && accepted.includes(field.capture));
+}
+
+/**
+ * The recorded values that can be corrected afterwards ("Editar datos registrados"): the fields with a value that people
+ * type. Computed fields follow their inputs, files are replaced by answering the step again, and read-only ones are not
+ * typed by anyone.
+ */
+export function correctableFields<T extends Pick<FieldDocument, 'code' | 'type' | 'config' | 'isReadOnly'>>(fields: readonly T[], values: Readonly<Record<string, unknown>>): readonly T[] {
+  return fields.filter((field) => !COMPUTED_FIELD_TYPES.has(field.type) && !holdsFiles(field) && !field.isReadOnly && !isBlankValue(values[field.code]));
 }
 
 /**
