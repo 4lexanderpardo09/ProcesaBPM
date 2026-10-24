@@ -78,6 +78,8 @@ export const profile = {
     alt: 'Tu firma',
     file: 'Imagen de la firma',
     upload: 'Subir firma',
+    draw: 'Dibujar firma',
+    drawTitle: 'Dibuja tu firma',
     replace: 'Cambiar firma',
     uploading: 'Subiendo…',
     remove: 'Quitar firma',

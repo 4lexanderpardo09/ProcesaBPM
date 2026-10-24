@@ -191,6 +191,27 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
     });
   });
 
+  describe('a signature drawn when answering a step', () => {
+    it('records the signer’s own image for the step instead of the profile one, and refuses one that is not an image or not theirs', async () => {
+      const signed = await publishFlow(world.admin, simpleFlow({ assignmentMode: 'USERS' }, { candidates: [user(worker)] }));
+      const ticket = (await create({}, requester, signed)).body as { id: string; openVisitId: string };
+      const advance = (signatureFileId: string) => worker.client.post(`/tickets/${ticket.id}/transition`, { transitionId: signed.transition.Done, visitId: ticket.openVisitId, values: {}, signatureFileId });
+
+      const notImage = await upload(worker, 'firma.pdf');
+      expect((await advance(notImage)).body.error).toMatchObject({ code: 'ATTACHMENTS_INVALID', details: { issues: [{ fileId: notImage, code: 'FILE_TYPE_NOT_ACCEPTED' }] } });
+      const theirs = await upload(requester, 'firma.png', png());
+      expect((await advance(theirs)).body.error.details.issues).toEqual([{ fileId: theirs, code: 'FILE_NOT_ATTACHABLE' }]);
+
+      const drawn = await upload(worker, 'firma.png', png());
+      expectStatus(await advance(drawn), 200);
+      const rows = (await db.platform.query<{ user_id: string; file_id: string; is_parallel: boolean }>('SELECT user_id, file_id, is_parallel FROM ticket_signatures WHERE ticket_id = $1', [ticket.id])).rows;
+      expect(rows).toEqual([{ user_id: worker.userId, file_id: drawn, is_parallel: false }]);
+      expect((await fileRow(drawn)).linked_at).not.toBeNull();
+      // It is the step's signature, not one more attachment of the ticket.
+      expect((await documentsOf(ticket.id)).map((document) => document.file.id)).not.toContain(drawn);
+    });
+  });
+
   describe('advancing, commenting and closing', () => {
     let ticketId: string;
     let visitId: string;

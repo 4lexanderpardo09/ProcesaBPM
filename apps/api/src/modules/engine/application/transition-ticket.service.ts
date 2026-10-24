@@ -12,6 +12,7 @@ import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { assertMayLeaveByDecision } from '../domain/close-policy.js';
 import { decisionExits } from '../domain/ticket-action-rules.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
+import { SignatureCapture } from './signature-capture.js';
 import { attachmentsPlanOf } from './submission-files.js';
 import { diversionEdge, submissionEvents, SubmissionValidator } from './submission-validator.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
@@ -37,6 +38,7 @@ export class TransitionTicketService {
     @Inject(ArrivalPlanner) private readonly planner: ArrivalPlanner,
     @Inject(TicketSlaService) private readonly sla: TicketSlaService,
     @Inject(TicketMutationApplier) private readonly applier: TicketMutationApplier,
+    @Inject(SignatureCapture) private readonly signatures: SignatureCapture,
   ) {}
 
   transition(actor: TicketActor, ticketId: string, request: TransitionTicketRequest): Promise<TicketMutationResponse> {
@@ -76,6 +78,10 @@ export class TransitionTicketService {
         uploaderId: actor.userId,
         attachmentIds: request.attachments,
       });
+
+      if (request.signatureFileId !== undefined) {
+        await this.signatures.record(tx, tenantId, { ticketId: ticket.id, companyId: ticket.companyId, stepId: step.id, loop: visit.loop, userId: actor.userId, fileId: request.signatureFileId, isParallel: false, at });
+      }
 
       const diversion = diversionEdge(document, submission.amounts, step.id);
       const diverted = diversion !== undefined && !(await this.writes.hasVisited(tx, tenantId, ticket.id, diversion.toStepId));

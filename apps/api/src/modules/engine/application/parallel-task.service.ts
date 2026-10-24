@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  InvalidReferenceError,
   CommentRequiredError,
   type ParallelTaskActionRequest,
   RejectionNotAllowedError,
@@ -17,6 +18,7 @@ import { signatureRefusal } from '../domain/ticket-action-rules.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
+import { SignatureCapture } from './signature-capture.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 import { TicketSlaService } from './ticket-sla.service.js';
 
@@ -39,6 +41,7 @@ export class ParallelTaskService {
     @Inject(ArrivalPlanner) private readonly planner: ArrivalPlanner,
     @Inject(TicketSlaService) private readonly sla: TicketSlaService,
     @Inject(TicketMutationApplier) private readonly applier: TicketMutationApplier,
+    @Inject(SignatureCapture) private readonly signatures: SignatureCapture,
   ) {}
 
   sign(actor: TicketActor, ticketId: string, request: ParallelTaskActionRequest): Promise<TicketMutationResponse> {
@@ -85,6 +88,10 @@ export class ParallelTaskService {
         outbox: [{ type: 'ticket.parallel_task_completed', payload: { taskId, status } }],
       });
 
+      if (request.signatureFileId !== undefined) {
+        if (action !== 'SIGN') throw new InvalidReferenceError('A signature goes with signing, not with rejecting');
+        await this.signatures.record(tx, tenantId, { ticketId: ticket.id, companyId: ticket.companyId, stepId: step.id, loop: visit.loop, userId: actor.userId, fileId: request.signatureFileId, isParallel: true, at });
+      }
       await this.writes.completeParallelTask(tx, tenantId, mine.id, action === 'SIGN' ? 'SIGNED' : 'REJECTED', at, comment);
       const events: EventPlan[] = [taskEvent(mine.id, actor.userId, action === 'SIGN' ? 'SIGNED' : 'REJECTED')];
 

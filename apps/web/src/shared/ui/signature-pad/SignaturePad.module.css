@@ -1,0 +1,12 @@
+.pad {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 480 / 180;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  cursor: crosshair;
+  /* The finger draws instead of scrolling the page. */
+  touch-action: none;
+}

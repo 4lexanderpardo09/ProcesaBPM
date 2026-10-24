@@ -204,6 +204,11 @@ export class TicketWriteRepository {
     await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { status, completedAt, comment } });
   }
 
+  /** The signature drawn when answering a step: the step's documents show it instead of the profile one. */
+  async insertSignature(tx: TenantTransaction, tenantId: string, signature: { ticketId: string; stepId: string; loop: number; userId: string; fileId: string; isParallel: boolean; signedAt: Date }): Promise<void> {
+    await tx.ticketSignature.create({ data: { tenantId, ...signature } });
+  }
+
   async moveParallelTask(tx: TenantTransaction, tenantId: string, taskId: string, toUserId: string): Promise<void> {
     await tx.ticketParallelTask.updateMany({ where: { tenantId, id: taskId, status: 'PENDING' }, data: { userId: toUserId } });
   }

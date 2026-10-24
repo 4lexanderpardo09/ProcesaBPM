@@ -604,7 +604,8 @@ export class FileRejectedError extends DomainError {
 
 export interface AttachmentIssue {
   readonly fileId: string;
-  readonly code: 'FILE_NOT_ATTACHABLE';
+  /** `FILE_TYPE_NOT_ACCEPTED`: a signature drawn or chosen when signing must be a PNG or JPEG image. */
+  readonly code: 'FILE_NOT_ATTACHABLE' | 'FILE_TYPE_NOT_ACCEPTED';
 }
 
 export class AttachmentsInvalidError extends DomainError {
