@@ -60,7 +60,8 @@ export function SectionNav({ container }: { readonly container: RefObject<HTMLEl
           aria-label={t('builder.sections.goTo', { title })}
           onClick={() => {
             sections.expand(title);
-            requestAnimationFrame(() => container.current?.querySelector(`[data-section="${CSS.escape(title)}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+            // `scrollIntoView` is optional: test DOMs (jsdom) do not have it.
+            requestAnimationFrame(() => container.current?.querySelector(`[data-section="${CSS.escape(title)}"]`)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }));
           }}
         >
           {title}
