@@ -101,9 +101,12 @@ export interface TicketMutation {
   readonly fieldWrites: readonly FieldWrite[];
   readonly closing?: { readonly visit: ClosedVisit; readonly clocks: readonly ClosedClock[] };
   readonly arrival?: ArrivalPlan;
-  /** `current` moves the ticket to a people step; `closed` ends it. */
+  /**
+   * `current` moves the ticket to a people step (`batchId`: it was answered in a batch, see `tickets.batch_id`); `closed`
+   * ends it.
+   */
   readonly ticket:
-    | { readonly kind: 'current'; readonly stepId: string; readonly loop: number }
+    | { readonly kind: 'current'; readonly stepId: string; readonly loop: number; readonly batchId?: string }
     | { readonly kind: 'closed'; readonly stepId: string | null; readonly forced?: boolean }
     /** The ticket stays where it is: only events are written (an error that is just recorded). */
     | { readonly kind: 'unchanged' }

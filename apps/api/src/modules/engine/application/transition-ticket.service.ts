@@ -42,7 +42,8 @@ export class TransitionTicketService {
     @Inject(SignatureCapture) private readonly signatures: SignatureCapture,
   ) {}
 
-  transition(actor: TicketActor, ticketId: string, request: TransitionTicketRequest): Promise<TicketMutationResponse> {
+  /** `batchId`: the ticket is answered with others in one batch ("procesar en lote"), which it keeps at its next step. */
+  transition(actor: TicketActor, ticketId: string, request: TransitionTicketRequest, batchId?: string): Promise<TicketMutationResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
@@ -129,7 +130,7 @@ export class TransitionTicketService {
       const mutation: TicketMutation =
         arrival.kind === 'END'
           ? { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, ticket: { kind: 'closed', stepId: arrival.endStepId }, events }
-          : { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop }, events };
+          : { at, actorId: actor.userId, fieldWrites: [...submission.fieldWrites, ...arrival.computed.fieldWrites], closing: closed, arrival: arrival.plan, ticket: { kind: 'current', stepId: arrival.step.id, loop: arrival.plan.visit.loop, ...(batchId === undefined ? {} : { batchId }) }, events };
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticket.id, workflowVersionId: ticket.workflowVersionId, companyId: ticket.companyId }, mutation);
       return { id: ticket.id, number: ticket.number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId: arrival.kind === 'END' ? arrival.endStepId : arrival.step.id, openVisitId };
     });

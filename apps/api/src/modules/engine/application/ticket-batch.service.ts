@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { type BatchTransitionRequest, type BatchTransitionResponse, type BatchTransitionResult, DomainError, NotFoundError, type TicketBatchGroup } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
@@ -73,8 +74,10 @@ export class TicketBatchService {
     });
   }
 
+  /** The tickets moved share a batch id, so a RANDOM_DISPATCH step they reach hands them to one person. */
   async transition(actor: TicketActor, request: BatchTransitionRequest): Promise<BatchTransitionResponse> {
     const refusals = await this.refusals(actor, request);
+    const batchId = randomUUID();
     const results: BatchTransitionResult[] = [];
     for (const item of request.items) {
       const refused = refusals.get(item.ticketId);
@@ -89,7 +92,7 @@ export class TicketBatchService {
           values: request.values,
           attachments: [],
           ...(request.comment === undefined ? {} : { comment: request.comment }),
-        });
+        }, batchId);
         results.push({ ticketId: item.ticketId, ok: true, ticket });
       } catch (error) {
         if (!(error instanceof DomainError)) this.logger.error(error, 'TicketBatchService');

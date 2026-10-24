@@ -881,7 +881,6 @@ model Membership {
   auditLogs               AuditLog[]
   textTemplates           TextTemplate[]
   textTemplateShares      TextTemplateShare[]
-  stepRuntimeStates       StepRuntimeState[]
   dataExportsRequested    TenantDataExport[]
 
   @@id([tenantId, userId])
@@ -1499,20 +1498,17 @@ model Step {
   @@map("steps")
 }
 
-/// Operational state of a step, kept apart from its (immutable) configuration:
-/// last random-dispatch run and the round-robin pointer.
+/// Operational state of a step, kept apart from its (immutable) configuration: the last random-dispatch run. Its row
+/// is also what a dispatch locks, so two runs never serve the same step at once.
 model StepRuntimeState {
-  tenantId           String    @map("tenant_id") @db.Uuid
-  stepId             String    @map("step_id") @db.Uuid
-  lastDispatchAt     DateTime? @map("last_dispatch_at") @db.Timestamptz(3)
-  lastAssignedUserId String?   @map("last_assigned_user_id") @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  stepId         String    @map("step_id") @db.Uuid
+  lastDispatchAt DateTime? @map("last_dispatch_at") @db.Timestamptz(3)
 
-  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  step             Step        @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: Cascade)
-  lastAssignedUser Membership? @relation(fields: [tenantId, lastAssignedUserId], references: [tenantId, userId], onDelete: NoAction)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  step   Step   @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: Cascade)
 
   @@id([tenantId, stepId])
-  @@index([tenantId, lastAssignedUserId])
   @@map("step_runtime_states")
 }
 
@@ -1825,6 +1821,8 @@ model Ticket {
   closedAt          DateTime?                @map("closed_at") @db.Timestamptz(3)
   closedById        String?                  @map("closed_by_id") @db.Uuid
   forcedClose       Boolean                  @default(false) @map("forced_close")
+  /// Shared by the tickets answered together in one batch, until each moves on its own (RANDOM_DISPATCH keeps them together).
+  batchId           String?                  @map("batch_id") @db.Uuid
   createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt         DateTime?                @map("deleted_at") @db.Timestamptz(3)

@@ -537,7 +537,7 @@ export const tickets = {
       PERSON: 'Lo recibe {{names}}.',
       POOL: 'Lo puede tomar cualquiera de estas personas: {{names}}.',
       PARALLEL: 'Firman en paralelo: {{names}}.',
-      DISPATCH: 'El sistema lo reparte por turnos entre {{count}} personas: {{names}}.',
+      DISPATCH: 'El sistema se lo da a quien tenga menos tickets abiertos en el paso, entre {{count}} personas: {{names}}.',
       CHOOSE: 'Ese paso pide elegir quién lo recibe, entre {{count}} personas. Elígelo abajo.',
     },
     blocked: {

@@ -9,7 +9,7 @@ export const TICKETS_READERS = {
     page: (tenantId, [id], limit) => Prisma.sql`
       SELECT tenant_id, id, number, workflow_id, workflow_version_id, subcategory_id, priority_id, company_id,
              department_id, site_id, creator_id, registered_by_id, title, description_html, status,
-             current_step_id, current_loop, closed_at, closed_by_id, forced_close, created_at, updated_at,
+             current_step_id, current_loop, closed_at, closed_by_id, forced_close, batch_id, created_at, updated_at,
              deleted_at
       FROM tickets WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
