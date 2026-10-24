@@ -1,10 +1,10 @@
-import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isBlankRichText, RichTextEditor } from '@/shared/ui';
+import { isBlankRichText } from '@/shared/ui';
 import { closeTicket } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { FilePicker } from '../advance/FileInput';
+import { ResponseEditor } from '../ResponseEditor';
 import { ActionDialog } from './ActionDialog';
 
 interface CloseArgs {
@@ -32,7 +32,7 @@ export function CloseDialog({ ticketId, visitId, onClose }: { readonly ticketId:
       onSubmit={() => close.mutate({ comment, attachments }, { onSuccess: onClose })}
     >
       <p>{t('actions.close.body')}</p>
-      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} onValueChange={setComment} />
+      <ResponseEditor label={t('actions.optionalComment')} value={comment} onValueChange={setComment} />
       <FilePicker label={t('actions.closingAttachments')} required={false} value={attachments} knownNames={{}} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
     </ActionDialog>
   );

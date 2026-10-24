@@ -366,6 +366,17 @@ describe('TicketDetailPage', () => {
     expect(screen.queryByRole('dialog', { name: 'comprobante-pago.pdf' })).toBeNull();
   });
 
+  it('downloads the PDF instead when it cannot be shown in the window', async () => {
+    vi.mocked(loadPdf).mockRejectedValueOnce(new Error('CORS'));
+    renderRoute(base, { handlers: ticketHandlers({ [`${base}/files/${FILE}/download-url`]: () => ({ url: 'https://files.example/comprobante?sig=1', expiresAt: at }) }) });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver comprobante-pago.pdf' }));
+
+    expect(await screen.findByText('No se pudo mostrar el PDF aquí: se descargó para que lo abras.')).toBeInTheDocument();
+    await vi.waitFor(() => expect(openDownload).toHaveBeenCalledTimes(1));
+    expect(openDownload).toHaveBeenCalledWith('https://files.example/comprobante?sig=1');
+  });
+
   it('says per step when the ticket got there and left, and whether in time', async () => {
     const visits = [
       { stepId: STEP, loop: 1, enteredAt: '2026-10-01T13:00:00.000Z', exitedAt: '2026-10-03T13:00:00.000Z', dueAt: '2026-10-02T13:00:00.000Z', result: 'LATE' },
@@ -702,6 +713,18 @@ describe('TicketDetailPage', () => {
       vi.unstubAllGlobals();
     });
 
+    it('closes the ticket with a closing note taken from a text template', async () => {
+      const templates = () => [{ id: id(398), title: 'Cierre', bodyHtml: '<p>Caso resuelto.</p>', isOwner: true, ownerId: id(397), ownerName: 'Olga Pérez', updatedAt: at }];
+      const { fake } = renderRoute(base, { handlers: withActions(allowed('close'), { '/text-templates': templates, [`${base}/close`]: () => mutation }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Cerrar ticket' }));
+      const dialog = screen.getByRole('dialog', { name: 'Cerrar ticket' });
+      await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Insertar plantilla' }), 'Cierre');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar ticket' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/close`)[0]?.options.body).toMatchObject({ comment: '<p>Caso resuelto.</p>' }));
+    });
+
     it('closes the ticket and keeps the dialog open with the reason when the API refuses', async () => {
       const { fake } = renderRoute(base, { handlers: withActions(allowed('close'), { [`${base}/close`]: forbidden }) });
 
@@ -929,6 +952,25 @@ describe('TicketDetailPage', () => {
       await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ comment: '<p>Revisa el extracto</p><p>Luego aprueba: listo</p>' }));
+    });
+
+    it('does not send the instructions untouched: they are completed or cleared', async () => {
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: () => mutation }, { editableFieldCodes: [], step: { ...form.step, description: 'Revisa el extracto' } }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Devolver' }));
+      const dialog = screen.getByRole('dialog', { name: 'Devolver' });
+      const answer = within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+      expect(answer).toHaveAccessibleDescription(/Completa o cambia las instrucciones del paso/);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Limpiar' }));
+      expect(answer).toHaveTextContent('');
+      expect(answer).not.toHaveAttribute('aria-invalid');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)).toHaveLength(1));
+      expect(fake.callsTo(`${base}/transition`)[0]?.options.body).not.toHaveProperty('comment');
     });
 
     it('asks for the required data before sending, then sends the step values with the decision', async () => {
