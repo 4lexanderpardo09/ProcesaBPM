@@ -18,3 +18,12 @@ export function typeInEditor(textbox: HTMLElement, text: string, { at = 'cursor'
     });
   });
 }
+
+/** Selects everything written in a RichTextEditor, as Ctrl+A does (jsdom does not always pass the shortcut on). */
+export function selectAllInEditor(textbox: HTMLElement): void {
+  const editor = (textbox as HTMLElement & { editor?: Editor }).editor;
+  if (editor === undefined) throw new Error('The element is not a rich text editor.');
+  act(() => {
+    editor.chain().focus().selectAll().run();
+  });
+}

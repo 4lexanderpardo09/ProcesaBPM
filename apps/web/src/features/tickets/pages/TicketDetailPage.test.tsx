@@ -6,7 +6,7 @@ import { openDownload } from '@/shared/lib/open-download';
 import { fakeProfile } from '@/test/fake-profile';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
-import { typeInEditor } from '@/test/rich-text-editor';
+import { selectAllInEditor, typeInEditor } from '@/test/rich-text-editor';
 
 vi.mock('@/shared/lib/open-download', () => ({ openDownload: vi.fn() }));
 
@@ -294,7 +294,7 @@ describe('TicketDetailPage', () => {
 
     const box = await screen.findByRole('textbox', { name: 'Agregar un comentario' });
     typeInEditor(box, 'Revisado');
-    await userEvent.keyboard('{Control>}a{/Control}');
+    selectAllInEditor(box);
     await userEvent.click(screen.getByRole('button', { name: 'Negrita' }));
     expect(screen.getByRole('button', { name: 'Negrita' })).toHaveAttribute('aria-pressed', 'true');
     typeInEditor(box, '\n', { at: 'end' });

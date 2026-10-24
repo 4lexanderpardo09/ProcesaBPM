@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef, useState } from 'react';
 import { describe, expect, it } from 'vitest';
-import { typeInEditor } from '@/test/rich-text-editor';
+import { selectAllInEditor, typeInEditor } from '@/test/rich-text-editor';
 import { isBlankRichText, RichTextEditor, type RichTextEditorHandle } from './RichTextEditor';
 
 function Controlled({ initial = '', handle }: { readonly initial?: string; readonly handle?: React.Ref<RichTextEditorHandle> }) {
@@ -33,8 +33,7 @@ describe('RichTextEditor', () => {
   it('formats the selection from the toolbar and shows the button pressed', async () => {
     render(<Controlled initial="<p>importante</p>" />);
     const editor = screen.getByRole('textbox', { name: 'Comentario' });
-    await userEvent.click(editor);
-    await userEvent.keyboard('{Control>}a{/Control}');
+    selectAllInEditor(editor);
     await userEvent.click(screen.getByRole('button', { name: 'Negrita' }));
     expect(html()).toBe('<p><strong>importante</strong></p>');
     expect(screen.getByRole('button', { name: 'Negrita' })).toHaveAttribute('aria-pressed', 'true');
@@ -54,8 +53,7 @@ describe('RichTextEditor', () => {
 
   it('colors the text with the chosen swatch', async () => {
     render(<Controlled initial="<p>alerta</p>" />);
-    await userEvent.click(screen.getByRole('textbox', { name: 'Comentario' }));
-    await userEvent.keyboard('{Control>}a{/Control}');
+    selectAllInEditor(screen.getByRole('textbox', { name: 'Comentario' }));
     await userEvent.click(screen.getByRole('button', { name: 'Color del texto' }));
     await userEvent.click(screen.getByRole('button', { name: 'Rojo' }));
     expect(html()).toBe('<p><span style="color: rgb(198, 40, 40);">alerta</span></p>');
@@ -63,8 +61,7 @@ describe('RichTextEditor', () => {
 
   it('links the selection to a web address and refuses other schemes', async () => {
     render(<Controlled initial="<p>manual</p>" />);
-    await userEvent.click(screen.getByRole('textbox', { name: 'Comentario' }));
-    await userEvent.keyboard('{Control>}a{/Control}');
+    selectAllInEditor(screen.getByRole('textbox', { name: 'Comentario' }));
     await userEvent.click(screen.getByRole('button', { name: 'Enlace' }));
     await userEvent.type(screen.getByRole('textbox', { name: 'Dirección del enlace' }), 'javascript:alert(1)');
     await userEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
