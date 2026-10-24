@@ -1,0 +1,25 @@
+# The reverse proxy in front of ProcesaBPM (docs/despliegue.md): HTTPS with automatic certificates, the API under /api
+# (its routes, health checks and the /api/realtime WebSocket) and the web for everything else, on one origin.
+# Copy it to /etc/caddy/Caddyfile, change the host name and reload: sudo systemctl reload caddy
+app.example.com {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000 {
+			# Reloading the configuration does not drop every WebSocket at once.
+			stream_close_delay 5m
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

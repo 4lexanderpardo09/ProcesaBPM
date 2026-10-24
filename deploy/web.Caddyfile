@@ -1,0 +1,26 @@
+# Serves the built web (apps/web/dist) on :8080, behind the reverse proxy that terminates TLS (deploy/Caddyfile.example).
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:8080 {
+	root * /srv
+	encode zstd gzip
+
+	# Vite names the bundles by their content: they can be kept forever. A missing one is a 404, not the app.
+	handle /assets/* {
+		@bundle file
+		header @bundle Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Everything else (index.html) is asked for again, so a deployment reaches people on their next load. A route of the
+	# app (/tickets/…) is not a file: the app's index.html opens it.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
