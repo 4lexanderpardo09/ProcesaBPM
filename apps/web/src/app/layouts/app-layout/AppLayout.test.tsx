@@ -56,4 +56,21 @@ describe('AppLayout', () => {
     expect(server.logout).toHaveBeenCalledOnce();
     expect(router.state.location.search).toBe('');
   });
+
+  it('opens the menu as a drawer from the top bar, and closes it on choosing a page or with Escape', async () => {
+    const { router } = renderRoute('/tickets');
+    const menu = await screen.findByRole('button', { name: 'Abrir el menú' });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+    expect(menu).toHaveAttribute('aria-controls', 'app-sidebar');
+
+    await userEvent.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(screen.getByRole('link', { name: 'Reportes' }));
+    expect(router.state.location.pathname).toBe('/reports');
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(menu);
+    await userEvent.keyboard('{Escape}');
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+  });
 });

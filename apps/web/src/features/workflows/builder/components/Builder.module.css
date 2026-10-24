@@ -165,6 +165,7 @@
   }
 }
 
+
 .inspector {
   position: relative;
 }
@@ -1052,4 +1053,51 @@
 
 .sectionBody[hidden] {
   display: none;
+}
+
+/* A phone: palette as a row of blocks that scrolls sideways, then the canvas and the inspector, full width. */
+@media (max-width: 640px) {
+  /* The page scrolls instead of squeezing the three parts into the screen's height. */
+  .workspace,
+  .workspace.workspaceWide,
+  .workspaceReadOnly,
+  .workspaceReadOnly.workspaceWide {
+    flex: none;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+  }
+
+  .palette {
+    flex: none;
+    flex-direction: row;
+    min-height: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: var(--space-2);
+  }
+
+  .inspector {
+    max-height: 80vh;
+  }
+
+  .paletteHint {
+    display: none;
+  }
+
+  .paletteGroup {
+    flex-shrink: 0;
+  }
+
+  .paletteList {
+    flex-direction: row;
+  }
+
+  .paletteItem {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .canvasWrap {
+    min-height: 60vh;
+  }
 }
