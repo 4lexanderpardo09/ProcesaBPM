@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+/**
+ * The longest HTML a comment, note or template may be (what the editor sends, before sanitizing): formatting, colors and
+ * a table pasted from a spreadsheet make the HTML far longer than the text it shows.
+ */
+export const RICH_TEXT_MAX = 50_000;
+/** The longest HTML a ticket description may be: it is where whole tables are pasted. */
+export const DESCRIPTION_HTML_MAX = 200_000;
+
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
 
 const booleanQuerySchema = z

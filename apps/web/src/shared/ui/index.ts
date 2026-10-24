@@ -16,7 +16,7 @@ export { RichText, type RichTextProps } from './rich-text/RichText';
 export { Select, type SelectOption, type SelectProps } from './select/Select';
 export { Table, type TableColumn, type TableProps } from './table/Table';
 export { Tabs, type TabItem, type TabsProps } from './tabs/Tabs';
-export { FormattedTextArea, type FormattedTextAreaProps } from './text-area/FormattedTextArea';
+export { isBlankRichText, RichTextEditor, type RichTextEditorHandle, type RichTextEditorProps } from './rich-text-editor/RichTextEditor';
 export { TextArea, type TextAreaProps } from './text-area/TextArea';
 export { TextField, type TextFieldProps } from './text-field/TextField';
 export { SignaturePad, type SignaturePadHandle, type SignaturePadProps } from './signature-pad/SignaturePad';

@@ -33,5 +33,6 @@ describe('report sheets', () => {
   it('turns a comment into the plain text of a cell: paragraphs and breaks kept, tags and entities gone', () => {
     expect(commentText('<p>Hola <strong>Ana</strong></p><p>Va el soporte&nbsp;&amp; la factura<br>Gracias</p>')).toBe('Hola Ana\nVa el soporte & la factura\nGracias');
     expect(commentText('<p></p><p></p><p></p><p>x</p>')).toBe('x');
+    expect(commentText('<p>Pagos:</p><table><tbody><tr><th><p>Mes</p></th><th><p>Valor</p></th></tr><tr><td><p>Enero</p></td><td><p>1.250.000</p></td></tr></tbody></table>')).toBe('Pagos:\nMes\tValor\nEnero\t1.250.000');
   });
 });

@@ -1,0 +1,309 @@
+.box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-50);
+}
+
+.invalid {
+  border-color: var(--danger);
+}
+
+.disabled {
+  background: var(--surface-2);
+  opacity: 0.7;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--surface-2);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.tableTools {
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--line);
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
+  color: var(--slate);
+  font: inherit;
+  font-size: 13.5px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tool:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--surface-3);
+  border-color: var(--line);
+}
+
+.tool[aria-pressed='true'],
+.tool[aria-expanded='true'] {
+  color: var(--accent);
+  background: var(--accent-50);
+  border-color: var(--accent-line);
+}
+
+.tool:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.tool:focus-visible,
+.textTool:focus-visible,
+.swatch:focus-visible,
+.blockSelect:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.textTool {
+  height: 26px;
+  padding: 0 var(--space-2);
+  color: var(--slate);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.textTool:hover {
+  color: var(--ink);
+  border-color: var(--faint);
+}
+
+.blockSelect {
+  height: 28px;
+  padding: 0 var(--space-1);
+  color: var(--slate);
+  font: inherit;
+  font-size: 12.5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.colorGlyph {
+  padding: 0 2px;
+  font-weight: 700;
+  line-height: 16px;
+  border-bottom: 3px solid currentColor;
+}
+
+.menuRoot {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: 220px;
+}
+
+.swatch {
+  width: 26px;
+  height: 26px;
+  font: inherit;
+  font-weight: 700;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.swatch[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+}
+
+.linkForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 280px;
+  max-width: calc(100vw - 48px);
+}
+
+.linkInput {
+  flex: 1 1 160px;
+  height: 28px;
+  padding: 0 var(--space-2);
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.linkInput[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.linkError {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.area {
+  position: relative;
+}
+
+.placeholder {
+  position: absolute;
+  top: 9px;
+  left: 12px;
+  margin: 0;
+  color: var(--faint);
+  font-size: 13.5px;
+  pointer-events: none;
+}
+
+/* The editable area: written like RichText shows it in the activity. */
+.content {
+  max-height: 60vh;
+  padding: 9px 12px;
+  overflow-y: auto;
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+
+.content > * + * {
+  margin-top: var(--space-2);
+}
+
+.content ul,
+.content ol {
+  padding-left: var(--space-5);
+}
+
+.content ul {
+  list-style: disc;
+}
+
+.content ol {
+  list-style: decimal;
+}
+
+.content blockquote {
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--line);
+  color: var(--slate);
+}
+
+.content code,
+.content pre {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.content pre {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-3);
+  white-space: pre-wrap;
+}
+
+.content h2 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.content h3 {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.content a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.content hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Tiptap wraps each table in a div.tableWrapper; it scrolls sideways when the table is wider than the field. */
+.content :global(.tableWrapper) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.content table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.content th,
+.content td {
+  position: relative;
+  min-width: 48px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+  text-align: left;
+}
+
+.content th {
+  background: var(--surface-3);
+  font-weight: 600;
+}
+
+/* Cells chosen by dragging across them. */
+.content :global(.selectedCell)::after {
+  position: absolute;
+  inset: 0;
+  background: var(--accent-50);
+  opacity: 0.7;
+  content: '';
+  pointer-events: none;
+}

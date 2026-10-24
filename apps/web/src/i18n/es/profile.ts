@@ -142,7 +142,6 @@ export const profile = {
     titleField: 'Título',
     titlePlaceholder: 'Solicitud recibida',
     body: 'Texto',
-    bodyHint: 'Deja una línea en blanco para separar párrafos.',
     shareTitle: 'Compartir «{{name}}»',
     shareHint: 'Quienes elijas pueden leerla y usarla, pero no cambiarla.',
     notShared: 'No la compartes con nadie.',

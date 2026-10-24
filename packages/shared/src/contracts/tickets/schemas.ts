@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { pageResponseSchema } from '../common.js';
+import { DESCRIPTION_HTML_MAX, pageResponseSchema, RICH_TEXT_MAX } from '../common.js';
 import { attachmentIdsSchema } from '../files/schemas.js';
 import { uuidSchema } from '../ids.js';
 import { type TagResponse, tagResponseSchema } from '../tags/schemas.js';
 
 const values = z.record(z.string(), z.unknown()).default({});
 /** An HTML fragment, sanitized by the server; the length limit applies to what is sent. */
-const comment = z.string().trim().min(1).max(5000).optional();
+const comment = z.string().trim().min(1).max(RICH_TEXT_MAX).optional();
 /**
  * The inboxes: created by me, assigned to me now, observed, all I may read; and, like the help desk, the ones I worked
  * on before (`history`), the ones reopened, and those with errors I reported or that were attributed to me.
@@ -25,7 +25,7 @@ export const createTicketRequestSchema = z.object({
   priorityId: uuidSchema.optional(),
   title: z.string().trim().min(1).max(300),
   /** An HTML fragment: the server sanitizes it with an allowlist (formatting tags and safe links); plain text is valid too. */
-  description: z.string().trim().max(20_000).default(''),
+  description: z.string().trim().max(DESCRIPTION_HTML_MAX).default(''),
   values,
   /** Who takes the first people step when that step has `manual_selection`. */
   assigneeId: uuidSchema.optional(),
@@ -37,7 +37,7 @@ export type CreateTicketRequest = z.infer<typeof createTicketRequestSchema>;
 export const editTicketRequestSchema = z
   .object({
     title: z.string().trim().min(1).max(300),
-    description: z.string().trim().max(20_000),
+    description: z.string().trim().max(DESCRIPTION_HTML_MAX),
     /** `null` takes the priority off. */
     priorityId: uuidSchema.nullable(),
   })
@@ -75,11 +75,11 @@ export const closeTicketRequestSchema = z.object({ visitId: uuidSchema, values, 
 export type CloseTicketRequest = z.infer<typeof closeTicketRequestSchema>;
 
 /** An incident (novedad): the ticket is paused and handed to someone else until they resolve it. */
-export const openIncidentRequestSchema = z.object({ visitId: uuidSchema, assignedToId: uuidSchema, description: z.string().trim().min(1).max(10_000) });
+export const openIncidentRequestSchema = z.object({ visitId: uuidSchema, assignedToId: uuidSchema, description: z.string().trim().min(1).max(RICH_TEXT_MAX) });
 export type OpenIncidentRequest = z.infer<typeof openIncidentRequestSchema>;
 
 /** `assigneeId` hands the ticket to someone else instead of back to its previous assignees (needs `reassign`). */
-export const resolveIncidentRequestSchema = z.object({ resolution: z.string().trim().min(1).max(10_000), assigneeId: uuidSchema.optional() });
+export const resolveIncidentRequestSchema = z.object({ resolution: z.string().trim().min(1).max(RICH_TEXT_MAX), assigneeId: uuidSchema.optional() });
 export type ResolveIncidentRequest = z.infer<typeof resolveIncidentRequestSchema>;
 
 /** Reopening a closed ticket records an error of a reopening type against whoever is responsible (by default whoever closed it). */
@@ -91,7 +91,7 @@ export const reopenTicketRequestSchema = z.object({
   responsibleId: uuidSchema.optional(),
   /** Who gets the step instead of its last holders. */
   assigneeId: uuidSchema.optional(),
-  description: z.string().trim().min(1).max(5000),
+  description: z.string().trim().min(1).max(RICH_TEXT_MAX),
 });
 export type ReopenTicketRequest = z.infer<typeof reopenTicketRequestSchema>;
 
@@ -104,7 +104,7 @@ export const reportTicketErrorRequestSchema = z.object({
   visitId: uuidSchema,
   errorTypeId: uuidSchema,
   errorSubtypeId: uuidSchema.optional(),
-  description: z.string().trim().min(1).max(5000),
+  description: z.string().trim().min(1).max(RICH_TEXT_MAX),
 });
 export type ReportTicketErrorRequest = z.infer<typeof reportTicketErrorRequestSchema>;
 

@@ -1,18 +1,16 @@
-import type { TextTemplateResponse } from '@procesabpm/shared';
+import { RICH_TEXT_MAX, type TextTemplateResponse } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AdminDialog } from '@/shared/admin/AdminDialog';
-import { htmlToPlainText, plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient, useCurrentUser } from '@/shared/session';
-import { Alert, Button, Card, Dialog, PlusIcon, RichText, TextArea, TextField } from '@/shared/ui';
+import { Alert, Button, Card, Dialog, isBlankRichText, PlusIcon, RichText, RichTextEditor, TextField } from '@/shared/ui';
 import { deleteTemplate, directoryNamesQueryOptions, saveTemplate, setTemplateShares, templateSharesQueryOptions, templatesQueryOptions, toolsQueryKeys } from '../api/profile-api';
 import { PersonPicker, personName } from './PersonPicker';
 import { ProfileError } from './ProfileError';
 import styles from './Profile.module.css';
 
 const TITLE_MAX = 200;
-const BODY_MAX = 20_000;
 
 type Editing = { readonly kind: 'edit'; readonly template: TextTemplateResponse | undefined } | { readonly kind: 'delete' | 'share' | 'view'; readonly template: TextTemplateResponse } | null;
 
@@ -86,7 +84,7 @@ function useTemplateChange<TArgs>(action: (client: ReturnType<typeof useApiClien
 function TemplateDialog({ template, onClose }: { readonly template: TextTemplateResponse | undefined; readonly onClose: () => void }) {
   const { t } = useTranslation(['profile', 'admin']);
   const [title, setTitle] = useState(template?.title ?? '');
-  const [body, setBody] = useState(template === undefined ? '' : htmlToPlainText(template.bodyHtml));
+  const [body, setBody] = useState(template?.bodyHtml ?? '');
   const [submitted, setSubmitted] = useState(false);
   const save = useTemplateChange((client, value: { title: string; bodyHtml: string }) => saveTemplate(client, template?.id, value));
   return (
@@ -98,11 +96,11 @@ function TemplateDialog({ template, onClose }: { readonly template: TextTemplate
       onClose={onClose}
       onSubmit={() => {
         setSubmitted(true);
-        if (title.trim() !== '' && body.trim() !== '') save.mutate({ title: title.trim(), bodyHtml: plainTextToHtml(body) }, { onSuccess: onClose });
+        if (title.trim() !== '' && !isBlankRichText(body)) save.mutate({ title: title.trim(), bodyHtml: body }, { onSuccess: onClose });
       }}
     >
       <TextField label={t('templates.titleField')} required value={title} maxLength={TITLE_MAX} placeholder={t('templates.titlePlaceholder')} error={submitted && title.trim() === '' ? t('data.required') : undefined} onChange={(event) => setTitle(event.target.value)} />
-      <TextArea label={t('templates.body')} required rows={8} value={body} maxLength={BODY_MAX} hint={t('templates.bodyHint')} error={submitted && body.trim() === '' ? t('data.required') : undefined} onChange={(event) => setBody(event.target.value)} />
+      <RichTextEditor label={t('templates.body')} required value={body} maxLength={RICH_TEXT_MAX} minHeight={180} error={submitted && isBlankRichText(body) ? t('data.required') : undefined} onValueChange={setBody} />
     </AdminDialog>
   );
 }

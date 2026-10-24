@@ -5,6 +5,7 @@ import { ApiError } from '@/shared/api';
 import { fakeProfile } from '@/test/fake-profile';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
+import { typeInEditor } from '@/test/rich-text-editor';
 
 const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 const MAIN = id(10);
@@ -130,7 +131,7 @@ describe('NewTicketPage', () => {
 
     await userEvent.type(screen.getByRole('textbox', { name: /Asunto/ }), 'Pago de cuota');
     await userEvent.type(screen.getByRole('textbox', { name: /Monto/ }), '850.000');
-    await userEvent.type(screen.getByRole('textbox', { name: 'Descripción' }), 'En la sede norte');
+    typeInEditor(screen.getByRole('textbox', { name: 'Descripción' }), 'En la sede norte');
     await userEvent.click(screen.getByRole('button', { name: 'Crear y enviar' }));
 
     await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/tickets/${NEW_TICKET}`));

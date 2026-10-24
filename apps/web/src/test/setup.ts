@@ -37,6 +37,13 @@ if (HTMLDialogElement.prototype.showModal === undefined) {
   };
 }
 
+/** jsdom has no layout: ProseMirror (the text editor) measures ranges and asks what is under a point to scroll the cursor into view. */
+const NO_RECTS = (): DOMRectList => Object.assign([], { item: () => null }) as unknown as DOMRectList;
+Range.prototype.getClientRects ??= NO_RECTS;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
+(Text.prototype as Text & { getClientRects?: () => DOMRectList }).getClientRects ??= NO_RECTS;
+document.elementFromPoint ??= () => null;
+
 afterEach(() => {
   cleanup();
 });

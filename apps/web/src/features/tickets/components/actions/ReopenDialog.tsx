@@ -1,9 +1,9 @@
+import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient } from '@/shared/session';
-import { Select, TextArea } from '@/shared/ui';
+import { Select, isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { errorSubtypesQueryOptions, reopenTicket, reopeningErrorTypesQueryOptions } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from './ActionDialog';
@@ -28,7 +28,7 @@ export function ReopenDialog({ ticketId, onClose }: { readonly ticketId: string;
   const types = useQuery(reopeningErrorTypesQueryOptions(client));
   const subtypes = useQuery({ ...errorSubtypesQueryOptions(client, errorTypeId), enabled: errorTypeId !== '' });
   const reopen = useTicketMutation((c, args: ReopenArgs) =>
-    reopenTicket(c, ticketId, { errorTypeId: args.errorTypeId, ...(args.errorSubtypeId === '' ? {} : { errorSubtypeId: args.errorSubtypeId }), description: plainTextToHtml(args.description) }),
+    reopenTicket(c, ticketId, { errorTypeId: args.errorTypeId, ...(args.errorSubtypeId === '' ? {} : { errorSubtypeId: args.errorSubtypeId }), description: args.description }),
   );
   const typeOptions = (types.data ?? []).map((type) => ({ value: type.id, label: type.name }));
   const typeStatus = types.isError ? t('actions.reopen.typesFailed') : types.data === undefined ? t('actions.reopen.typesLoading') : typeOptions.length === 0 ? t('actions.reopen.noTypes') : undefined;
@@ -43,7 +43,7 @@ export function ReopenDialog({ ticketId, onClose }: { readonly ticketId: string;
       onClose={onClose}
       onSubmit={() => {
         setSubmitted(true);
-        if (errorTypeId !== '' && description.trim() !== '') reopen.mutate({ errorTypeId, errorSubtypeId, description }, { onSuccess: onClose });
+        if (errorTypeId !== '' && !isBlankRichText(description)) reopen.mutate({ errorTypeId, errorSubtypeId, description }, { onSuccess: onClose });
       }}
     >
       <p>{t('actions.reopen.body')}</p>
@@ -63,14 +63,13 @@ export function ReopenDialog({ ticketId, onClose }: { readonly ticketId: string;
       {subtypeOptions.length > 0 && (
         <Select label={t('actions.reopen.subtype')} value={errorSubtypeId} placeholder={t('actions.reopen.noSubtype')} options={subtypeOptions} onChange={(event) => setErrorSubtypeId(event.target.value)} />
       )}
-      <TextArea
+      <RichTextEditor
         label={t('actions.reopen.description')}
         required
         value={description}
-        maxLength={5000}
-        rows={4}
-        error={submitted && description.trim() === '' ? t('actions.reopen.descriptionRequired') : undefined}
-        onChange={(event) => setDescription(event.target.value)}
+        maxLength={RICH_TEXT_MAX}
+        error={submitted && isBlankRichText(description) ? t('actions.reopen.descriptionRequired') : undefined}
+        onValueChange={setDescription}
       />
     </ActionDialog>
   );

@@ -1,7 +1,7 @@
+import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
-import { TextArea } from '@/shared/ui';
+import { isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { reassignTicket } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from './ActionDialog';
@@ -19,7 +19,7 @@ export function ReassignDialog({ ticketId, visitId, onClose }: { readonly ticket
   const [comment, setComment] = useState('');
   const [missing, setMissing] = useState(false);
   const reassign = useTicketMutation((client, args: ReassignArgs) =>
-    reassignTicket(client, ticketId, { visitId, toUserId: args.toUserId, ...(args.comment.trim() === '' ? {} : { comment: plainTextToHtml(args.comment) }) }),
+    reassignTicket(client, ticketId, { visitId, toUserId: args.toUserId, ...(isBlankRichText(args.comment) ? {} : { comment: args.comment }) }),
   );
   return (
     <ActionDialog
@@ -42,7 +42,7 @@ export function ReassignDialog({ ticketId, visitId, onClose }: { readonly ticket
           setMissing(false);
         }}
       />
-      <TextArea label={t('actions.optionalComment')} value={comment} maxLength={5000} rows={3} onChange={(event) => setComment(event.target.value)} />
+      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} onValueChange={setComment} />
     </ActionDialog>
   );
 }

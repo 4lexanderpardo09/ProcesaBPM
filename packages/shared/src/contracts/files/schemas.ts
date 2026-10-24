@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RICH_TEXT_MAX } from '../common.js';
 import { allowedTypeOf, MAX_FILE_BYTES, MAX_FILES_PER_SUBMISSION, MAX_SUBMISSION_BYTES } from '../../files/file-types.js';
 import { uuidSchema } from '../ids.js';
 
@@ -36,7 +37,7 @@ export const attachmentIdsSchema = z
   .default([]);
 
 export const commentTicketRequestSchema = z.object({
-  comment: z.string().trim().min(1).max(5000),
+  comment: z.string().trim().min(1).max(RICH_TEXT_MAX),
   attachments: attachmentIdsSchema,
 });
 export type CommentTicketRequest = z.infer<typeof commentTicketRequestSchema>;
