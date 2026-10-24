@@ -1,5 +1,15 @@
 import {
+  type AddCountryHolidayRequest,
   type AnnouncementRequest,
+  countryHolidayResponseSchema,
+  type CreateCountryRequest,
+  failedOutboxEventSchema,
+  type ListPlatformAuditQuery,
+  platformAuditEntrySchema,
+  platformMetricsSchema,
+  regeneratedHolidaysSchema,
+  type RequestTenantDeletion,
+  tenantDeletionResponseSchema,
   type InvitePlatformAdminRequest,
   type MfaResetRequest,
   mfaResetResponseSchema,
@@ -30,6 +40,10 @@ export const platformQueryKeys = {
   countries: () => [...platformQueryKeys.all, 'countries'] as const,
   announcements: () => [...platformQueryKeys.all, 'announcements'] as const,
   admins: () => [...platformQueryKeys.all, 'admins'] as const,
+  holidays: (code: string, year: number) => [...platformQueryKeys.all, 'holidays', code, year] as const,
+  failedEvents: (scope: string, page: number) => [...platformQueryKeys.all, 'failed-events', scope, page] as const,
+  metrics: () => [...platformQueryKeys.all, 'metrics'] as const,
+  audit: (filters: Partial<ListPlatformAuditQuery>) => [...platformQueryKeys.all, 'audit', filters] as const,
 };
 
 const query = (values: Readonly<Record<string, string | number | undefined>>) => {
@@ -115,4 +129,59 @@ export function lookUpUser(client: HttpClient, email: string) {
 
 export function resetUserMfa(client: HttpClient, userId: string, body: MfaResetRequest) {
   return client.request(`/platform/users/${encodeURIComponent(userId)}/mfa-reset`, { method: 'POST', body, schema: mfaResetResponseSchema });
+}
+
+export function createCountry(client: HttpClient, body: CreateCountryRequest) {
+  return client.request('/platform/catalog/countries', { method: 'POST', body, schema: countrySummarySchema });
+}
+
+const holidaysPath = (code: string) => `/platform/catalog/countries/${encodeURIComponent(code)}/holidays`;
+
+export function holidaysQueryOptions(client: HttpClient, code: string, year: number) {
+  return queryOptions({ queryKey: platformQueryKeys.holidays(code, year), queryFn: ({ signal }) => client.request(`${holidaysPath(code)}${query({ year })}`, { schema: z.array(countryHolidayResponseSchema), signal }) });
+}
+
+export function addHoliday(client: HttpClient, code: string, body: AddCountryHolidayRequest) {
+  return client.request(holidaysPath(code), { method: 'POST', body, schema: countryHolidayResponseSchema });
+}
+
+export function removeHoliday(client: HttpClient, code: string, date: string) {
+  return client.request(`${holidaysPath(code)}/${encodeURIComponent(date)}`, { method: 'DELETE' });
+}
+
+export function regenerateHolidays(client: HttpClient, code: string, year: number) {
+  return client.request(`${holidaysPath(code)}/regenerate`, { method: 'POST', body: { year }, schema: regeneratedHolidaysSchema });
+}
+
+export function failedEventsQueryOptions(client: HttpClient, scope: 'PLATFORM' | 'TENANT', page: number) {
+  return queryOptions({
+    queryKey: platformQueryKeys.failedEvents(scope, page),
+    queryFn: ({ signal }) => client.request(`/platform/operations/outbox-events/failed${query({ scope, page })}`, { schema: pageResponseSchema(failedOutboxEventSchema), signal }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function retryEvent(client: HttpClient, event: { readonly scope: 'PLATFORM' | 'TENANT'; readonly tenantId: string | null; readonly id: string }) {
+  const path = event.scope === 'PLATFORM' ? `/platform/operations/outbox-events/platform/${encodeURIComponent(event.id)}/retry` : `/platform/operations/outbox-events/tenants/${encodeURIComponent(event.tenantId ?? '')}/${encodeURIComponent(event.id)}/retry`;
+  return client.request(path, { method: 'POST' });
+}
+
+export function metricsQueryOptions(client: HttpClient) {
+  return queryOptions({ queryKey: platformQueryKeys.metrics(), queryFn: ({ signal }) => client.request('/platform/operations/metrics', { schema: platformMetricsSchema, signal }) });
+}
+
+export function auditQueryOptions(client: HttpClient, filters: Partial<ListPlatformAuditQuery>) {
+  return queryOptions({
+    queryKey: platformQueryKeys.audit(filters),
+    queryFn: ({ signal }) => client.request(`/platform/audit-logs${query({ ...filters })}`, { schema: pageResponseSchema(platformAuditEntrySchema), signal }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function requestDeletion(client: HttpClient, tenantId: string, body: RequestTenantDeletion) {
+  return client.request(`/platform/tenants/${encodeURIComponent(tenantId)}/deletion`, { method: 'POST', body, schema: tenantDeletionResponseSchema });
+}
+
+export function cancelDeletion(client: HttpClient, tenantId: string) {
+  return client.request(`/platform/tenants/${encodeURIComponent(tenantId)}/deletion`, { method: 'DELETE', schema: tenantDeletionResponseSchema });
 }

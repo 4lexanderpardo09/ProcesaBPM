@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { formatDateTime, formatShortDate } from '@/shared/lib/format-date-time';
 import { paths } from '@/shared/lib/paths';
-import { Alert, Breadcrumb, Button, Card, Dialog, PageHeader, Select, TextArea } from '@/shared/ui';
-import { changeTenantPlan, plansQueryOptions, platformQueryKeys, reactivateTenant, suspendTenant, tenantQueryOptions } from '../api/platform-api';
+import { Alert, Breadcrumb, Button, Card, Dialog, PageHeader, Select, TextArea, TextField } from '@/shared/ui';
+import { cancelDeletion, changeTenantPlan, plansQueryOptions, platformQueryKeys, reactivateTenant, requestDeletion, suspendTenant, tenantQueryOptions } from '../api/platform-api';
 import { PlatformError } from '../components/PlatformError';
 import { formatStorage } from '../lib/storage-units';
 import { TenantStatusBadge } from '../components/TenantStatusBadge';
@@ -76,6 +76,8 @@ function TenantActions({ tenant }: { readonly tenant: TenantDetail }) {
   const plans = useQuery(plansQueryOptions(client));
   const [planCode, setPlanCode] = useState(tenant.planCode);
   const [asking, setAsking] = useState<'suspend' | 'reactivate'>();
+  const [deleting, setDeleting] = useState(false);
+  const cancel = useMutation({ mutationFn: () => cancelDeletion(client, tenant.tenantId), onSuccess: () => refresh() });
   const refresh = () => queryClient.invalidateQueries({ queryKey: platformQueryKeys.all });
   const plan = useMutation({
     mutationFn: () => changeTenantPlan(client, tenant.tenantId, planCode),
@@ -109,10 +111,18 @@ function TenantActions({ tenant }: { readonly tenant: TenantDetail }) {
               {t('tenant.reactivate')}
             </Button>
           )}
+          {editable && <Button onClick={() => setDeleting(true)}>{t('tenant.delete')}</Button>}
+          {tenant.status === 'PENDING_DELETION' && (
+            <Button disabled={cancel.isPending} onClick={() => cancel.mutate()}>
+              {t('tenant.cancelDeletion')}
+            </Button>
+          )}
         </div>
+        {cancel.isError && <PlatformError error={cancel.error} />}
         {plan.isSuccess && <Alert tone="ok">{t('tenant.planChanged')}</Alert>}
         {plan.isError && <PlatformError error={plan.error} />}
       </div>
+      {deleting && <DeletionDialog tenant={tenant} onClose={() => setDeleting(false)} onDone={() => void refresh()} />}
       {asking !== undefined && <StatusDialog tenant={tenant} action={asking} onClose={() => setAsking(undefined)} onDone={() => void refresh()} />}
     </Card>
   );
@@ -165,6 +175,55 @@ function StatusDialog({ tenant, action, onClose, onDone }: { readonly tenant: Te
           value={reason}
           onChange={(event) => setReason(event.target.value)}
         />
+        {run.isError && <PlatformError error={run.error} />}
+      </div>
+    </Dialog>
+  );
+}
+
+/**
+ * Asking to delete an organization: its name typed again and a reason. Nobody can enter while it waits; it is purged
+ * after 30 days unless the deletion is cancelled.
+ */
+function DeletionDialog({ tenant, onClose, onDone }: { readonly tenant: TenantDetail; readonly onClose: () => void; readonly onDone: () => void }) {
+  const { t } = useTranslation('platform');
+  const client = usePlatformClient();
+  const [name, setName] = useState('');
+  const [reason, setReason] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const nameOk = name.trim() === tenant.name;
+  const reasonOk = reason.trim().length >= MIN_REASON;
+  const run = useMutation({
+    mutationFn: () => requestDeletion(client, tenant.tenantId, { confirmName: name.trim(), reason: reason.trim() }),
+    onSuccess: () => {
+      onDone();
+      onClose();
+    },
+  });
+  return (
+    <Dialog
+      open
+      title={t('tenant.deleteTitle', { name: tenant.name })}
+      closeLabel={t('close')}
+      onClose={onClose}
+      onSubmit={(event) => {
+        event.preventDefault();
+        setSubmitted(true);
+        if (nameOk && reasonOk && !run.isPending) run.mutate();
+      }}
+      footer={
+        <>
+          <Button onClick={onClose}>{t('cancel')}</Button>
+          <Button type="submit" variant="primary" disabled={run.isPending}>
+            {t('tenant.delete')}
+          </Button>
+        </>
+      }
+    >
+      <div className={styles.stack}>
+        <Alert tone="danger">{t('tenant.deleteHint')}</Alert>
+        <TextField label={t('tenant.confirmName', { name: tenant.name })} required error={submitted && !nameOk ? t('tenant.nameMismatch') : undefined} value={name} onChange={(event) => setName(event.target.value)} />
+        <TextArea label={t('tenant.reason')} required maxLength={500} error={submitted && !reasonOk ? t('tenant.reasonShort') : undefined} value={reason} onChange={(event) => setReason(event.target.value)} />
         {run.isError && <PlatformError error={run.error} />}
       </div>
     </Dialog>
