@@ -12,6 +12,7 @@ import { typedFields, useStepFields } from '../../hooks/use-step-fields';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from '../actions/ActionDialog';
 import { NextAssigneeField } from '../actions/NextAssigneeField';
+import { SignatureChoice, useSignatureChoice } from '../actions/SignatureChoice';
 import styles from './AdvanceDialog.module.css';
 import { StepFieldInput } from './StepFieldInput';
 
@@ -39,6 +40,10 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const fields = typedFields(form.fields.filter((field) => editable.has(field.code)));
   const [comment, setComment] = useState('');
   const next = useNextAssignee();
+  // A signature step is signed: with the profile signature, or one drawn now.
+  const signs = form.step?.type === 'SIGNATURE';
+  const signature = useSignatureChoice();
+  const [submitted, setSubmitted] = useState(false);
   const documents = useQuery(ticketDocumentsQueryOptions(useApiClient(), ticket.id));
   const knownFiles = Object.fromEntries((documents.data ?? []).map((document) => [document.file.id, document.file.name]));
   const knownLabels = Object.assign({}, ...Object.values(ticket.valueNames)) as Record<string, string>;
@@ -49,11 +54,14 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       values: args.values,
       ...(args.comment.trim() === '' ? {} : { comment: plainTextToHtml(args.comment) }),
       ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
+      ...(signs && signature.fileId !== undefined ? { signatureFileId: signature.fileId } : {}),
     }),
   );
   const stepFields = useStepFields(fields, ticket.values, advance.error);
 
   const submit = () => {
+    setSubmitted(true);
+    if (signs && signature.missing) return;
     const collected = stepFields.collect();
     const assignee = next.request();
     if (collected.ok && assignee.ok) advance.mutate({ values: collected.values, comment, assigneeId: assignee.assigneeId }, { onSuccess: onClose, onError: next.onError });
@@ -75,6 +83,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
         <StepFieldInput key={field.id} field={field} knownLabels={knownLabels} knownFiles={knownFiles} {...stepFields.inputProps(field)} />
       ))}
       <TextArea label={t('actions.optionalComment')} value={comment} maxLength={5000} rows={3} onChange={(event) => setComment(event.target.value)} />
+      {signs && <SignatureChoice choice={signature} showMissing={submitted} />}
       <NextAssigneeField next={next} />
     </ActionDialog>
   );

@@ -1,5 +1,19 @@
 export const common = {
   appName: 'ProcesaBPM',
+  signature: {
+    hint: 'Firma en el recuadro con el mouse, un lápiz o el dedo.',
+    pad: 'Recuadro para firmar',
+    clear: 'Borrar',
+    chooseImage: 'Subir una imagen de la firma',
+    image: 'Imagen de la firma',
+    use: 'Usar esta firma',
+    saving: 'Guardando…',
+    cancel: 'Cancelar',
+    close: 'Cerrar',
+    wrongType: 'La firma debe ser una imagen PNG o JPEG.',
+    tooLarge: 'La imagen pesa más de 1 MB: los documentos no la incluirían.',
+    failed: 'No se pudo guardar la firma. Inténtalo de nuevo.',
+  },
   notFound: {
     title: 'Página no encontrada',
     description: 'La dirección no existe o ya no está disponible.',

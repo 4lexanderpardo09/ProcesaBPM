@@ -5,6 +5,7 @@ import { connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
 import { type FlowSpec, type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, SUPERVISOR_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
+import { png, uploadFile } from '../support/file-uploads.js';
 import { expectStatus } from '../support/supertest-diagnostics.js';
 
 useTestEnvironment();
@@ -129,6 +130,15 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       const done = await sign(b, ticket).expect(200);
       expect(done.body).toMatchObject({ status: 'CLOSED', openVisitId: null });
       expect(await world.ticketRow(ticket.id)).toMatchObject({ status: 'CLOSED', closed_by_id: b.userId });
+    });
+
+    it('a signer may sign with a signature drawn at that moment; a rejection carries none', async () => {
+      const ticket = (await create(flow)).body;
+      const drawn = await uploadFile(a, { name: 'firma.png', content: png() });
+      await reject(a, ticket, { comment: 'No', signatureFileId: drawn }).expect(422);
+      await sign(a, ticket, { signatureFileId: drawn }).expect(200);
+      const rows = (await db.platform.query<{ user_id: string; file_id: string; is_parallel: boolean }>('SELECT user_id, file_id, is_parallel FROM ticket_signatures WHERE ticket_id = $1', [ticket.id])).rows;
+      expect(rows).toEqual([{ user_id: a.userId, file_id: drawn, is_parallel: true }]);
     });
 
     it('only a signer signs, and only once', async () => {

@@ -11,3 +11,30 @@
   justify-content: flex-end;
   gap: var(--space-2);
 }
+
+.signature {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.signatureState {
+  margin: 0;
+  color: var(--slate);
+  font-size: 13px;
+}
+
+.signatureActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.signatureError {
+  color: var(--danger);
+  font-size: 12.5px;
+}

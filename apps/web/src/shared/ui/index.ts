@@ -19,3 +19,4 @@ export { Tabs, type TabItem, type TabsProps } from './tabs/Tabs';
 export { FormattedTextArea, type FormattedTextAreaProps } from './text-area/FormattedTextArea';
 export { TextArea, type TextAreaProps } from './text-area/TextArea';
 export { TextField, type TextFieldProps } from './text-field/TextField';
+export { SignaturePad, type SignaturePadHandle, type SignaturePadProps } from './signature-pad/SignaturePad';

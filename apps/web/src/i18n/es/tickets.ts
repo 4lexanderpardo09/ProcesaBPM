@@ -1,4 +1,17 @@
 export const tickets = {
+  signature: {
+    title: 'Firma',
+    profile: 'Firmarás con la firma de tu perfil.',
+    none: 'No tienes firma en tu perfil: dibújala para firmar.',
+    drawn: 'Firmarás con la firma que acabas de dibujar.',
+    loading: 'Revisando tu firma…',
+    drawNow: 'Firmar ahora',
+    redraw: 'Firmar de nuevo',
+    useProfile: 'Usar la de mi perfil',
+    required: 'Dibuja tu firma para continuar.',
+    dialogTitle: 'Firma para este paso',
+    dialogHint: 'Esta firma va en los documentos de este paso, en lugar de la de tu perfil.',
+  },
   retry: 'Reintentar',
   batch: {
     title: 'Procesar en lote',

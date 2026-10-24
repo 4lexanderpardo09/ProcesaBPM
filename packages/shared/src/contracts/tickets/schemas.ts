@@ -56,6 +56,11 @@ export const transitionTicketRequestSchema = z.object({
   comment,
   assigneeId: uuidSchema.optional(),
   attachments: attachmentIdsSchema,
+  /**
+   * The signature drawn (or chosen) when answering the step: the caller's own confirmed PNG or JPEG upload. The step's
+   * documents show it instead of the profile signature. Without it, the profile signature is used.
+   */
+  signatureFileId: uuidSchema.optional(),
 });
 export type TransitionTicketRequest = z.infer<typeof transitionTicketRequestSchema>;
 
@@ -104,7 +109,13 @@ export const reportTicketErrorRequestSchema = z.object({
 export type ReportTicketErrorRequest = z.infer<typeof reportTicketErrorRequestSchema>;
 
 /** Signing or rejecting one's own pending signature of a PARALLEL step; `assigneeId` is for a manual-selection step that follows. */
-export const parallelTaskActionRequestSchema = z.object({ visitId: uuidSchema, comment, assigneeId: uuidSchema.optional() });
+export const parallelTaskActionRequestSchema = z.object({
+  visitId: uuidSchema,
+  comment,
+  assigneeId: uuidSchema.optional(),
+  /** Only when signing: the signature drawn at that moment (see `transitionTicketRequestSchema`). */
+  signatureFileId: uuidSchema.optional(),
+});
 export type ParallelTaskActionRequest = z.infer<typeof parallelTaskActionRequestSchema>;
 
 const assigneeTypeSchema = z.enum(['PRIMARY', 'POOL', 'PARALLEL', 'INCIDENT']);

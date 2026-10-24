@@ -31,6 +31,7 @@ import { FieldOptionsService } from './application/field-options.service.js';
 import { TicketCandidatesService } from './application/ticket-candidates.service.js';
 import { TicketMutationApplier } from './application/ticket-mutation-applier.js';
 import { TicketSlaService } from './application/ticket-sla.service.js';
+import { SignatureCapture } from './application/signature-capture.js';
 import { TransitionTicketService } from './application/transition-ticket.service.js';
 import { AssignmentCandidatesRepository } from './data/assignment-candidates.repository.js';
 import { FieldReferenceRepository } from './data/field-reference.repository.js';
@@ -60,6 +61,7 @@ import { TicketWriteRepository } from './data/ticket-write.repository.js';
     CreationCheckService,
     CreateTicketService,
     TransitionTicketService,
+    SignatureCapture,
     ReassignTicketService,
     TakeTicketService,
     CloseTicketService,

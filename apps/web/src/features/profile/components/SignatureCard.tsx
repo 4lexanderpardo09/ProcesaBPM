@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { uploadFiles } from '@/shared/files/upload-files';
 import { currentUserQueryKey, useApiClient } from '@/shared/session';
+import { SignatureDialog } from '@/shared/signature/SignatureDialog';
 import { Alert, Button, Card } from '@/shared/ui';
 import { clearSignature, profileQueryKeys, setSignature, signatureQueryOptions } from '../api/profile-api';
 import { ProfileError } from './ProfileError';
@@ -12,13 +13,14 @@ const ACCEPTED = ['image/png', 'image/jpeg'];
 /** What a PDF draws: a heavier signature would be left out of the documents (and is almost surely a photo of the whole page). */
 const MAX_BYTES = 1024 * 1024;
 
-/** The image of the person's signature, which goes on the PDF documents they sign. PNG or JPEG. */
+/** The image of the person's signature, which goes on the PDF documents they sign: a PNG or JPEG, or drawn here. */
 export function SignatureCard() {
   const { t } = useTranslation('profile');
   const client = useApiClient();
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const [problem, setProblem] = useState<'type' | 'size'>();
+  const [drawing, setDrawing] = useState(false);
   const signature = useQuery(signatureQueryOptions(client));
   const refresh = () => Promise.all([queryClient.invalidateQueries({ queryKey: profileQueryKeys.signature }), queryClient.invalidateQueries({ queryKey: currentUserQueryKey })]);
   const upload = useMutation({
@@ -29,7 +31,8 @@ export function SignatureCard() {
     onSuccess: refresh,
   });
   const remove = useMutation({ mutationFn: () => clearSignature(client), onSuccess: refresh });
-  const busy = upload.isPending || remove.isPending;
+  const drawn = useMutation({ mutationFn: (fileId: string) => setSignature(client, fileId), onSuccess: refresh });
+  const busy = upload.isPending || remove.isPending || drawn.isPending;
 
   return (
     <Card title={t('signature.title')}>
@@ -43,7 +46,7 @@ export function SignatureCard() {
           <img className={styles.signature} src={signature.data.url} alt={t('signature.alt')} />
         )}
         {problem !== undefined && <Alert tone="danger">{t(problem === 'type' ? 'signature.wrongType' : 'signature.tooLarge')}</Alert>}
-        <ProfileError error={upload.error ?? remove.error} context="signature" />
+        <ProfileError error={upload.error ?? remove.error ?? drawn.error} context="signature" />
         <input
           ref={input}
           type="file"
@@ -64,6 +67,9 @@ export function SignatureCard() {
           <Button variant="brand" disabled={busy} onClick={() => input.current?.click()}>
             {upload.isPending ? t('signature.uploading') : signature.data === null || signature.data === undefined ? t('signature.upload') : t('signature.replace')}
           </Button>
+          <Button disabled={busy} onClick={() => setDrawing(true)}>
+            {t('signature.draw')}
+          </Button>
           {signature.data !== null && signature.data !== undefined && (
             <Button variant="ghost" disabled={busy} onClick={() => remove.mutate()}>
               {t('signature.remove')}
@@ -71,6 +77,16 @@ export function SignatureCard() {
           )}
         </div>
       </div>
+      {drawing && (
+        <SignatureDialog
+          title={t('signature.drawTitle')}
+          onClose={() => setDrawing(false)}
+          onSigned={(fileId) => {
+            setDrawing(false);
+            drawn.mutate(fileId);
+          }}
+        />
+      )}
     </Card>
   );
 }

@@ -646,6 +646,38 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/parallel-tasks/sign`)[0]?.options.body).toEqual({ visitId: VISIT });
     });
 
+    it('signs a parallel step with a signature drawn now when the profile has none', async () => {
+      const FILE_ID = id(902);
+      const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/sig?x=1', method: 'PUT', headers: { 'content-type': 'image/png', 'content-length': '3' }, expiresAt: at };
+      const stored = { id: FILE_ID, name: 'firma.png', kind: 'IMAGE', mimeType: 'image/png', sizeBytes: 3, status: 'CONFIRMED', createdAt: at, confirmedAt: at };
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(null, { status: 200 }))));
+      const { fake } = renderRoute(base, {
+        handlers: withActions(allowed('signParallelTask'), {
+          [`${base}/parallel-tasks/sign`]: () => mutation,
+          '/auth/me/signature': () => null,
+          '/files/uploads': () => ({ uploads: [slot], quota: { overLimit: false } }),
+          [`/files/${FILE_ID}/confirm`]: () => stored,
+        }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Firmar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Firmar el paso' });
+      expect(await within(dialog).findByText('No tienes firma en tu perfil: dibújala para firmar.')).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Firmar' }));
+      expect(within(dialog).getByText('Dibuja tu firma para continuar.')).toBeInTheDocument();
+      expect(fake.callsTo(`${base}/parallel-tasks/sign`)).toHaveLength(0);
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Firmar ahora' }));
+      const pad = screen.getByRole('dialog', { name: 'Firma para este paso' });
+      expect(within(pad).getByRole('img', { name: 'Recuadro para firmar' })).toBeInTheDocument();
+      await userEvent.upload(within(pad).getByLabelText('Imagen de la firma'), new File(['png'], 'mi-firma.png', { type: 'image/png' }));
+      expect(await within(dialog).findByText('Firmarás con la firma que acabas de dibujar.')).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Firmar' }));
+
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/parallel-tasks/sign`)[0]?.options.body).toEqual({ visitId: VISIT, signatureFileId: FILE_ID }));
+      vi.unstubAllGlobals();
+    });
+
     it('asks why before rejecting a parallel step', async () => {
       const { fake } = renderRoute(base, { handlers: withActions(allowed('signParallelTask'), { [`${base}/parallel-tasks/reject`]: () => mutation }) });
 
