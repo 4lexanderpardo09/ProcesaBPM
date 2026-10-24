@@ -12,7 +12,9 @@ import { createVersion, workflowQueryKeys, workflowQueryOptions } from '../../ap
 import { builderQueryKeys, publishVersion, type VersionDetail } from '../api/builder-api';
 import { useBuilder } from '../hooks/use-builder';
 import { useDraftContent } from '../hooks/use-draft-content';
-import { addStep, connect, connectSystem, freeSpot, removeStep, removeTransition, type Selection, updateStep, updateTransition } from '../lib/builder-doc';
+import { addStep, connect, connectSystem, freeSpot, moveStep, removeStep, removeTransition, type Selection, updateStep, updateTransition } from '../lib/builder-doc';
+import { layeredPositions, namedRecords } from '../lib/canvas-extras';
+import { useRecordNames } from '../hooks/use-record-names';
 import { problemsByElement, problemTarget } from '../lib/problems';
 import { serverOnlyProblems, withServerProblems } from '../lib/server-problems';
 import { AmountRulesDialog } from './AmountRulesDialog';
@@ -21,10 +23,29 @@ import { BuilderCanvas } from './BuilderCanvas';
 import { ProblemsPanel } from './ProblemsPanel';
 import { PublishDialog } from './PublishDialog';
 import { StepInspector } from './StepInspector';
+import { StepsTable } from './StepsTable';
 import { TransitionInspector } from './TransitionInspector';
 import styles from './Builder.module.css';
 
 const STALE_REVISION = 'STALE_REVISION';
+const VIEW_KEY = 'procesabpm.builder.view';
+
+/** The preferred view of the blocks; storage may be unavailable (private mode), and then it is the canvas. */
+function readView(): 'canvas' | 'list' {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'canvas';
+  } catch {
+    return 'canvas';
+  }
+}
+
+function saveView(view: 'canvas' | 'list') {
+  try {
+    window.localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // Only a convenience.
+  }
+}
 
 /**
  * The builder of one version: palette, canvas and inspector, with the draft's problems always in view. A published or
@@ -45,10 +66,36 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
   const [serverProblems, setServerProblems] = useState<WorkflowProblem[]>([]);
   const validation = useMemo(() => withServerProblems(builder.validation, serverProblems), [builder.validation, serverProblems]);
   const problemsOf = useMemo(() => problemsByElement(validation), [validation]);
+  const named = useMemo(() => namedRecords(doc), [doc]);
+  const { nameOf } = useRecordNames(named.kinds, named.userIds);
   const [panelOpen, setPanelOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [amountRulesOpen, setAmountRulesOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const [view, setView] = useState<'canvas' | 'list'>(() => readView());
+  const [miniMap, setMiniMap] = useState(false);
+  const builderRef = useRef<HTMLDivElement>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setFullScreen(document.fullscreenElement !== null && document.fullscreenElement === builderRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFullScreen = () => {
+    if (document.fullscreenElement !== null) void document.exitFullscreen();
+    else void builderRef.current?.requestFullscreen?.();
+  };
+  const changeView = (next: 'canvas' | 'list') => {
+    setView(next);
+    saveView(next);
+  };
+  /** Puts the blocks in columns by their distance from the start, then shows the whole flow. */
+  const arrange = () => {
+    const positions = layeredPositions(doc);
+    edit((current) => [...positions].reduce((next, [id, position]) => moveStep(next, id, position), current));
+    setAnnouncement(t('builder.canvas.arranged'));
+    window.setTimeout(() => void flow.fitView({ maxZoom: 1, padding: 0.12, duration: 300 }), 0);
+  };
   const navigate = useNavigate();
   // From a version that no longer changes, the way on is the draft: open it, or make one from this version.
   const offerDraft = status !== 'DRAFT' && can('update', 'Workflow');
@@ -174,7 +221,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
   const warnings = validation.warnings.length;
 
   return (
-    <div className={styles.builder}>
+    <div ref={builderRef} className={fullScreen ? styles.builderFull : styles.builder}>
       <Breadcrumb
         label={t('builder.breadcrumb')}
         items={[{ label: t('title'), to: paths.workflows }, { label: detail.workflow.name, to: workflowPath(detail.workflow.id) }, { label: t('builder.versionLabel', { number: detail.version.number }) }]}
@@ -234,10 +281,40 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
       {save.error !== null && !stale && <Alert tone="danger">{t('builder.saveFailed')}</Alert>}
       {copy.error !== null && <Alert tone="danger">{t('builder.saveFailed')}</Alert>}
 
+      <div className={styles.canvasBar} role="toolbar" aria-label={t('builder.canvas.toolbar')}>
+        <div className={styles.segmented} role="group" aria-label={t('builder.canvas.view')}>
+          {(['canvas', 'list'] as const).map((value) => (
+            <button key={value} type="button" aria-pressed={view === value} className={view === value ? styles.segmentOn : styles.segment} onClick={() => changeView(value)}>
+              {t(`builder.canvas.views.${value}`)}
+            </button>
+          ))}
+        </div>
+        {view === 'canvas' && (
+          <>
+            {!readOnly && (
+              <Button variant="ghost" onClick={arrange}>
+                {t('builder.canvas.arrange')}
+              </Button>
+            )}
+            <Button variant="ghost" aria-pressed={miniMap} onClick={() => setMiniMap((on) => !on)}>
+              {t('builder.canvas.miniMapToggle')}
+            </Button>
+          </>
+        )}
+        <Button variant="ghost" aria-pressed={fullScreen} onClick={toggleFullScreen}>
+          {fullScreen ? t('builder.canvas.exitFullScreen') : t('builder.canvas.fullScreen')}
+        </Button>
+      </div>
+
       <div className={readOnly ? styles.workspaceReadOnly : styles.workspace}>
         {!readOnly && <BlockPalette onAdd={(type) => addBlock(type)} />}
         <div ref={canvasRef} className={styles.canvasWrap}>
+          {view === 'list' ? (
+            <StepsTable doc={doc} selectedId={selectedStep?.id} problemsOf={problemsOf} onSelect={(id) => setSelection({ kind: 'step', id })} />
+          ) : (
           <BuilderCanvas
+            showMiniMap={miniMap}
+            nameOf={nameOf}
             doc={doc}
             selection={selection}
             readOnly={readOnly}
@@ -247,6 +324,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
             onConnect={connectBlocks}
             onDropBlock={addBlock}
           />
+          )}
           {panelOpen && <ProblemsPanel validation={validation} nameOf={problemOwner} onGoTo={goTo} onOpenAmountRules={() => setAmountRulesOpen(true)} onClose={() => setPanelOpen(false)} />}
         </div>
         <aside className={styles.inspector} aria-label={t('builder.inspector.label')}>

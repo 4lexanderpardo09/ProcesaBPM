@@ -74,6 +74,39 @@ function api(initial: WorkflowVersionDocument = startingDoc(), options: { status
 const outline = () => screen.getByRole('navigation', { name: 'Bloques del flujo' });
 
 describe('workflow builder', () => {
+  it('shows on the canvas who can create and what each step carries, and lists the blocks in a table', async () => {
+    const PAY = id(42);
+    const CARTERA = id(80);
+    const doc: WorkflowVersionDocument = {
+      ...startingDoc(),
+      steps: [
+        step(START, 'START', 'Inicio', { initiators: [{ id: id(81), participantType: 'DEPARTMENT', userId: null, positionId: null, groupId: null, departmentId: CARTERA, companyId: null, siteId: null }] }),
+        step(PAY, 'TASK', 'Pagar', { allowsBatch: true, deadlineType: 'CUTOFF', ui: { x: 240, y: 0 } }),
+        step(END, 'END', 'Fin', { ui: { x: 480, y: 0 } }),
+      ],
+      transitions: [link(id(50), START, PAY), link(id(51), PAY, END, { type: 'DECISION', label: 'Pagado' })],
+    };
+    renderRoute(url, { handlers: { ...api(doc), '/departments': () => ({ items: [{ id: CARTERA, name: 'Cartera', isActive: true, createdAt: at }], page: 1, pageSize: 100, total: 1 }) } });
+
+    const canvas = await screen.findByRole('region', { name: 'Lienzo del flujo' });
+    expect(await within(canvas).findByText('Cartera')).toBeInTheDocument();
+    expect(within(canvas).getByText('Quién puede crear')).toBeInTheDocument();
+    expect(within(canvas).getByText('Corte')).toBeInTheDocument();
+    expect(within(canvas).getByText('Lote')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Lista' }));
+    const table = screen.getByRole('table', { name: 'Bloques del flujo en una tabla' });
+    expect(within(table).getByText('Pagado → Fin')).toBeInTheDocument();
+    expect(within(table).getByText('Corte · Lote')).toBeInTheDocument();
+    await userEvent.click(within(table).getByText('Pagar'));
+    expect(within(screen.getByRole('complementary', { name: 'Propiedades' })).getByRole('heading', { name: 'Pagar' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Lienzo' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Ordenar' }));
+    expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Los bloques quedaron en columnas, desde el inicio.');
+  }, 15_000);
+
   it('opens a draft valid and saved, and adds a step that the validation flags until it is wired', async () => {
     renderRoute(url, { handlers: api() });
 
