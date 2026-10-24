@@ -17,7 +17,10 @@ export interface PdfViewerDialogProps {
   readonly onClose: () => void;
 }
 
-/** A PDF of the ticket read in place, page after page at the window's width, without downloading it. */
+/**
+ * A PDF of the ticket read in place, page after page at the window's width, without downloading it. When it cannot be shown (the bucket
+ * does not let the page read it, a damaged file) it is downloaded instead, as the help desk always did, so the person still gets to read it.
+ */
 export function PdfViewerDialog({ ticketId, file, onClose }: PdfViewerDialogProps) {
   const { t } = useTranslation('tickets');
   const client = useApiClient();
@@ -31,6 +34,10 @@ export function PdfViewerDialog({ ticketId, file, onClose }: PdfViewerDialogProp
     retry: false,
   });
   useEffect(() => () => pdf.data?.destroy(), [pdf.data]);
+  const downloadOnce = useRef(download.mutate);
+  useEffect(() => {
+    if (pdf.isError) downloadOnce.current(file.id);
+  }, [pdf.isError, file.id]);
 
   return (
     <Dialog

@@ -1,10 +1,10 @@
-import { type FormDecisionResponse, RICH_TEXT_MAX, type TicketDetailResponse, type TicketFormResponse } from '@procesabpm/shared';
+import { type FormDecisionResponse, type TicketDetailResponse, type TicketFormResponse } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { textAsHtml } from '@/shared/lib/text-as-html';
 import { useApiClient, useCurrentUser } from '@/shared/session';
-import { isBlankRichText, RichTextEditor } from '@/shared/ui';
+import { isBlankRichText } from '@/shared/ui';
 import { previewTransition, transitionTicket } from '../../api/ticket-actions-api';
 import { ticketDocumentsQueryOptions } from '../../api/ticket-detail-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
@@ -15,6 +15,7 @@ import { ActionDialog } from '../actions/ActionDialog';
 import { NextAssigneeField } from '../actions/NextAssigneeField';
 import { SignatureChoice, useSignatureChoice } from '../actions/SignatureChoice';
 import { NextStepSummary } from '../next-step/NextStepSummary';
+import { ResponseEditor } from '../ResponseEditor';
 import styles from './AdvanceDialog.module.css';
 import { FilePicker } from './FileInput';
 import { StepFieldInput } from './StepFieldInput';
@@ -36,7 +37,7 @@ interface AdvanceArgs {
 
 /**
  * Answers the step with one of its decisions: the fields captured on this step, an optional note (it starts with the
- * step's instructions, to complete or clear) and loose files. Before sending,
+ * step's instructions, to complete or clear: they are not sent untouched) and loose files. Before sending,
  * it says what follows (the next step, who gets it, what is filled there, or that the ticket ends or cannot go on) and,
  * when the next step needs its assignee chosen, asks for that person among its candidates.
  */
@@ -44,7 +45,9 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const { t } = useTranslation('tickets');
   const editable = new Set(form.editableFieldCodes);
   const fields = typedFields(form.fields.filter((field) => editable.has(field.code)));
-  const [comment, setComment] = useState(() => textAsHtml(form.step?.description ?? ''));
+  const instructions = textAsHtml(form.step?.description ?? '');
+  const [comment, setComment] = useState(instructions);
+  const [untouched, setUntouched] = useState(false);
   const [attachments, setAttachments] = useState<readonly string[]>([]);
   const [attaching, setAttaching] = useState(false);
   const client = useApiClient();
@@ -73,7 +76,10 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
 
   const submit = () => {
     setSubmitted(true);
-    if (signs && signature.missing) return;
+    // As in the help desk: the preloaded instructions are a guide to answer, not the answer.
+    const unchanged = !isBlankRichText(instructions) && plainText(comment) === plainText(instructions);
+    setUntouched(unchanged);
+    if (unchanged || (signs && signature.missing)) return;
     const collected = stepFields.collect();
     const assignee = next.request();
     if (collected.ok && assignee.ok) advance.mutate({ values: collected.values, comment, attachments, assigneeId: assignee.assigneeId }, { onSuccess: onClose, onError: next.onError });
@@ -95,11 +101,25 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       {fields.map((field) => (
         <StepFieldInput key={field.id} field={field} knownLabels={knownLabels} knownFiles={knownFiles} {...stepFields.inputProps(field)} />
       ))}
-      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} minHeight={180} onValueChange={setComment} />
+      <ResponseEditor
+        label={t('actions.optionalComment')}
+        value={comment}
+        minHeight={180}
+        error={untouched ? t('actions.untouchedInstructions') : undefined}
+        onValueChange={(next) => {
+          setComment(next);
+          setUntouched(false);
+        }}
+      />
       <FilePicker label={t('actions.attachments')} required={false} value={attachments} knownNames={knownFiles} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
       {signs && <SignatureChoice choice={signature} showMissing={submitted} />}
       <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />
       <NextAssigneeField next={next} />
     </ActionDialog>
   );
+}
+
+/** The words of the HTML, without its markup or spacing: the instructions count as untouched even if the editor rewrote their tags. */
+function plainText(html: string): string {
+  return (new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '').replace(/\s+/g, ' ').trim();
 }

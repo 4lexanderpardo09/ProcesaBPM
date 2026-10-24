@@ -277,7 +277,7 @@ export const tickets = {
     viewer: {
       view: 'Ver {{name}}',
       loading: 'Abriendo el PDF…',
-      failed: 'No se pudo mostrar el PDF. Descárgalo para verlo.',
+      failed: 'No se pudo mostrar el PDF aquí: se descargó para que lo abras.',
       pageFailed: 'No se pudo dibujar la página {{page}}.',
       page: 'Página {{page}} de {{pages}}',
       more: 'Se muestran {{shown}} de {{total}} páginas: descarga el archivo para ver el resto.',
@@ -327,6 +327,7 @@ export const tickets = {
     comment: {
       template: 'Insertar plantilla',
       chooseTemplate: 'Elige una plantilla',
+      clear: 'Limpiar',
       label: 'Agregar un comentario',
       placeholder: 'Escribe una nota para el equipo…',
       submit: 'Comentar',
@@ -399,6 +400,7 @@ export const tickets = {
     dismiss: 'Cerrar',
     sending: 'Enviando…',
     optionalComment: 'Comentario (opcional)',
+    untouchedInstructions: 'Completa o cambia las instrucciones del paso antes de enviar, o bórralas con «Limpiar».',
     attachments: 'Adjuntos (opcional)',
     closingAttachments: 'Documentos de cierre (opcional)',
     people: {
