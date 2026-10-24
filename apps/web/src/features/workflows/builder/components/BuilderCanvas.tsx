@@ -5,6 +5,7 @@ import {
   Background,
   Controls,
   type EdgeChange,
+  MiniMap,
   MarkerType,
   type NodeChange,
   ReactFlow,
@@ -14,6 +15,7 @@ import { type DragEvent, useCallback, useEffect, useMemo, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { EFFECT_TYPES } from '../lib/block-catalog';
 import { moveStep, removeStep, removeTransition, type Selection } from '../lib/builder-doc';
+import { peopleOf, stepBadges } from '../lib/canvas-extras';
 import type { ElementProblems } from '../lib/problems';
 import { BlockNode, type BlockNodeType } from './BlockNode';
 import { TransitionEdge, type TransitionEdgeType } from './TransitionEdge';
@@ -35,9 +37,15 @@ export interface BuilderCanvasProps {
   readonly onChange: (next: (doc: WorkflowVersionDocument) => WorkflowVersionDocument) => void;
   readonly onConnect: (fromId: string, toId: string) => void;
   readonly onDropBlock: (type: StepType, position: { x: number; y: number }) => void;
+  /** The small map of the whole flow, in a corner (big flows). */
+  readonly showMiniMap?: boolean;
+  /** Names of the people and records the blocks name (creators, candidates). */
+  readonly nameOf?: (id: string) => string | undefined;
 }
 
-function toNodes(doc: WorkflowVersionDocument, selection: Selection, readOnly: boolean, problemsOf: (id: string) => ElementProblems): BlockNodeType[] {
+const noNames = (): string | undefined => undefined;
+
+function toNodes(doc: WorkflowVersionDocument, selection: Selection, readOnly: boolean, problemsOf: (id: string) => ElementProblems, nameOf: (id: string) => string | undefined): BlockNodeType[] {
   return doc.steps.map((step) => {
     const problems = problemsOf(step.id);
     return {
@@ -48,7 +56,7 @@ function toNodes(doc: WorkflowVersionDocument, selection: Selection, readOnly: b
       draggable: !readOnly,
       deletable: !readOnly,
       ariaLabel: `${step.type}: ${step.name}`,
-      data: { step, errors: problems.errors.length, warnings: problems.warnings.length, readOnly },
+      data: { step, errors: problems.errors.length, warnings: problems.warnings.length, readOnly, badges: stepBadges(doc, step), people: peopleOf(step, nameOf) },
     };
   });
 }
@@ -57,11 +65,11 @@ function toNodes(doc: WorkflowVersionDocument, selection: Selection, readOnly: b
  * The canvas: blocks where the person left them, connections with their names, problems marked on each. Moving a block
  * is saved in the document when the drag ends; selection lives in the page (the inspector shows it).
  */
-export function BuilderCanvas({ doc, selection, readOnly, problemsOf, onSelect, onChange, onConnect, onDropBlock }: BuilderCanvasProps) {
+export function BuilderCanvas({ doc, selection, readOnly, problemsOf, onSelect, onChange, onConnect, onDropBlock, showMiniMap = false, nameOf = noNames }: BuilderCanvasProps) {
   const { t } = useTranslation('workflows');
   const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes] = useState(() => toNodes(doc, selection, readOnly, problemsOf));
-  useEffect(() => setNodes(toNodes(doc, selection, readOnly, problemsOf)), [doc, selection, readOnly, problemsOf]);
+  const [nodes, setNodes] = useState(() => toNodes(doc, selection, readOnly, problemsOf, nameOf));
+  useEffect(() => setNodes(toNodes(doc, selection, readOnly, problemsOf, nameOf)), [doc, selection, readOnly, problemsOf, nameOf]);
 
   const stepType = useMemo(() => new Map(doc.steps.map((step) => [step.id, step.type])), [doc.steps]);
   const edges = useMemo<TransitionEdgeType[]>(
@@ -160,6 +168,7 @@ export function BuilderCanvas({ doc, selection, readOnly, problemsOf, onSelect, 
       >
         <Background gap={16} size={1} color="var(--line)" />
         <Controls showInteractive={false} />
+        {showMiniMap && <MiniMap pannable zoomable ariaLabel={t('builder.canvas.miniMap')} nodeColor="var(--line)" />}
       </ReactFlow>
     </div>
   );

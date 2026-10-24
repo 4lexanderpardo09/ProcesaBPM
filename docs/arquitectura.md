@@ -349,6 +349,15 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
   - Los nodos siguen docs/diseno: franja del color del tipo, tipo, nombre, una línea de estado y el número de errores y advertencias.
   - Las conexiones muestran su nombre en una pastilla, que también la selecciona. Van punteadas las de los efectos y las «solo del sistema», y en rojo si tienen errores.
   - Mover un bloque se escribe en el documento al soltarlo. Supr o Retroceso borra lo seleccionado.
+  - **Más información en el lienzo, como el de la mesa (2026-10-23, `feat/builder-parity`, `lib/canvas-extras`):**
+    - El inicio muestra «Quién puede crear»: sus iniciadores por departamento, empresa, sede, cargo, grupo y persona, como chips con nombre (3 y «+N»). Sin iniciadores dice que puede crear cualquiera con el permiso.
+    - Un paso de personas muestra sus candidatos por cargo, grupo y persona.
+    - Insignias (`stepBadges`): topes de monto activos con el color de la acción más fuerte, «Corte», «Plano», «Lote» y archivos de apoyo.
+    - Los nombres se piden una vez para todo el lienzo (`useRecordNames`, ahora memorizado).
+  - **Barra del lienzo:**
+    - «Lienzo / Lista» (la preferencia se recuerda en el navegador). La lista (`StepsTable`) da tipo, nombre, quién y plazo, salidas, lo que lleva y problemas; una fila abre el bloque en el inspector.
+    - «Ordenar» (`layeredPositions`) pone los bloques en columnas por su distancia al inicio, sin seguir los regresos, y deja al final lo que no se alcanza.
+    - «Minimapa» y «Pantalla completa» (API del navegador sobre el constructor).
 - **Conectar** (`lib/builder-doc.ts`, `connect`):
   - El tipo sale del bloque de origen. Uno con persona sale por decisiones: «Aprobar», luego «Rechazar» y luego «Opción N» en una aprobación; «Continuar» y luego opciones en un paso.
   - Uno automático sale por su única salida por defecto. Una condición sale primero por «En otro caso» y luego por ramas con regla.

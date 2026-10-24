@@ -1,9 +1,55 @@
-.builder {
+.builder,
+.builderFull {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   height: 100%;
   min-height: 560px;
+}
+
+/* The whole screen for the builder: the page's own background and some room around. */
+.builderFull {
+  padding: var(--space-4);
+  background: var(--canvas, var(--surface-2));
+  overflow: auto;
+}
+
+.canvasBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.segment,
+.segmentOn {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  background: none;
+  color: var(--slate);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segmentOn {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.stepsTable {
+  height: 100%;
+  overflow: auto;
 }
 
 .header {
@@ -292,6 +338,91 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 3px;
+}
+
+.nodePeople {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.nodePeopleTitle {
+  color: var(--faint);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nodePeopleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nodePeopleKind {
+  width: 58px;
+  flex-shrink: 0;
+  color: var(--faint);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.nodeChip {
+  max-width: 110px;
+  overflow: hidden;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-50);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nodeMore,
+.nodePeopleEmpty {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: italic;
+}
+
+.nodeBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.nodeBadge {
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2, var(--surface));
+  color: var(--slate);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.capBLOCK {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.capEXTRA_APPROVAL {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.capWARN {
+  border-color: var(--warn);
+  color: var(--warn);
 }
 
 .errorPill,
