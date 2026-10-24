@@ -27,7 +27,7 @@ test.describe('ticket detail', () => {
     await page.getByRole('button', { name: 'Comentar' }).click();
 
     await expect(page.getByText('Ya lo revisé <ok>')).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveValue('');
+    await expect(page.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveText('');
     const comment = api.requests.find((request) => request.method === 'POST' && request.path === `/api/tickets/${TICKET}/comments`);
     expect(comment?.authorization?.startsWith('Bearer ')).toBe(true);
   });

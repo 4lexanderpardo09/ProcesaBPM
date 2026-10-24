@@ -13,8 +13,33 @@ describe('sanitizeRichText', () => {
     ['an iframe', '<iframe src="https://evil.test"></iframe>ok', 'ok'],
     ['a style block', '<style>p{display:none}</style>ok', 'ok'],
     ['an svg with a script', '<svg><script>alert(1)</script></svg>ok', 'ok'],
-    ['inline styles and classes', '<p style="color:red" class="x">a</p>', '<p>a</p>'],
+    ['named colors and classes', '<p style="color:red" class="x">a</p>', '<p>a</p>'],
+    ['an image, even a safe one', '<img src="https://example.com/x.png">ok', 'ok'],
   ])('drops %s', (_name, input, expected) => expect(sanitizeRichText(input)).toBe(expected));
+
+  it('keeps tables (with their spans and widths), headings, underline and strike', () => {
+    const table = '<table style="min-width: 75px"><colgroup><col style="min-width: 25px"></colgroup><tbody><tr><th colspan="2" rowspan="1"><p>Mes</p></th></tr><tr><td><p>Enero</p></td><td><p>1.250.000</p></td></tr></tbody></table>';
+    expect(sanitizeRichText(table)).toBe(table.replace(/: /g, ':').replace('<col style="min-width:25px">', '<col style="min-width:25px" />'));
+    expect(sanitizeRichText('<h2>Resumen</h2><p><u>firmado</u> y <s>pendiente</s></p>')).toBe('<h2>Resumen</h2><p><u>firmado</u> y <s>pendiente</s></p>');
+  });
+
+  it('keeps text and background colors and the alignment, with values of a known shape only', () => {
+    expect(sanitizeRichText('<p style="text-align: center"><span style="color: #c0392b; background-color: rgb(255, 242, 204)">ojo</span></p>')).toBe('<p style="text-align:center"><span style="color:#c0392b;background-color:rgb(255, 242, 204)">ojo</span></p>');
+    expect(sanitizeRichText('<td style="width: 120px">x</td>')).toBe('<td>x</td>');
+  });
+
+  it.each([
+    ['a url in a color', '<span style="background-color: url(https://evil.test/x)">a</span>'],
+    ['an expression', '<span style="color: expression(alert(1))">a</span>'],
+    ['positioning', '<p style="position: fixed; top: 0; display: none">a</p>'],
+    ['an import', '<span style="color: #fff; @import url(x)">a</span>'],
+    ['a width outside tables', '<p style="width: 9999px">a</p>'],
+  ])('drops styles that are not allowed: %s', (_name, input) => expect(sanitizeRichText(input)).not.toMatch(/url|expression|position|display|import|9999/));
+
+  it('takes the empty paragraphs an editor leaves at the edges off, and an empty editor is empty', () => {
+    expect(sanitizeRichText('<p></p>')).toBe('');
+    expect(sanitizeRichText('<p><br></p><p>hola</p><p></p><p>chao</p><p><br /></p>')).toBe('<p>hola</p><p></p><p>chao</p>');
+  });
 
   describe('links', () => {
     const link = (href: string) => sanitizeRichText(`<a href="${href}">go</a>`);

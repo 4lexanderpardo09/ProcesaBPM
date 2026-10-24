@@ -1,10 +1,10 @@
 import type { FormDecisionResponse, TicketDetailResponse, TicketFormResponse } from '@procesabpm/shared';
+import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient, useCurrentUser } from '@/shared/session';
-import { TextArea } from '@/shared/ui';
+import { isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { previewTransition, transitionTicket } from '../../api/ticket-actions-api';
 import { ticketDocumentsQueryOptions } from '../../api/ticket-detail-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
@@ -56,7 +56,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       transitionId: decision.transitionId,
       visitId,
       values: args.values,
-      ...(args.comment.trim() === '' ? {} : { comment: plainTextToHtml(args.comment) }),
+      ...(isBlankRichText(args.comment) ? {} : { comment: args.comment }),
       ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
       ...(signs && signature.fileId !== undefined ? { signatureFileId: signature.fileId } : {}),
     }),
@@ -88,7 +88,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       {fields.map((field) => (
         <StepFieldInput key={field.id} field={field} knownLabels={knownLabels} knownFiles={knownFiles} {...stepFields.inputProps(field)} />
       ))}
-      <TextArea label={t('actions.optionalComment')} value={comment} maxLength={5000} rows={3} onChange={(event) => setComment(event.target.value)} />
+      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} onValueChange={setComment} />
       {signs && <SignatureChoice choice={signature} showMissing={submitted} />}
       <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />
       <NextAssigneeField next={next} />

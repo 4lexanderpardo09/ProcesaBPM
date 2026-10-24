@@ -6,6 +6,7 @@ import { openDownload } from '@/shared/lib/open-download';
 import { fakeProfile } from '@/test/fake-profile';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
+import { selectAllInEditor, typeInEditor } from '@/test/rich-text-editor';
 
 vi.mock('@/shared/lib/open-download', () => ({ openDownload: vi.fn() }));
 
@@ -279,30 +280,30 @@ describe('TicketDetailPage', () => {
     });
 
     const box = await screen.findByRole('textbox', { name: 'Agregar un comentario' });
-    await userEvent.type(box, 'Revisado <ok>{enter}{enter}Gracias');
+    typeInEditor(box, 'Revisado <ok>\nGracias');
     await userEvent.click(screen.getByRole('button', { name: 'Comentar' }));
 
     expect(await screen.findByText('Revisado <ok>')).toBeInTheDocument();
     expect(comments).toEqual(['<p>Revisado &lt;ok&gt;</p><p>Gracias</p>']);
     expect(fake.callsTo(`${base}/comments`)[0]?.options.method).toBe('POST');
-    expect(box).toHaveValue('');
+    await vi.waitFor(() => expect(box).toHaveTextContent(''));
   });
 
   it('formats a comment with the toolbar: bold and a list, sent as HTML', async () => {
     const { fake } = renderRoute(base, { handlers: ticketHandlers({ [`${base}/comments`]: () => ({ eventId: id(399) }) }) });
 
     const box = await screen.findByRole('textbox', { name: 'Agregar un comentario' });
-    await userEvent.type(box, 'Revisado');
-    (box as HTMLTextAreaElement).setSelectionRange(0, 8);
+    typeInEditor(box, 'Revisado');
+    selectAllInEditor(box);
     await userEvent.click(screen.getByRole('button', { name: 'Negrita' }));
-    expect(box).toHaveValue('**Revisado**');
-    await userEvent.type(box, '{End}{Enter}la cédula{Enter}el RUT');
-    (box as HTMLTextAreaElement).setSelectionRange(13, 29);
+    expect(screen.getByRole('button', { name: 'Negrita' })).toHaveAttribute('aria-pressed', 'true');
+    typeInEditor(box, '\n', { at: 'end' });
+    await userEvent.click(screen.getByRole('button', { name: 'Negrita' }));
     await userEvent.click(screen.getByRole('button', { name: 'Lista' }));
-    expect(box).toHaveValue('**Revisado**\n\n- la cédula\n- el RUT');
+    typeInEditor(box, 'la cédula\nel RUT');
     await userEvent.click(screen.getByRole('button', { name: 'Comentar' }));
 
-    await vi.waitFor(() => expect(fake.callsTo(`${base}/comments`)[0]?.options.body).toEqual({ comment: '<p><strong>Revisado</strong></p><ul><li>la cédula</li><li>el RUT</li></ul>' }));
+    await vi.waitFor(() => expect(fake.callsTo(`${base}/comments`)[0]?.options.body).toEqual({ comment: '<p><strong>Revisado</strong></p><ul><li><p>la cédula</p></li><li><p>el RUT</p></li></ul>' }));
   });
 
   it('asks for the comment instead of sending an empty one', async () => {
@@ -314,7 +315,7 @@ describe('TicketDetailPage', () => {
     expect(fake.callsTo(`${base}/comments`)).toHaveLength(0);
   });
 
-  it('inserts a text template into the comment, after what was already typed', async () => {
+  it('inserts a text template into the comment where the cursor is, with its formatting', async () => {
     const { fake } = renderRoute(base, {
       handlers: ticketHandlers({
         '/text-templates': () => [{ id: id(398), title: 'Solicitud recibida', bodyHtml: '<p>Recibimos tu solicitud.</p><p>Te escribimos pronto.</p>', isOwner: false, ownerId: id(397), ownerName: 'Olga Pérez', updatedAt: at }],
@@ -322,11 +323,11 @@ describe('TicketDetailPage', () => {
     });
 
     const box = await screen.findByRole('textbox', { name: 'Agregar un comentario' });
-    await userEvent.type(box, 'Hola, Luis:');
+    typeInEditor(box, 'Hola, Luis:\n');
     const template = await screen.findByRole('combobox', { name: 'Insertar plantilla' });
     await userEvent.selectOptions(template, 'Solicitud recibida');
 
-    expect(box).toHaveValue('Hola, Luis:\n\nRecibimos tu solicitud.\n\nTe escribimos pronto.');
+    expect(Array.from(box.querySelectorAll('p'), (paragraph) => paragraph.textContent)).toEqual(['Hola, Luis:', 'Recibimos tu solicitud.', 'Te escribimos pronto.']);
     expect(template).toHaveValue('');
     expect(fake.callsTo(`${base}/comments`)).toHaveLength(0);
   });
@@ -334,7 +335,7 @@ describe('TicketDetailPage', () => {
   it('says so when the person may not comment', async () => {
     renderRoute(base, { handlers: ticketHandlers({ [`${base}/comments`]: forbidden }) });
 
-    await userEvent.type(await screen.findByRole('textbox', { name: 'Agregar un comentario' }), 'Hola');
+    typeInEditor(await screen.findByRole('textbox', { name: 'Agregar un comentario' }), 'Hola');
     await userEvent.click(screen.getByRole('button', { name: 'Comentar' }));
 
     expect(await screen.findByText('No tienes permiso para comentar en este ticket.')).toBeInTheDocument();
@@ -582,7 +583,7 @@ describe('TicketDetailPage', () => {
       expect(within(dialog).getByRole('combobox', { name: /Nuevo responsable/ })).toHaveAccessibleDescription('Elige a quién reasignar el ticket.');
 
       await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /Nuevo responsable/ }), await within(dialog).findByRole('option', { name: 'Marta Ruiz' }));
-      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Va para cartera');
+      typeInEditor(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Va para cartera');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Reasignar' }));
 
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -600,7 +601,7 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/incidents`)).toHaveLength(0);
 
       await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /A cargo de/ }), await within(dialog).findByRole('option', { name: 'Luis Gómez' }));
-      await userEvent.type(within(dialog).getByRole('textbox', { name: /Qué pasa/ }), 'Falta el extracto');
+      typeInEditor(within(dialog).getByRole('textbox', { name: /Qué pasa/ }), 'Falta el extracto');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Abrir novedad' }));
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/incidents`)[0]?.options.body).toEqual({ visitId: VISIT, assignedToId: OTHER, description: '<p>Falta el extracto</p>' }));
@@ -612,7 +613,7 @@ describe('TicketDetailPage', () => {
 
       await userEvent.click(await screen.findByRole('button', { name: 'Cerrar ticket' }));
       const dialog = screen.getByRole('dialog', { name: 'Cerrar ticket' });
-      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Listo');
+      typeInEditor(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Listo');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar ticket' }));
 
       expect(await within(dialog).findByText('No tienes permiso para hacer esto en este ticket.')).toBeInTheDocument();
@@ -627,7 +628,7 @@ describe('TicketDetailPage', () => {
 
       await userEvent.click(await screen.findByRole('button', { name: 'Resolver novedad' }));
       const dialog = screen.getByRole('dialog', { name: 'Resolver novedad' });
-      await userEvent.type(within(dialog).getByRole('textbox', { name: /Cómo se resolvió/ }), 'Llegó el extracto');
+      typeInEditor(within(dialog).getByRole('textbox', { name: /Cómo se resolvió/ }), 'Llegó el extracto');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Resolver' }));
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/incidents/${id(500)}/resolve`)[0]?.options.body).toEqual({ resolution: '<p>Llegó el extracto</p>' }));
@@ -687,7 +688,7 @@ describe('TicketDetailPage', () => {
       expect(within(dialog).getByRole('textbox', { name: /Motivo del rechazo/ })).toHaveAccessibleDescription('Escribe por qué rechazas.');
       expect(fake.callsTo(`${base}/parallel-tasks/reject`)).toHaveLength(0);
 
-      await userEvent.type(within(dialog).getByRole('textbox', { name: /Motivo del rechazo/ }), 'El monto no cuadra');
+      typeInEditor(within(dialog).getByRole('textbox', { name: /Motivo del rechazo/ }), 'El monto no cuadra');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Rechazar' }));
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/parallel-tasks/reject`)[0]?.options.body).toEqual({ visitId: VISIT, comment: '<p>El monto no cuadra</p>' }));
@@ -706,7 +707,7 @@ describe('TicketDetailPage', () => {
       expect(within(type).getAllByRole('option').map((option) => option.textContent)).toEqual(['Elige una opción', 'Monto mal digitado', 'Soporte equivocado']);
       await userEvent.selectOptions(type, 'Soporte equivocado');
       expect(within(dialog).getByText(/vuelve al paso anterior/)).toBeInTheDocument();
-      await userEvent.type(within(dialog).getByRole('textbox', { name: /Qué pasó/ }), 'El soporte es de otro cliente');
+      typeInEditor(within(dialog).getByRole('textbox', { name: /Qué pasó/ }), 'El soporte es de otro cliente');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Reportar' }));
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/errors`)[0]?.options.body).toEqual({ visitId: VISIT, errorTypeId: id(722), description: '<p>El soporte es de otro cliente</p>' }));
@@ -736,7 +737,7 @@ describe('TicketDetailPage', () => {
       expect(within(typeSelect).getAllByRole('option').map((option) => option.textContent)).toEqual(['Elige una opción', 'Cierre prematuro']);
       await userEvent.selectOptions(typeSelect, 'Cierre prematuro');
       await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Subtipo (opcional)' }), 'Faltó un soporte');
-      await userEvent.type(within(dialog).getByRole('textbox', { name: /Qué quedó mal/ }), 'Faltaba el extracto');
+      typeInEditor(within(dialog).getByRole('textbox', { name: /Qué quedó mal/ }), 'Faltaba el extracto');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Reabrir' }));
 
       await vi.waitFor(() => expect(fake.callsTo(`${base}/reopen`)[0]?.options.body).toEqual({ errorTypeId: id(701), errorSubtypeId: id(710), description: '<p>Faltaba el extracto</p>' }));
@@ -754,8 +755,8 @@ describe('TicketDetailPage', () => {
 
       await userEvent.click(await screen.findByRole('button', { name: 'Editar' }));
       const dialog = screen.getByRole('dialog', { name: 'Editar ticket' });
-      // The bold of the saved description comes back as its marks, so editing keeps it.
-      expect(within(dialog).getByRole('textbox', { name: /Descripción/ })).toHaveValue('Adjunto el comprobante del pago del **1 de octubre**.');
+      // The saved description opens in the editor with its formatting.
+      expect(within(within(dialog).getByRole('textbox', { name: /Descripción/ })).getByText('1 de octubre').tagName).toBe('STRONG');
       const subject = within(dialog).getByRole('textbox', { name: /Asunto/ });
       await userEvent.clear(subject);
       await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
@@ -814,7 +815,7 @@ describe('TicketDetailPage', () => {
 
       await userEvent.type(within(dialog).getByRole('textbox', { name: /Monto verificado/ }), '1.250.000,50');
       await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Canal' }), 'Banco');
-      await userEvent.type(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Cuadra con el extracto');
+      typeInEditor(within(dialog).getByRole('textbox', { name: 'Comentario (opcional)' }), 'Cuadra con el extracto');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
 
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

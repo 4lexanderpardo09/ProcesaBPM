@@ -1,10 +1,9 @@
-import { type BatchTransitionResult, holdsFiles, type TicketBatchGroup } from '@procesabpm/shared';
+import { type BatchTransitionResult, holdsFiles, type TicketBatchGroup, RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient } from '@/shared/session';
-import { Alert, TextArea } from '@/shared/ui';
+import { Alert, isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { runTicketBatch } from '../../api/batch-api';
 import { ticketFormQueryOptions } from '../../api/ticket-detail-api';
 import { typedFields, useStepFields } from '../../hooks/use-step-fields';
@@ -60,7 +59,7 @@ function BatchForm({ group, ticketIds, decision, fields, onClose }: BatchAdvance
       transitionId: decision.transitionId,
       items: group.tickets.filter((ticket) => ticketIds.includes(ticket.id)).map((ticket) => ({ ticketId: ticket.id, visitId: ticket.visitId })),
       values,
-      ...(comment.trim() === '' ? {} : { comment: plainTextToHtml(comment) }),
+      ...(isBlankRichText(comment) ? {} : { comment: comment }),
     }),
   );
   const stepFields = useStepFields(fields, {}, null);
@@ -104,7 +103,7 @@ function BatchForm({ group, ticketIds, decision, fields, onClose }: BatchAdvance
       {fields.map((field) => (
         <StepFieldInput key={field.id} field={field} knownLabels={{}} knownFiles={{}} {...stepFields.inputProps(field)} />
       ))}
-      <TextArea label={t('actions.optionalComment')} value={comment} maxLength={5000} rows={3} onChange={(event) => setComment(event.target.value)} />
+      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} onValueChange={setComment} />
     </ActionDialog>
   );
 }

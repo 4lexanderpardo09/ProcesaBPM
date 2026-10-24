@@ -133,11 +133,17 @@ export const ticketsSheets = (rows: readonly ReportTicketRow[]): Sheet[] => [
 
 const ENTITIES: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", nbsp: ' ' };
 
-/** A comment as the plain text a spreadsheet cell holds: paragraphs and line breaks kept, tags and entities gone. */
+/**
+ * A comment as the plain text a spreadsheet cell holds: paragraphs and line breaks kept, a table as one line per row
+ * with its cells split by tabs, tags and entities gone.
+ */
 export function commentText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    // A cell's last paragraph ends with the cell, not with a line of its own.
+    .replace(/<\/p>\s*(?=<\/t[dh]>)/gi, '')
+    .replace(/<\/t[dh]>\s*(?=<t[dh][\s>])/gi, '\t')
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n')
     .replace(/<[^>]*>/g, '')
     .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_, name: string) => ENTITIES[name] ?? '')
     .replace(/\n{3,}/g, '\n\n')

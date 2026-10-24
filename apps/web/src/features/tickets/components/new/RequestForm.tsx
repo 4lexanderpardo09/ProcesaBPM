@@ -1,11 +1,10 @@
-import type { CreationFormStart } from '@procesabpm/shared';
+import { type CreationFormStart, DESCRIPTION_HTML_MAX } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { paths, ticketPath } from '@/shared/lib/paths';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient, useCurrentUser } from '@/shared/session';
-import { Button, ButtonLink, Card, FormattedTextArea, TextField } from '@/shared/ui';
+import { Button, ButtonLink, Card, isBlankRichText, RichTextEditor, TextField } from '@/shared/ui';
 import { createTicket, previewCreation } from '../../api/new-ticket-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
 import { choicesOfPreview, useNextStepPreview } from '../../hooks/use-next-step-preview';
@@ -20,7 +19,6 @@ import { SectionTitle } from './RequestTypeCard';
 import styles from './NewTicket.module.css';
 
 const TITLE_MAX = 300;
-const DESCRIPTION_MAX = 20_000;
 
 export interface RequestFormProps {
   readonly subcategoryId: string;
@@ -64,7 +62,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
       ...(requesterId === undefined ? {} : { requesterId }),
       ...(priorityId === undefined ? {} : { priorityId }),
       title: args.title,
-      description: args.description.trim() === '' ? '' : plainTextToHtml(args.description),
+      description: isBlankRichText(args.description) ? '' : args.description,
       values: args.values,
       attachments: [...args.attachments],
       ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
@@ -114,7 +112,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
           {fields.map((field) => (
             <StepFieldInput key={field.id} field={field} knownLabels={{}} knownFiles={{}} {...stepFields.inputProps(field)} />
           ))}
-          <FormattedTextArea label={t('new.data.description')} value={description} maxLength={DESCRIPTION_MAX} rows={5} placeholder={t('new.data.descriptionPlaceholder')} onValueChange={setDescription} />
+          <RichTextEditor label={t('new.data.description')} value={description} maxLength={DESCRIPTION_HTML_MAX} minHeight={160} placeholder={t('new.data.descriptionPlaceholder')} onValueChange={setDescription} />
           <FilePicker label={t('new.data.attachments')} required={false} value={attachments} knownNames={{}} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
           <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />
           <NextAssigneeField next={next} />

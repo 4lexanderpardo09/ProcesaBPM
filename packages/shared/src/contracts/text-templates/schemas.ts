@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { nameSchema } from '../common.js';
+import { nameSchema, RICH_TEXT_MAX } from '../common.js';
 import { uuidSchema } from '../ids.js';
 
 /** Personal text templates (snippets) that a member can insert into a comment; the owner may share them read-only. */
-const bodySchema = z.string().trim().min(1).max(20_000);
+const bodySchema = z.string().trim().min(1).max(RICH_TEXT_MAX);
 
 export const createTextTemplateRequestSchema = z.object({ title: nameSchema, bodyHtml: bodySchema });
 export type CreateTextTemplateRequest = z.infer<typeof createTextTemplateRequestSchema>;

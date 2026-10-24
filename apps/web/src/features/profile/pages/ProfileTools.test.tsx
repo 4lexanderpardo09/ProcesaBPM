@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
+import { typeInEditor } from '@/test/rich-text-editor';
 
 const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 const ME = id(1);
@@ -66,7 +67,7 @@ describe('profile tools', () => {
     await vi.waitFor(() => expect(fake.callsTo(`/tags/${id(31)}`)[0]?.options.method).toBe('DELETE'));
   });
 
-  it('writes a template as text, edits it back as text, and only the own ones can be changed', async () => {
+  it('writes a template in the editor, opens it back with its paragraphs, and only the own ones can be changed', async () => {
     const own = { id: id(40), title: 'Recibido', bodyHtml: '<p>Recibimos tu solicitud.</p><p>Gracias</p>', isOwner: true, ownerId: ME, ownerName: 'Ana Torres', updatedAt: at };
     const shared = { id: id(41), title: 'Cierre', bodyHtml: '<p>Cerramos el caso.</p>', isOwner: false, ownerId: OLGA, ownerName: 'Olga Pérez', updatedAt: at };
     const { fake } = open('/profile?tab=templates', {
@@ -80,12 +81,13 @@ describe('profile tools', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Nueva plantilla' }));
     const create = screen.getByRole('dialog', { name: 'Nueva plantilla' });
     await userEvent.type(within(create).getByRole('textbox', { name: /Título/ }), 'Pendiente');
-    await userEvent.type(within(create).getByRole('textbox', { name: /Texto/ }), 'Falta un soporte <pdf>.{enter}{enter}Gracias');
+    typeInEditor(within(create).getByRole('textbox', { name: /Texto/ }), 'Falta un soporte <pdf>.\nGracias');
     await userEvent.click(within(create).getByRole('button', { name: 'Guardar' }));
     await vi.waitFor(() => expect(fake.calls.find((call) => call.path === '/text-templates' && call.options.method === 'POST')?.options.body).toEqual({ title: 'Pendiente', bodyHtml: '<p>Falta un soporte &lt;pdf&gt;.</p><p>Gracias</p>' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Editar la plantilla Recibido' }));
-    expect(within(screen.getByRole('dialog', { name: 'Editar plantilla' })).getByRole('textbox', { name: /Texto/ })).toHaveValue('Recibimos tu solicitud.\n\nGracias');
+    const body = within(screen.getByRole('dialog', { name: 'Editar plantilla' })).getByRole('textbox', { name: /Texto/ });
+    expect(Array.from(body.querySelectorAll('p'), (paragraph) => paragraph.textContent)).toEqual(['Recibimos tu solicitud.', 'Gracias']);
   });
 
   it('shares a template with a colleague found by name', async () => {

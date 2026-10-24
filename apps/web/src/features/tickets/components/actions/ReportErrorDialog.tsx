@@ -1,9 +1,9 @@
+import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient } from '@/shared/session';
-import { Alert, Select, TextArea } from '@/shared/ui';
+import { Alert, Select, isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { errorSubtypesQueryOptions, reportableErrorTypesQueryOptions, reportTicketError } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from './ActionDialog';
@@ -28,7 +28,7 @@ export function ReportErrorDialog({ ticketId, visitId, onClose }: { readonly tic
   const types = useQuery(reportableErrorTypesQueryOptions(client));
   const subtypes = useQuery({ ...errorSubtypesQueryOptions(client, errorTypeId), enabled: errorTypeId !== '' });
   const report = useTicketMutation((c, args: ReportArgs) =>
-    reportTicketError(c, ticketId, { visitId, errorTypeId: args.errorTypeId, ...(args.errorSubtypeId === '' ? {} : { errorSubtypeId: args.errorSubtypeId }), description: plainTextToHtml(args.description) }),
+    reportTicketError(c, ticketId, { visitId, errorTypeId: args.errorTypeId, ...(args.errorSubtypeId === '' ? {} : { errorSubtypeId: args.errorSubtypeId }), description: args.description }),
   );
   const typeOptions = (types.data ?? []).map((type) => ({ value: type.id, label: type.name }));
   const typeStatus = types.isError ? t('actions.reportError.typesFailed') : types.data === undefined ? t('actions.reportError.typesLoading') : typeOptions.length === 0 ? t('actions.reportError.noTypes') : undefined;
@@ -45,7 +45,7 @@ export function ReportErrorDialog({ ticketId, visitId, onClose }: { readonly tic
       onClose={onClose}
       onSubmit={() => {
         setSubmitted(true);
-        if (errorTypeId !== '' && description.trim() !== '') report.mutate({ errorTypeId, errorSubtypeId, description }, { onSuccess: onClose });
+        if (errorTypeId !== '' && !isBlankRichText(description)) report.mutate({ errorTypeId, errorSubtypeId, description }, { onSuccess: onClose });
       }}
     >
       <p>{t('actions.reportError.body')}</p>
@@ -66,14 +66,13 @@ export function ReportErrorDialog({ ticketId, visitId, onClose }: { readonly tic
         <Select label={t('actions.reportError.subtype')} value={errorSubtypeId} placeholder={t('actions.reportError.noSubtype')} options={subtypeOptions} onChange={(event) => setErrorSubtypeId(event.target.value)} />
       )}
       {effect !== undefined && <Alert tone={effect === 'records' ? 'info' : 'warn'}>{t(`actions.reportError.effects.${effect}`)}</Alert>}
-      <TextArea
+      <RichTextEditor
         label={t('actions.reportError.description')}
         required
         value={description}
-        maxLength={5000}
-        rows={4}
-        error={submitted && description.trim() === '' ? t('actions.reportError.descriptionRequired') : undefined}
-        onChange={(event) => setDescription(event.target.value)}
+        maxLength={RICH_TEXT_MAX}
+        error={submitted && isBlankRichText(description) ? t('actions.reportError.descriptionRequired') : undefined}
+        onValueChange={setDescription}
       />
     </ActionDialog>
   );

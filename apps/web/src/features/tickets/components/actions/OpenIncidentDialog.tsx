@@ -1,7 +1,7 @@
+import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
-import { TextArea } from '@/shared/ui';
+import { isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { openIncident } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from './ActionDialog';
@@ -18,9 +18,9 @@ export function OpenIncidentDialog({ ticketId, visitId, onClose }: { readonly ti
   const [assignedToId, setAssignedToId] = useState('');
   const [description, setDescription] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const incident = useTicketMutation((client, args: IncidentArgs) => openIncident(client, ticketId, { visitId, assignedToId: args.assignedToId, description: plainTextToHtml(args.description) }));
+  const incident = useTicketMutation((client, args: IncidentArgs) => openIncident(client, ticketId, { visitId, assignedToId: args.assignedToId, description: args.description }));
   const personMissing = submitted && assignedToId === '';
-  const descriptionMissing = submitted && description.trim() === '';
+  const descriptionMissing = submitted && isBlankRichText(description);
   return (
     <ActionDialog
       open
@@ -31,7 +31,7 @@ export function OpenIncidentDialog({ ticketId, visitId, onClose }: { readonly ti
       onClose={onClose}
       onSubmit={() => {
         setSubmitted(true);
-        if (assignedToId !== '' && description.trim() !== '') incident.mutate({ assignedToId, description }, { onSuccess: onClose });
+        if (assignedToId !== '' && !isBlankRichText(description)) incident.mutate({ assignedToId, description }, { onSuccess: onClose });
       }}
     >
       <p>{t('actions.incident.body')}</p>
@@ -43,14 +43,13 @@ export function OpenIncidentDialog({ ticketId, visitId, onClose }: { readonly ti
         error={personMissing ? t('actions.incident.personRequired') : undefined}
         onChange={setAssignedToId}
       />
-      <TextArea
+      <RichTextEditor
         label={t('actions.incident.description')}
         required
         value={description}
-        maxLength={10_000}
-        rows={4}
+        maxLength={RICH_TEXT_MAX}
         error={descriptionMissing ? t('actions.incident.descriptionRequired') : undefined}
-        onChange={(event) => setDescription(event.target.value)}
+        onValueChange={setDescription}
       />
     </ActionDialog>
   );

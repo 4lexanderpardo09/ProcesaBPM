@@ -19,7 +19,20 @@ describe('richTextNodes', () => {
   });
 
   it('keeps only the text of tags outside the list and never their attributes', () => {
-    expect(markup('<div onclick="x()"><img src="x" onerror="y()">texto <span style="color:red">rojo</span></div>')).toBe('<div>texto rojo</div>');
+    expect(markup('<div onclick="x()"><img src="x" onerror="y()">texto <span title="t" style="color:red">rojo</span></div>')).toBe('<div>texto <span>rojo</span></div>');
+  });
+
+  it('keeps colors and alignment of a known shape and nothing else of the style', () => {
+    expect(markup('<p style="text-align: center; position: fixed"><span style="color: #c62828; background-color: rgb(255, 245, 157); background-image: url(x)">ojo</span></p>')).toBe(
+      '<div><p style="text-align:center"><span style="color:rgb(198, 40, 40);background-color:rgb(255, 245, 157)">ojo</span></p></div>',
+    );
+  });
+
+  it('draws tables with their spans and widths, in a box that scrolls, without the indentation between rows', () => {
+    const html = '<table style="min-width: 50px; float: left"><colgroup><col style="width: 120px"></colgroup>\n<tbody>\n<tr><th colspan="2">A</th></tr><tr><td rowspan="1">1</td><td colspan="999">2</td></tr></tbody></table><hr>';
+    expect(markup(html)).toBe(
+      '<div><div data-rich-table=""><table style="min-width:50px"><colgroup><col style="width:120px"/></colgroup><tbody><tr><th colSpan="2">A</th></tr><tr><td>1</td><td>2</td></tr></tbody></table></div><hr/></div>',
+    );
   });
 
   it('drops scripts and styles with their content', () => {

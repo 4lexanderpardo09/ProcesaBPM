@@ -1,7 +1,7 @@
+import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { plainTextToHtml } from '@/shared/lib/plain-text-html';
-import { TextArea } from '@/shared/ui';
+import { isBlankRichText, RichTextEditor } from '@/shared/ui';
 import { resolveIncident } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from './ActionDialog';
@@ -17,7 +17,7 @@ export function ResolveIncidentDialog({ ticketId, incidentId, onClose }: Resolve
   const { t } = useTranslation('tickets');
   const [resolution, setResolution] = useState('');
   const [missing, setMissing] = useState(false);
-  const resolve = useTicketMutation((client, text: string) => resolveIncident(client, ticketId, incidentId, plainTextToHtml(text)));
+  const resolve = useTicketMutation((client, text: string) => resolveIncident(client, ticketId, incidentId, text));
   return (
     <ActionDialog
       open
@@ -26,17 +26,16 @@ export function ResolveIncidentDialog({ ticketId, incidentId, onClose }: Resolve
       pending={resolve.isPending}
       error={resolve.error}
       onClose={onClose}
-      onSubmit={() => (resolution.trim() === '' ? setMissing(true) : resolve.mutate(resolution, { onSuccess: onClose }))}
+      onSubmit={() => (isBlankRichText(resolution) ? setMissing(true) : resolve.mutate(resolution, { onSuccess: onClose }))}
     >
-      <TextArea
+      <RichTextEditor
         label={t('actions.resolve.resolution')}
         required
         value={resolution}
-        maxLength={10_000}
-        rows={4}
+        maxLength={RICH_TEXT_MAX}
         error={missing ? t('actions.resolve.resolutionRequired') : undefined}
-        onChange={(event) => {
-          setResolution(event.target.value);
+        onValueChange={(next) => {
+          setResolution(next);
           setMissing(false);
         }}
       />

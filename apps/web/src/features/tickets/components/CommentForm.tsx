@@ -1,31 +1,32 @@
+import { RICH_TEXT_MAX } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { templatesQueryOptions } from '@/features/profile';
 import { ApiError, genericErrorMessage } from '@/shared/api';
-import { htmlToPlainText } from '@/shared/lib/plain-text-html';
 import { useApiClient } from '@/shared/session';
-import { Button, FormattedTextArea, Select } from '@/shared/ui';
+import { Button, isBlankRichText, RichTextEditor, type RichTextEditorHandle, Select } from '@/shared/ui';
 import { useCommentOnTicket } from '../hooks/use-comment-on-ticket';
 import styles from './CommentForm.module.css';
 
 const FORBIDDEN = 403;
 
 /**
- * A comment, with light formatting (bold, italics, lists), for everyone who can see the ticket; it shows up in the activity once saved. The person's text
- * templates (their own and the ones shared with them) can be inserted, to edit before sending.
+ * A comment, written in the rich text editor, for everyone who can see the ticket; it shows up in the activity once saved. The person's text
+ * templates (their own and the ones shared with them) are inserted where the cursor is, with their formatting, to edit before sending.
  */
 export function CommentForm({ ticketId }: { readonly ticketId: string }) {
   const { t } = useTranslation('tickets');
   const { t: tCommon } = useTranslation();
   const [text, setText] = useState('');
   const [missing, setMissing] = useState(false);
+  const editor = useRef<RichTextEditorHandle>(null);
   const comment = useCommentOnTicket(ticketId);
   const templates = useQuery(templatesQueryOptions(useApiClient()));
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (text.trim() === '') {
+    if (isBlankRichText(text)) {
       setMissing(true);
       return;
     }
@@ -42,11 +43,12 @@ export function CommentForm({ ticketId }: { readonly ticketId: string }) {
 
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
-      <FormattedTextArea
+      <RichTextEditor
+        ref={editor}
         label={t('detail.comment.label')}
         placeholder={t('detail.comment.placeholder')}
         value={text}
-        maxLength={5000}
+        maxLength={RICH_TEXT_MAX}
         error={failure()}
         onValueChange={(next) => {
           setText(next);
@@ -63,8 +65,7 @@ export function CommentForm({ ticketId }: { readonly ticketId: string }) {
             onChange={(event) => {
               const chosen = templates.data.find((template) => template.id === event.target.value);
               if (chosen === undefined) return;
-              const inserted = htmlToPlainText(chosen.bodyHtml);
-              setText((current) => (current.trim() === '' ? inserted : `${current.trimEnd()}\n\n${inserted}`));
+              editor.current?.insertHtml(chosen.bodyHtml);
               setMissing(false);
             }}
           />

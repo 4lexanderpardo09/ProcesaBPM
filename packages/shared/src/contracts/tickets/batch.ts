@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RICH_TEXT_MAX } from '../common.js';
 import { FIELD_TYPES } from '../../workflow/constants.js';
 import { BATCH_GROUP_BY } from '../../workflow/block-config.js';
 import { uuidSchema } from '../ids.js';
@@ -60,7 +61,7 @@ export const batchTransitionRequestSchema = z.object({
     .max(MAX_BATCH_TICKETS)
     .refine((items) => new Set(items.map((item) => item.ticketId)).size === items.length, 'A ticket appears twice'),
   values: z.record(z.string(), z.unknown()).default({}),
-  comment: z.string().trim().min(1).max(5000).optional(),
+  comment: z.string().trim().min(1).max(RICH_TEXT_MAX).optional(),
 });
 export type BatchTransitionRequest = z.infer<typeof batchTransitionRequestSchema>;
 

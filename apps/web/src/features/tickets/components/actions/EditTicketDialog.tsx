@@ -1,28 +1,25 @@
-import type { EditTicketRequest, TicketDetailResponse } from '@procesabpm/shared';
+import { DESCRIPTION_HTML_MAX, type EditTicketRequest, type TicketDetailResponse } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { htmlToPlainText, plainTextToHtml } from '@/shared/lib/plain-text-html';
 import { useApiClient } from '@/shared/session';
-import { FormattedTextArea, Select, TextField } from '@/shared/ui';
+import { isBlankRichText, RichTextEditor, Select, TextField } from '@/shared/ui';
 import { prioritiesQueryOptions } from '../../api/new-ticket-api';
 import { editTicket } from '../../api/ticket-actions-api';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from './ActionDialog';
 
 const TITLE_MAX = 300;
-const DESCRIPTION_MAX = 20_000;
 
 /**
- * Corrects what the ticket says: its subject, description and priority. Only what changed is sent, so editing the
- * subject never rewrites a description that held richer markup than the plain text shown here.
+ * Corrects what the ticket says: its subject, description and priority. Only what changed is sent: the editor reports
+ * the description only once it is edited, so editing the subject never rewrites it.
  */
 export function EditTicketDialog({ ticket, onClose }: { readonly ticket: TicketDetailResponse; readonly onClose: () => void }) {
   const { t } = useTranslation('tickets');
   const client = useApiClient();
-  const originalDescription = htmlToPlainText(ticket.descriptionHtml);
   const [title, setTitle] = useState(ticket.title);
-  const [description, setDescription] = useState(originalDescription);
+  const [description, setDescription] = useState(ticket.descriptionHtml);
   const [priorityId, setPriorityId] = useState(ticket.priorityId ?? '');
   const [submitted, setSubmitted] = useState(false);
   const priorities = useQuery(prioritiesQueryOptions(client));
@@ -36,7 +33,7 @@ export function EditTicketDialog({ ticket, onClose }: { readonly ticket: TicketD
   ];
   const changes: EditTicketRequest = {
     ...(title.trim() === ticket.title ? {} : { title: title.trim() }),
-    ...(description.trim() === originalDescription ? {} : { description: description.trim() === '' ? '' : plainTextToHtml(description) }),
+    ...(description === ticket.descriptionHtml ? {} : { description: isBlankRichText(description) ? '' : description }),
     ...(priorityId === (ticket.priorityId ?? '') ? {} : { priorityId: priorityId === '' ? null : priorityId }),
   };
 
@@ -71,7 +68,7 @@ export function EditTicketDialog({ ticket, onClose }: { readonly ticket: TicketD
         options={options}
         onChange={(event) => setPriorityId(event.target.value)}
       />
-      <FormattedTextArea label={t('actions.edit.description')} value={description} maxLength={DESCRIPTION_MAX} rows={6} onValueChange={setDescription} />
+      <RichTextEditor label={t('actions.edit.description')} value={description} maxLength={DESCRIPTION_HTML_MAX} minHeight={160} onValueChange={setDescription} />
     </ActionDialog>
   );
 }

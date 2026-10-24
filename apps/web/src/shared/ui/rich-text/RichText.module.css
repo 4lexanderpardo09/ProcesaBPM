@@ -41,10 +41,49 @@
   white-space: pre-wrap;
 }
 
+.richText h2 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .richText h3,
 .richText h4 {
   font-size: 13.5px;
   font-weight: 700;
+}
+
+.richText hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.richText [data-rich-table] {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.richText table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.richText th,
+.richText td {
+  min-width: 48px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+  text-align: left;
+}
+
+.richText th {
+  background: var(--surface-3);
+  font-weight: 600;
+}
+
+.richText td > * + *,
+.richText th > * + * {
+  margin-top: var(--space-1);
 }
 
 .richText a {
