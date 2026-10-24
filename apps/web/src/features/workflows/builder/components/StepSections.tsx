@@ -23,6 +23,7 @@ import { patchConfig } from '../lib/numbers';
 import { fromRecipients } from '../lib/participants';
 import { BatchSettings, type BatchConfig } from './BatchSettings';
 import { ParticipantList } from './participants/ParticipantList';
+import { useSections } from './SectionNav';
 import { WholeNumberField } from './WholeNumberField';
 import styles from './Builder.module.css';
 
@@ -45,15 +46,32 @@ const PEOPLE_MODES = ASSIGNMENT_MODES.filter((mode) => mode !== 'NONE');
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-/** A part of the inspector, named by its title (a region a screen reader can jump to). */
+/**
+ * A part of the inspector, named by its title (a region a screen reader can jump to). Inside the builder it folds from
+ * its title; folded, its content stays mounted (hidden), so nothing being typed is lost.
+ */
 function Section({ title, children }: { readonly title: string; readonly children: React.ReactNode }) {
   const titleId = useId();
+  const bodyId = useId();
+  const sections = useSections();
+  const folded = sections?.collapsed.has(title) ?? false;
   return (
-    <section className={styles.section} aria-labelledby={titleId}>
+    <section className={styles.section} aria-labelledby={titleId} data-section={title}>
       <h3 id={titleId} className={styles.sectionTitle}>
-        {title}
+        {sections === undefined ? (
+          title
+        ) : (
+          <button type="button" className={styles.sectionToggle} aria-expanded={!folded} aria-controls={bodyId} onClick={() => sections.toggle(title)}>
+            <span aria-hidden="true" className={styles.sectionCaret}>
+              {folded ? '▸' : '▾'}
+            </span>
+            {title}
+          </button>
+        )}
       </h3>
-      <div className={styles.sectionBody}>{children}</div>
+      <div id={bodyId} className={styles.sectionBody} hidden={folded}>
+        {children}
+      </div>
     </section>
   );
 }
