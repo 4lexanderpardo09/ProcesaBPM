@@ -1,18 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type CreateTicketRequest,
+  type CreationPreviewRequest,
   InitiatorNotAllowedError,
   InvalidReferenceError,
   NotFoundError,
   PermissionDeniedError,
   type StepDocument,
   type TicketMutationResponse,
+  type TransitionPreviewResponse,
   WorkflowNotAvailableError,
 } from '@procesabpm/shared';
 import { sanitizeRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
-import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { PublishedVersionReader, type PublishedWorkflow } from '../../workflows/application/published-version-reader.js';
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
@@ -21,6 +23,7 @@ import { type Arrival, ArrivalPlanner, arrivalEvents } from './arrival-planner.j
 import { assertRunnable, CreationGate } from './creation-gate.js';
 import { attachmentsPlanOf } from './submission-files.js';
 import { diversionEdge, formulaFailureEvents, SubmissionValidator } from './submission-validator.js';
+import { previewOrBlocked, previewResponse } from './next-step-preview.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
 
 export interface TicketCreator {
@@ -64,18 +67,7 @@ export class CreateTicketService {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
       const requesterId = request.requesterId ?? actor.userId;
-      const requester = await this.people.findActiveMember(tx, tenantId, requesterId);
-      if (requester === null) throw new InvalidReferenceError('The requester is not an active member');
-      const company = await this.gate.companyOf(tx, tenantId, requester, request.companyId);
-      const subcategory = await this.people.findAvailableSubcategory(tx, tenantId, request.subcategoryId, company.id, requester.departmentId);
-      if (subcategory === null) throw new NotFoundError();
-      const published = await this.versions.findForSubcategory(tx, tenantId, request.subcategoryId);
-      if (published === null) throw new WorkflowNotAvailableError();
-      assertRunnable(published.document);
-      const priorityId = request.priorityId ?? subcategory.defaultPriorityId;
-      this.assertMayCreateFor(actor, requesterId, { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId: request.subcategoryId, workflowId: published.workflowId, priorityId, creatorId: requester.userId });
-      const start = this.startStep(published, request.startStepId);
-      if ((await this.gate.allowedStarts(tx, tenantId, [start], requester, company)).length === 0) throw new InitiatorNotAllowedError();
+      const { requester, company, published, start, priorityId } = await this.prepare(tx, tenantId, actor, request);
 
       const submission = await this.submissions.validate(tx, {
         tenantId,
@@ -150,6 +142,58 @@ export class CreateTicketService {
       const openVisitId = await this.applier.apply(tx, tenantId, { id: ticketId, workflowVersionId: published.versionId, companyId: company.id }, this.mutation(at, actor.userId, [...submission.fieldWrites, ...arrival.computed.fieldWrites], arrival, events));
       return { id: ticketId, number: number.toString(), status: arrival.kind === 'END' ? 'CLOSED' : 'OPEN', currentStepId, openVisitId };
     });
+  }
+
+  /**
+   * Where a new ticket would go and who would get its first step, before creating it: the same checks as `create`
+   * (requester, company, subcategory, published workflow, permission and START block) and the same route, read with the
+   * values typed so far. Nothing is written.
+   */
+  preview(actor: TicketCreator, request: CreationPreviewRequest): Promise<TransitionPreviewResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      const { tenantId } = this.context.require();
+      const at = this.clock.now();
+      const { requester, company, published, start } = await this.prepare(tx, tenantId, actor, request);
+      return previewOrBlocked(async () => {
+        const submission = await this.submissions.previewValues(tx, { tenantId, document: published.document, stage: 'CREATION', step: start, input: request.values, existing: {}, company, positionId: requester.positionId, at });
+        const diversion = diversionEdge(published.document, submission.amounts, start.id);
+        const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, company.calendarId, at);
+        const arrival = await this.planner.preview(tx, {
+          tenantId,
+          ticketId: null,
+          workflowVersionId: published.versionId,
+          document: published.document,
+          entryStepId: diversion?.toStepId ?? start.id,
+          values: submission.merged,
+          companyId: company.id,
+          siteId: requester.siteId,
+          creatorId: requester.userId,
+          calendar,
+          timeZone: company.timeZone,
+          at,
+          chosenAssigneeId: undefined,
+        });
+        return previewResponse(arrival, published.document);
+      });
+    });
+  }
+
+  /** What creating (or previewing) a ticket checks first: who it is for, the company, the subcategory, the workflow, the permission and the START block. */
+  private async prepare(tx: TenantTransaction, tenantId: string, actor: TicketCreator, request: CreationPreviewRequest & { readonly priorityId?: string | undefined }) {
+    const requesterId = request.requesterId ?? actor.userId;
+    const requester = await this.people.findActiveMember(tx, tenantId, requesterId);
+    if (requester === null) throw new InvalidReferenceError('The requester is not an active member');
+    const company = await this.gate.companyOf(tx, tenantId, requester, request.companyId);
+    const subcategory = await this.people.findAvailableSubcategory(tx, tenantId, request.subcategoryId, company.id, requester.departmentId);
+    if (subcategory === null) throw new NotFoundError();
+    const published = await this.versions.findForSubcategory(tx, tenantId, request.subcategoryId);
+    if (published === null) throw new WorkflowNotAvailableError();
+    assertRunnable(published.document);
+    const priorityId = request.priorityId ?? subcategory.defaultPriorityId;
+    this.assertMayCreateFor(actor, requesterId, { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId: request.subcategoryId, workflowId: published.workflowId, priorityId, creatorId: requester.userId });
+    const start = this.startStep(published, request.startStepId);
+    if ((await this.gate.allowedStarts(tx, tenantId, [start], requester, company)).length === 0) throw new InitiatorNotAllowedError();
+    return { requester, company, published, start, priorityId };
   }
 
   private mutation(at: Date, actorId: string, fieldWrites: TicketMutation['fieldWrites'], arrival: Arrival, events: readonly EventPlan[]): TicketMutation {

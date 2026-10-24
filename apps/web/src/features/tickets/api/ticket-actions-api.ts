@@ -10,6 +10,7 @@ import {
   type TicketCandidatesQuery,
   ticketCandidatesResponseSchema,
   ticketMutationResponseSchema,
+  transitionPreviewResponseSchema,
 } from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import type { HttpClient } from '@/shared/api';
@@ -61,6 +62,11 @@ export function resolveIncident(client: HttpClient, ticketId: string, incidentId
 /** Answers the current step with one of its decisions, the values captured on it and an optional comment. */
 export function transitionTicket(client: HttpClient, ticketId: string, body: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string; assigneeId?: string }) {
   return client.request(`${ticketUrl(ticketId)}/transition`, { method: 'POST', body: { ...body, attachments: [] }, schema: ticketMutationResponseSchema });
+}
+
+/** Where a decision would take the ticket and who would get it, with the values typed so far: nothing changes. */
+export function previewTransition(client: HttpClient, ticketId: string, body: { transitionId: string; visitId: string; values: Record<string, unknown> }) {
+  return client.request(`${ticketUrl(ticketId)}/transition-preview`, { method: 'POST', body, schema: transitionPreviewResponseSchema });
 }
 
 /** Signs or rejects the caller's own pending signature on a parallel step; `assigneeId` when the step that follows asks for one. */

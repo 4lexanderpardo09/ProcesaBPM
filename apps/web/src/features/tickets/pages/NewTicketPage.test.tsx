@@ -260,6 +260,38 @@ describe('NewTicketPage', () => {
     await vi.waitFor(() => expect(fake.callsTo('/tickets')[1]?.options.body).toMatchObject({ assigneeId: id(60) }));
   });
 
+  it('says where the ticket goes as the data is typed, and asks who takes the first step when it must be chosen', async () => {
+    const preview = (options: { body?: unknown }) => {
+      const amount = (options.body as { values?: Record<string, unknown> } | undefined)?.values?.['AMOUNT'];
+      const big = typeof amount === 'string' && Number(amount) > 1000;
+      return {
+        outcome: 'STEP',
+        via: [],
+        step: { id: id(33), name: big ? 'Dirección' : 'Tesorería', type: 'TASK' },
+        assignment: big ? 'CHOOSE' : 'PERSON',
+        people: big ? [{ id: id(60), name: 'Luis Gómez' }, { id: id(61), name: 'Marta Ruiz' }] : [{ id: id(62), name: 'Ana Díaz' }],
+        fields: [],
+        resumeAt: null,
+        blocked: null,
+      };
+    };
+    const { fake } = renderRoute('/tickets/new', { handlers: handlers({ '/tickets/creation-preview': preview, '/tickets': () => created }) });
+
+    await chooseRequest();
+    const summary = await screen.findByRole('region', { name: 'Qué sigue' });
+    await vi.waitFor(() => expect(summary).toHaveTextContent('Lo recibe Ana Díaz.'));
+    expect(screen.queryByRole('combobox', { name: /Quién recibe el siguiente paso/ })).toBeNull();
+
+    await userEvent.type(screen.getByRole('textbox', { name: /Asunto/ }), 'Pago');
+    await userEvent.type(screen.getByRole('textbox', { name: /Monto/ }), '5000');
+    await vi.waitFor(() => expect(summary).toHaveTextContent('Pasa a «Dirección».'));
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /Quién recibe el siguiente paso/ }), 'Marta Ruiz');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear y enviar' }));
+
+    await vi.waitFor(() => expect(fake.callsTo('/tickets')[0]?.options.body).toMatchObject({ assigneeId: id(61) }));
+    expect(fake.callsTo('/tickets/creation-preview').at(-1)?.options.body).toMatchObject({ values: { AMOUNT: '5000' } });
+  });
+
   it('tells a person without a company that they cannot create tickets', async () => {
     renderRoute('/tickets/new', { handlers: handlers({ '/auth/me': profile([]) }) });
     expect(await screen.findByText(/No perteneces a ninguna empresa/)).toBeInTheDocument();

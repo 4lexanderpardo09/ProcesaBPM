@@ -46,6 +46,20 @@ export function useStepFields(fields: readonly FormFieldResponse[], initialValue
       },
       onBusyChange: (busy: boolean) => setUploading((current) => withBusy(current, field.code, busy)),
     }),
+    /**
+     * What is typed so far, as the API's values, without checking or marking anything: for a preview of where the
+     * answer goes. A blank or not yet valid input is left out.
+     */
+    draft(): Record<string, unknown> {
+      const values: Record<string, unknown> = {};
+      for (const field of fields) {
+        const input = inputs[field.code] ?? '';
+        if (isBlankInput(input)) continue;
+        const value = requestValue(field, input);
+        if (value.ok) values[field.code] = value.value;
+      }
+      return values;
+    },
     collect(): CollectedValues {
       // Blank table rows are not sent: dropping them here too keeps the rows the API names in step with the screen.
       const sent = withoutBlankRows(fields, inputs);

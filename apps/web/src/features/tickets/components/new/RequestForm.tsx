@@ -4,14 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 import { paths, ticketPath } from '@/shared/lib/paths';
 import { plainTextToHtml } from '@/shared/lib/plain-text-html';
+import { useApiClient, useCurrentUser } from '@/shared/session';
 import { Button, ButtonLink, Card, FormattedTextArea, TextField } from '@/shared/ui';
-import { createTicket } from '../../api/new-ticket-api';
+import { createTicket, previewCreation } from '../../api/new-ticket-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
+import { choicesOfPreview, useNextStepPreview } from '../../hooks/use-next-step-preview';
 import { typedFields, useStepFields } from '../../hooks/use-step-fields';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { NextAssigneeField } from '../actions/NextAssigneeField';
 import { FilePicker } from '../advance/FileInput';
 import { StepFieldInput } from '../advance/StepFieldInput';
+import { NextStepSummary } from '../next-step/NextStepSummary';
 import { CreationError } from './CreationError';
 import { SectionTitle } from './RequestTypeCard';
 import styles from './NewTicket.module.css';
@@ -39,7 +42,8 @@ interface CreateArgs {
 
 /**
  * Step 2: the subject, the fields of the START block, a description and loose attachments; "Crear y enviar" creates the
- * ticket and opens it. When the first step needs its assignee chosen, the API says so and the form asks for that person.
+ * ticket and opens it. Before that, the form says where the ticket goes and who gets its first step, and when that step
+ * needs its assignee chosen, asks for that person among its candidates.
  */
 export function RequestForm({ subcategoryId, companyId, requesterId, priorityId, start }: RequestFormProps) {
   const { t } = useTranslation('tickets');
@@ -50,7 +54,8 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
   const [attachments, setAttachments] = useState<readonly string[]>([]);
   const [attaching, setAttaching] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const next = useNextAssignee();
+  const client = useApiClient();
+  const timeZone = useCurrentUser().data?.user.timeZone ?? undefined;
   const create = useTicketMutation((client, args: CreateArgs) =>
     createTicket(client, {
       subcategoryId,
@@ -66,6 +71,10 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
     }),
   );
   const stepFields = useStepFields(fields, {}, create.error);
+  const preview = useNextStepPreview([subcategoryId, start.stepId, companyId, requesterId ?? ''], stepFields.draft(), (values) =>
+    previewCreation(client, { subcategoryId, startStepId: start.stepId, companyId, ...(requesterId === undefined ? {} : { requesterId }), values: { ...values } }),
+  );
+  const next = useNextAssignee(choicesOfPreview(preview.data));
   const titleMissing = submitted && title.trim() === '';
   const busy = create.isPending || stepFields.busy || attaching;
 
@@ -107,6 +116,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
           ))}
           <FormattedTextArea label={t('new.data.description')} value={description} maxLength={DESCRIPTION_MAX} rows={5} placeholder={t('new.data.descriptionPlaceholder')} onValueChange={setDescription} />
           <FilePicker label={t('new.data.attachments')} required={false} value={attachments} knownNames={{}} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
+          <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />
           <NextAssigneeField next={next} />
         </div>
       </Card>
