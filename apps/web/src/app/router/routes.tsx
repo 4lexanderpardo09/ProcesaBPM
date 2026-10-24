@@ -6,7 +6,7 @@ import { HomePage } from '@/features/home';
 import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
-import { AccountsPage, AdminsPage, AnnouncementsPage, AuditPage, CountriesPage, OperationsPage, PlansPage, PlatformLayout, TenantPage, TenantsPage } from '@/features/platform';
+import { AccountsPage, AdminsPage, AnnouncementsPage, AuditPage, CountriesPage, OperationsPage, PlansPage, PlatformLayout, SupportVisitScope, TenantPage, TenantsPage } from '@/features/platform';
 import { ProfilePage } from '@/features/profile';
 import { ReportsPage } from '@/features/reports';
 import { SettingsPage } from '@/features/settings';
@@ -95,11 +95,17 @@ export const appRoutes: RouteObject[] = [
     ],
   },
   {
-    element: <RequireSession />,
+    // During a support visit the same screens run over the visit's session instead of the member's.
+    element: <SupportVisitScope />,
     children: [
       {
-        element: <AppLayout />,
-        children: [{ index: true, element: <HomePage /> }, ...ticketRoutes, ...workflowRoutes, ...reportRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
+        element: <RequireSession />,
+        children: [
+          {
+            element: <AppLayout />,
+            children: [{ index: true, element: <HomePage /> }, ...ticketRoutes, ...workflowRoutes, ...reportRoutes, ...configurationRoutes, ...sectionRoutes, { path: '*', element: <NotFoundPage /> }],
+          },
+        ],
       },
     ],
   },

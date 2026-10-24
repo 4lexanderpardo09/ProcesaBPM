@@ -58,3 +58,11 @@ export interface SupportSessionResponse {
   readonly grantId: string;
   readonly grantExpiresAt: string;
 }
+
+export const supportSessionResponseSchema = z.object({
+  accessToken: z.string().min(1),
+  expiresIn: z.number().int().positive(),
+  sessionId: uuidSchema,
+  grantId: uuidSchema,
+  grantExpiresAt: z.string(),
+}) satisfies z.ZodType<SupportSessionResponse>;

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation } from 'react-router';
 import { OrganizationSwitcher, UserMenu, useTenantFromLink } from '@/features/auth';
 import { NotificationBell } from '@/features/notifications';
+import { EndVisitButton, SupportVisitTitle, useSupportVisits } from '@/features/platform';
 import { AnnouncementsBanner } from '@/features/settings';
 import { MenuIcon } from '@/shared/ui';
 import styles from './AppLayout.module.css';
@@ -11,11 +12,13 @@ import { Topbar } from './Topbar';
 
 /**
  * Sidebar, top bar and the routed page in the scrollable content area. On a narrow screen the sidebar is a drawer the
- * menu button opens; it closes on choosing a page, with Escape or by touching outside it.
+ * menu button opens; it closes on choosing a page, with Escape or by touching outside it. During a support visit the
+ * top bar names the organization as read-only and offers the way out instead of the person's own menus.
  */
 export function AppLayout() {
   useTenantFromLink();
   const { t } = useTranslation('navigation');
+  const { visit } = useSupportVisits();
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
   useEffect(() => setMenuOpen(false), [pathname]);
@@ -39,12 +42,16 @@ export function AppLayout() {
               <MenuIcon size={20} />
             </button>
           }
-          start={<OrganizationSwitcher />}
+          start={visit === null ? <OrganizationSwitcher /> : <SupportVisitTitle visit={visit} />}
           end={
-            <>
-              <NotificationBell />
-              <UserMenu />
-            </>
+            visit === null ? (
+              <>
+                <NotificationBell />
+                <UserMenu />
+              </>
+            ) : (
+              <EndVisitButton visit={visit} />
+            )
           }
         />
         <main className={styles.content}>

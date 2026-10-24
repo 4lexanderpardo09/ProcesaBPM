@@ -9,3 +9,5 @@ export { PlansPage } from './pages/PlansPage';
 export { TenantPage } from './pages/TenantPage';
 export { TenantsPage } from './pages/TenantsPage';
 export { PlatformSessionProvider, usePlatformSession } from './session/PlatformSessionContext';
+export { EndVisitButton, SupportVisitTitle } from './visit/SupportVisitBar';
+export { SupportVisitProvider, SupportVisitScope, useSupportVisits } from './visit/SupportVisitContext';
