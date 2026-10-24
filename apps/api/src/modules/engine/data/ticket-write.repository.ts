@@ -183,7 +183,7 @@ export class TicketWriteRepository {
 
   /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
   async reopenTicket(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<void> {
-    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'OPEN', closedAt: null, closedById: null, forcedClose: false, currentStepId: stepId, currentLoop: loop } });
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'OPEN', closedAt: null, closedById: null, forcedClose: false, currentStepId: stepId, currentLoop: loop, batchId: null } });
   }
 
   async insertTicketError(tx: TenantTransaction, tenantId: string, ticketId: string, error: { errorTypeId: string; errorSubtypeId: string | null; reporterId: string; responsibleId: string; description: string; isProcessError: boolean; createdAt: Date }): Promise<string> {
@@ -380,14 +380,15 @@ export class TicketWriteRepository {
     await tx.ticketSlaClock.updateMany({ where: { tenantId, id: clockId, completedAt: null, responsibleId: null }, data: { responsibleId } });
   }
 
-  async moveTicket(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<void> {
-    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { currentStepId: stepId, currentLoop: loop } });
+  /** Every move sets the batch the ticket moved in, or clears it: a batch only holds together until each ticket moves alone. */
+  async moveTicket(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number, batchId: string | null): Promise<void> {
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { currentStepId: stepId, currentLoop: loop, batchId } });
   }
 
   /** One UPDATE: the check that ties `closed_at` to the status is immediate. */
   /** `forced`: an error type that forces the close ended it (the reports tell it from a normal close). */
   async closeTicket(tx: TenantTransaction, tenantId: string, ticketId: string, closedAt: Date, closedById: string | null, stepId: string | null, forced = false): Promise<void> {
-    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, ...(forced ? { forcedClose: true } : {}), ...(stepId === null ? {} : { currentStepId: stepId }) } });
+    await tx.ticket.updateMany({ where: { tenantId, id: ticketId }, data: { status: 'CLOSED', closedAt, closedById, batchId: null, ...(forced ? { forcedClose: true } : {}), ...(stepId === null ? {} : { currentStepId: stepId }) } });
   }
 
   /** What a person may edit of a ticket: its subject, description and priority. */

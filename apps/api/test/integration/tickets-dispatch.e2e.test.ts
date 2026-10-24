@@ -12,7 +12,7 @@ import { type Member, publishFlow, type PublishedFlow, REQUESTER_GRANTS, simpleF
 
 useTestEnvironment();
 
-describe('RANDOM_DISPATCH: waiting tickets are handed out round-robin by the worker', () => {
+describe('RANDOM_DISPATCH: the worker hands waiting tickets out by load, batches whole', () => {
   let db: TestDatabase;
   let app: INestApplication;
   let worker: TestingModule;
@@ -59,42 +59,83 @@ describe('RANDOM_DISPATCH: waiting tickets are handed out round-robin by the wor
     expect(detail).toMatchObject({ status: 'OPEN', awaitingDispatch: true });
   });
 
-  it('hands the waiting tickets out in turn, keeping the clock start, with events and outbox', async () => {
-    const step = flow.step.task!;
+  it('hands the waiting tickets out evenly, keeping the clock start, with events and outbox', async () => {
+    const crew = [await world.member(WORKER_GRANTS), await world.member(WORKER_GRANTS), await world.member(WORKER_GRANTS)];
+    const even = await publishFlow(world.admin, simpleFlow({ assignmentMode: 'RANDOM_DISPATCH', dispatchIntervalMin: 5, slaValue: 8, slaUnit: 'BUSINESS_HOURS' }, { candidates: crew.map(user) }));
     const tickets = [];
-    for (let index = 0; index < 4; index += 1) tickets.push((await create()).body);
-    await letIntervalPass(step);
+    for (let index = 0; index < 6; index += 1) tickets.push((await create(even)).body);
+    await letIntervalPass(even.step.task!).catch(() => undefined);
     const result = await dispatchAll();
     expect(result.failed).toBe(0);
-    const owners = [];
-    for (const ticket of tickets) owners.push((await holder(ticket.id))[0]);
-    // Oldest first, in id order of the candidates, wrapping around (earlier tests may have moved the pointer).
-    const ids = people.map((person) => person.userId);
-    const start = ids.indexOf(owners[0]!);
-    expect(owners).toEqual([0, 1, 2, 3].map((offset) => ids[(start + offset) % 3]!));
+    const owners: string[] = [];
+    for (const ticket of tickets) owners.push((await holder(ticket.id))[0]!);
+    expect(crew.map((person) => owners.filter((owner) => owner === person.userId).length)).toEqual([2, 2, 2]);
     const [clock] = await world.clocks(tickets[0].id);
     expect(clock).toMatchObject({ responsible_id: owners[0], completed_at: null });
     expect((await world.events(tickets[0].id)).at(-1)).toMatchObject({ type: 'ASSIGNED', actor_id: null, assignee_id: owners[0], data: { assigneeType: 'PRIMARY', dispatched: true } });
     expect(await world.outbox('ticket.assigned', tickets[0].id)).toHaveLength(1);
-    const pointer = (await db.platform.query(`SELECT last_assigned_user_id FROM step_runtime_states WHERE step_id = $1`, [step])).rows[0].last_assigned_user_id;
-    expect(pointer).toBe(owners[3]);
     expect((await requester.client.get(`/tickets/${tickets[0].id}`).expect(200)).body.awaitingDispatch).toBe(false);
   });
 
-  it('continues where it stopped, and does nothing until the interval passes', async () => {
-    const step = flow.step.task!;
-    const ids = people.map((person) => person.userId);
-    const a = (await create()).body;
-    await letIntervalPass(step);
+  it('the one with fewer open tickets in the step gets the next, and nothing moves until the interval passes', async () => {
+    const [x, y] = [await world.member(WORKER_GRANTS), await world.member(WORKER_GRANTS)];
+    const pair = await publishFlow(world.admin, simpleFlow({ assignmentMode: 'RANDOM_DISPATCH', dispatchIntervalMin: 5 }, { candidates: [x, y].map(user) }));
+    const [first, second] = [(await create(pair)).body, (await create(pair)).body];
+    await letIntervalPass(pair.step.task!).catch(() => undefined);
     await dispatchAll();
-    const [ownerA] = await holder(a.id);
+    const done = (await holder(first.id))[0] === y.userId ? first : second;
+    await y.client.post(`/tickets/${done.id}/transition`, { transitionId: pair.transition.Done, visitId: done.openVisitId, values: {} }).then((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
 
-    const b = (await create()).body;
+    const next = (await create(pair)).body;
     await dispatchAll();
-    expect(await holder(b.id)).toEqual([]);
-    await letIntervalPass(step);
+    expect(await holder(next.id)).toEqual([]);
+    await letIntervalPass(pair.step.task!);
     await dispatchAll();
-    expect(await holder(b.id)).toEqual([ids[(ids.indexOf(ownerA!) + 1) % 3]!]);
+    expect(await holder(next.id)).toEqual([y.userId]);
+  });
+
+  it('tickets answered together in a batch go whole to one person; one answered alone is on its own', async () => {
+    const clerk = await world.member(WORKER_GRANTS);
+    const crew = [await world.member(WORKER_GRANTS), await world.member(WORKER_GRANTS), await world.member(WORKER_GRANTS)];
+    const payments = await publishFlow(world.admin, {
+      steps: [
+        { key: 'start', type: 'START' },
+        { key: 'collect', type: 'TASK', extra: { assignmentMode: 'USERS', allowsBatch: true, config: { batch: { maxTickets: 10 } } }, candidates: [user(clerk)] },
+        { key: 'review', type: 'TASK', extra: { assignmentMode: 'RANDOM_DISPATCH', dispatchIntervalMin: 5 }, candidates: crew.map(user) },
+        { key: 'end', type: 'END' },
+      ],
+      transitions: [
+        { from: 'start', to: 'collect', type: 'DEFAULT' },
+        { from: 'collect', to: 'review', type: 'DECISION', label: 'Send' },
+        { from: 'review', to: 'end', type: 'DECISION', label: 'Approve' },
+      ],
+    });
+    const tickets = [];
+    for (let index = 0; index < 4; index += 1) tickets.push((await create(payments)).body);
+    const [alone, ...together] = tickets;
+    const moved = await clerk.client.post('/ticket-batches/transition', { transitionId: payments.transition.Send, items: together.map((ticket) => ({ ticketId: ticket.id, visitId: ticket.openVisitId })), values: {} }).expect(200);
+    expect(moved.body.results.every((result: { ok: boolean }) => result.ok)).toBe(true);
+    await clerk.client.post(`/tickets/${alone.id}/transition`, { transitionId: payments.transition.Send, visitId: alone.openVisitId, values: {} }).expect(200);
+    const batchOf = async (ticketId: string) => (await db.platform.query(`SELECT batch_id FROM tickets WHERE id = $1`, [ticketId])).rows[0].batch_id as string | null;
+    const batchIds = await Promise.all(together.map((ticket) => batchOf(ticket.id)));
+    expect(new Set(batchIds).size).toBe(1);
+    expect(batchIds[0]).not.toBeNull();
+    expect(await batchOf(alone.id)).toBeNull();
+
+    await letIntervalPass(payments.step.review!).catch(() => undefined);
+    await dispatchAll();
+    const owners = await Promise.all(together.map(async (ticket) => (await holder(ticket.id))[0]));
+    expect(new Set(owners).size).toBe(1);
+    const [aloneOwner] = await holder(alone.id);
+    expect(aloneOwner).toBeDefined();
+    expect(aloneOwner).not.toBe(owners[0]);
+
+    // Moving on alone clears the batch: it holds together only until each ticket moves by itself.
+    const owner = crew.find((person) => person.userId === owners[0])!;
+    // The dispatch gives the ticket a person within the same visit the batch opened.
+    const visitId = (moved.body.results as Array<{ ticketId: string; ticket: { openVisitId: string } }>).find((result) => result.ticketId === together[0]!.id)!.ticket.openVisitId;
+    await owner.client.post(`/tickets/${together[0]!.id}/transition`, { transitionId: payments.transition.Approve, visitId, values: {} }).expect(200);
+    expect(await batchOf(together[0]!.id)).toBeNull();
   });
 
   it('a person who is no longer eligible is skipped', async () => {
@@ -145,20 +186,17 @@ describe('RANDOM_DISPATCH: waiting tickets are handed out round-robin by the wor
     }
   });
 
-  it('serves each tenant with its own people and its own pointer', async () => {
+  it('serves each tenant with its own people', async () => {
     const other = await TicketWorld.create(db, app);
     const [theirRequester, theirWorker] = [await other.member(REQUESTER_GRANTS), await other.member(WORKER_GRANTS)];
     const theirs = await publishFlow(other.admin, simpleFlow({ assignmentMode: 'RANDOM_DISPATCH', dispatchIntervalMin: 5 }, { candidates: [user(theirWorker)] }));
     const theirTicket = (await theirRequester.client.post('/tickets', { subcategoryId: theirs.subcategoryId, title: 'x', values: {} }).expect(201)).body;
     const mine = (await create()).body;
-    const pointerBefore = (await db.platform.query(`SELECT last_assigned_user_id FROM step_runtime_states WHERE step_id = $1`, [flow.step.task])).rows[0]?.last_assigned_user_id;
     await letIntervalPass(flow.step.task!);
     await db.platform.query(`UPDATE step_runtime_states SET last_dispatch_at = NULL WHERE step_id = $1`, [theirs.step.task]);
     await dispatchAll();
     expect((await db.platform.query(`SELECT user_id FROM ticket_assignees WHERE ticket_id = $1`, [theirTicket.id])).rows.map((row) => row.user_id)).toEqual([theirWorker.userId]);
     expect(people.map((person) => person.userId)).toContain((await holder(mine.id))[0]);
-    expect((await db.platform.query(`SELECT last_assigned_user_id FROM step_runtime_states WHERE step_id = $1`, [theirs.step.task])).rows[0].last_assigned_user_id).toBe(theirWorker.userId);
-    void pointerBefore;
   });
 
   it('a dispatched holder who is gone when their incident ends sends the ticket back to the queue', async () => {

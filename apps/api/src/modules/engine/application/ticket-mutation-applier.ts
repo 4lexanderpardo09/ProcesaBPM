@@ -40,7 +40,7 @@ export class TicketMutationApplier {
       if (assignees.length > 0) await this.writes.insertAssignees(tx, tenantId, ticket.id, at, assignees);
       if (mutation.arrival.parallelTasks.length > 0) await this.writes.insertParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop, mutation.arrival.parallelTasks);
     }
-    if (mutation.ticket.kind === 'current') await this.writes.moveTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
+    if (mutation.ticket.kind === 'current') await this.writes.moveTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop, mutation.ticket.batchId ?? null);
     else if (mutation.ticket.kind === 'reopened') await this.writes.reopenTicket(tx, tenantId, ticket.id, mutation.ticket.stepId, mutation.ticket.loop);
     else if (mutation.ticket.kind === 'closed') await this.writes.closeTicket(tx, tenantId, ticket.id, at, mutation.actorId, mutation.ticket.stepId, mutation.ticket.forced);
     for (const event of mutation.events) {

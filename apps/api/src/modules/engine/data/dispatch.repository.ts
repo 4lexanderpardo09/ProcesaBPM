@@ -7,6 +7,7 @@ export interface WaitingTicket {
   readonly companyId: string;
   readonly siteId: string | null;
   readonly creatorId: string;
+  readonly batchId: string | null;
 }
 
 /** The worker's reads and writes for handing out tickets of RANDOM_DISPATCH steps. Callers pass the tenant's transaction. */
@@ -17,23 +18,43 @@ export class DispatchRepository {
     return tx.$queryRaw`SELECT out_tenant_id::text AS "tenantId", out_step_id::text AS "stepId" FROM claim_random_dispatch_steps(${limit}::int)`;
   }
 
-  /** Locks the round-robin pointer of the step; `undefined` when it has no state row. */
-  async lockPointer(tx: TenantTransaction, tenantId: string, stepId: string): Promise<{ last: string | null } | undefined> {
-    const rows = await tx.$queryRaw<Array<{ last: string | null }>>`
-      SELECT last_assigned_user_id::text AS "last" FROM step_runtime_states
-      WHERE tenant_id = ${tenantId}::uuid AND step_id = ${stepId}::uuid FOR UPDATE`;
-    return rows[0];
+  /** Locks the step's state row, so two runs never serve the same step at once; `false` when it has none. */
+  async lockStep(tx: TenantTransaction, tenantId: string, stepId: string): Promise<boolean> {
+    const rows = await tx.$queryRaw<unknown[]>`
+      SELECT 1 FROM step_runtime_states WHERE tenant_id = ${tenantId}::uuid AND step_id = ${stepId}::uuid FOR UPDATE`;
+    return rows.length > 0;
   }
 
-  async savePointer(tx: TenantTransaction, tenantId: string, stepId: string, lastAssignedUserId: string): Promise<void> {
-    await tx.stepRuntimeState.updateMany({ where: { tenantId, stepId }, data: { lastAssignedUserId } });
+  /** Open tickets each of the people holds in the step now: what they still have to do there. */
+  async loadAtStep(tx: TenantTransaction, tenantId: string, stepId: string, userIds: readonly string[]): Promise<Map<string, number>> {
+    const rows = await tx.$queryRaw<Array<{ userId: string; open: number }>>`
+      SELECT a.user_id::text AS "userId", count(DISTINCT t.id)::int AS "open"
+      FROM ticket_assignees a
+      JOIN tickets t ON t.tenant_id = a.tenant_id AND t.id = a.ticket_id
+      WHERE a.tenant_id = ${tenantId}::uuid AND a.type = 'PRIMARY' AND a.user_id = ANY(${[...userIds]}::uuid[])
+        AND t.status = 'OPEN' AND t.current_step_id = ${stepId}::uuid
+      GROUP BY a.user_id`;
+    return new Map(rows.map((row) => [row.userId, row.open]));
+  }
+
+  /** Who already holds an open ticket of each batch in the step (part of it went out in an earlier run). */
+  async batchHolders(tx: TenantTransaction, tenantId: string, stepId: string, batchIds: readonly string[]): Promise<Map<string, string>> {
+    if (batchIds.length === 0) return new Map();
+    const rows = await tx.$queryRaw<Array<{ batchId: string; userId: string }>>`
+      SELECT DISTINCT ON (t.batch_id) t.batch_id::text AS "batchId", a.user_id::text AS "userId"
+      FROM tickets t
+      JOIN ticket_assignees a ON a.tenant_id = t.tenant_id AND a.ticket_id = t.id AND a.type = 'PRIMARY'
+      WHERE t.tenant_id = ${tenantId}::uuid AND t.batch_id = ANY(${[...batchIds]}::uuid[])
+        AND t.status = 'OPEN' AND t.current_step_id = ${stepId}::uuid
+      ORDER BY t.batch_id, a.user_id`;
+    return new Map(rows.map((row) => [row.batchId, row.userId]));
   }
 
   /** Open tickets in the step with a running clock nobody is responsible for and nobody holding them; locked, oldest first. */
   waiting(tx: TenantTransaction, tenantId: string, stepId: string, limit: number): Promise<WaitingTicket[]> {
     return tx.$queryRaw<WaitingTicket[]>`
       SELECT t.id::text AS "id", t.workflow_version_id::text AS "workflowVersionId", t.company_id::text AS "companyId",
-             t.site_id::text AS "siteId", t.creator_id::text AS "creatorId"
+             t.site_id::text AS "siteId", t.creator_id::text AS "creatorId", t.batch_id::text AS "batchId"
       FROM tickets t
       JOIN ticket_sla_clocks c ON c.tenant_id = t.tenant_id AND c.ticket_id = t.id
       WHERE t.tenant_id = ${tenantId}::uuid AND t.status = 'OPEN' AND t.current_step_id = ${stepId}::uuid

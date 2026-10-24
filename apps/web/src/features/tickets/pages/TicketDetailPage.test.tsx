@@ -1084,7 +1084,7 @@ describe('TicketDetailPage', () => {
 
       answer = preview({ assignment: 'DISPATCH', people: Array.from({ length: 7 }, (_, index) => ({ id: id(900 + index), name: `Persona ${index + 1}` })) });
       dialog = await open();
-      expect(await within(dialog).findByText('El sistema lo reparte por turnos entre 7 personas: Persona 1, Persona 2, Persona 3, Persona 4, Persona 5 y 2 más.')).toBeInTheDocument();
+      expect(await within(dialog).findByText('El sistema se lo da a quien tenga menos tickets abiertos en el paso, entre 7 personas: Persona 1, Persona 2, Persona 3, Persona 4, Persona 5 y 2 más.')).toBeInTheDocument();
       await close(dialog);
 
       answer = preview({ outcome: 'END', step: null, assignment: null });
