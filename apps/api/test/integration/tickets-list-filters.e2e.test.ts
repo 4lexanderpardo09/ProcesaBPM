@@ -19,7 +19,7 @@ interface CreatedTicket {
 }
 
 interface Page {
-  readonly items: ReadonlyArray<{ id: string }>;
+  readonly items: ReadonlyArray<{ id: string; filteredValue?: unknown; lastActivityAt?: string }>;
   readonly total: number;
 }
 
@@ -82,6 +82,36 @@ describe('GET /tickets filters and GET /tickets/counts', () => {
   afterAll(async () => {
     await app.close();
     await db.close();
+  });
+
+  describe('order (as in the help desk: latest activity first by default)', () => {
+    const order = async (query: string) => (await list(reader, `view=all&${query}`)).items.map((item) => item.id);
+    const among = (ids: readonly string[], ...names: Array<keyof typeof ticket>) => ids.filter((id) => names.some((name) => ticket[name].id === id));
+
+    it('a ticket that just had activity goes first, and its last activity moves on', async () => {
+      const before = (await list(reader, 'view=all')).items.find((item) => item.id === ticket.percent.id)!.lastActivityAt!;
+      const commenter = await world.member([grant('comment'), grant('read_all')]);
+      await commenter.client.post(`/tickets/${ticket.percent.id}/comments`, { comment: 'Any news?' }).expect(201);
+      const items = (await list(reader, 'view=all')).items;
+      expect(items[0]!.id).toBe(ticket.percent.id);
+      expect(Date.parse(items[0]!.lastActivityAt!)).toBeGreaterThan(Date.parse(before));
+      expect(among(await order('sort=lastActivity&direction=asc'), 'percent', 'colleague')).toEqual([ticket.colleague.id, ticket.percent.id]);
+    });
+
+    it('by number, title, requester and priority, both ways', async () => {
+      expect(among(await order('sort=number&direction=asc'), 'percent', 'plain', 'colleague')).toEqual([ticket.percent.id, ticket.plain.id, ticket.colleague.id]);
+      expect(among(await order('sort=number&direction=desc'), 'percent', 'plain', 'colleague')).toEqual([ticket.colleague.id, ticket.plain.id, ticket.percent.id]);
+      expect(among(await order('sort=title&direction=asc'), 'colleague', 'percent')).toEqual([ticket.colleague.id, ticket.percent.id]);
+      // Bruno Díaz before Zoe María Quintero.
+      expect(among(await order('sort=requester&direction=asc'), 'colleague', 'percent')).toEqual([ticket.colleague.id, ticket.percent.id]);
+      const byPriority = among(await order('sort=priority&direction=asc'), 'percent', 'colleague');
+      expect(byPriority).toHaveLength(2);
+    });
+
+    it('refuses a sort it does not know', async () => {
+      await reader.client.get('/tickets?view=all&sort=color').expect(400);
+      await reader.client.get('/tickets?view=all&direction=up').expect(400);
+    });
   });
 
   describe('search', () => {
@@ -249,6 +279,13 @@ describe('GET /tickets filters and GET /tickets/counts', () => {
       field.datetime = await create(filler, other, 'Field datetime', { values: { DUE_ON: '2026-03-20T22:30:00.000Z', REFERENCE: 77, AMOUNT: 'N-9000' } });
       field.other = await create(filler, other, 'Field other', { values: { DUE_ON: '2026-04-02T10:00:00.000Z', AMOUNT: 'abc' } });
       field.none = await create(filler, dated, 'Field none', { values: {} });
+    });
+
+    it('carries the value of the field filtered by, for its column (as in the help desk)', async () => {
+      const page = await list(reader, 'view=all&fieldCode=REFERENCE&fieldOperator=filled');
+      const valueOf = (name: keyof typeof field) => page.items.find((item) => item.id === field[name].id)?.filteredValue;
+      expect([valueOf('early'), valueOf('late'), valueOf('datetime')]).toEqual(['Factura FAC-001', 'Recibo 77', 77]);
+      expect((await list(reader, 'view=all')).items.every((item) => item.filteredValue === null)).toBe(true);
     });
 
     it('contains a text, ignoring case and only in that field', async () => {

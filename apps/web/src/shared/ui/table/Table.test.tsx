@@ -21,6 +21,17 @@ const renderTable = (props: Partial<Parameters<typeof Table<Row>>[0]> = {}) =>
   render(<Table label="Ejemplo" columns={columns} rows={rows} rowKey={(row) => row.id} empty="Nada por aquí" loadingLabel="Cargando" {...props} />);
 
 describe('Table', () => {
+  it('a sortable header is a button that says how the rows are sorted', async () => {
+    const onSort = vi.fn();
+    renderTable({ columns: [{ ...columns[0]!, sort: { direction: 'asc', onSort: () => undefined } }, { ...columns[1]!, sort: { direction: undefined, onSort } }] });
+    const table = screen.getByRole('table', { name: 'Ejemplo' });
+    expect(within(table).getByRole('columnheader', { name: /Nº/ })).toHaveAttribute('aria-sort', 'ascending');
+    expect(within(table).getByRole('columnheader', { name: /Nombre/ })).toHaveAttribute('aria-sort', 'none');
+    await userEvent.click(within(table).getByRole('button', { name: /Nombre/ }));
+    expect(onSort).toHaveBeenCalledOnce();
+  });
+
+
   it('shows a header per column and a row per item', () => {
     renderTable();
     const table = screen.getByRole('table', { name: 'Ejemplo' });

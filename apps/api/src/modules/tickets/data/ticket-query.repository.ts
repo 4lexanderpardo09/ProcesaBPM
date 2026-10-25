@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { FilterableFieldType } from '@procesabpm/shared';
+import type { FilterableFieldType, SortDirection, TicketSort } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { fullName } from '../domain/person-name.js';
 
@@ -24,6 +24,7 @@ const SUMMARY = {
   priorityId: true,
   createdAt: true,
   closedAt: true,
+  lastActivityAt: true,
   creator: { select: PERSON_NAME },
   subcategory: { select: { name: true, category: { select: { id: true, name: true } }, defaultPriority: { select: { id: true, name: true, color: true } } } },
   currentStep: { select: NAMED },
@@ -88,6 +89,21 @@ const REALTIME_SUMMARY = {
 /** The caller's own tags on a ticket (never anyone else's): part of the summary and the detail. */
 const withTags = (userId: string) => ({ tags: { where: { userId }, select: { tag: { select: { id: true, name: true, color: true } } } } }) as const;
 
+/** The Prisma order of each inbox sort; the number (newest first) breaks ties so pages never overlap. */
+const orderOf = (sort: TicketSort, direction: SortDirection): Where[] => {
+  const by: Record<TicketSort, Where> = {
+    lastActivity: { lastActivityAt: direction },
+    number: { number: direction },
+    title: { title: direction },
+    status: { status: direction },
+    requester: { creator: { user: { firstName: direction } } },
+    priority: { priority: { sortOrder: direction } },
+    workflowPriority: { subcategory: { defaultPriority: { sortOrder: direction } } },
+    createdAt: { createdAt: direction },
+  };
+  return sort === 'number' ? [by.number] : sort === 'requester' ? [by.requester, { creator: { user: { lastName: direction } } }, { number: 'desc' }] : [by[sort], { number: 'desc' }];
+};
+
 /** The tenant's tickets that are not deleted and meet every filter. */
 const liveTickets = (tenantId: string, filters: readonly Where[]) => ({ AND: [{ tenantId, deletedAt: null }, ...filters] }) as never;
 
@@ -98,10 +114,17 @@ export class TicketQueryRepository {
     return tx.ticket.findFirst({ where: { AND: [{ tenantId, id: ticketId, deletedAt: null }, access] } as never, select: { ...DETAIL, ...withTags(userId) } });
   }
 
-  async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }, userId: string) {
+  async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }, userId: string, order: { sort: TicketSort; direction: SortDirection } = { sort: 'number', direction: 'desc' }) {
     // One query after another: an interactive transaction has a single connection.
-    const rows = await tx.ticket.findMany({ where: liveTickets(tenantId, filters), select: { ...SUMMARY, ...withTags(userId) }, orderBy: { number: 'desc' }, ...window });
+    const rows = await tx.ticket.findMany({ where: liveTickets(tenantId, filters), select: { ...SUMMARY, ...withTags(userId) }, orderBy: orderOf(order.sort, order.direction) as never, ...window });
     return { rows, total: await this.count(tx, tenantId, filters) };
+  }
+
+  /** The value of the field with that code on each of the tickets (the column of a listing filtered by that field). */
+  async valuesOfField(tx: TenantTransaction, tenantId: string, ticketIds: readonly string[], code: string): Promise<Map<string, unknown>> {
+    if (ticketIds.length === 0) return new Map();
+    const rows = await tx.ticketFieldValue.findMany({ where: { tenantId, ticketId: { in: [...ticketIds] }, field: { code } }, select: { ticketId: true, value: true } });
+    return new Map(rows.map((row) => [row.ticketId, row.value]));
   }
 
   /** How many live tickets of the tenant meet every filter. */

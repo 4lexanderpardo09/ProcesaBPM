@@ -1,4 +1,4 @@
-import { ticketCountsResponseSchema, ticketPageResponseSchema } from '@procesabpm/shared';
+import { ticketCountsResponseSchema, ticketFilterFieldsResponseSchema, ticketPageResponseSchema } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import type { HttpClient } from '@/shared/api';
 import { filterQuery, filtersOf, type InboxFilters, type InboxParams } from '../lib/inbox-params';
@@ -24,6 +24,8 @@ export function ticketListQueryOptions(client: HttpClient, params: InboxParams) 
   query.set('view', params.view);
   query.set('page', String(params.page));
   query.set('pageSize', String(INBOX_PAGE_SIZE));
+  query.set('sort', params.sort);
+  query.set('direction', params.direction);
   return queryOptions({
     queryKey: ticketQueryKeys.list(params),
     queryFn: ({ signal }) => client.request(`/tickets?${query.toString()}`, { schema: ticketPageResponseSchema, signal }),
@@ -40,3 +42,11 @@ export function ticketCountsQueryOptions(client: HttpClient, filters: InboxFilte
     placeholderData: keepPreviousData,
   });
 }
+
+/** The field codes the inbox can filter by, with their labels (the field filter and its column). */
+export const filterFieldsQueryOptions = (client: HttpClient) =>
+  queryOptions({
+    queryKey: ['tickets', 'filter-fields'] as const,
+    queryFn: ({ signal }) => client.request('/tickets/filter-fields', { schema: ticketFilterFieldsResponseSchema, signal }),
+    staleTime: 5 * 60_000,
+  });

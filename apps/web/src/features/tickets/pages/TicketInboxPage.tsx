@@ -1,9 +1,10 @@
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { paths } from '@/shared/lib/paths';
-import { useCurrentUser, usePermissions } from '@/shared/session';
+import { useApiClient, useCurrentUser, usePermissions } from '@/shared/session';
 import { ButtonLink, PageHeader, Pagination, PlusIcon, Tabs } from '@/shared/ui';
-import { INBOX_PAGE_SIZE } from '../api/tickets-api';
+import { filterFieldsQueryOptions, INBOX_PAGE_SIZE } from '../api/tickets-api';
 import { InboxFilters } from '../components/InboxFilters';
 import { LoadError } from '../components/LoadError';
 import { TicketTable } from '../components/TicketTable';
@@ -22,6 +23,9 @@ export function TicketInboxPage() {
   const show = (next: Partial<InboxParams>) => setSearchParams((current) => writeInboxParams({ ...readInboxParams(current), page: 1, ...next }));
   const page = list.data;
   const { can } = usePermissions();
+  // As in the help desk, a field filter adds a column with that field (named as its form calls it).
+  const fields = useQuery({ ...filterFieldsQueryOptions(useApiClient()), enabled: params.fieldCode !== undefined });
+  const fieldLabel = params.fieldCode === undefined ? undefined : (fields.data?.find((field) => field.code === params.fieldCode)?.label ?? params.fieldCode);
 
   return (
     <>
@@ -54,6 +58,10 @@ export function TicketInboxPage() {
           loading={page === undefined}
           empty={hasFilters(filtersOf(params)) ? t('inbox.empty.filtered') : t(`inbox.empty.${params.view}`)}
           timeZone={timeZone}
+          sort={params.sort}
+          direction={params.direction}
+          onSort={(sort, direction) => show({ sort, direction })}
+          fieldLabel={fieldLabel}
           footer={page === undefined || page.total === 0 ? undefined : <Pagination page={params.page} pageSize={INBOX_PAGE_SIZE} total={page.total} onChange={(next) => show({ page: next })} />}
         />
       )}

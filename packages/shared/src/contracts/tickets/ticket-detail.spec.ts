@@ -22,6 +22,8 @@ const detail = {
   currentStep: { id: id(5), name: 'Revisión' },
   priority: null,
   workflowPriority: null,
+  lastActivityAt: '2026-10-17T16:00:00.000Z',
+  filteredValue: null,
   sla: null,
   workflowId: id(6),
   workflowVersionId: id(7),

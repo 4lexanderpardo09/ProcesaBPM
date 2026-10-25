@@ -66,7 +66,7 @@ describe('TicketQueriesService', () => {
     const person = (firstName: string) => ({ user: { firstName, lastName: 'Pérez' } });
     const detailRow = {
       id: TICKET, number: 1n, title: 't', status: 'OPEN', companyId: CATEGORY, creatorId: USER, subcategoryId: CATEGORY, currentStepId: null, priorityId: null,
-      createdAt: new Date(), closedAt: null, tags: [], creator: person('Ana'), subcategory: { name: 's', category: { id: CATEGORY, name: 'c' } }, currentStep: null, priority: null,
+      createdAt: new Date(), closedAt: null, lastActivityAt: new Date(), tags: [], creator: person('Ana'), subcategory: { name: 's', category: { id: CATEGORY, name: 'c' } }, currentStep: null, priority: null,
       assignees: [], slaClocks: [], workflowId: CATEGORY, workflowVersionId: CATEGORY, registeredById: null, registeredBy: null, descriptionHtml: '', departmentId: null, department: null,
       siteId: null, site: null, currentLoop: 1, closedById: null, closedBy: null, company: { id: CATEGORY, name: 'Co' }, stepVisits: [], parallelTasks: [], incidents: [],
       fieldValues: [
@@ -108,13 +108,13 @@ describe('TicketQueriesService', () => {
   describe('list', () => {
     it('reads the page with the same filters as the counts of its view', async () => {
       const { service, tickets, tx, inTenant } = setUp();
-      await inTenant(() => service.list(principal, ability, { ...query, view: 'created', page: 2, pageSize: 10 }));
-      expect(tickets.list).toHaveBeenCalledWith(tx, TENANT, expectedFilters('created'), { skip: 10, take: 10 }, USER);
+      await inTenant(() => service.list(principal, ability, { ...query, view: 'created', page: 2, pageSize: 10, sort: 'priority', direction: 'asc' }));
+      expect(tickets.list).toHaveBeenCalledWith(tx, TENANT, expectedFilters('created'), { skip: 10, take: 10 }, USER, { sort: 'priority', direction: 'asc' });
     });
 
     it('always ends with the access filter, so no filter can widen it', async () => {
       const { service, tickets, inTenant } = setUp();
-      await inTenant(() => service.list(principal, ability, { view: 'all', page: 1, pageSize: 25 }));
+      await inTenant(() => service.list(principal, ability, { view: 'all', page: 1, pageSize: 25, sort: 'lastActivity', direction: 'desc' }));
       const filters = vi.mocked(tickets.list).mock.calls[0]![2];
       expect(filters).toEqual([{}, readableTickets(ability)]);
     });

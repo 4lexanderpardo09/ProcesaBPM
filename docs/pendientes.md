@@ -69,6 +69,12 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Del flujo:** la de la subcategoría (`default_priority_id`), que ahora se llama «Prioridad del flujo». Viaja en `workflowPriority` del listado y el detalle y se filtra con `workflowPriorityId`.
   - **Web:** el detalle muestra las dos («Prioridad Alta (usuario)», «Prioridad Media (flujo)»), la bandeja filtra por cada una y el catálogo marca la prioridad por defecto.
   - **Ojo:** los tickets creados antes guardan la de la subcategoría como si la hubiera elegido el usuario (no se tocan).
+- **Columnas y orden de la bandeja (2026-10-25, `feat/inbox-columns`, A3 de paridad):**
+  - **Columnas como la mesa:** número, asunto, el campo filtrado (si hay filtro por campo), solicitante, asignado a, estado, prioridad usuario, prioridad flujo, etiquetas y última actualización.
+  - **Última actualización:** nueva columna `tickets.last_activity_at`, que un trigger en `ticket_events` mantiene (cualquier evento: crear, avanzar, asignar, comentar...). La migración la llena con el último evento de cada ticket sin tocar `updated_at`.
+  - **Orden:** `GET /tickets` acepta `sort` (`lastActivity` por defecto, `number`, `title`, `status`, `requester`, `priority`, `workflowPriority`, `createdAt`) y `direction` (`desc` por defecto). En la web cada encabezado ordena y el segundo clic invierte; queda en la URL (`sort`, `dir`).
+  - **Campo filtrado:** con `fieldCode`, cada fila trae `filteredValue` (el valor tal como se guardó).
+  - **Por confirmar:** ordenar por la columna del campo filtrado (la mesa lo hace) no está; el valor se muestra como se guardó (sin formato de moneda ni nombre de la opción).
 - **Ranking como la mesa (2026-10-25, `feat/ranking-like-help-desk`, decisión B5 del usuario):**
   - **Fórmula:** con n gestionados (cada vez que la persona tuvo un paso: sus relojes, como las asignaciones de la mesa), o a tiempo y e errores de proceso:
     - puntaje = 70·o/n + 30·(1 − e/n);

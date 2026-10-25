@@ -5,7 +5,7 @@ const ID = '018f0000-0000-7000-8000-000000000001';
 
 describe('listTicketsQuerySchema', () => {
   it('defaults to the first page of the assigned view', () => {
-    expect(listTicketsQuerySchema.parse({})).toEqual({ page: 1, pageSize: 25, view: 'assigned' });
+    expect(listTicketsQuerySchema.parse({})).toEqual({ page: 1, pageSize: 25, view: 'assigned', sort: 'lastActivity', direction: 'desc' });
   });
 
   it('takes the inbox filters and trims the search', () => {
