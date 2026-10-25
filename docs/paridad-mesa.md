@@ -17,12 +17,12 @@ Un subagente comparó desde cero la mesa de ayuda (`mesa-de-ayuda/help-desk-back
 ## A. Lo que falta en ProcesaBPM
 | # | Qué | Mesa | ProcesaBPM | Impacto | Lado | Evidencia |
 |---|---|---|---|---|---|---|
-| A1 | **Cédula de la persona** | Se captura al crear el usuario. Sale en planos (`solicitante` → cédula) y en Formatos PDF | La columna existe y los planos la leen, pero nada la llena: sale vacía. El PDF no la ofrece | **Alto** | ambos | MB/users/dto/create-user.dto.ts:72; MB/formatos-pdf/services/datos-ticket-pdf.service.ts:209; shared/contracts/identity/schemas.ts:26 y :39 |
+| A1 | ~~**Cédula de la persona**~~ **Descartado por el usuario (2026-10-25):** no hace falta; los datos de empleados van en un Excel («Datos de Excel»), sin crear cuentas | Se captura al crear el usuario. Sale en planos (`solicitante` → cédula) y en Formatos PDF | La columna existe y los planos la leen, pero nada la llena: sale vacía. El PDF no la ofrece | **Alto** | ambos | MB/users/dto/create-user.dto.ts:72; MB/formatos-pdf/services/datos-ticket-pdf.service.ts:209; shared/contracts/identity/schemas.ts:26 y :39 |
 | A2 | **Elegir firmantes y aprobador a mano** cuando no se resuelven solos | Si un cargo tiene 0 o más de un titular, se elige entre los usuarios de la empresa y se puede omitir la firma (`allowSkip`). Sin jefe inmediato también se elige a mano | Toma al titular con menos carga; si un firmante no se resuelve, falla todo el avance. Sin aprobador, error | **Alto** | ambos | MB/workflows/services/workflow-transition.service.ts:2107 y :2140; api/engine/application/assignment-resolver.ts:49 |
 | A3 | **Columnas y orden de la bandeja** | Cliente, asignado, prioridad del usuario, prioridad del flujo, última actualización y la columna del campo filtrado. Se ordena (por defecto, por última actualización) | Número, título, estado, fecha y etiquetas. Orden fijo por número descendente | Medio | ambos | MF/modules/tickets/pages/TicketsPage.tsx:417-551; MB/tickets/services/ticket-listing.service.ts:354; web/features/tickets/components/TicketTable.tsx:24-36; api/tickets/data/ticket-query.repository.ts:103 |
 | A4 | **Agregar un firmante paralelo nuevo al reasignar** | Sí (`crearNuevoParalelo`) | Solo mueve una firma pendiente a otra persona | Medio | back | MB/tickets/dto/reassign-ticket.dto.ts:32; shared/contracts/tickets/schemas.ts:72 |
 | A5 | **Agrupar el lote por un dato del formulario** | Por un dato de la persona o por corte de plano | Por empresa, sede o departamento del solicitante, o por corte de plano | Bajo | back | MB/workflows/services/procesar-lote.service.ts:37; shared/workflow/block-config.ts:8 |
-| A6 | **Calculadora «saldo de viáticos»** | `CALC:SALDO_VIATICOS` | Solo `MEAL_ALLOWANCE`, aunque la decisión D3 era traer las dos | Medio | back | help-desk-backend/src/common/calculos/saldo-viaticos.calculator.ts; shared/calculators/ |
+| A6 | ~~**Calculadora «saldo de viáticos»**~~ **Hecho (2026-10-25):** `TRAVEL_BALANCE` | `CALC:SALDO_VIATICOS` | Solo `MEAL_ALLOWANCE`, aunque la decisión D3 era traer las dos | Medio | back | help-desk-backend/src/common/calculos/saldo-viaticos.calculator.ts; shared/calculators/ |
 | A7 | **Mantenimiento activado por el cliente** | El administrador del cliente lo activa; solo entra el rol Administrador | Solo el anuncio de plataforma bloquea el ingreso; el cliente no lo controla | Bajo | ambos | MB/system-config/system-config.controller.ts:36; MB/auth/auth.service.ts:58; api/announcements/domain/login-block-policy.ts |
 | A8 | **Manual de usuario** | Docusaurus en `help-desk-frontend/docs` (unas 45 páginas) | No hay; solo Storybook | Bajo | front | `apps/web` |
 | A9 | **Notificaciones en tiempo real en la web** | La campana se actualiza por WebSocket | El API tiene la pasarela, pero la web consulta cada cierto tiempo | Medio | front | MF/shared/services/notifications-ws.service.ts; `apps/web/package.json` sin `socket.io-client` |
@@ -33,6 +33,8 @@ Un subagente comparó desde cero la mesa de ayuda (`mesa-de-ayuda/help-desk-back
 - Campos alimentados por SQL guardado (`campo_query`): los reemplazan los datasets, por seguridad (MB/templates/templates.controller.ts:69).
 - Reportes guardados con SQL (`tm_consulta`): MB/reports/reports.controller.ts:43-102. No se encontró código que los ejecute; puede ser un resto sin uso.
 - Diagnóstico `dashboard/pasos-estado-null`: MB/reports/reports.controller.ts:639. Es interno de la mesa.
+
+- **Hecho (2026-10-25): «llenar todos los que coinciden»**, el «campo trigger» de la mesa. Antes, cada campo se configuraba por separado. Ahora en el constructor está «Llenar desde un Excel»: se eligen el Excel y el campo de la clave, y quedan configurados de una vez los campos de texto del bloque cuyo código coincide con una columna.
 
 ## B. Existe en ambos pero funciona distinto: decidir con el negocio
 | # | Qué | Mesa | ProcesaBPM | Opinión | Evidencia |
@@ -94,8 +96,8 @@ Un subagente comparó desde cero la mesa de ayuda (`mesa-de-ayuda/help-desk-back
 - **Constructor de flujos:** no se comprobó que expone cada opción del API, por ejemplo todos los parámetros de un bloque.
 
 ## Orden de trabajo propuesto
-1. **A1** (cédula) y **A2** (firmantes y aprobador a mano, con omitir firma).
+1. **A2** (firmantes y aprobador a mano, con omitir firma).
 2. **B2** (opción «sede y, si no hay, cualquiera») y **B3** (límite y tipos de adjuntos, por decidir).
 3. **A3** (columnas y orden de la bandeja) y **A4** (agregar un firmante al reasignar).
-4. **A6** (calculadora de saldo de viáticos), **A9** (tiempo real en la web) y **A8** (manual).
+4. **A9** (tiempo real en la web) y **A8** (manual).
 5. Decisiones de negocio pendientes: **B1**, **B4**, **B5**, **B6** y **B11**.

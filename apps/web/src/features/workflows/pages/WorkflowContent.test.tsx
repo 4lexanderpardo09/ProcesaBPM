@@ -206,6 +206,36 @@ describe('workflow content', () => {
     await vi.waitFor(() => expect(within(inspector()).queryByText('Notas')).not.toBeInTheDocument());
   });
 
+  it('sets up every text field named like a column of an Excel to fill itself from the key, in one go', async () => {
+    const fake = api({
+      ...startingDoc(),
+      fields: [
+        field(id(70), START, 'CEDULA', 'Cédula', 'TEXT', { sortOrder: 0 }),
+        field(id(71), START, 'NOMBRE_COMPLETO', 'Nombre', 'TEXT', { sortOrder: 1 }),
+        field(id(72), START, 'CARGO', 'Cargo', 'TEXT', { sortOrder: 2 }),
+        field(id(73), START, 'SALARIO', 'Salario', 'CURRENCY', { sortOrder: 3 }),
+      ],
+    });
+    for (const fieldId of [id(70), id(71), id(72), id(73)]) fake.handlers[`${url}/fields/${fieldId}`] = fake.fieldHandler;
+    const employees = { id: id(80), name: 'Empleados', workflowId: null, columns: [{ name: 'Cédula', isKey: true }, { name: 'Nombre completo', isKey: false }, { name: 'Cargo', isKey: false }, { name: 'Salario', isKey: false }], keyColumn: 'Cédula', rowCount: 3, sourceFileName: null, loadedAt: at, isActive: true };
+    const { fake: transport } = renderRoute(url, { handlers: { ...fake.handlers, '/datasets': () => page([employees]) } });
+
+    await openBlock('Inicio: Inicio');
+    await userEvent.click(within(inspector()).getByRole('button', { name: 'Llenar desde un Excel' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Llenar campos desde un Excel' });
+    await userEvent.selectOptions(await within(dialog).findByRole('combobox', { name: 'Excel' }), 'Empleados');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /^Campo donde se escribe la clave/ }), 'Cédula (CEDULA)');
+    const matches = within(dialog).getByRole('group', { name: 'Campos que se llenarán' });
+    expect(within(matches).getAllByRole('checkbox').map((box) => box.closest('label')?.textContent)).toEqual(['Nombre (NOMBRE_COMPLETO) ← columna «Nombre completo»', 'Cargo (CARGO) ← columna «Cargo»']);
+    expect(within(dialog).getByText(/no son de texto y no se pueden llenar desde el Excel: SALARIO/)).toBeInTheDocument();
+
+    await userEvent.click(within(matches).getByRole('checkbox', { name: /^Cargo/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Configurar 1 campo' }));
+    await vi.waitFor(() => expect(transport.callsTo(`${url}/fields/${id(71)}`)[0]?.options.body).toEqual({ dataSource: { kind: 'DATASET', datasetId: id(80), column: 'Nombre completo', lookupFieldCode: 'CEDULA' } }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Llenar campos desde un Excel' })).not.toBeInTheDocument());
+    expect(transport.callsTo(`${url}/fields/${id(72)}`)).toHaveLength(0);
+  });
+
   it('asks to save a block that is new before giving it fields or participants', async () => {
     renderRoute(url, { handlers: api(startingDoc()).handlers });
 

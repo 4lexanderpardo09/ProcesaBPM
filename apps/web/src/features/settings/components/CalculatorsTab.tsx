@@ -9,6 +9,7 @@ import { SettingsError } from './SettingsError';
 import styles from './Settings.module.css';
 
 const MEAL_ALLOWANCE = 'MEAL_ALLOWANCE';
+const TRAVEL_BALANCE = 'TRAVEL_BALANCE';
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const AMOUNT = /^\d{1,12}(\.\d{1,2})?$/;
 const MAX_MEALS = 10;
@@ -61,11 +62,45 @@ export function CalculatorsTab() {
 
 function CalculatorCard({ calculator }: { readonly calculator: CalculatorResponse }) {
   const { t } = useTranslation('settings');
-  const known = calculator.code === MEAL_ALLOWANCE;
+  const title = calculator.code === MEAL_ALLOWANCE ? t('calculators.mealAllowance.title') : calculator.code === TRAVEL_BALANCE ? t('calculators.travelBalance.title') : calculator.code;
   return (
-    <Card title={known ? t('calculators.mealAllowance.title') : calculator.code} actions={<Badge tone={calculator.configured ? 'ok' : 'neutral'}>{calculator.configured ? t('calculators.on') : t('calculators.off')}</Badge>}>
-      {known ? <MealAllowanceEditor calculator={calculator} /> : <p className={styles.note}>{t('calculators.unknown')}</p>}
+    <Card title={title} actions={<Badge tone={calculator.configured ? 'ok' : 'neutral'}>{calculator.configured ? t('calculators.on') : t('calculators.off')}</Badge>}>
+      {calculator.code === MEAL_ALLOWANCE ? (
+        <MealAllowanceEditor calculator={calculator} />
+      ) : calculator.code === TRAVEL_BALANCE ? (
+        <TravelBalanceSwitch calculator={calculator} />
+      ) : (
+        <p className={styles.note}>{t('calculators.unknown')}</p>
+      )}
     </Card>
+  );
+}
+
+/** The travel balance has nothing to tune: it is only switched on or off. */
+function TravelBalanceSwitch({ calculator }: { readonly calculator: CalculatorResponse }) {
+  const { t } = useTranslation('settings');
+  const client = useApiClient();
+  const queryClient = useQueryClient();
+  const refresh = () => queryClient.invalidateQueries({ queryKey: settingsQueryKeys.calculators });
+  const turnOn = useMutation({ mutationFn: () => configureCalculator(client, calculator.code, {}), onSuccess: refresh });
+  const turnOff = useMutation({ mutationFn: () => disableCalculator(client, calculator.code), onSuccess: refresh });
+  return (
+    <div className={styles.stack}>
+      <p className={styles.note}>{t('calculators.travelBalance.hint')}</p>
+      <div className={styles.buttons}>
+        {calculator.configured ? (
+          <Button variant="ghost" disabled={turnOff.isPending} onClick={() => turnOff.mutate()}>
+            {t('calculators.turnOff')}
+          </Button>
+        ) : (
+          <Button variant="brand" disabled={turnOn.isPending} onClick={() => turnOn.mutate()}>
+            {t('calculators.turnOn')}
+          </Button>
+        )}
+      </div>
+      {calculator.configured && <p className={styles.note}>{t('calculators.offHint')}</p>}
+      <SettingsError error={turnOn.error ?? turnOff.error} />
+    </div>
   );
 }
 

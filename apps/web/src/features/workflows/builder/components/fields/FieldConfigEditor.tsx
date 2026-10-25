@@ -179,7 +179,7 @@ export function FieldConfigEditor({ type, config, dataSource, fields, onChange }
           {calculator?.parameters.map((parameter) => (
             <Select
               key={parameter.name}
-              label={t('builder.calculator.input', { name: parameter.name })}
+              label={t('builder.calculator.input', { name: t(`builder.calculator.parameters.${parameter.name as 'advance'}`, { defaultValue: parameter.name }) })}
               placeholder={t('builder.calculator.inputPlaceholder')}
               options={fields.filter((field) => INPUT_TYPES[parameter.type]?.has(effectiveFieldType(field)) === true).map((field) => ({ value: field.code, label: `${field.label} (${field.code})` }))}
               value={inputs[parameter.name] ?? ''}
