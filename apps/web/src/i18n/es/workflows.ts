@@ -538,8 +538,6 @@ export const workflows = {
     },
     maxLoops: 'Máximo de vueltas',
     maxLoopsHint: 'Cuántas veces puede volver un ticket a este paso. Vacío: sin límite.',
-    instructions: 'Instrucciones',
-    instructionsHint: 'Lo que ve quien atiende el paso.',
     rejectRequiresComment: 'Rechazar exige un comentario',
     batch: {
       allows: 'Se puede atender en lote',

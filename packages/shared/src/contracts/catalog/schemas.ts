@@ -47,10 +47,13 @@ export const categoryVisibilityResponseSchema = z.object({ companyIds: z.array(u
 export type CategoryVisibilityResponse = z.infer<typeof categoryVisibilityResponseSchema>;
 
 // ---- Subcategories ----
+/** The description is HTML from the editor (what people read when they open a ticket of it); the API sanitizes it. */
+export const SUBCATEGORY_DESCRIPTION_MAX = 10_000;
+
 export const createSubcategoryRequestSchema = z.object({
   categoryId: uuidSchema,
   name: nameSchema,
-  description: z.string().trim().min(1).max(2000).optional(),
+  description: z.string().trim().min(1).max(SUBCATEGORY_DESCRIPTION_MAX).optional(),
   defaultPriorityId: uuidSchema.optional(),
 });
 export type CreateSubcategoryRequest = z.infer<typeof createSubcategoryRequestSchema>;
@@ -59,7 +62,7 @@ export type CreateSubcategoryRequest = z.infer<typeof createSubcategoryRequestSc
 export const updateSubcategoryRequestSchema = z
   .object({
     name: nameSchema,
-    description: z.string().trim().min(1).max(2000).nullable(),
+    description: z.string().trim().min(1).max(SUBCATEGORY_DESCRIPTION_MAX).nullable(),
     defaultPriorityId: uuidSchema.nullable(),
   })
   .partial()
