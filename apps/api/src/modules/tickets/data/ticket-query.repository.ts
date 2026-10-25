@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@procesabpm/db';
 import type { FilterableFieldType, SortDirection, TicketSort } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { fullName } from '../domain/person-name.js';
@@ -90,8 +91,8 @@ const REALTIME_SUMMARY = {
 const withTags = (userId: string) => ({ tags: { where: { userId }, select: { tag: { select: { id: true, name: true, color: true } } } } }) as const;
 
 /** The Prisma order of each inbox sort; the number (newest first) breaks ties so pages never overlap. */
-const orderOf = (sort: TicketSort, direction: SortDirection): Where[] => {
-  const by: Record<TicketSort, Where> = {
+const orderOf = (sort: Exclude<TicketSort, 'field'>, direction: SortDirection): Where[] => {
+  const by: Record<Exclude<TicketSort, 'field'>, Where> = {
     lastActivity: { lastActivityAt: direction },
     number: { number: direction },
     title: { title: direction },
@@ -114,10 +115,47 @@ export class TicketQueryRepository {
     return tx.ticket.findFirst({ where: { AND: [{ tenantId, id: ticketId, deletedAt: null }, access] } as never, select: { ...DETAIL, ...withTags(userId) } });
   }
 
-  async list(tx: TenantTransaction, tenantId: string, filters: readonly Where[], window: { skip: number; take: number }, userId: string, order: { sort: TicketSort; direction: SortDirection } = { sort: 'number', direction: 'desc' }) {
+  async list(
+    tx: TenantTransaction,
+    tenantId: string,
+    filters: readonly Where[],
+    window: { skip: number; take: number },
+    userId: string,
+    order: { sort: TicketSort; direction: SortDirection; fieldCode?: string | undefined } = { sort: 'number', direction: 'desc' },
+  ) {
+    const where = liveTickets(tenantId, filters);
+    const select = { ...SUMMARY, ...withTags(userId) };
     // One query after another: an interactive transaction has a single connection.
-    const rows = await tx.ticket.findMany({ where: liveTickets(tenantId, filters), select: { ...SUMMARY, ...withTags(userId) }, orderBy: orderOf(order.sort, order.direction) as never, ...window });
+    if (order.sort === 'field' && order.fieldCode !== undefined) {
+      const ids = await this.idsByField(tx, tenantId, where, order.fieldCode, order.direction, window);
+      const found = await tx.ticket.findMany({ where: { tenantId, id: { in: ids } }, select });
+      const byId = new Map(found.map((row) => [row.id, row]));
+      return { rows: ids.flatMap((id) => byId.get(id) ?? []), total: await this.count(tx, tenantId, filters) };
+    }
+    const rows = await tx.ticket.findMany({ where, select, orderBy: orderOf(order.sort === 'field' ? 'lastActivity' : order.sort, order.direction) as never, ...window });
     return { rows, total: await this.count(tx, tenantId, filters) };
+  }
+
+  /**
+   * One page of the tickets that meet `where`, by the value of the field `code` as stored (JSON: dates sort as their
+   * `YYYY-MM-DD` text, numbers as numbers), blank values last both ways, then newest first. Prisma cannot order by a
+   * value of a related row picked by code, so the ids of the matches are ordered in SQL.
+   */
+  private async idsByField(tx: TenantTransaction, tenantId: string, where: never, code: string, direction: SortDirection, window: { skip: number; take: number }): Promise<string[]> {
+    const matches = (await tx.ticket.findMany({ where, select: { id: true } })).map((row) => row.id);
+    if (matches.length === 0) return [];
+    const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT t.id FROM tickets t
+      LEFT JOIN LATERAL (
+        SELECT v.value FROM ticket_field_values v
+        JOIN fields f ON f.tenant_id = v.tenant_id AND f.version_id = v.workflow_version_id AND f.id = v.field_id
+        WHERE v.tenant_id = t.tenant_id AND v.ticket_id = t.id AND f.code = ${code}
+        LIMIT 1
+      ) fv ON true
+      WHERE t.tenant_id = ${tenantId}::uuid AND t.id = ANY(${matches}::uuid[])
+      ORDER BY (fv.value IS NULL OR fv.value IN ('null'::jsonb, '""'::jsonb)), fv.value ${direction === 'asc' ? Prisma.sql`ASC` : Prisma.sql`DESC`}, t.number DESC
+      OFFSET ${window.skip} LIMIT ${window.take}`);
+    return rows.map((row) => row.id);
   }
 
   /** The value of the field with that code on each of the tickets (the column of a listing filtered by that field). */

@@ -34,6 +34,7 @@ describe('readInboxParams', () => {
     ['a page that is not a positive integer', 'page=-2', { page: 1 }],
     ['a fractional page', 'page=1.5', { page: 1 }],
     ['an unknown sort', 'sort=color&dir=up', { sort: 'lastActivity', direction: 'desc' }],
+    ['a sort by the field without a field filter', 'sort=field&dir=asc', { sort: 'lastActivity', direction: 'asc' }],
     ['a page that is not a number', 'page=two', { page: 1 }],
   ])('ignores %s', (_, query, expected) => {
     expect(read(query)).toMatchObject(expected);

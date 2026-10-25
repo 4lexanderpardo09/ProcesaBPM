@@ -115,16 +115,21 @@ describe('TicketInboxPage', () => {
     expect(api.queries.filter((search) => !search.has('pageSize')).every((search) => !search.has('sort'))).toBe(true);
   });
 
-  it('adds a column with the field the inbox is filtered by, named as its form calls it', async () => {
+  it('adds a sortable column with the field the inbox is filtered by, named as its form calls it and read by its type', async () => {
     const api = ticketsApi({ assigned: [ticket(1, { filteredValue: '2026-03-01' }), ticket(2)] });
     renderRoute('/tickets?field=DUE_ON&op=filled', {
       handlers: { ...api.handlers, '/tickets/filter-fields': () => [{ code: 'DUE_ON', label: 'Fecha de pago', type: 'DATE', options: null }] },
     });
 
-    expect(await within(await table()).findByRole('columnheader', { name: 'Fecha de pago' })).toBeInTheDocument();
+    expect(await within(await table()).findByRole('columnheader', { name: /Fecha de pago/ })).toBeInTheDocument();
     const rows = within(await table()).getAllByRole('row').slice(1);
-    expect(within(rows[0]!).getAllByRole('cell')[2]).toHaveTextContent('2026-03-01');
+    // Read by the field's type: a date as a date.
+    await vi.waitFor(() => expect(within(rows[0]!).getAllByRole('cell')[2]).toHaveTextContent('1 de mar de 2026'));
     expect(within(rows[1]!).getAllByRole('cell')[2]).toHaveTextContent('—');
+
+    // And it sorts like the other columns.
+    await userEvent.click(within(await table()).getByRole('button', { name: /Fecha de pago/ }));
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('sort')).toBe('field'));
   });
 
   it('searches and filters by priority and category, sends the same filters to the counts, and clears them', async () => {

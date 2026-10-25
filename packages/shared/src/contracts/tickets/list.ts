@@ -87,9 +87,10 @@ export type TicketFiltersQuery = z.infer<typeof ticketFiltersQuerySchema>;
 
 /**
  * How the inbox sorts, as in the help desk: by default the latest activity first (`lastActivity`, the last event of the
- * ticket). `requester` sorts by the requester's name; the priorities by their place in the catalog.
+ * ticket). `requester` sorts by the requester's name; the priorities by their place in the catalog; `field` by the value
+ * of the field the listing is filtered by (`fieldCode`), blanks last both ways (without a field filter it is `lastActivity`).
  */
-export const TICKET_SORTS = ['lastActivity', 'number', 'title', 'status', 'requester', 'priority', 'workflowPriority', 'createdAt'] as const;
+export const TICKET_SORTS = ['lastActivity', 'number', 'title', 'status', 'requester', 'priority', 'workflowPriority', 'createdAt', 'field'] as const;
 export type TicketSort = (typeof TICKET_SORTS)[number];
 export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
 export type SortDirection = (typeof SORT_DIRECTIONS)[number];

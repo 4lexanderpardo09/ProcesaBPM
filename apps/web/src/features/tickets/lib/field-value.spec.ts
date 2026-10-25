@@ -1,6 +1,6 @@
 import type { FormFieldResponse } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { fieldValueDisplay } from './field-value';
+import { fieldValueDisplay, filteredValueText } from './field-value';
 
 const field = (type: FormFieldResponse['type'], config: Record<string, unknown> = {}): FormFieldResponse => ({
   id: '018f0000-0000-7000-8000-000000000001',
@@ -61,5 +61,21 @@ describe('fieldValueDisplay', () => {
 
   it('formats a formula by its result type', () => {
     expect(textOf(fieldValueDisplay(field('FORMULA', { expression: 'a*b', resultType: 'NUMBER', decimals: 2 }), '10.456', noNames))).toBe('10,46');
+  });
+});
+
+describe('filteredValueText', () => {
+  it('reads the value of the filtered field by its type, as on the ticket', () => {
+    expect(filteredValueText({ type: 'DATE', options: null }, '2026-03-01')).toBe('1 de mar de 2026');
+    expect(filteredValueText({ type: 'SELECT', options: [{ value: 'P', label: 'Pagado' }] }, 'P')).toBe('Pagado');
+    expect(filteredValueText({ type: 'CURRENCY', options: null }, 250000.5)).toBe('250.000,50');
+    expect(filteredValueText({ type: 'NUMBER', options: null }, 1.25)).toBe('1,25');
+    expect(filteredValueText({ type: 'TEXT', options: null }, 'Factura')).toBe('Factura');
+  });
+
+  it('shows a dash with no value, and the value as is when the field is not known', () => {
+    expect(filteredValueText({ type: 'TEXT', options: null }, null)).toBe('—');
+    expect(filteredValueText(undefined, 'X-1')).toBe('X-1');
+    expect(filteredValueText(undefined, null)).toBe('—');
   });
 });
