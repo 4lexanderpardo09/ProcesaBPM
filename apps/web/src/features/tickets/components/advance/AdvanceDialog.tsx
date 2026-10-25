@@ -1,4 +1,4 @@
-import { type FormDecisionResponse, type TicketDetailResponse, type TicketFormResponse } from '@procesabpm/shared';
+import { type FormDecisionResponse, type SignerChoices, type TicketDetailResponse, type TicketFormResponse } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,11 +8,13 @@ import { isBlankRichText } from '@/shared/ui';
 import { previewTransition, transitionTicket } from '../../api/ticket-actions-api';
 import { ticketDocumentsQueryOptions } from '../../api/ticket-detail-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
+import { useSignerChoices } from '../../hooks/use-signer-choices';
 import { choicesOfPreview, useNextStepPreview } from '../../hooks/use-next-step-preview';
 import { typedFields, useStepFields } from '../../hooks/use-step-fields';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { ActionDialog } from '../actions/ActionDialog';
 import { NextAssigneeField } from '../actions/NextAssigneeField';
+import { SignerChoicesField } from '../actions/SignerChoicesField';
 import { SignatureChoice, useSignatureChoice } from '../actions/SignatureChoice';
 import { NextStepSummary } from '../next-step/NextStepSummary';
 import { ResponseEditor } from '../ResponseEditor';
@@ -33,6 +35,7 @@ interface AdvanceArgs {
   readonly comment: string;
   readonly attachments: readonly string[];
   readonly assigneeId: string | undefined;
+  readonly signerChoices: SignerChoices | undefined;
 }
 
 /**
@@ -67,12 +70,14 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       ...(isBlankRichText(args.comment) ? {} : { comment: args.comment }),
       attachments: args.attachments,
       ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
+      ...(args.signerChoices === undefined ? {} : { signerChoices: args.signerChoices }),
       ...(signs && signature.fileId !== undefined ? { signatureFileId: signature.fileId } : {}),
     }),
   );
   const stepFields = useStepFields(fields, ticket.values, advance.error);
   const preview = useNextStepPreview([ticket.id, visitId, decision.transitionId], stepFields.draft(), (values) => previewTransition(client, ticket.id, { transitionId: decision.transitionId, visitId, values: { ...values } }));
   const next = useNextAssignee(choicesOfPreview(preview.data));
+  const signers = useSignerChoices(preview.data?.signerChoices);
 
   const submit = () => {
     setSubmitted(true);
@@ -82,7 +87,8 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
     if (unchanged || (signs && signature.missing)) return;
     const collected = stepFields.collect();
     const assignee = next.request();
-    if (collected.ok && assignee.ok) advance.mutate({ values: collected.values, comment, attachments, assigneeId: assignee.assigneeId }, { onSuccess: onClose, onError: next.onError });
+    const signing = signers.request();
+    if (collected.ok && assignee.ok && signing.ok) advance.mutate({ values: collected.values, comment, attachments, assigneeId: assignee.assigneeId, signerChoices: signing.signerChoices }, { onSuccess: onClose, onError: next.onError });
   };
 
   return (
@@ -115,6 +121,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
       {signs && <SignatureChoice choice={signature} showMissing={submitted} />}
       <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />
       <NextAssigneeField next={next} />
+      <SignerChoicesField choices={signers} />
     </ActionDialog>
   );
 }

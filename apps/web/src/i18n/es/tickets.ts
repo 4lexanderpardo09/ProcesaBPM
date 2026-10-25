@@ -444,6 +444,13 @@ export const tickets = {
       hint: 'El siguiente paso pide elegir a su responsable.',
       required: 'Elige quién recibe el siguiente paso.',
     },
+    signerChoices: {
+      title: 'Firmantes por elegir',
+      hint: 'Estos firmantes del siguiente paso no tienen a quién asignarse. Elige quién firma en su lugar u omite esa firma.',
+      skip: 'Omitir esta firma',
+      required: 'Elige quién firma u omite la firma.',
+      type: { USER: 'Persona', POSITION: 'Cargo', APPROVER: 'Aprobador', CREATOR: 'Solicitante' },
+    },
     parallel: {
       sign: {
         open: 'Firmar',
@@ -520,6 +527,7 @@ export const tickets = {
       rejected: 'Este paso no permite hacerlo así. Revisa los datos del paso.',
       assigneeRequired: 'El siguiente paso pide elegir a su responsable, y eso todavía no se puede hacer desde la web.',
       noCandidates: 'El siguiente paso no tiene a quién asignarse. Avísale a quien administra el flujo.',
+      signersRequired: 'Hay firmantes del siguiente paso sin a quién asignarse. Revisa «Firmantes por elegir».',
     },
   },
   nextStep: {

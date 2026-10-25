@@ -51,6 +51,7 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.initiatorNotAllowed]: { status: 403, message: 'The requester cannot start this workflow' },
   [ERROR_CODES.noAssigneeCandidates]: { status: 422, message: 'The step has nobody to assign' },
   [ERROR_CODES.assigneeSelectionRequired]: { status: 422, message: 'Choose who the step is assigned to' },
+  [ERROR_CODES.signerSelectionRequired]: { status: 422, message: 'Choose who signs for the signers that resolved to nobody' },
   [ERROR_CODES.invalidAssignee]: { status: 422, message: 'The chosen user cannot be assigned to this step' },
   [ERROR_CODES.invalidTransition]: { status: 422, message: 'The transition does not leave the current step' },
   [ERROR_CODES.exportCutoffPending]: { status: 422, message: 'The ticket waits for the next file of an export' },
