@@ -41,7 +41,10 @@ const ticketFiltersObject = z.object({
   search: pageQuerySchema.shape.search,
   /** `true`: the search also looks in the description and the comments (slower: plain text search over every message). */
   searchMessages: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+  /** The requester's priority. */
   priorityId: uuidSchema.optional(),
+  /** The workflow's priority (the subcategory's), filtered apart from the requester's as in the help desk. */
+  workflowPriorityId: uuidSchema.optional(),
   categoryId: uuidSchema.optional(),
   subcategoryId: uuidSchema.optional(),
   companyId: uuidSchema.optional(),

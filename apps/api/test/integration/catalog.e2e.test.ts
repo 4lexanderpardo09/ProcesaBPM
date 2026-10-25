@@ -41,6 +41,19 @@ describe('catalog API', () => {
       expect((await admin.post(`/priorities/${high.id}/activate`).expect(200)).body.isActive).toBe(true);
     });
 
+    it('keeps one default priority: marking another unmarks it, deactivating unmarks it, an inactive one cannot be it', async () => {
+      const first = (await admin.post('/priorities', { name: unique('Default'), isDefault: true }).expect(201)).body;
+      expect(first.isDefault).toBe(true);
+      const second = (await admin.post('/priorities', { name: unique('Other') }).expect(201)).body;
+      expect(second.isDefault).toBe(false);
+      expect((await admin.patch(`/priorities/${second.id}`, { isDefault: true }).expect(200)).body.isDefault).toBe(true);
+      expect((await admin.get(`/priorities/${first.id}`).expect(200)).body.isDefault).toBe(false);
+      expect((await admin.post(`/priorities/${second.id}/deactivate`).expect(200)).body).toMatchObject({ isActive: false, isDefault: false });
+      expect((await admin.patch(`/priorities/${second.id}`, { isDefault: true }).expect(422)).body.error.code).toBe('INVALID_STATE');
+      const defaults = (await admin.get('/priorities?pageSize=100').expect(200)).body.items.filter((item: { isDefault: boolean }) => item.isDefault);
+      expect(defaults).toHaveLength(0);
+    });
+
     it('refuses a bad color (400) and a repeated name (409)', async () => {
       await admin.post('/priorities', { name: unique('Bad'), color: 'red' }).expect(400);
       const name = unique('Dup');

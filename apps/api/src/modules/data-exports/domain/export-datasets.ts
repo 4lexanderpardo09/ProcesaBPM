@@ -82,7 +82,7 @@ export const EXPORT_DATASETS = [
   table('approval_group_approvers', 'identity', ['tenant_id', 'group_id', 'user_id', 'position'], ['group_id', 'user_id']),
   table('approval_group_members', 'identity', ['tenant_id', 'group_id', 'type_id', 'company_id', 'user_id'], ['group_id', 'user_id']),
   table('delegations', 'identity', ['tenant_id', 'id', 'from_user_id', 'to_user_id', 'starts_at', 'ends_at', 'reason', 'created_at'], ['id']),
-  table('priorities', 'catalog', ['tenant_id', 'id', 'name', 'sort_order', 'color', 'is_active'], ['id']),
+  table('priorities', 'catalog', ['tenant_id', 'id', 'name', 'sort_order', 'color', 'is_active', 'is_default'], ['id']),
   table('categories', 'catalog', ['tenant_id', 'id', 'name', 'is_active', 'created_at'], ['id']),
   table('category_companies', 'catalog', ['tenant_id', 'category_id', 'company_id'], ['category_id', 'company_id']),
   table('category_departments', 'catalog', ['tenant_id', 'category_id', 'department_id'], ['category_id', 'department_id']),

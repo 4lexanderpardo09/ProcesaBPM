@@ -72,6 +72,11 @@ export class TicketContextRepository {
    * The subcategory when a person of the company and department may pick it: both it and its category are
    * active, and a category with no visibility rows on an axis is open on that axis (as in the catalog).
    */
+  /** The priority a ticket takes when its requester chooses none: the active one the tenant marks as the default. */
+  async findDefaultPriorityId(tx: TenantTransaction, tenantId: string): Promise<string | null> {
+    return (await tx.priority.findFirst({ where: { tenantId, isDefault: true, isActive: true }, select: { id: true } }))?.id ?? null;
+  }
+
   findAvailableSubcategory(tx: TenantTransaction, tenantId: string, subcategoryId: string, companyId: string, departmentId: string | null): Promise<{ defaultPriorityId: string | null } | null> {
     return tx.subcategory.findFirst({
       where: {

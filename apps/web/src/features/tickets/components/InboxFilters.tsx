@@ -55,7 +55,7 @@ export function InboxFilters({ filters, onChange }: InboxFiltersProps) {
     setSearch(filters.search);
   }, [filters.search]);
 
-  const pick = (key: 'priorityId' | 'categoryId' | 'companyId', value: string) => onChange({ [key]: value === '' ? undefined : value });
+  const pick = (key: 'priorityId' | 'workflowPriorityId' | 'categoryId' | 'companyId', value: string) => onChange({ [key]: value === '' ? undefined : value });
   return (
     <div className={styles.panel} role="search" aria-label={t('filters.label')}>
       <div className={styles.filters}>
@@ -71,7 +71,10 @@ export function InboxFilters({ filters, onChange }: InboxFiltersProps) {
           onChange={(event) => onChange({ status: TICKET_STATUSES.find((value) => value === event.target.value) as TicketStatus | undefined })}
         />
         {priorities.data !== undefined && priorities.data.length > 0 && (
-          <Select label={t('filters.priority')} placeholder={t('filters.any')} options={priorities.data.map((priority) => ({ value: priority.id, label: priority.name }))} value={filters.priorityId ?? ''} onChange={(event) => pick('priorityId', event.target.value)} />
+          <>
+            <Select label={t('filters.priority')} placeholder={t('filters.any')} options={priorities.data.map((priority) => ({ value: priority.id, label: priority.name }))} value={filters.priorityId ?? ''} onChange={(event) => pick('priorityId', event.target.value)} />
+            <Select label={t('filters.workflowPriority')} placeholder={t('filters.any')} options={priorities.data.map((priority) => ({ value: priority.id, label: priority.name }))} value={filters.workflowPriorityId ?? ''} onChange={(event) => pick('workflowPriorityId', event.target.value)} />
+          </>
         )}
         {categories.data !== undefined && categories.data.length > 0 && (
           <Select label={t('filters.category')} placeholder={t('filters.any')} options={categories.data.map((category) => ({ value: category.id, label: category.name }))} value={filters.categoryId ?? ''} onChange={(event) => pick('categoryId', event.target.value)} />

@@ -1,6 +1,7 @@
 import { type PriorityResponse, priorityResponseSchema } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/shared/ui';
 import { usePermissions } from '@/shared/session';
 import { AdminList } from '@/shared/admin/AdminList';
 import { PriorityDialog } from './PriorityDialog';
@@ -22,7 +23,15 @@ export function PrioritiesTab() {
         path="/priorities"
         item={priorityResponseSchema}
         columns={[
-          { key: 'name', header: t('admin:fields.name'), cell: (row) => row.name },
+          {
+            key: 'name',
+            header: t('admin:fields.name'),
+            cell: (row) => (
+              <>
+                {row.name} {row.isDefault && <Badge tone="accent">{t('priorities.defaultTag')}</Badge>}
+              </>
+            ),
+          },
           { key: 'order', header: t('priorities.order'), width: '90px', code: true, cell: (row) => row.sortOrder },
           {
             key: 'color',

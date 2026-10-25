@@ -14,7 +14,7 @@ const HIGH = id(20);
 
 const page = <T,>(items: readonly T[]) => ({ items, page: 1, pageSize: 25, total: items.length });
 const category = (categoryId: string, name: string, isActive = true) => ({ id: categoryId, name, isActive, createdAt: at });
-const priority = (priorityId: string, name: string, sortOrder: number) => ({ id: priorityId, name, sortOrder, color: null, isActive: true });
+const priority = (priorityId: string, name: string, sortOrder: number) => ({ id: priorityId, name, sortOrder, color: null, isActive: true, isDefault: false });
 const grant = (action: string, subject: string) => ({ action, subject, conditional: false });
 
 function handlers(extra: Record<string, FakeHandler> = {}): Record<string, FakeHandler> {
@@ -82,7 +82,26 @@ describe('CatalogPage', () => {
     await vi.waitFor(() => expect(fake.callsTo(`/categories/${COMPRAS}/deactivate`)[0]?.options.method).toBe('POST'));
   });
 
-  it('shows the subcategories of a category and adds one with its default priority', async () => {
+  it('marks which priority a ticket takes when its requester chooses none', async () => {
+    const media = { ...priority(id(21), 'Media', 2), isDefault: true };
+    const { fake } = renderRoute('/catalog', {
+      handlers: handlers({ '/priorities': () => page([priority(HIGH, 'Alta', 1), media]), [`/priorities/${HIGH}`]: () => ({ ...priority(HIGH, 'Alta', 1), isDefault: true }) }),
+    });
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Prioridades' }));
+    const table = await screen.findByRole('table', { name: 'Prioridades' });
+    const mediaRow = (await within(table).findByText('Media')).closest('tr')!;
+    expect(within(mediaRow).getByText('Por defecto')).toBeInTheDocument();
+
+    await userEvent.click(within(table).getByRole('button', { name: 'Editar Alta' }));
+    const dialog = screen.getByRole('dialog', { name: 'Editar prioridad' });
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Por defecto/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(fake.callsTo(`/priorities/${HIGH}`).at(-1)?.options.body).toEqual({ name: 'Alta', sortOrder: 1, color: null, isDefault: true });
+  });
+
+  it('shows the subcategories of a category and adds one with its workflow priority', async () => {
     const saved = { id: id(31), categoryId: CARTERA, name: 'Acuerdo de pago', description: 'Cuotas atrasadas', defaultPriorityId: HIGH, isActive: true, createdAt: at };
     const { fake } = renderRoute('/catalog', { handlers: handlers({ '/subcategories': (options) => (options.method === 'POST' ? saved : page([])) }) });
 
@@ -95,7 +114,7 @@ describe('CatalogPage', () => {
     const dialog = screen.getByRole('dialog', { name: 'Nueva subcategoría' });
     await userEvent.type(within(dialog).getByRole('textbox', { name: /Nombre/ }), 'Acuerdo de pago');
     typeInEditor(within(dialog).getByRole('textbox', { name: 'Descripción' }), 'Cuotas atrasadas');
-    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Prioridad por defecto' }), await within(dialog).findByRole('option', { name: 'Alta' }));
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Prioridad del flujo' }), await within(dialog).findByRole('option', { name: 'Alta' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
 
     await vi.waitFor(() =>

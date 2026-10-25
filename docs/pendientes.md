@@ -39,6 +39,11 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Consola de la plataforma en la web:** ~~sesión de plataforma, organizaciones (lista, alta, detalle, plan, suspender y reactivar) y avisos (mantenimiento y notas de cambios de la mesa)~~ (hecho, arquitectura §10 «Consola de plataforma en la web»); ~~planes, administradores y cuentas (reinicio del MFA)~~ (hecho); ~~países y festivos, operación, auditoría y eliminación~~ (hecho); ~~la visita de soporte (abrir la organización en modo lectura con el token de soporte)~~ (hecho, arquitectura §10 «Visita de soporte»).
     - **Decidido (con criterio, el usuario delegó):** la visita reusa las pantallas de la organización en la misma pestaña, sin una vista aparte; la visita dura lo que la sesión de la consola (15 min), como en el API.
 - **No se comenta un ticket cerrado (2026-10-25, `feat/no-comments-on-closed`, decisión B11 del usuario: como la mesa):** `POST /tickets/:id/comments` responde 422 `TICKET_NOT_OPEN` con el ticket cerrado (en pausa sí se comenta). La acción `comment` sale apagada y la actividad dice «El ticket está cerrado: ya no recibe comentarios. Si hace falta algo más, reábrelo.».
+- **Dos prioridades, como la mesa (2026-10-25, `feat/two-priorities`, decisión B6 del usuario):**
+  - **Del usuario:** la que elige quien crea el ticket (`tickets.priority_id`). Si no elige, toma la prioridad marcada «por defecto» del catálogo (nueva columna `priorities.is_default`, una por organización; la migración marca «Media», como la mesa). Ya no se copia la de la subcategoría.
+  - **Del flujo:** la de la subcategoría (`default_priority_id`), que ahora se llama «Prioridad del flujo». Viaja en `workflowPriority` del listado y el detalle y se filtra con `workflowPriorityId`.
+  - **Web:** el detalle muestra las dos («Prioridad Alta (usuario)», «Prioridad Media (flujo)»), la bandeja filtra por cada una y el catálogo marca la prioridad por defecto.
+  - **Ojo:** los tickets creados antes guardan la de la subcategoría como si la hubiera elegido el usuario (no se tocan).
 - **Ranking como la mesa (2026-10-25, `feat/ranking-like-help-desk`, decisión B5 del usuario):**
   - **Fórmula:** con n gestionados (cada vez que la persona tuvo un paso: sus relojes, como las asignaciones de la mesa), o a tiempo y e errores de proceso:
     - puntaje = 70·o/n + 30·(1 − e/n);

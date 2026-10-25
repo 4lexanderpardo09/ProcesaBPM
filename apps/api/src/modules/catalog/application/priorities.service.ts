@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   type CreatePriorityRequest,
+  InvalidStateError,
   NotFoundError,
   type Page,
   type PageQuery,
@@ -33,9 +34,10 @@ export class PrioritiesService {
   }
 
   create(request: CreatePriorityRequest): Promise<PriorityResponse> {
-    return this.runner.withTenantTransaction((tx) =>
-      this.repository.create(tx, this.tenantId, { name: request.name, ...compact({ sortOrder: request.sortOrder, color: request.color }) }),
-    );
+    return this.runner.withTenantTransaction(async (tx) => {
+      if (request.isDefault === true) await this.repository.clearDefault(tx, this.tenantId);
+      return this.repository.create(tx, this.tenantId, { name: request.name, ...compact({ sortOrder: request.sortOrder, color: request.color, isDefault: request.isDefault }) });
+    });
   }
 
   update(id: string, request: UpdatePriorityRequest): Promise<PriorityResponse> {
@@ -46,13 +48,16 @@ export class PrioritiesService {
     return this.change(id, { isActive: true });
   }
 
+  /** An inactive priority is not offered, so it stops being the default too. */
   deactivate(id: string): Promise<PriorityResponse> {
-    return this.change(id, { isActive: false });
+    return this.change(id, { isActive: false, isDefault: false });
   }
 
   private change(id: string, data: PriorityWrite): Promise<PriorityResponse> {
     return this.runner.withTenantTransaction(async (tx) => {
-      await this.require(tx, id);
+      const current = await this.require(tx, id);
+      if (data.isDefault === true && !current.isActive) throw new InvalidStateError('An inactive priority cannot be the default');
+      if (data.isDefault === true) await this.repository.clearDefault(tx, this.tenantId);
       await this.repository.update(tx, this.tenantId, id, data);
       return this.require(tx, id);
     });

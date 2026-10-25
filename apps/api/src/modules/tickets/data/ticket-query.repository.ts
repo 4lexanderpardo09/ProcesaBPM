@@ -25,7 +25,7 @@ const SUMMARY = {
   createdAt: true,
   closedAt: true,
   creator: { select: PERSON_NAME },
-  subcategory: { select: { name: true, category: { select: { id: true, name: true } } } },
+  subcategory: { select: { name: true, category: { select: { id: true, name: true } }, defaultPriority: { select: { id: true, name: true, color: true } } } },
   currentStep: { select: NAMED },
   priority: { select: { id: true, name: true, color: true } },
   assignees: { select: { userId: true, type: true, assignedAt: true, membership: { select: PERSON_NAME } }, orderBy: { userId: 'asc' } },

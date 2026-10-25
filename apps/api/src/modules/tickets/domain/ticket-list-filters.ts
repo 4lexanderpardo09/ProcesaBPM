@@ -37,6 +37,7 @@ export function ticketFilters(query: TicketFiltersQuery, callerId: string): Cond
   return [
     ...(query.status === undefined ? [] : [{ status: query.status }]),
     ...(query.priorityId === undefined ? [] : [{ priorityId: query.priorityId }]),
+    ...(query.workflowPriorityId === undefined ? [] : [{ subcategory: { defaultPriorityId: query.workflowPriorityId } }]),
     ...(query.companyId === undefined ? [] : [{ companyId: query.companyId }]),
     ...(query.categoryId === undefined ? [] : [{ subcategory: { categoryId: query.categoryId } }]),
     ...(query.subcategoryId === undefined ? [] : [{ subcategoryId: query.subcategoryId }]),

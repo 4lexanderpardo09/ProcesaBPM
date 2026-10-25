@@ -189,7 +189,8 @@ export class CreateTicketService {
     const published = await this.versions.findForSubcategory(tx, tenantId, request.subcategoryId);
     if (published === null) throw new WorkflowNotAvailableError();
     assertRunnable(published.document);
-    const priorityId = request.priorityId ?? subcategory.defaultPriorityId;
+    // The requester's priority; the workflow's (the subcategory's) is shown apart and never copied onto the ticket.
+    const priorityId = request.priorityId ?? (await this.people.findDefaultPriorityId(tx, tenantId));
     this.assertMayCreateFor(actor, requesterId, { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId: request.subcategoryId, workflowId: published.workflowId, priorityId, creatorId: requester.userId });
     const start = this.startStep(published, request.startStepId);
     if ((await this.gate.allowedStarts(tx, tenantId, [start], requester, company)).length === 0) throw new InitiatorNotAllowedError();

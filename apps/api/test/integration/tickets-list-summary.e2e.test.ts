@@ -80,6 +80,21 @@ describe('GET /tickets: what each row shows (names and the SLA of the current st
     expect(row!.assignees).toMatchObject(expected);
   });
 
+  it('shows the requester\'s priority and the workflow\'s apart, as in the help desk: no choice takes the default, never the subcategory\'s', async () => {
+    const defaultPriority = (await world.admin.post('/priorities', { name: unique('Media'), isDefault: true }).expect(201)).body as { id: string; name: string };
+    await world.admin.patch(`/subcategories/${flow.subcategoryId}`, { defaultPriorityId: priority.id }).expect(200);
+    const plain = (await creator.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: unique('Plain'), values: {} }).expect(201)).body;
+    const page = ticketPageResponseSchema.parse((await reader.client.get(`/tickets?view=all&pageSize=100&workflowPriorityId=${priority.id}`).expect(200)).body);
+    const row = page.items.find((item) => item.id === plain.id);
+    expect(row).toMatchObject({ priority: { id: defaultPriority.id, name: defaultPriority.name }, workflowPriority: priority });
+    expect(page.items.every((item) => item.workflowPriority?.id === priority.id)).toBe(true);
+    const byRequester = ticketPageResponseSchema.parse((await reader.client.get(`/tickets?view=all&pageSize=100&priorityId=${priority.id}`).expect(200)).body);
+    expect(byRequester.items.map((item) => item.id)).not.toContain(plain.id);
+    expect((await reader.client.get(`/tickets/${plain.id}`).expect(200)).body.workflowPriority).toEqual(priority);
+    await world.admin.patch(`/subcategories/${flow.subcategoryId}`, { defaultPriorityId: null }).expect(200);
+    await world.admin.patch(`/priorities/${defaultPriority.id}`, { isDefault: false }).expect(200);
+  });
+
   it('the same row for every view that shows the ticket', async () => {
     const all = await rowFor(reader);
     expect(await rowFor(creator, 'created')).toEqual(all);

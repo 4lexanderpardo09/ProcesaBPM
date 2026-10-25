@@ -29,11 +29,13 @@ export interface PriorityTemplate {
   readonly name: string;
   readonly sortOrder: number;
   readonly color: string;
+  /** The priority a ticket takes when its requester chooses none. */
+  readonly isDefault?: boolean;
 }
 
 export const DEFAULT_PRIORITIES: readonly PriorityTemplate[] = [
   { name: 'Baja', sortOrder: 1, color: '#2E7D32' },
-  { name: 'Media', sortOrder: 2, color: '#F9A825' },
+  { name: 'Media', sortOrder: 2, color: '#F9A825', isDefault: true },
   { name: 'Alta', sortOrder: 3, color: '#EF6C00' },
   { name: 'Urgente', sortOrder: 4, color: '#C62828' },
 ];
