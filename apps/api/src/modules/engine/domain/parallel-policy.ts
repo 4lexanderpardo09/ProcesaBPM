@@ -28,8 +28,3 @@ export function parallelOutcome(tasks: ReadonlyArray<{ readonly userId: string; 
   return othersPending.length === 0 ? { kind: 'APPROVED' } : { kind: 'WAIT' };
 }
 
-/** Among the people who could sign for a position, the one with the fewest tickets right now; ties go to the lowest id. */
-export function pickSignerHolder(holders: readonly string[], loads: ReadonlyMap<string, number>): string {
-  const sorted = [...holders].sort();
-  return sorted.reduce((best, candidate) => ((loads.get(candidate) ?? 0) < (loads.get(best) ?? 0) ? candidate : best), sorted[0]!);
-}

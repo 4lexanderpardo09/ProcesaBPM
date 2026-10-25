@@ -78,3 +78,21 @@ export const transitionPreviewResponseSchema = z.object({
     )
     .default([]),
 }) satisfies z.ZodType<TransitionPreviewResponse>;
+
+/** What signing one's own pending signature of a PARALLEL step would do, asked before signing (`visitId`: the visit seen). */
+export const parallelSignPreviewRequestSchema = z.object({ visitId: uuidSchema });
+export type ParallelSignPreviewRequest = z.infer<typeof parallelSignPreviewRequestSchema>;
+
+/**
+ * `last`: whether this is the signature the step still waits for last. Only then does the step move on, and `next`
+ * says where to, as a decision's preview does (with the signers of a next PARALLEL step to choose for).
+ */
+export interface ParallelSignPreviewResponse {
+  readonly last: boolean;
+  readonly next: TransitionPreviewResponse | null;
+}
+
+export const parallelSignPreviewResponseSchema = z.object({
+  last: z.boolean(),
+  next: transitionPreviewResponseSchema.nullable(),
+}) satisfies z.ZodType<ParallelSignPreviewResponse>;

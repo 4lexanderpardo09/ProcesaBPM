@@ -5,8 +5,10 @@ import {
   errorTypeResponseSchema,
   incidentMutationResponseSchema,
   pageResponseSchema,
+  parallelSignPreviewResponseSchema,
   type ReopenTicketRequest,
   type ReportTicketErrorRequest,
+  type SignerChoices,
   type TicketCandidatesQuery,
   ticketCandidatesResponseSchema,
   ticketMutationResponseSchema,
@@ -64,7 +66,7 @@ export function resolveIncident(client: HttpClient, ticketId: string, incidentId
 export function transitionTicket(
   client: HttpClient,
   ticketId: string,
-  { attachments = [], ...body }: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string; assigneeId?: string; signatureFileId?: string; attachments?: readonly string[] },
+  { attachments = [], ...body }: { transitionId: string; visitId: string; values: Record<string, unknown>; comment?: string; assigneeId?: string; signerChoices?: SignerChoices; signatureFileId?: string; attachments?: readonly string[] },
 ) {
   return client.request(`${ticketUrl(ticketId)}/transition`, { method: 'POST', body: { ...body, attachments: [...attachments] }, schema: ticketMutationResponseSchema });
 }
@@ -74,9 +76,17 @@ export function previewTransition(client: HttpClient, ticketId: string, body: { 
   return client.request(`${ticketUrl(ticketId)}/transition-preview`, { method: 'POST', body, schema: transitionPreviewResponseSchema });
 }
 
-/** Signs or rejects the caller's own pending signature on a parallel step; `assigneeId` when the step that follows asks for one. */
-export function answerParallelTask(client: HttpClient, ticketId: string, answer: 'sign' | 'reject', body: { visitId: string; comment?: string; assigneeId?: string }) {
+/**
+ * Signs or rejects the caller's own pending signature on a parallel step; `assigneeId` and `signerChoices` when the
+ * step that follows asks for them.
+ */
+export function answerParallelTask(client: HttpClient, ticketId: string, answer: 'sign' | 'reject', body: { visitId: string; comment?: string; assigneeId?: string; signerChoices?: SignerChoices; signatureFileId?: string }) {
   return client.request(`${ticketUrl(ticketId)}/parallel-tasks/${answer}`, { method: 'POST', body, schema: ticketMutationResponseSchema });
+}
+
+/** Whether signing now is the last signature of the step and, if so, where the ticket goes: nothing changes. */
+export function previewParallelSign(client: HttpClient, ticketId: string, visitId: string) {
+  return client.request(`${ticketUrl(ticketId)}/parallel-tasks/sign-preview`, { method: 'POST', body: { visitId }, schema: parallelSignPreviewResponseSchema });
 }
 
 /** Reopens a closed ticket on its last step, with whoever held it, filing an error of a reopening type. */

@@ -194,11 +194,12 @@ export class ArrivalPlanner {
   private async previewSigners(tx: TenantTransaction, request: ArrivalRequest, hops: readonly RouteHop[], step: StepDocument): Promise<ArrivalPreview> {
     const ticket = ticketOf(request);
     const { people, missing } = await this.resolver.resolveSigners(tx, step, ticket);
-    const members = missing.length === 0 ? [] : (await this.resolver.companyMembers(tx, ticket)).map((member) => ({ id: member.userId, name: member.name }));
+    const asOptions = (people: readonly AssigneeCandidate[]) => people.map((person) => ({ id: person.userId, name: person.name }));
+    const members = missing.some(({ among }) => among === null) ? asOptions(await this.resolver.companyMembers(tx, ticket)) : [];
     const signerChoices: SignerChoice[] = [];
-    for (const signer of missing) {
+    for (const { signer, among } of missing) {
       if (signer.signerType === 'STEP_ASSIGNEE') continue;
-      signerChoices.push({ signerId: signer.id, signerType: signer.signerType, label: await this.resolver.signerLabel(tx, request.tenantId, signer), candidates: members });
+      signerChoices.push({ signerId: signer.id, signerType: signer.signerType, label: await this.resolver.signerLabel(tx, request.tenantId, signer), candidates: among === null ? members : asOptions(among) });
     }
     return { kind: 'PEOPLE', hops, step, assignment: 'PARALLEL', people: await this.resolver.named(tx, request.tenantId, [...new Set(people)]), signerChoices };
   }

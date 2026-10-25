@@ -33,6 +33,9 @@ import {
   listTicketsQuerySchema,
   type Page,
   type ReassignTicketRequest,
+  parallelSignPreviewRequestSchema,
+  type ParallelSignPreviewRequest,
+  type ParallelSignPreviewResponse,
   reassignTicketRequestSchema,
   type TakeTicketRequest,
   takeTicketRequestSchema,
@@ -284,6 +287,14 @@ export class TicketsController {
   @HttpCode(HttpStatus.OK)
   signParallelTask(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(parallelTaskActionRequestSchema)) body: ParallelTaskActionRequest): Promise<TicketMutationResponse> {
     return this.parallelTasks.sign(this.actor(principal, ability), id, body);
+  }
+
+  /** Whether signing now is the last signature and where the ticket would go then; nothing changes. */
+  @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)
+  @Post(':id/parallel-tasks/sign-preview')
+  @HttpCode(HttpStatus.OK)
+  signParallelTaskPreview(@CurrentPrincipal() principal: Principal, @CurrentAbility() ability: AppAbility, @Param('id', ParseUUIDPipe) id: string, @Body(new ZodValidationPipe(parallelSignPreviewRequestSchema)) body: ParallelSignPreviewRequest): Promise<ParallelSignPreviewResponse> {
+    return this.parallelTasks.previewSign(this.actor(principal, ability), id, body);
   }
 
   @RequireAnyPermission(TICKET_READ_ACTIONS, TICKET_SUBJECT)

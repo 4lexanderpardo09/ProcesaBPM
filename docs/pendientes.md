@@ -48,7 +48,8 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
     - sin respuesta: 422 `SIGNER_SELECTION_REQUIRED`; omitir todas: 422 `NO_ASSIGNEE_CANDIDATES`; alguien fuera de la empresa: 422 `INVALID_ASSIGNEE`.
   - **Paso del aprobador sin aprobador:** se elige a mano entre los miembros de la empresa (`CHOOSE` en la vista previa, `assigneeId` al enviar), en vez de fallar con `APPROVER_NOT_FOUND`.
   - **Web:** «Firmantes por elegir» en el diálogo de avanzar y al crear la solicitud, con «Omitir esta firma».
-  - **Por confirmar:** un cargo con varios titulares sigue tomando al de menos carga (la mesa deja elegir); firmar la última firma paralela no tiene vista previa, así que si el paso que sigue tiene firmantes sin resolver solo muestra el aviso.
+  - **Cargo con varios titulares (2026-10-25, decisión del usuario):** como la mesa, se elige cuál de ellos firma (o se omite la firma); ya no se toma al de menos carga.
+  - **Última firma paralela con vista previa:** `POST /tickets/:id/parallel-tasks/sign-preview` dice si es la última firma y, si lo es, a dónde va el ticket. El diálogo de firmar muestra «Qué sigue» y pide los firmantes del paso siguiente.
 - **A quién se avisa, como la mesa (2026-10-25, `feat/notify-like-help-desk`, decisión B4 del usuario):**
   - **Destinatarios por evento** (`recipient-policy.ts`):
     - crear: el solicitante, aunque lo haya creado él (la constancia que manda la mesa), y los observadores;

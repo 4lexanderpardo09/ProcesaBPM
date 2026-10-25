@@ -797,6 +797,45 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/parallel-tasks/sign`)[0]?.options.body).toEqual({ visitId: VISIT });
     });
 
+    it('the last signature says where the ticket goes and asks who signs for the next step\'s unresolved signers', async () => {
+      const SIGNER = id(711);
+      const next = {
+        outcome: 'STEP',
+        via: [],
+        step: { id: id(601), name: 'Visto bueno', type: 'TASK' },
+        assignment: 'PARALLEL',
+        people: [{ id: OTHER, name: 'Luis Gómez' }],
+        fields: [],
+        resumeAt: null,
+        blocked: null,
+        signerChoices: [{ signerId: SIGNER, signerType: 'POSITION', label: 'Gerente', candidates: [{ id: id(51), name: 'Marta Ruiz' }] }],
+      };
+      const { fake } = renderRoute(base, {
+        handlers: withActions(allowed('signParallelTask'), { [`${base}/parallel-tasks/sign-preview`]: () => ({ last: true, next }), [`${base}/parallel-tasks/sign`]: () => mutation }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Firmar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Firmar el paso' });
+      expect(await within(dialog).findByText('Pasa a «Visto bueno».')).toBeInTheDocument();
+      const manager = within(dialog).getByRole('combobox', { name: /Gerente/ });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Firmar' }));
+      expect(fake.callsTo(`${base}/parallel-tasks/sign`)).toHaveLength(0);
+
+      await userEvent.selectOptions(manager, 'Marta Ruiz');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Firmar' }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/parallel-tasks/sign`)[0]?.options.body).toEqual({ visitId: VISIT, signerChoices: [{ signerId: SIGNER, userId: id(51) }] });
+    });
+
+    it('a signature that is not the last one shows nothing about the next step', async () => {
+      renderRoute(base, { handlers: withActions(allowed('signParallelTask'), { [`${base}/parallel-tasks/sign-preview`]: () => ({ last: false, next: null }) }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Firmar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Firmar el paso' });
+      await vi.waitFor(() => expect(within(dialog).queryByRole('region', { name: 'Qué sigue' })).toBeNull());
+      expect(within(dialog).queryByText('Firmantes por elegir')).toBeNull();
+    });
+
     it('signs a parallel step with a signature drawn now when the profile has none', async () => {
       const FILE_ID = id(902);
       const slot = { fileId: FILE_ID, url: 'http://storage.test/bucket/sig?x=1', method: 'PUT', headers: { 'content-type': 'image/png', 'content-length': '3' }, expiresAt: at };

@@ -1,6 +1,6 @@
 import { InvalidStateError, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { parallelExits, parallelOutcome, pickSignerHolder } from './parallel-policy.js';
+import { parallelExits, parallelOutcome } from './parallel-policy.js';
 
 const doc = (types: string[]) => ({ steps: [], fields: [], amountRules: [], transitions: types.map((type, index) => ({ id: `t${index}`, fromStepId: 's', toStepId: `n${index}`, type })) }) as unknown as WorkflowVersionDocument;
 
@@ -27,9 +27,3 @@ describe('parallelOutcome', () => {
   it('a lone signer approves at once', () => expect(parallelOutcome([{ userId: 'a', status: 'PENDING' }], 'a', 'SIGN')).toEqual({ kind: 'APPROVED' }));
 });
 
-describe('pickSignerHolder', () => {
-  it('prefers the least loaded, then the lowest id', () => {
-    expect(pickSignerHolder(['c', 'b', 'a'], new Map([['a', 3], ['b', 1], ['c', 1]]))).toBe('b');
-    expect(pickSignerHolder(['b', 'a'], new Map())).toBe('a');
-  });
-});
