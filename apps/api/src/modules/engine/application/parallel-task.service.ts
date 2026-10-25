@@ -126,6 +126,7 @@ export class ParallelTaskService {
         timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
+        signerChoices: request.signerChoices,
       });
       const closing = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.id, 'STEP_EXITED', new Set(rejected ? outcome.cancelUserIds : []));
       events.push(

@@ -683,6 +683,33 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/reassign`)[0]?.options.body).toEqual({ visitId: VISIT, toUserId: id(51), comment: '<p>Va para cartera</p>' });
     });
 
+    it('on a parallel step moves one pending signature, or adds one more signer as in the help desk', async () => {
+      const signatures = [
+        { id: id(801), userId: id(52), name: 'Ana Pérez', status: 'SIGNED', completedAt: '2026-10-20T15:00:00.000Z' },
+        { id: id(802), userId: OTHER, name: 'Luis Gómez', status: 'PENDING', completedAt: null },
+      ];
+      const { fake } = renderRoute(base, {
+        handlers: ticketHandlers({ [base]: () => detail({ actions: allowed('reassign'), parallelTasks: signatures }), [`${base}/candidates`]: candidates, [`${base}/reassign`]: () => mutation }),
+      });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Reasignar' }));
+      let dialog = screen.getByRole('dialog', { name: 'Reasignar ticket' });
+      const which = within(dialog).getByRole('combobox', { name: /Qué firma/ });
+      expect(within(which).getAllByRole('option').map((option) => option.textContent)).toEqual(['Pasar la firma de Luis Gómez', 'Agregar un firmante nuevo']);
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /Nuevo responsable/ }), await within(dialog).findByRole('option', { name: 'Marta Ruiz' }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Reasignar' }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/reassign`)[0]?.options.body).toEqual({ visitId: VISIT, toUserId: id(51), fromUserId: OTHER });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Reasignar' }));
+      dialog = screen.getByRole('dialog', { name: 'Reasignar ticket' });
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /Qué firma/ }), 'Agregar un firmante nuevo');
+      await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: /Nuevo firmante/ }), await within(dialog).findByRole('option', { name: 'Marta Ruiz' }));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Agregar firmante' }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/reassign`)[1]?.options.body).toEqual({ visitId: VISIT, toUserId: id(51), addSigner: true });
+    });
+
     it('opens an incident for someone, describing it', async () => {
       const { fake } = renderRoute(base, { handlers: withActions(allowed('openIncident'), { [`${base}/candidates`]: candidates, [`${base}/incidents`]: () => ({ ...mutation, status: 'PAUSED', incidentId: id(500) }) }) });
 
@@ -1072,6 +1099,41 @@ describe('TicketDetailPage', () => {
       await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ assigneeId: id(51) });
+    });
+
+    it('asks who signs for a parallel signer that resolved to nobody, or to leave that signature out, as in the help desk', async () => {
+      const MANAGER = id(701);
+      const APPROVER_SIGNER = id(702);
+      const candidates = [{ id: OTHER, name: 'Luis Gómez' }, { id: id(51), name: 'Marta Ruiz' }];
+      const previews = () =>
+        preview({
+          assignment: 'PARALLEL',
+          people: [{ id: id(52), name: 'Ana Pérez' }],
+          signerChoices: [
+            { signerId: MANAGER, signerType: 'POSITION', label: 'Gerente regional', candidates },
+            { signerId: APPROVER_SIGNER, signerType: 'APPROVER', label: null, candidates },
+          ],
+        });
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition-preview`]: previews, [`${base}/transition`]: () => mutation }, { fields: [], editableFieldCodes: [] }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      const manager = await within(dialog).findByRole('combobox', { name: /Gerente regional/ });
+      const approver = within(dialog).getByRole('combobox', { name: /Aprobador/ });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      expect(manager).toHaveAccessibleDescription(/Elige quién firma u omite la firma\./);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+
+      await userEvent.selectOptions(manager, 'Marta Ruiz');
+      await userEvent.selectOptions(approver, 'Omitir esta firma');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({
+        signerChoices: [
+          { signerId: MANAGER, userId: id(51) },
+          { signerId: APPROVER_SIGNER, userId: null },
+        ],
+      });
     });
 
     it('names the parallel signers, a hand-out in turns, the end, and warns when the workflow cannot go on', async () => {

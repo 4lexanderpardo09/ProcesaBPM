@@ -88,7 +88,7 @@ export const profile = {
   },
   notifications: {
     title: 'Notificaciones',
-    hint: 'Qué avisos te llegan en la aplicación y cuáles por correo. Cada cambio se guarda al momento.',
+    hint: 'Qué avisos te llegan en la aplicación y cuáles por correo. Por defecto, solo las asignaciones llegan también por correo. Cada cambio se guarda al momento.',
     kind: 'Aviso',
     inApp: 'En la app',
     email: 'Por correo',

@@ -178,10 +178,15 @@ describe('assignment, pool, reassignment', () => {
       expect(await world.assignees(created.body.id)).toEqual([{ user_id: requester.userId, type: 'PRIMARY' }]);
     });
 
-    it('APPROVER without an approver for the requester fails with APPROVER_NOT_FOUND', async () => {
+    it('APPROVER without an approver for the requester asks for the approver among the company members, as in the help desk', async () => {
       const typeId = (await world.admin.post('/approval-group-types', { name: unique('Type') }).expect(201)).body.id as string;
       const flow = await flowWith({ assignmentMode: 'APPROVER', approvalGroupTypeId: typeId, approvalLevel: 1 });
-      expect((await create(flow).expect(422)).body.error.code).toBe('APPROVER_NOT_FOUND');
+      const refused = (await create(flow).expect(422)).body.error;
+      expect(refused.code).toBe('ASSIGNEE_SELECTION_REQUIRED');
+      expect(refused.details.candidates.map((candidate: { userId: string }) => candidate.userId)).toContain(requester.userId);
+      const chosen = (refused.details.candidates as Array<{ userId: string }>).find((candidate) => candidate.userId !== requester.userId)!.userId;
+      const created = await create(flow, { assigneeId: chosen }).expect(201);
+      expect(await world.assignees(created.body.id)).toEqual([{ user_id: chosen, type: 'PRIMARY' }]);
     });
   });
 

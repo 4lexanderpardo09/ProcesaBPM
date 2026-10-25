@@ -27,6 +27,18 @@ export const NEXT_ASSIGNMENTS = ['PERSON', 'POOL', 'PARALLEL', 'DISPATCH', 'CHOO
 export type NextAssignment = (typeof NEXT_ASSIGNMENTS)[number];
 
 /**
+ * A signer of the next PARALLEL step that resolved to nobody: as in the help desk, the person answering picks who signs
+ * in its place among `candidates` (the company's members) or leaves that signature out. `label` is the signer's own
+ * label, else the position's name; `null` when it has neither.
+ */
+export interface SignerChoice {
+  readonly signerId: string;
+  readonly signerType: 'USER' | 'POSITION' | 'APPROVER' | 'CREATOR';
+  readonly label: string | null;
+  readonly candidates: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+}
+
+/**
  * Where a decision takes the ticket: to a people `STEP`, to a `WAIT` until `resumeAt`, to the `END`, or nowhere
  * because the workflow cannot go on (`BLOCKED`, with the error the answer would get: nobody to assign, no branch
  * that matches, the step visited too many times...). `via` are the automatic blocks passed on the way.
@@ -41,6 +53,8 @@ export interface TransitionPreviewResponse {
   readonly fields: readonly string[];
   readonly resumeAt: string | null;
   readonly blocked: { readonly code: string; readonly details: unknown } | null;
+  /** The signers to choose for (send the answers as `signerChoices`); empty when every signer resolved. */
+  readonly signerChoices: readonly SignerChoice[];
 }
 
 /** Parses `TransitionPreviewResponse` (for the web client). */
@@ -53,4 +67,14 @@ export const transitionPreviewResponseSchema = z.object({
   fields: z.array(z.string()),
   resumeAt: z.string().nullable(),
   blocked: z.object({ code: z.string(), details: z.unknown() }).nullable(),
+  signerChoices: z
+    .array(
+      z.object({
+        signerId: uuidSchema,
+        signerType: z.enum(['USER', 'POSITION', 'APPROVER', 'CREATOR']),
+        label: z.string().nullable(),
+        candidates: z.array(z.object({ id: uuidSchema, name: z.string() })),
+      }),
+    )
+    .default([]),
 }) satisfies z.ZodType<TransitionPreviewResponse>;
