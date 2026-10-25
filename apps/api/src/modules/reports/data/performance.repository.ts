@@ -186,7 +186,8 @@ export class PerformanceRepository {
   }
 
   /** Reopenings blamed on each person in the period (an error of the process is nobody's). */
-  async reopeningErrors(tx: TenantTransaction, query: ReportQuery, responsibleId?: string): Promise<ErrorCountRow[]> {
+  /** Process errors per responsible, as the help desk's ranking counts them: process error types and those that force the close. */
+  async processErrors(tx: TenantTransaction, query: ReportQuery, responsibleId?: string): Promise<ErrorCountRow[]> {
     const only = responsibleId === undefined ? sql`TRUE` : sql`e.responsible_id = ${responsibleId}::uuid`;
     return tx.$queryRaw<ErrorCountRow[]>`
       SELECT e.responsible_id::text AS "userId", max(u.first_name || ' ' || u.last_name) AS name, count(*)::int AS errors
@@ -195,7 +196,7 @@ export class PerformanceRepository {
       JOIN ${TICKET_JOIN} ON t.tenant_id = e.tenant_id AND t.id = e.ticket_id
       LEFT JOIN memberships m ON m.tenant_id = e.tenant_id AND m.user_id = e.responsible_id
       LEFT JOIN users u ON u.id = m.user_id
-      WHERE ${ticketPredicate(query)} AND e.tenant_id = ${query.tenantId}::uuid AND et.is_reopening AND NOT e.is_process_error
+      WHERE ${ticketPredicate(query)} AND e.tenant_id = ${query.tenantId}::uuid AND (e.is_process_error OR et.forces_close)
         AND ${inCoarsePeriod(sql`e.created_at`, query)} AND ${inPeriod(sql`e.created_at`, query)} AND ${only}
       GROUP BY e.responsible_id`;
   }

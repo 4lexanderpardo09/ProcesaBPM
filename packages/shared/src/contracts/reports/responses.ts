@@ -65,13 +65,20 @@ export interface RankingRow {
   readonly delivered: number;
   readonly onTime: number;
   readonly late: number;
+  /** Times the person held a step (each clock): the help desk's "tickets gestionados", the n of the score. */
+  readonly handled: number;
+  /** Process errors blamed on the person (process error types, and those that force the close). */
   readonly errors: number;
-  /** Compliance C = on time / (on time + late). */
+  /** Compliance C = on time / handled. */
   readonly compliance: number | null;
-  /** Quality Q = max(0, 1 - errors / delivered). */
+  /** Quality Q = 1 − errors / handled. */
   readonly quality: number | null;
-  /** 100 × C × Q. */
+  /** 70 × C + 30 × Q, as the help desk scores. */
   readonly score: number | null;
+  /** score × ln(handled + 1) × (1 − errors / handled)²: what the ranking orders by. */
+  readonly weighted: number | null;
+  /** Against the best of the period: from 80 % GREEN, from 55 % YELLOW, below RED; `null` without a position. */
+  readonly classification: 'GREEN' | 'YELLOW' | 'RED' | null;
   readonly medianMin: Minutes;
 }
 
