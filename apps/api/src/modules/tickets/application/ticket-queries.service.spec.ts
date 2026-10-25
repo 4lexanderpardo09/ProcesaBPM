@@ -95,7 +95,7 @@ describe('TicketQueriesService', () => {
       const { service, actionStates, tx, inTenant } = setUp(undefined, detailRow);
       const detail = await inTenant(() => service.get(ability, TICKET, USER));
       expect(actionStates.read).toHaveBeenCalledWith(tx, TENANT, TICKET, expect.objectContaining({ userId: USER }));
-      expect(detail.actions).toEqual({ advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: true, reportError: false, edit: false });
+      expect(detail.actions).toEqual({ advance: false, take: false, reassign: false, close: false, openIncident: false, resolveIncident: false, reopen: false, signParallelTask: false, comment: false, reportError: false, edit: false });
     });
 
     it('the body alone does not judge the actions', async () => {

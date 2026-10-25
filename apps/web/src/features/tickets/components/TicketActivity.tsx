@@ -45,6 +45,8 @@ export interface TicketActivityProps {
   readonly timeline: UseQueryResult<readonly TicketEventResponse[]>;
   /** The comment box only shows to someone who may comment. */
   readonly canComment: boolean;
+  /** A closed ticket takes no more comments: the activity says so instead of offering the box. */
+  readonly closed?: boolean;
   readonly timeZone: string | undefined;
   /** The fields of the ticket's version and the names its values point to, to read what a `FIELDS_UPDATED` changed. */
   readonly fields: readonly FormFieldResponse[];
@@ -54,7 +56,7 @@ export interface TicketActivityProps {
 }
 
 /** What happened on the ticket, oldest first, with the files that came with each event, and a box to add a comment for whoever may. */
-export function TicketActivity({ ticketId, timeline, canComment, timeZone, fields, valueNames, documents }: TicketActivityProps) {
+export function TicketActivity({ ticketId, timeline, canComment, closed = false, timeZone, fields, valueNames, documents }: TicketActivityProps) {
   const { t } = useTranslation('tickets');
   const download = useTicketFileDownload(ticketId);
   const [filter, setFilter] = useState<ActivityFilter>('all');
@@ -107,10 +109,15 @@ export function TicketActivity({ ticketId, timeline, canComment, timeZone, field
       )}
       {download.isError && <Alert tone="danger">{t('detail.attachments.downloadFailed')}</Alert>}
       {viewing !== undefined && <PdfViewerDialog ticketId={ticketId} file={viewing} onClose={() => setViewing(undefined)} />}
-      {canComment && (
+      {canComment && !closed && (
         <div className={styles.comment} data-print="hide">
           <CommentForm ticketId={ticketId} />
         </div>
+      )}
+      {closed && (
+        <p className={styles.muted} data-print="hide">
+          {t('detail.comment.closed')}
+        </p>
       )}
     </Card>
   );

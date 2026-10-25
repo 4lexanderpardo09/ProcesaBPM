@@ -73,7 +73,7 @@ export function ticketActionRefusals(state: TicketActionState): TicketActionRefu
     }),
     reopen: reopenRefusal(grants.reopen, state.status) ?? (state.hasReopenTarget ? null : new InvalidReopenStepError()),
     signParallelTask: onOpenVisit ?? signatureRefusal(parallel, state.signatures, state.actorId),
-    comment: commentRefusal(grants.comment),
+    comment: commentRefusal(grants.comment, state.status),
     reportError: onOpenVisit ?? reportErrorRefusal(grants.report_error),
     edit: editRefusal(grants.update, state.status),
   };
