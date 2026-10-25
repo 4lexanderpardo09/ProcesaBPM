@@ -72,12 +72,15 @@ const rankingRowSchema = z.object({
   userId: z.string(),
   name: z.string(),
   delivered: count,
+  handled: count,
   onTime: count,
   late: count,
   errors: count,
   compliance: z.number().nullable(),
   quality: z.number().nullable(),
   score: z.number().nullable(),
+  weighted: z.number().nullable(),
+  classification: z.enum(['GREEN', 'YELLOW', 'RED']).nullable(),
   medianMin: minutes,
 });
 const rankingSchema = z.object({ minVolume: count, ranked: z.array(rankingRowSchema), unranked: z.array(rankingRowSchema) }) satisfies z.ZodType<RankingReport>;

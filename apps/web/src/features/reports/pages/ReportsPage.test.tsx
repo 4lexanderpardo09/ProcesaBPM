@@ -93,6 +93,23 @@ describe('ReportsPage', () => {
     expect(queryOf(fake.callsTo('/reports/backlog')[0]!.path).has('from')).toBe(false);
   });
 
+  it('ranks people as the help desk does: weighted score, colored against the best', async () => {
+    const row = (userId: string, name: string, rank: number, weighted: number, classification: string) => ({
+      rank, userId, name, delivered: 4, handled: 6, onTime: 4, late: 1, errors: 0, compliance: 4 / 6, quality: 1, score: 76.7, weighted, classification, medianMin: 120,
+    });
+    const { fake } = renderRoute('/reports/ranking?from=2026-10-01&to=2026-10-20', {
+      handlers: { ...filterHandlers, '/reports/ranking': () => ({ minVolume: 1, ranked: [row(id(10), 'Ana Torres', 1, 149.25, 'GREEN'), row(id(11), 'Luis Gómez', 2, 69.31, 'RED')], unranked: [] }) },
+    });
+
+    const table = await screen.findByRole('table', { name: 'Ranking' });
+    const [, first, second] = within(table).getAllByRole('row');
+    expect(within(first!).getByText('Ana Torres')).toBeInTheDocument();
+    expect(within(first!).getByText('149,3')).toBeInTheDocument();
+    expect(within(first!).getByText('Verde')).toBeInTheDocument();
+    expect(within(second!).getByText('Rojo')).toBeInTheDocument();
+    expect(queryOf(fake.callsTo('/reports/ranking')[0]!.path).get('minVolume')).toBe('1');
+  });
+
   it('sends a role without reports back home', async () => {
     const { router } = renderRoute('/reports', { handlers: { ...filterHandlers, '/auth/me/permissions': () => ({ permissions: [{ action: 'read', subject: 'Ticket', conditional: false }] }) } });
 
