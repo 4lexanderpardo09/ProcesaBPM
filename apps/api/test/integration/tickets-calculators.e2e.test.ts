@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminOf, connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
-import { type FlowSpec, type Member, publishFlow, REQUESTER_GRANTS, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
+import { type FlowSpec, type Member, publishFlow, REQUESTER_GRANTS, simpleFlow, TicketWorld, WORKER_GRANTS } from '../support/ticket-world.js';
 
 useTestEnvironment();
 
@@ -54,7 +54,7 @@ describe('calculators: tenant settings, publication and the CALCULATOR block', (
 
   it('lists the built-in calculators as off until the tenant configures them', async () => {
     const listed = (await world.admin.get('/calculators').expect(200)).body as Array<{ code: string; configured: boolean; config: unknown }>;
-    expect(listed).toEqual([expect.objectContaining({ code: 'MEAL_ALLOWANCE', configured: false, config: null })]);
+    expect(listed).toEqual([expect.objectContaining({ code: 'MEAL_ALLOWANCE', configured: false, config: null }), expect.objectContaining({ code: 'TRAVEL_BALANCE', configured: false, config: null })]);
   });
 
   it('refuses a version that uses a calculator the tenant has not configured', async () => {
@@ -87,6 +87,27 @@ describe('calculators: tenant settings, publication and the CALCULATOR block', (
 
     const short = await create({ LEAVES: '2026-10-05T20:30:00.000Z', BACK: '2026-10-05T21:00:00.000Z' }).expect(201);
     expect(short.body.status).toBe('CLOSED');
+  });
+
+  it('the travel balance is what was advanced minus what the expense table adds up to', async () => {
+    await world.admin.put('/calculators/TRAVEL_BALANCE/config', { meals: [] }).expect(400);
+    expect((await world.admin.put('/calculators/TRAVEL_BALANCE/config', {}).expect(200)).body).toMatchObject({ configured: true, config: {} });
+    const flow = await publishFlow(world.admin, {
+      ...simpleFlow(),
+      fields: [
+        { step: 'start', code: 'ANTICIPO', type: 'CURRENCY', capture: 'CREATION', isRequired: true },
+        { step: 'start', code: 'GASTOS', type: 'TABLE', capture: 'CREATION', config: { columns: [{ code: 'CONCEPTO', label: 'Concepto', type: 'TEXT' }, { code: 'VALOR', label: 'Valor', type: 'CURRENCY' }] } },
+        { step: 'start', code: 'GASTADO', type: 'FORMULA', capture: 'CREATION', config: { expression: 'SUM(GASTOS.VALOR)', resultType: 'CURRENCY' } },
+        { step: 'start', code: 'SALDO', type: 'CALCULATOR', capture: 'CREATION', config: { calculatorCode: 'TRAVEL_BALANCE', inputs: { advance: 'ANTICIPO', spent: 'GASTADO' } } },
+      ],
+    });
+    const balanceOf = async (values: Record<string, unknown>) => {
+      const created = (await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Legalización', values }).expect(201)).body.id as string;
+      return Number((await requester.client.get(`/tickets/${created}`).expect(200)).body.values.SALDO);
+    };
+    expect(await balanceOf({ ANTICIPO: 500000, GASTOS: [{ CONCEPTO: 'Hotel', VALOR: 300000 }, { CONCEPTO: 'Taxi', VALOR: '45000.50' }] })).toBe(154999.5);
+    expect(await balanceOf({ ANTICIPO: 100000, GASTOS: [{ CONCEPTO: 'Hotel', VALOR: 180000 }] })).toBe(-80000);
+    await world.admin.delete('/calculators/TRAVEL_BALANCE/config').expect(200);
   });
 
   it('keeps the ticket moving with a blank when the calculator is switched off later, and records why', async () => {

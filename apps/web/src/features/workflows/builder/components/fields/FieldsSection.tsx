@@ -7,6 +7,7 @@ import { fieldsOf, removeField, upsertField } from '../../lib/content-doc';
 import type { DraftContent } from '../../hooks/use-draft-content';
 import { Section } from '../StepSections';
 import { FieldDialog } from './FieldDialog';
+import { FillFromDatasetDialog } from './FillFromDatasetDialog';
 import styles from '../Builder.module.css';
 
 export interface FieldsSectionProps {
@@ -16,7 +17,7 @@ export interface FieldsSectionProps {
   readonly content: DraftContent;
 }
 
-type Editing = { readonly kind: 'edit'; readonly fieldId: string | null } | { readonly kind: 'remove'; readonly fieldId: string } | null;
+type Editing = { readonly kind: 'edit'; readonly fieldId: string | null } | { readonly kind: 'remove'; readonly fieldId: string } | { readonly kind: 'fill' } | null;
 
 /** The fields a block asks for, in their order: add, edit, move up or down, and take out. */
 export function FieldsSection({ step, doc, readOnly, content }: FieldsSectionProps) {
@@ -87,9 +88,11 @@ export function FieldsSection({ step, doc, readOnly, content }: FieldsSectionPro
         <div>
           <Button icon={<PlusIcon size={14} />} onClick={() => open({ kind: 'edit', fieldId: null })}>
             {t('builder.fields.add')}
-          </Button>
+          </Button>{' '}
+          {fields.length > 1 && <Button onClick={() => open({ kind: 'fill' })}>{t('builder.fields.fill.open')}</Button>}
         </div>
       )}
+      {editing?.kind === 'fill' && <FillFromDatasetDialog fields={fields} content={content} onClose={() => setEditing(null)} />}
       {editing?.kind === 'edit' && (
         <FieldDialog
           {...(editedField === undefined ? {} : { field: editedField })}

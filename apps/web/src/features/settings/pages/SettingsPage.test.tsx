@@ -85,6 +85,28 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Activar' })).toBeInTheDocument();
   });
 
+  it('switches the travel balance calculator on and off; it has nothing to configure', async () => {
+    let configured = false;
+    const calculator = () => ({ code: 'TRAVEL_BALANCE', parameters: [{ name: 'advance', type: 'NUMBER', required: true }, { name: 'spent', type: 'NUMBER', required: true }], output: 'CURRENCY', configured, config: configured ? {} : null });
+    const { fake } = renderRoute('/settings/calculators', {
+      handlers: {
+        '/calculators': () => [calculator()],
+        '/calculators/TRAVEL_BALANCE/config': (options) => {
+          configured = options.method !== 'DELETE';
+          return calculator();
+        },
+      },
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Saldo de viáticos' })).toBeInTheDocument();
+    expect(screen.getByText('Apagada')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Activar' }));
+    expect(await screen.findByText('Activa')).toBeInTheDocument();
+    expect(fake.callsTo('/calculators/TRAVEL_BALANCE/config')[0]?.options).toMatchObject({ method: 'PUT', body: {} });
+    await userEvent.click(screen.getByRole('button', { name: 'Apagar' }));
+    expect(await screen.findByText('Apagada')).toBeInTheDocument();
+  });
+
   it('gives support access for some hours with a reason, and ends it', async () => {
     let active: ReturnType<typeof grant> | null = null;
     const { fake } = renderRoute('/settings/support', {

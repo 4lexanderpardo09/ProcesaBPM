@@ -64,6 +64,10 @@ export const settings = {
     turnOff: 'Apagar',
     saved: 'Configuración guardada.',
     offHint: 'Si la apagas, los campos que la usan dejan de calcular hasta que la vuelvas a activar.',
+    travelBalance: {
+      title: 'Saldo de viáticos',
+      hint: 'Al legalizar un viaje, resta lo gastado de lo anticipado. Si da positivo, la persona devuelve la diferencia a la empresa; si da negativo, la empresa se la debe; en cero no hay saldo. En el flujo, cada lado suele ser un campo de fórmula que suma sus tablas, por ejemplo SUM(GASTOS.VALOR).',
+    },
     mealAllowance: {
       title: 'Viáticos de alimentación',
       hint: 'Paga cada comida en cada día del viaje cuya hora de inicio caiga entre la salida y el regreso. Los campos de tipo calculadora la usan con la fecha de salida y la de regreso.',

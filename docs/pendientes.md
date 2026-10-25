@@ -38,6 +38,17 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - ~~**Editor de texto como el de la mesa:** títulos, colores, resaltado, alineación, enlaces y tablas (también pegadas de Excel) en comentarios, descripciones, respuestas y plantillas~~ (hecho, arquitectura «Editor de texto enriquecido»). ~~Adjuntos sueltos al comentar, avanzar y cerrar~~ (hecho, arquitectura «Adjuntos sueltos»). ~~Las instrucciones del paso precargadas en la respuesta y un panel más grande~~ (hecho, arquitectura «Instrucciones del paso»). ~~Filtros de la actividad, visor de PDF, imprimir y a tiempo/tarde por paso~~ (hecho, arquitectura «Herramientas del historial»). ~~«Editar datos registrados»~~ (hecho, arquitectura «Editar datos registrados»). ~~Plantillas y «Limpiar» al avanzar y cerrar; no enviar las instrucciones sin tocar; el visor de PDF descarga si no puede mostrar~~ (hecho, arquitectura «Respuesta como en la mesa»). **Decidido con el usuario:** las instrucciones siguen precargadas (como la mesa) y el editor no se carga aparte (la mesa tampoco lo hace).
   - **Consola de la plataforma en la web:** ~~sesión de plataforma, organizaciones (lista, alta, detalle, plan, suspender y reactivar) y avisos (mantenimiento y notas de cambios de la mesa)~~ (hecho, arquitectura §10 «Consola de plataforma en la web»); ~~planes, administradores y cuentas (reinicio del MFA)~~ (hecho); ~~países y festivos, operación, auditoría y eliminación~~ (hecho); ~~la visita de soporte (abrir la organización en modo lectura con el token de soporte)~~ (hecho, arquitectura §10 «Visita de soporte»).
     - **Decidido (con criterio, el usuario delegó):** la visita reusa las pantallas de la organización en la misma pestaña, sin una vista aparte; la visita dura lo que la sesión de la consola (15 min), como en el API.
+- **Saldo de viáticos y «Llenar desde un Excel» (2026-10-25, `feat/travel-balance-and-fill`):**
+  - **Calculadora `TRAVEL_BALANCE`:** anticipado menos gastado, como el `CALC:saldo_viaticos` de la mesa.
+    - Si da positivo, la persona devuelve la diferencia; si da negativo, la empresa la debe.
+    - Un lado vacío cuenta como cero; si los dos están vacíos, queda en blanco.
+    - No tiene parámetros: en Ajustes → Calculadoras solo se activa o se apaga.
+    - Cada lado suele ser un campo de fórmula, por ejemplo `SUM(GASTOS.VALOR)`.
+  - **«Llenar desde un Excel»** en los campos de un bloque del constructor:
+    - Configura de una vez la búsqueda por clave de los campos de texto cuyo código coincide con una columna del Excel. Se comparan sin tildes, mayúsculas ni espacios.
+    - Los que coinciden pero no son de texto se nombran y no se tocan.
+    - Es el «campo trigger» de la mesa, pero cada campo queda con su búsqueda propia y se puede cambiar suelto.
+  - **Decidido con el usuario:** no se guarda cédula en las personas; los datos de empleados van en un Excel, sin crear cuentas.
 - **Tercera revisión de paridad (2026-10-25, independiente):** resultados y orden de trabajo en [paridad-mesa.md](paridad-mesa.md).
 - **Editor de texto en todo lo que se lee con formato (2026-10-25, `feat/rich-text-everywhere`):**
   - **Descripción de la subcategoría:** se escribe con el editor, como en la mesa. El API la sanea con la misma lista permitida de los comentarios: lo que queda vacío es `null`, y el máximo sube a 10 000 caracteres. «Nuevo ticket» la muestra con su formato; las descripciones viejas en texto plano se muestran como párrafos.

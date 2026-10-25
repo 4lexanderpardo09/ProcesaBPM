@@ -15,8 +15,8 @@ const meals = findCalculator('MEAL_ALLOWANCE')!;
 const compute = (departure: string | null, back: string | null, timeZone = 'America/Bogota') => meals.compute({ departure, return: back }, config, { timeZone })?.toPlainString() ?? null;
 
 describe('MEAL_ALLOWANCE', () => {
-  it('is the only built-in calculator and validates its configuration', () => {
-    expect(listCalculators().map((calculator) => calculator.code)).toEqual(['MEAL_ALLOWANCE']);
+  it('is one of the built-in calculators and validates its configuration', () => {
+    expect(listCalculators().map((calculator) => calculator.code)).toEqual(['MEAL_ALLOWANCE', 'TRAVEL_BALANCE']);
     expect(meals.configSchema.safeParse(config).success).toBe(true);
     expect(meals.configSchema.safeParse({ meals: [] }).success).toBe(false);
     expect(meals.configSchema.safeParse({ meals: [{ code: 'A', from: '09:00', to: '08:00', amount: '1' }] }).success).toBe(false);
@@ -48,6 +48,30 @@ describe('MEAL_ALLOWANCE', () => {
 function field(code: string, type: FieldDocument['type'], fieldConfig: Record<string, unknown> = {}): FieldDocument {
   return { id: code, stepId: 'S', code, label: code, type, capture: 'STEP', isRequired: false, isReadOnly: false, sortOrder: 0, config: fieldConfig, dataSource: null } as FieldDocument;
 }
+
+describe('TRAVEL_BALANCE', () => {
+  const balance = findCalculator('TRAVEL_BALANCE')!;
+  const compute = (advance: unknown, spent: unknown) => balance.compute({ advance, spent }, {}, { timeZone: 'UTC' })?.toPlainString() ?? null;
+
+  it('is what was advanced minus what was spent: positive to give back, negative owed to the person', () => {
+    expect(compute(500000, 420000.5)).toBe('79999.5');
+    expect(compute('300000', 350000)).toBe('-50000');
+    expect(compute(100, 100)).toBe('0');
+  });
+
+  it('counts an empty side as zero, and is blank while both are empty', () => {
+    expect(compute(250000, null)).toBe('250000');
+    expect(compute('', 80000)).toBe('-80000');
+    expect(compute(null, undefined)).toBeNull();
+  });
+
+  it('takes no configuration and refuses what is not a number', () => {
+    expect(balance.configSchema.safeParse({}).success).toBe(true);
+    expect(balance.configSchema.safeParse({ extra: 1 }).success).toBe(false);
+    expect(() => compute('mucho', 1)).toThrow(FormulaRuntimeError);
+    expect(() => compute({ value: 1 }, 1)).toThrow(FormulaRuntimeError);
+  });
+});
 
 describe('CALCULATOR fields in computeFieldValues', () => {
   const fields = [
