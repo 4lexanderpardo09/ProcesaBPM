@@ -68,8 +68,13 @@ export const transitionTicketRequestSchema = z.object({
 });
 export type TransitionTicketRequest = z.infer<typeof transitionTicketRequestSchema>;
 
-/** On a PARALLEL step `fromUserId` says whose pending signature moves to `toUserId`. */
-export const reassignTicketRequestSchema = z.object({ toUserId: uuidSchema, visitId: uuidSchema, comment, fromUserId: uuidSchema.optional() });
+/**
+ * On a PARALLEL step `fromUserId` says whose pending signature moves to `toUserId`; or, as in the help desk, `addSigner`
+ * adds `toUserId` as one more signer of the step, leaving the others as they are.
+ */
+export const reassignTicketRequestSchema = z
+  .object({ toUserId: uuidSchema, visitId: uuidSchema, comment, fromUserId: uuidSchema.optional(), addSigner: z.boolean().optional() })
+  .refine((request) => !(request.addSigner === true && request.fromUserId !== undefined), 'Either move a signature or add a signer');
 export type ReassignTicketRequest = z.infer<typeof reassignTicketRequestSchema>;
 
 export const takeTicketRequestSchema = z.object({ visitId: uuidSchema });

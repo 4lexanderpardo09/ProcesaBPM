@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { InvalidAssigneeError, type ReassignTicketRequest, type TicketMutationResponse } from '@procesabpm/shared';
+import { InvalidAssigneeError, InvalidStateError, type ReassignTicketRequest, type TicketMutationResponse } from '@procesabpm/shared';
 import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -42,6 +42,10 @@ export class ReassignTicketService {
       const target = await this.people.findActiveMember(tx, tenantId, request.toUserId);
       const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
       const parallel = document.steps.find((candidate) => candidate.id === visit.stepId)?.assignmentMode === 'PARALLEL';
+      if (request.addSigner === true) {
+        if (!parallel) throw new InvalidStateError('Only a parallel step takes another signer');
+        return this.addSignature(tx, tenantId, current, actor, request, target, at);
+      }
       if (parallel) return this.reassignSignature(tx, tenantId, current, actor, request, target, at);
       if (target === null || !isEligibleAssignee(target, ticket.companyId) || isSoleHolder(current.assignees, target.userId)) throw new InvalidAssigneeError();
 
@@ -67,6 +71,36 @@ export class ReassignTicketService {
       });
       return { id: ticket.id, number: ticket.number.toString(), status: 'OPEN', currentStepId: visit.stepId, openVisitId: visit.id };
     });
+  }
+
+  /**
+   * As in the help desk (`crearNuevoParalelo`): one more person signs the parallel step. They get a pending signature,
+   * a PARALLEL assignment and their own clock; the other signatures stay as they are, and the step now also waits for
+   * this one. The target must not already be a signer of this visit.
+   */
+  private async addSignature(tx: TenantTransaction, tenantId: string, current: TicketInProgress, actor: TicketActor, request: ReassignTicketRequest, target: MemberRow | null, at: Date): Promise<TicketMutationResponse> {
+    const { ticket, visit } = current;
+    const tasks = await this.writes.findParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop);
+    if (target === null || !isEligibleAssignee(target, ticket.companyId) || isSigner(tasks, target.userId)) throw new InvalidAssigneeError();
+
+    const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
+    const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, visit.calendarId, at);
+    const opened = openSla({ value: visit.slaValue, unit: visit.slaUnit }, calendar?.calendar ?? null, at);
+    const visitPlan: VisitPlan = { stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt, sla: { value: visit.slaValue, unit: visit.slaUnit }, calendarId: visit.calendarId, dueAt: visit.dueAt };
+    await this.writes.insertParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop, [target.userId]);
+    await this.writes.insertAssignees(tx, tenantId, ticket.id, at, [{ userId: target.userId, type: 'PARALLEL' }]);
+    await this.writes.insertClocks(tx, tenantId, ticket, visit.id, visitPlan, [{ responsibleId: target.userId, startedAt: at, sla: { value: opened.value, unit: opened.unit }, calendarId: visit.calendarId, dueAt: opened.dueAt }]);
+    await this.writes.insertEvent(tx, tenantId, ticket.id, at, {
+      type: 'REASSIGNED',
+      stepId: visit.stepId,
+      loop: visit.loop,
+      actorId: actor.userId,
+      assigneeId: target.userId,
+      commentHtml: sanitizeOptionalRichText(request.comment),
+      data: { fromUserIds: [], addedSigner: true },
+      outbox: [{ type: 'ticket.assigned', payload: { stepId: visit.stepId, loop: visit.loop, userId: target.userId, assigneeType: 'PARALLEL' } }],
+    });
+    return { id: ticket.id, number: ticket.number.toString(), status: 'OPEN', currentStepId: visit.stepId, openVisitId: visit.id };
   }
 
   /**
