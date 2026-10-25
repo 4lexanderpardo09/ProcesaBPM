@@ -12,6 +12,8 @@ export interface CalculatorParameter {
 export interface CalculatorContext {
   /** Time zone of the company the ticket belongs to. */
   readonly timeZone: string;
+  /** What the field or block chose among the organization's settings, e.g. `table` for a rate table. */
+  readonly options?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -23,6 +25,8 @@ export interface CalculatorDefinition {
   readonly parameters: readonly CalculatorParameter[];
   /** How the result is stored: an amount of money rounded to 2 decimals, or a plain number. */
   readonly output: 'CURRENCY' | 'NUMBER';
+  /** Its configuration holds named tables (`{tables: [{code, name}]}`) and each use picks one. */
+  readonly usesTable?: boolean;
   readonly configSchema: z.ZodType<Record<string, unknown>>;
   /** `null` when an input is missing; throws `FormulaRuntimeError` when the inputs cannot produce a value. */
   compute(inputs: Readonly<Record<string, unknown>>, config: Record<string, unknown>, context: CalculatorContext): Decimal | null;

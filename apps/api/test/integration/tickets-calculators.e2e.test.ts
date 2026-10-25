@@ -9,7 +9,12 @@ import { type FlowSpec, type Member, publishFlow, REQUESTER_GRANTS, simpleFlow, 
 
 useTestEnvironment();
 
-const MEALS = { meals: [{ code: 'LUNCH', from: '12:00', to: '14:00', amount: '15000.50' }, { code: 'DINNER', from: '18:00', to: '20:00', amount: '20000' }] };
+const RATES = {
+  tables: [
+    { code: 'COMIDAS', name: 'Comidas', slots: [{ name: 'Almuerzo', from: '12:00', to: '14:00', amount: '15000.50' }, { name: 'Cena', from: '18:00', to: '20:00', amount: '20000' }] },
+    { code: 'NOCTURNO', name: 'Recargo nocturno', slots: [{ name: 'Noche', from: '22:00', to: '06:00', amount: '30000' }] },
+  ],
+};
 
 describe('calculators: tenant settings, publication and the CALCULATOR block', () => {
   let db: TestDatabase;
@@ -54,7 +59,7 @@ describe('calculators: tenant settings, publication and the CALCULATOR block', (
 
   it('lists the built-in calculators as off until the tenant configures them', async () => {
     const listed = (await world.admin.get('/calculators').expect(200)).body as Array<{ code: string; configured: boolean; config: unknown }>;
-    expect(listed).toEqual([expect.objectContaining({ code: 'MEAL_ALLOWANCE', configured: false, config: null }), expect.objectContaining({ code: 'TRAVEL_BALANCE', configured: false, config: null })]);
+    expect(listed).toEqual([expect.objectContaining({ code: 'TIME_SLOTS', configured: false, config: null })]);
   });
 
   it('refuses a version that uses a calculator the tenant has not configured', async () => {
@@ -62,19 +67,19 @@ describe('calculators: tenant settings, publication and the CALCULATOR block', (
   });
 
   it('validates the configuration with the calculator schema', async () => {
-    const invalid = await world.admin.put('/calculators/MEAL_ALLOWANCE/config', { meals: [] }).expect(400);
+    const invalid = await world.admin.put('/calculators/TIME_SLOTS/config', { tables: [] }).expect(400);
     expect(invalid.body.error.code).toBe('VALIDATION_FAILED');
-    await world.admin.put('/calculators/NOPE/config', MEALS).expect(404);
+    await world.admin.put('/calculators/NOPE/config', RATES).expect(404);
   });
 
   it('only people allowed to change settings can switch calculators', async () => {
     await requester.client.get('/calculators').expect(403);
-    await requester.client.put('/calculators/MEAL_ALLOWANCE/config', MEALS).expect(403);
+    await requester.client.put('/calculators/TIME_SLOTS/config', RATES).expect(403);
   });
 
   it('computes the allowance when the ticket passes the block and routes on it', async () => {
-    const saved = (await world.admin.put('/calculators/MEAL_ALLOWANCE/config', MEALS).expect(200)).body;
-    expect(saved).toMatchObject({ configured: true, config: MEALS });
+    const saved = (await world.admin.put('/calculators/TIME_SLOTS/config', RATES).expect(200)).body;
+    expect(saved).toMatchObject({ code: 'TIME_SLOTS', configured: true, config: RATES });
     const flow = await publishFlow(world.admin, tripFlow());
     const create = (values: Record<string, unknown>) => requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Trip', values });
 
@@ -89,44 +94,45 @@ describe('calculators: tenant settings, publication and the CALCULATOR block', (
     expect(short.body.status).toBe('CLOSED');
   });
 
-  it('the travel balance is what was advanced minus what the expense table adds up to', async () => {
-    await world.admin.put('/calculators/TRAVEL_BALANCE/config', { meals: [] }).expect(400);
-    expect((await world.admin.put('/calculators/TRAVEL_BALANCE/config', {}).expect(200)).body).toMatchObject({ configured: true, config: {} });
-    const flow = await publishFlow(world.admin, {
+  it('tells workflow designers the rate tables by name only, never their slots or amounts', async () => {
+    await world.admin.put('/calculators/TIME_SLOTS/config', RATES).expect(200);
+    expect((await world.admin.get('/calculators/choices').expect(200)).body).toEqual([{ code: 'TIME_SLOTS', tables: [{ code: 'COMIDAS', name: 'Comidas' }, { code: 'NOCTURNO', name: 'Recargo nocturno' }] }]);
+    await requester.client.get('/calculators/choices').expect(403);
+  });
+
+  it('a field picks one of the organization\'s rate tables; publishing refuses a table it does not have', async () => {
+    const shiftFlow = (table: string) => ({
       ...simpleFlow(),
       fields: [
-        { step: 'start', code: 'ANTICIPO', type: 'CURRENCY', capture: 'CREATION', isRequired: true },
-        { step: 'start', code: 'GASTOS', type: 'TABLE', capture: 'CREATION', config: { columns: [{ code: 'CONCEPTO', label: 'Concepto', type: 'TEXT' }, { code: 'VALOR', label: 'Valor', type: 'CURRENCY' }] } },
-        { step: 'start', code: 'GASTADO', type: 'FORMULA', capture: 'CREATION', config: { expression: 'SUM(GASTOS.VALOR)', resultType: 'CURRENCY' } },
-        { step: 'start', code: 'SALDO', type: 'CALCULATOR', capture: 'CREATION', config: { calculatorCode: 'TRAVEL_BALANCE', inputs: { advance: 'ANTICIPO', spent: 'GASTADO' } } },
+        { step: 'start', code: 'INICIO', type: 'DATETIME', capture: 'CREATION' as const, isRequired: true },
+        { step: 'start', code: 'FIN', type: 'DATETIME', capture: 'CREATION' as const, isRequired: true },
+        { step: 'start', code: 'RECARGO', type: 'CALCULATOR', capture: 'CREATION' as const, config: { calculatorCode: 'TIME_SLOTS', inputs: { departure: 'INICIO', return: 'FIN' }, table } },
       ],
     });
-    const balanceOf = async (values: Record<string, unknown>) => {
-      const created = (await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Legalización', values }).expect(201)).body.id as string;
-      return Number((await requester.client.get(`/tickets/${created}`).expect(200)).body.values.SALDO);
-    };
-    expect(await balanceOf({ ANTICIPO: 500000, GASTOS: [{ CONCEPTO: 'Hotel', VALOR: 300000 }, { CONCEPTO: 'Taxi', VALOR: '45000.50' }] })).toBe(154999.5);
-    expect(await balanceOf({ ANTICIPO: 100000, GASTOS: [{ CONCEPTO: 'Hotel', VALOR: 180000 }] })).toBe(-80000);
-    await world.admin.delete('/calculators/TRAVEL_BALANCE/config').expect(200);
+    await expect(publishFlow(world.admin, shiftFlow('GONE'))).rejects.toThrow('CALCULATOR_TABLE_UNKNOWN');
+    const flow = await publishFlow(world.admin, shiftFlow('NOCTURNO'));
+    // Mon 11:00 to Tue 13:00 Bogota: the night slot starts once (Monday 22:00).
+    const created = (await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Turno', values: { INICIO: '2026-10-05T16:00:00.000Z', FIN: '2026-10-06T18:00:00.000Z' } }).expect(201)).body.id as string;
+    expect((await requester.client.get(`/tickets/${created}`).expect(200)).body.values.RECARGO).toBe(30000);
   });
 
   it('keeps the ticket moving with a blank when the calculator is switched off later, and records why', async () => {
     const flow = await publishFlow(world.admin, tripFlow());
-    await world.admin.delete('/calculators/MEAL_ALLOWANCE/config').expect(200);
+    await world.admin.delete('/calculators/TIME_SLOTS/config').expect(200);
     const created = await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Trip', values: { LEAVES: '2026-10-05T16:00:00.000Z', BACK: '2026-10-07T02:00:00.000Z' } }).expect(201);
     expect(created.body.status).toBe('CLOSED');
     expect((await world.events(created.body.id)).filter((event) => event.type === 'SYSTEM').map((event) => event.data)).toEqual([{ kind: 'FORMULA_ERROR', fieldCode: 'ALLOWANCE', reason: 'CALCULATOR_NOT_CONFIGURED' }]);
-    await world.admin.put('/calculators/MEAL_ALLOWANCE/config', MEALS).expect(200);
+    await world.admin.put('/calculators/TIME_SLOTS/config', RATES).expect(200);
   });
 
   it('never shows or uses the settings of another tenant (tenant leak test)', async () => {
     const other = await adminOf(db, app, await seedTenant(db.platform));
     expect((await other.admin.get('/calculators').expect(200)).body[0]).toMatchObject({ configured: false, config: null });
-    await other.admin.put('/calculators/MEAL_ALLOWANCE/config', { meals: [{ code: 'X', from: '09:00', to: '10:00', amount: '1' }] }).expect(200);
-    expect((await world.admin.get('/calculators').expect(200)).body[0].config).toEqual(MEALS);
-    await other.admin.delete('/calculators/MEAL_ALLOWANCE/config').expect(200);
-    expect((await world.admin.get('/calculators').expect(200)).body[0]).toMatchObject({ configured: true, config: MEALS });
-    const rows = await db.platform.query(`SELECT tenant_id FROM calculator_configs WHERE code = 'MEAL_ALLOWANCE'`);
+    await other.admin.put('/calculators/TIME_SLOTS/config', { tables: [{ code: 'X', name: 'X', slots: [{ name: 'X', from: '09:00', to: '10:00', amount: '1' }] }] }).expect(200);
+    expect((await world.admin.get('/calculators').expect(200)).body[0].config).toEqual(RATES);
+    await other.admin.delete('/calculators/TIME_SLOTS/config').expect(200);
+    expect((await world.admin.get('/calculators').expect(200)).body[0]).toMatchObject({ configured: true, config: RATES });
+    const rows = await db.platform.query(`SELECT tenant_id FROM calculator_configs WHERE code = 'TIME_SLOTS'`);
     expect(rows.rows.map((row) => row.tenant_id)).toContain(world.tenant.tenantId);
   });
 });

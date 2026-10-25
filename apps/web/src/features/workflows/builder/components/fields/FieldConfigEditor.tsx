@@ -1,4 +1,4 @@
-import { effectiveFieldType, type FieldDocument, type FieldType, listCalculators } from '@procesabpm/shared';
+import { effectiveFieldType, type FieldDocument, type FieldType, findCalculator, listCalculators } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
@@ -8,8 +8,10 @@ import { useApiClient } from '@/shared/session';
 import { Checkbox, Select, TextArea, TextField } from '@/shared/ui';
 import { datasetsQueryOptions } from '../../api/builder-api';
 import { patchConfig } from '../../lib/numbers';
+import { CalculatorTableSelect } from '../CalculatorTableSelect';
 import { DecimalField } from '../DecimalField';
 import { WholeNumberField } from '../WholeNumberField';
+import { FormulaGuide } from './FormulaGuide';
 import { type FieldOption, OptionsEditor } from './OptionsEditor';
 import { type TableColumn, TableColumnsEditor } from './TableColumnsEditor';
 import styles from '../Builder.module.css';
@@ -155,6 +157,7 @@ export function FieldConfigEditor({ type, config, dataSource, fields, onChange }
             value={str(config.expression)}
             onChange={(event) => set({ expression: event.target.value })}
           />
+          <FormulaGuide />
           <Select
             label={label('resultType')}
             options={RESULT_TYPES.map((value) => ({ value, label: t(`builder.fields.config.resultTypes.${value}`) }))}
@@ -165,21 +168,22 @@ export function FieldConfigEditor({ type, config, dataSource, fields, onChange }
         </>
       );
     case 'CALCULATOR': {
-      const calculator = listCalculators().find((candidate) => candidate.code === config.calculatorCode);
+      const calculator = findCalculator(str(config.calculatorCode));
       const inputs = (config.inputs ?? {}) as Record<string, string>;
       return (
         <>
           <Select
             label={t('builder.calculator.calculator')}
             placeholder={t('builder.calculator.placeholder')}
-            options={listCalculators().map((candidate) => ({ value: candidate.code, label: t(`builder.calculator.names.${candidate.code as 'MEAL_ALLOWANCE'}`, { defaultValue: candidate.code }) }))}
-            value={str(config.calculatorCode)}
+            options={listCalculators().map((candidate) => ({ value: candidate.code, label: t(`builder.calculator.names.${candidate.code as 'TIME_SLOTS'}`, { defaultValue: candidate.code }) }))}
+            value={calculator?.code ?? str(config.calculatorCode)}
             onChange={(event) => onChange({ calculatorCode: event.target.value, inputs: {} }, null)}
           />
+          {calculator !== undefined && <CalculatorTableSelect calculator={calculator} value={str(config.table)} onChange={(table) => set({ table })} />}
           {calculator?.parameters.map((parameter) => (
             <Select
               key={parameter.name}
-              label={t('builder.calculator.input', { name: t(`builder.calculator.parameters.${parameter.name as 'advance'}`, { defaultValue: parameter.name }) })}
+              label={t('builder.calculator.input', { name: t(`builder.calculator.parameters.${parameter.name as 'departure'}`, { defaultValue: parameter.name }) })}
               placeholder={t('builder.calculator.inputPlaceholder')}
               options={fields.filter((field) => INPUT_TYPES[parameter.type]?.has(effectiveFieldType(field)) === true).map((field) => ({ value: field.code, label: `${field.label} (${field.code})` }))}
               value={inputs[parameter.name] ?? ''}

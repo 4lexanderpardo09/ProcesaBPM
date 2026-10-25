@@ -594,8 +594,14 @@ export const workflows = {
     calculator: {
       calculator: 'Calculadora',
       placeholder: 'Elige una calculadora',
-      names: { MEAL_ALLOWANCE: 'Auxilio de alimentación', TRAVEL_BALANCE: 'Saldo de viáticos' },
-      parameters: { departure: 'Salida', return: 'Regreso', advance: 'Total anticipado', spent: 'Total gastado' },
+      names: { TIME_SLOTS: 'Pago por franjas horarias' },
+      parameters: { departure: 'Inicio (fecha y hora)', return: 'Fin (fecha y hora)' },
+      table: 'Tarifa',
+      tableHint: 'Una de las tarifas de la organización (Ajustes → Calculadoras).',
+      tablePlaceholder: 'La primera tarifa',
+      tableGone: '{{code}} (ya no existe)',
+      noTables: 'La organización aún no tiene tarifas: créalas en Ajustes → Calculadoras.',
+      tablesFailed: 'No se pudieron cargar las tarifas de la organización.',
       input: 'Campo para «{{name}}»',
       inputPlaceholder: 'Elige un campo',
       output: 'Guardar el resultado en',
@@ -666,6 +672,20 @@ export const workflows = {
       readOnly: 'Solo lectura',
       saveFirst: 'Guarda los cambios del lienzo para configurar los campos y participantes de este bloque nuevo.',
       busy: 'Guardando…',
+      formulaGuide: {
+        title: 'Ejemplos de fórmulas',
+        examples: {
+          total: 'Total de una columna de tabla',
+          balance: 'Saldo: anticipado menos lo gastado',
+          label: 'Texto según el resultado (tipo de resultado: texto)',
+          percent: 'Porcentaje redondeado',
+          days: 'Días entre dos fechas, contando ambas',
+          due: 'Fecha dentro de 5 días hábiles',
+          cap: 'Lo pedido, sin pasar del tope',
+        },
+        functions:
+          'Funciones: ROUND, ROUNDDOWN, ABS, MIN, MAX, SUM, AVG, COUNT, IF, IFERROR, AND, OR, NOT, ISBLANK, CONCAT, UPPER, LOWER, TRIM, LEFT, LEN, TODAY, ADD_DAYS, ADD_BUSINESS_DAYS, DAYS_BETWEEN, YEAR, MONTH, DAY. Usa los códigos de los campos; una columna de tabla es TABLA.COLUMNA.',
+      },
       fill: {
         open: 'Llenar desde un Excel',
         title: 'Llenar campos desde un Excel',

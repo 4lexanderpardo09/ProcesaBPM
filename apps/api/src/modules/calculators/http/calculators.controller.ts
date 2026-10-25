@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Inject, Param, Put } from '@nestjs/common';
-import type { CalculatorResponse } from '@procesabpm/shared';
+import type { CalculatorChoicesResponse, CalculatorResponse } from '@procesabpm/shared';
 import { Audited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { CalculatorsService } from '../application/calculators.service.js';
@@ -12,6 +12,13 @@ export class CalculatorsController {
   @Get()
   list(): Promise<CalculatorResponse[]> {
     return this.calculators.list();
+  }
+
+  /** For whoever designs workflows: the tables each switched-on calculator offers, by name only. */
+  @RequirePermission('update', 'Workflow')
+  @Get('choices')
+  choices(): Promise<CalculatorChoicesResponse> {
+    return this.calculators.choices();
   }
 
   @RequirePermission('update', 'Setting')

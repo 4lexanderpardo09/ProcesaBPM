@@ -39,42 +39,46 @@ describe('SettingsPage', () => {
     expect(await screen.findByText('3 personas activas todavía no la tienen configurada.')).toBeInTheDocument();
   });
 
-  it('configures the meal allowance calculator, checking each meal first, and turns it off', async () => {
-    let config: Record<string, unknown> | null = { meals: [{ code: 'DESAYUNO', from: '06:00', to: '09:00', amount: '15000' }] };
-    const calculator = () => ({ code: 'MEAL_ALLOWANCE', parameters: [{ name: 'departure', type: 'DATETIME', required: true }, { name: 'return', type: 'DATETIME', required: true }], output: 'CURRENCY', configured: config !== null, config });
+  it('names its own rate tables and slots, checks them first, and turns the calculator off', async () => {
+    let config: Record<string, unknown> | null = { tables: [{ code: 'COMIDAS', name: 'Comidas', slots: [{ name: 'Desayuno', from: '06:00', to: '09:00', amount: '15000' }] }] };
+    const calculator = () => ({ code: 'TIME_SLOTS', parameters: [{ name: 'departure', type: 'DATETIME', required: true }, { name: 'return', type: 'DATETIME', required: true }], output: 'CURRENCY', configured: config !== null, config });
     const { fake } = renderRoute('/settings/calculators', {
       handlers: {
         '/calculators': () => [calculator()],
-        '/calculators/MEAL_ALLOWANCE/config': (options) => {
+        '/calculators/TIME_SLOTS/config': (options) => {
           config = options.method === 'DELETE' ? null : (options.body as Record<string, unknown>);
           return calculator();
         },
       },
     });
 
-    expect(await screen.findByRole('heading', { name: 'Viáticos de alimentación' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Pago por franjas horarias' })).toBeInTheDocument();
     expect(screen.getByText('Activa')).toBeInTheDocument();
-    expect(within(screen.getByRole('group', { name: 'Comida 1' })).getByRole('textbox', { name: 'Código' })).toHaveValue('DESAYUNO');
+    const meals = screen.getByRole('group', { name: 'Tarifa 1' });
+    expect(within(meals).getByRole('textbox', { name: 'Nombre de la tarifa' })).toHaveValue('Comidas');
+    // A stored table keeps its code: flows pick it by that code.
+    expect(within(meals).getByRole('textbox', { name: /^Código/ })).toHaveAttribute('readonly');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Agregar comida' }));
-    const lunch = screen.getByRole('group', { name: 'Comida 2' });
-    await userEvent.type(within(lunch).getByRole('textbox', { name: 'Código' }), 'DESAYUNO');
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar tarifa' }));
+    const night = screen.getByRole('group', { name: 'Tarifa 2' });
+    await userEvent.type(within(night).getByRole('textbox', { name: 'Nombre de la tarifa' }), 'Recargo nocturno');
+    expect(within(night).getByRole('textbox', { name: /^Código/ })).toHaveValue('RECARGO_NOCTURNO');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
-    expect(within(lunch).getByRole('textbox', { name: 'Código' })).toHaveAccessibleDescription('Ese código ya está en otra comida.');
+    expect(within(night).getByRole('textbox', { name: 'Franja' })).toHaveAccessibleDescription('Escribe el nombre de la franja.');
     expect(fake.calls.filter((call) => call.options.method === 'PUT')).toHaveLength(0);
 
-    await userEvent.clear(within(lunch).getByRole('textbox', { name: 'Código' }));
-    await userEvent.type(within(lunch).getByRole('textbox', { name: 'Código' }), 'ALMUERZO');
-    await userEvent.type(within(lunch).getByLabelText('Desde'), '12:00');
-    await userEvent.type(within(lunch).getByLabelText('Hasta'), '14:00');
-    await userEvent.type(within(lunch).getByRole('textbox', { name: 'Valor' }), '25000.50');
+    const slot = within(night).getByRole('group', { name: 'Franja 1 de Recargo nocturno' });
+    await userEvent.type(within(slot).getByRole('textbox', { name: 'Franja' }), 'Noche');
+    await userEvent.type(within(slot).getByLabelText('Desde'), '22:00');
+    await userEvent.type(within(slot).getByLabelText('Hasta'), '06:00');
+    await userEvent.type(within(slot).getByRole('textbox', { name: 'Valor' }), '30000');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
     await vi.waitFor(() =>
       expect(fake.calls.find((call) => call.options.method === 'PUT')?.options.body).toEqual({
-        meals: [
-          { code: 'DESAYUNO', from: '06:00', to: '09:00', amount: '15000' },
-          { code: 'ALMUERZO', from: '12:00', to: '14:00', amount: '25000.50' },
+        tables: [
+          { code: 'COMIDAS', name: 'Comidas', slots: [{ name: 'Desayuno', from: '06:00', to: '09:00', amount: '15000' }] },
+          { code: 'RECARGO_NOCTURNO', name: 'Recargo nocturno', slots: [{ name: 'Noche', from: '22:00', to: '06:00', amount: '30000' }] },
         ],
       }),
     );
@@ -83,28 +87,6 @@ describe('SettingsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Apagar' }));
     expect(await screen.findByText('Apagada')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Activar' })).toBeInTheDocument();
-  });
-
-  it('switches the travel balance calculator on and off; it has nothing to configure', async () => {
-    let configured = false;
-    const calculator = () => ({ code: 'TRAVEL_BALANCE', parameters: [{ name: 'advance', type: 'NUMBER', required: true }, { name: 'spent', type: 'NUMBER', required: true }], output: 'CURRENCY', configured, config: configured ? {} : null });
-    const { fake } = renderRoute('/settings/calculators', {
-      handlers: {
-        '/calculators': () => [calculator()],
-        '/calculators/TRAVEL_BALANCE/config': (options) => {
-          configured = options.method !== 'DELETE';
-          return calculator();
-        },
-      },
-    });
-
-    expect(await screen.findByRole('heading', { name: 'Saldo de viáticos' })).toBeInTheDocument();
-    expect(screen.getByText('Apagada')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Activar' }));
-    expect(await screen.findByText('Activa')).toBeInTheDocument();
-    expect(fake.callsTo('/calculators/TRAVEL_BALANCE/config')[0]?.options).toMatchObject({ method: 'PUT', body: {} });
-    await userEvent.click(screen.getByRole('button', { name: 'Apagar' }));
-    expect(await screen.findByText('Apagada')).toBeInTheDocument();
   });
 
   it('gives support access for some hours with a reason, and ends it', async () => {

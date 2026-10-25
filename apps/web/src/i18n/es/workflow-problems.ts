@@ -60,6 +60,7 @@ export const workflowProblems = {
   CALCULATOR_OUTPUT_TYPE_MISMATCH: 'El resultado debe guardarse en un campo de número o moneda; {{code}} no lo es.',
   CALCULATOR_OUTPUT_NOT_READ_ONLY: 'El campo {{code}} donde se guarda el resultado debe ser de solo lectura.',
   CALCULATOR_NOT_CONFIGURED: 'La calculadora {{code}} no está activada en la organización.',
+  CALCULATOR_TABLE_UNKNOWN: 'La tarifa {{table}} no existe en la organización: elige otra o créala en Ajustes → Calculadoras.',
   WAIT_UNKNOWN_FIELD: 'El campo {{code}} de la espera no existe en esta versión.',
   WAIT_FIELD_NOT_DATE: 'El campo {{code}} de la espera debe ser una fecha.',
   NOTIFICATION_TEXT_INVALID: 'El {{part}} de la notificación tiene un error: {{detail}}.',

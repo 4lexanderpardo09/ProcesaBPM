@@ -128,12 +128,13 @@ describe('administrative actions are audited in the same transaction', () => {
   });
 
   it('the calculator configuration: updated and removed, with the parameters in the trail', async () => {
-    const meals = { meals: [{ code: 'LUNCH', from: '12:00', to: '14:00', amount: '15000.50' }] };
-    await admin.put('/calculators/MEAL_ALLOWANCE/config', meals).expect(200);
-    await admin.delete('/calculators/MEAL_ALLOWANCE/config').expect(200);
+    const rates = { tables: [{ code: 'COMIDAS', name: 'Comidas', slots: [{ name: 'Almuerzo', from: '12:00', to: '14:00', amount: '15000.50' }] }] };
+    await admin.put('/calculators/TIME_SLOTS/config', rates).expect(200);
+    await admin.delete('/calculators/TIME_SLOTS/config').expect(200);
     const updated = (await rows('calculator.config_updated'))[0]!;
-    expect(updated.after).toEqual({ calculator: 'MEAL_ALLOWANCE', config: meals });
-    expect((await rows('calculator.config_removed'))[0]!.before).toMatchObject({ calculator: 'MEAL_ALLOWANCE' });
+    // The trail keeps a few levels of the configuration: the rate table, not its slots.
+    expect(updated.after).toEqual({ calculator: 'TIME_SLOTS', config: { tables: [{ code: 'COMIDAS', name: 'Comidas' }] } });
+    expect((await rows('calculator.config_removed'))[0]!.before).toMatchObject({ calculator: 'TIME_SLOTS' });
   });
 
   it('report exports are recorded with the report and its filters', async () => {

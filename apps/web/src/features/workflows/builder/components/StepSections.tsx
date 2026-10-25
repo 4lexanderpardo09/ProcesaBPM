@@ -8,6 +8,7 @@ import {
   listCalculators,
   SITE_SCOPES,
   SLA_UNITS,
+  findCalculator,
   type StepDocument,
 } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
@@ -22,6 +23,7 @@ import { exportsQueryOptions } from '../../exports/api/exports-api';
 import { patchConfig } from '../lib/numbers';
 import { fromRecipients } from '../lib/participants';
 import { BatchSettings, type BatchConfig } from './BatchSettings';
+import { CalculatorTableSelect } from './CalculatorTableSelect';
 import { ParticipantList } from './participants/ParticipantList';
 import { useSections } from './SectionNav';
 import { WholeNumberField } from './WholeNumberField';
@@ -406,7 +408,7 @@ export function CalculatorSection({ step, fields, readOnly, onChange }: SectionP
   const config = step.config;
   const code = text(config.calculatorCode);
   const inputs = (config.inputs ?? {}) as Record<string, string>;
-  const calculator = listCalculators().find((candidate) => candidate.code === code);
+  const calculator = findCalculator(code);
   const outputs = fields.filter((field) => field.type === 'NUMBER' || field.type === 'CURRENCY');
   return (
     <Section title={t('builder.types.CALCULATOR')}>
@@ -414,14 +416,17 @@ export function CalculatorSection({ step, fields, readOnly, onChange }: SectionP
         label={t('builder.calculator.calculator')}
         disabled={readOnly}
         placeholder={t('builder.calculator.placeholder')}
-        options={listCalculators().map((candidate) => ({ value: candidate.code, label: t(`builder.calculator.names.${candidate.code as 'MEAL_ALLOWANCE'}`, { defaultValue: candidate.code }) }))}
-        value={code}
+        options={listCalculators().map((candidate) => ({ value: candidate.code, label: t(`builder.calculator.names.${candidate.code as 'TIME_SLOTS'}`, { defaultValue: candidate.code }) }))}
+        value={calculator?.code ?? code}
         onChange={(event) => onChange({ config: event.target.value === '' ? {} : { calculatorCode: event.target.value, inputs: {}, outputFieldCode: text(config.outputFieldCode) } })}
       />
+      {calculator !== undefined && (
+        <CalculatorTableSelect calculator={calculator} disabled={readOnly} value={text(config.table)} onChange={(table) => onChange({ config: patchConfig(config, { table }) })} />
+      )}
       {calculator?.parameters.map((parameter) => (
         <Select
           key={parameter.name}
-          label={t('builder.calculator.input', { name: t(`builder.calculator.parameters.${parameter.name as 'advance'}`, { defaultValue: parameter.name }) })}
+          label={t('builder.calculator.input', { name: t(`builder.calculator.parameters.${parameter.name as 'departure'}`, { defaultValue: parameter.name }) })}
           disabled={readOnly}
           placeholder={t('builder.calculator.inputPlaceholder')}
           options={fields.filter((field) => INPUT_TYPES[parameter.type]?.has(effectiveFieldType(field)) === true).map((field) => ({ value: field.code, label: `${field.label} (${field.code})` }))}
