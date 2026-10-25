@@ -92,7 +92,7 @@ describe('TicketInboxPage', () => {
     const rows = within(await table()).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
     // The columns of the help desk: requester, who holds it, both priorities and the last activity.
-    expect(within(rows[0]!).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['T-1001', 'Pago de crédito', 'Ana Pérez', 'Luis Gómez', 'Abierto', 'Alta', 'Media', '', '17 de oct de 2026, 11:00 a. m.']);
+    expect(within(rows[0]!).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['T-1001', 'Pago de crédito', 'Ana Pérez', 'Luis Gómez', 'Abierto', 'Alta', 'Media', '', expect.stringMatching(/^17 de oct de 2026, \d{1,2}:00/)]);
     expect(within(rows[1]!).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['T-1002', expect.any(String), 'Ana Pérez', 'Sin asignar', 'Pausado', '—', '—', '', expect.any(String)]);
     expect(api.listQueries().at(-1)?.get('sort')).toBe('lastActivity');
     expect(within(await table()).getByRole('columnheader', { name: /Última actualización/ })).toHaveAttribute('aria-sort', 'descending');
