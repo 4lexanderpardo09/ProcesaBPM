@@ -32,7 +32,7 @@ export const pagedReportFiltersSchema = z.object({ ...periodShape, ...paging }).
 export type PagedReportFilters = z.infer<typeof pagedReportFiltersSchema>;
 
 export const rankingFiltersSchema = z
-  .object({ ...periodShape, minVolume: z.coerce.number().int().min(1).max(10_000).default(5) })
+  .object({ ...periodShape, minVolume: z.coerce.number().int().min(1).max(10_000).default(1) })
   .strict()
   .refine(periodIsSane, PERIOD_MESSAGE);
 export type RankingFilters = z.infer<typeof rankingFiltersSchema>;

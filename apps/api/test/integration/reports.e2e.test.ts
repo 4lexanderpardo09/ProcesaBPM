@@ -138,10 +138,17 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
       expect(step).toMatchObject({ stepName: 'task', visits: 6, onTime: 4, late: 2, compliancePct: 66.7, avgMin: 155, medianMin: 120, reprocesses: 1 });
     });
 
-    it('ranking: compliance × quality, quality from the reopening errors', async () => {
+    it('ranking: the help desk formula, by the weighted score; a reopening error is not a process error', async () => {
       const { ranked, unranked } = await get(reader, 'ranking', `${A()}&minVolume=1`);
-      expect(ranked.map((row: { userId: string; rank: number; score: number }) => [row.userId, row.rank, row.score])).toEqual([[u2.userId, 1, 100], [u1.userId, 2, 60]]);
-      expect(ranked[1]).toMatchObject({ delivered: 4, onTime: 4, late: 1, errors: 1, compliance: 0.8, quality: 0.75 });
+      // U1: 6 steps held, 4 on time, no process error: 70 × 4/6 + 30 = 76.7, weighted 76.7 × ln 7.
+      // U2: 1 step, on time: 100, weighted 100 × ln 2 = 69.3, under 55 % of U1's.
+      expect(ranked.map((row: { userId: string; rank: number; score: number; classification: string }) => [row.userId, row.rank, row.score, row.classification])).toEqual([
+        [u1.userId, 1, 76.7, 'GREEN'],
+        [u2.userId, 2, 100, 'RED'],
+      ]);
+      expect(ranked[0]).toMatchObject({ delivered: 4, handled: 6, onTime: 4, late: 1, errors: 0, quality: 1 });
+      expect(ranked[0].weighted).toBeCloseTo(149.2513, 3);
+      expect(ranked[1].weighted).toBeCloseTo(69.3147, 3);
       expect(unranked).toEqual([]);
       const strict = await get(reader, 'ranking', `${A()}&minVolume=4`);
       expect(strict.ranked.map((row: { userId: string }) => row.userId)).toEqual([u1.userId]);
@@ -177,7 +184,7 @@ describe('reports: numbers computed by hand from tickets the real engine moved',
 
     it('user detail: their summary and their clocks, newest first', async () => {
       const detail = await get(reader, `users/${u1.userId}`, A());
-      expect(detail.summary).toMatchObject({ userId: u1.userId, delivered: 4, errors: 1, score: 60 });
+      expect(detail.summary).toMatchObject({ userId: u1.userId, delivered: 4, handled: 6, errors: 0, score: 76.7 });
       expect(detail.clocks.total).toBe(7);
       expect(detail.clocks.items.filter((row: { result: string | null }) => row.result === 'LATE')).toHaveLength(1);
       expect(detail.clocks.items.some((row: { completedAt: string | null }) => row.completedAt === null)).toBe(true);

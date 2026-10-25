@@ -53,8 +53,8 @@ export const stepsSheets = (rows: readonly StepSlaRow[]): Sheet[] => [
   },
 ];
 
-const rankingRow = (row: RankingRow): SheetCell[] => [row.rank, row.name, row.delivered, row.onTime, row.late, row.errors, row.compliance === null ? null : Math.round(row.compliance * 1000) / 10, row.quality === null ? null : Math.round(row.quality * 1000) / 10, row.score, row.medianMin];
-const rankingHeaders = [es.ranking.rank, es.ranking.user, es.ranking.delivered, es.ranking.onTime, es.ranking.late, es.ranking.errors, `${es.ranking.compliance} (%)`, `${es.ranking.quality} (%)`, es.ranking.score, es.ranking.median];
+const rankingRow = (row: RankingRow): SheetCell[] => [row.rank, row.name, row.handled, row.delivered, row.onTime, row.late, row.errors, row.compliance === null ? null : Math.round(row.compliance * 1000) / 10, row.quality === null ? null : Math.round(row.quality * 1000) / 10, row.score, row.weighted, row.classification === null ? null : es.ranking.classes[row.classification], row.medianMin];
+const rankingHeaders = [es.ranking.rank, es.ranking.user, es.ranking.handled, es.ranking.delivered, es.ranking.onTime, es.ranking.late, es.ranking.errors, `${es.ranking.compliance} (%)`, `${es.ranking.quality} (%)`, es.ranking.score, es.ranking.weighted, es.ranking.classification, es.ranking.median];
 
 export const rankingSheets = (report: RankingReport): Sheet[] => [
   { name: es.ranking.sheet, headers: rankingHeaders, rows: report.ranked.map(rankingRow) },
