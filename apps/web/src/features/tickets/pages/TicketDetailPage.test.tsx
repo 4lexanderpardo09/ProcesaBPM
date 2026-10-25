@@ -1068,6 +1068,41 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ assigneeId: id(51) });
     });
 
+    it('asks who signs for a parallel signer that resolved to nobody, or to leave that signature out, as in the help desk', async () => {
+      const MANAGER = id(701);
+      const APPROVER_SIGNER = id(702);
+      const candidates = [{ id: OTHER, name: 'Luis Gómez' }, { id: id(51), name: 'Marta Ruiz' }];
+      const previews = () =>
+        preview({
+          assignment: 'PARALLEL',
+          people: [{ id: id(52), name: 'Ana Pérez' }],
+          signerChoices: [
+            { signerId: MANAGER, signerType: 'POSITION', label: 'Gerente regional', candidates },
+            { signerId: APPROVER_SIGNER, signerType: 'APPROVER', label: null, candidates },
+          ],
+        });
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition-preview`]: previews, [`${base}/transition`]: () => mutation }, { fields: [], editableFieldCodes: [] }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      const manager = await within(dialog).findByRole('combobox', { name: /Gerente regional/ });
+      const approver = within(dialog).getByRole('combobox', { name: /Aprobador/ });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      expect(manager).toHaveAccessibleDescription(/Elige quién firma u omite la firma\./);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+
+      await userEvent.selectOptions(manager, 'Marta Ruiz');
+      await userEvent.selectOptions(approver, 'Omitir esta firma');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({
+        signerChoices: [
+          { signerId: MANAGER, userId: id(51) },
+          { signerId: APPROVER_SIGNER, userId: null },
+        ],
+      });
+    });
+
     it('names the parallel signers, a hand-out in turns, the end, and warns when the workflow cannot go on', async () => {
       let answer: Record<string, unknown> = preview({ assignment: 'PARALLEL', people: [{ id: OTHER, name: 'Luis Gómez' }, { id: id(51), name: 'Marta Ruiz' }] });
       const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition-preview`]: () => answer }, { fields: [], editableFieldCodes: [] }) });

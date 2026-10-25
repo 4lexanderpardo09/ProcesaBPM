@@ -98,6 +98,7 @@ export class CreateTicketService {
         timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
+        signerChoices: request.signerChoices,
       });
 
       const currentStepId = arrival.kind === 'END' ? arrival.endStepId : arrival.step.id;

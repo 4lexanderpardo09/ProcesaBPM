@@ -21,6 +21,12 @@ export class AssignmentCandidatesRepository {
     return rows.map(toRow);
   }
 
+  /** Every member of the company: who may be picked by hand when a signer or an approver resolves to nobody. */
+  async byCompany(tx: TenantTransaction, tenantId: string, companyId: string): Promise<CandidateRow[]> {
+    const rows = await tx.membership.findMany({ where: { tenantId, companies: { some: { companyId } }, ...ELIGIBLE }, select: SELECT, orderBy: [{ user: { firstName: 'asc' } }, { user: { lastName: 'asc' } }] });
+    return rows.map(toRow);
+  }
+
   async byUsers(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<CandidateRow[]> {
     if (userIds.length === 0) return [];
     const rows = await tx.membership.findMany({ where: { tenantId, userId: { in: [...userIds] }, ...ELIGIBLE }, select: SELECT, orderBy: { userId: 'asc' } });

@@ -103,6 +103,7 @@ export class TransitionTicketService {
         timeZone: company.timeZone,
         at,
         chosenAssigneeId: request.assigneeId,
+        signerChoices: request.signerChoices,
       });
       if (request.assigneeId !== undefined && arrival.kind === 'END') throw new InvalidReferenceError('The ticket ends here: there is nobody to assign');
 
