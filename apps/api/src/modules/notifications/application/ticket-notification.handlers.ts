@@ -21,6 +21,7 @@ const SCHEMAS = {
   'ticket.created': base,
   'ticket.assigned': base.extend({ userId: uuidSchema }),
   'ticket.transitioned': base,
+  'ticket.parallel_task_completed': base,
   'ticket.closed': base,
   'ticket.reopened': base,
   'ticket.commented': base,
@@ -32,11 +33,8 @@ const SCHEMAS = {
 
 type Payload = { ticketId: string; eventId?: string | undefined; userId?: string; incidentId?: string; clockId?: string };
 
-/** Observers hear about progress, not about every comment or about things aimed at one person. */
-const NOTIFIES_OBSERVERS: ReadonlySet<TicketEventKind> = new Set(['ticket.created', 'ticket.transitioned', 'ticket.closed', 'ticket.reopened', 'sla.overdue']);
-
-/** Events that move a ticket but are already covered by another one (`ticket.transitioned`, `ticket.assigned`). */
-const COVERED_ELSEWHERE = ['ticket.parallel_task_completed'] as const;
+/** Observers follow the progress, as in the help desk: the opening, every move, each parallel signature and the close. */
+const NOTIFIES_OBSERVERS: ReadonlySet<TicketEventKind> = new Set(['ticket.created', 'ticket.transitioned', 'ticket.parallel_task_completed', 'ticket.closed']);
 
 /**
  * Turns ticket events into notifications. Everything here is database work, so it runs in the transaction that
@@ -60,7 +58,6 @@ export class TicketNotificationHandlers implements OnModuleInit {
     for (const kind of TICKET_EVENT_KINDS) {
       this.registry.registerTransactional({ type: kind, schema: SCHEMAS[kind] as z.ZodType<Payload>, handle: (tx, event, effects) => this.handle(tx, kind, event, effects) });
     }
-    for (const type of COVERED_ELSEWHERE) this.registry.registerTransactional({ type, schema: z.object({}).passthrough(), handle: () => Promise.resolve() });
   }
 
   private async handle(tx: TenantTransaction, kind: TicketEventKind, event: ClaimedEvent<Payload>, effects: PostCommitEffects): Promise<void> {
@@ -106,6 +103,8 @@ export class TicketNotificationHandlers implements OnModuleInit {
     switch (kind) {
       case 'ticket.assigned':
         return { ...common, assignedUserId: payload.userId };
+      case 'ticket.closed':
+        return { ...common, participantIds: await this.facts.participantIds(tx, tenantId, payload.ticketId) };
       case 'ticket.incident_opened':
       case 'ticket.incident_resolved': {
         const incident = await this.facts.incident(tx, tenantId, payload.incidentId!);
