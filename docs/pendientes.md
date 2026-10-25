@@ -51,7 +51,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Se queda de ProcesaBPM:**
     - el preaviso al 80 % (solo al responsable);
     - nadie recibe aviso de lo que hizo él mismo, salvo la constancia de creación.
-  - **Correo por defecto** solo para asignaciones y bloques de notificación (`defaultChannels`). Cada persona puede activar más en sus preferencias.
+  - **Correo por defecto** solo para asignaciones, bloques de notificación y el aviso de almacenamiento a los administradores (`defaultChannels`). Cada persona puede activar más en sus preferencias.
 - **Ranking como la mesa (2026-10-25, `feat/ranking-like-help-desk`, decisión B5 del usuario):**
   - **Fórmula:** con n gestionados (cada vez que la persona tuvo un paso: sus relojes, como las asignaciones de la mesa), o a tiempo y e errores de proceso:
     - puntaje = 70·o/n + 30·(1 − e/n);
