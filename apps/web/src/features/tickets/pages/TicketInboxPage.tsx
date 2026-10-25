@@ -25,7 +25,8 @@ export function TicketInboxPage() {
   const { can } = usePermissions();
   // As in the help desk, a field filter adds a column with that field (named as its form calls it).
   const fields = useQuery({ ...filterFieldsQueryOptions(useApiClient()), enabled: params.fieldCode !== undefined });
-  const fieldLabel = params.fieldCode === undefined ? undefined : (fields.data?.find((field) => field.code === params.fieldCode)?.label ?? params.fieldCode);
+  const definition = fields.data?.find((field) => field.code === params.fieldCode);
+  const field = params.fieldCode === undefined ? undefined : { label: definition?.label ?? params.fieldCode, definition };
 
   return (
     <>
@@ -61,7 +62,7 @@ export function TicketInboxPage() {
           sort={params.sort}
           direction={params.direction}
           onSort={(sort, direction) => show({ sort, direction })}
-          fieldLabel={fieldLabel}
+          field={field}
           footer={page === undefined || page.total === 0 ? undefined : <Pagination page={params.page} pageSize={INBOX_PAGE_SIZE} total={page.total} onChange={(next) => show({ page: next })} />}
         />
       )}

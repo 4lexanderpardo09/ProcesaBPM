@@ -1,4 +1,4 @@
-import type { FormFieldResponse, TicketValueNamesResponse } from '@procesabpm/shared';
+import type { FormFieldResponse, TicketFilterFieldResponse, TicketValueNamesResponse } from '@procesabpm/shared';
 import { formatDateTime, formatShortDate } from '@/shared/lib/format-date-time';
 
 const LOCALE = 'es-CO';
@@ -48,6 +48,19 @@ export function fieldValueDisplay(field: ReadField, value: unknown, names: Ticke
     default:
       return typeof value === 'number' ? numberText(value, { maximumFractionDigits: 6 }) : text(String(value));
   }
+}
+
+const NO_NAMES: TicketValueNamesResponse = { users: {}, sites: {}, companies: {}, departments: {}, positions: {} };
+
+/**
+ * A value in the inbox column of the field the listing is filtered by, read as on the ticket with what the inbox knows
+ * of the field (its type and fixed options; not its currency nor its decimals). `—` when it has none.
+ */
+export function filteredValueText(field: Pick<TicketFilterFieldResponse, 'type' | 'options'> | undefined, value: unknown, timeZone?: string): string {
+  if (field === undefined) return isEmpty(value) ? '—' : String(value);
+  const display = fieldValueDisplay({ type: field.type, config: { options: field.options ?? [], decimals: 6 } }, value, NO_NAMES, timeZone);
+  if (display === undefined || display.kind === 'unknown') return '—';
+  return display.kind === 'text' ? display.text : String(display.count);
 }
 
 function isEmpty(value: unknown): boolean {

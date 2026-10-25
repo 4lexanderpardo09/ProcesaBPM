@@ -92,6 +92,8 @@ export const hasFilters = (filters: InboxFilters): boolean => (Object.keys(NO_FI
 export function readInboxParams(search: URLSearchParams): InboxParams {
   const createdFrom = dateOf(search.get('from'));
   const createdTo = dateOf(search.get('to'));
+  const field = fieldFilterOf(search);
+  const sort = oneOf(TICKET_SORTS, search.get('sort'));
   return {
     view: oneOf(INBOX_VIEWS, search.get('view')) ?? DEFAULT_VIEW,
     status: oneOf(TICKET_STATUSES, search.get('status')),
@@ -101,9 +103,10 @@ export function readInboxParams(search: URLSearchParams): InboxParams {
     createdFrom,
     // A range that ends before it starts is dropped at its end, like any other value the API would refuse.
     createdTo: createdFrom !== undefined && createdTo !== undefined && createdTo < createdFrom ? undefined : createdTo,
-    ...fieldFilterOf(search),
+    ...field,
     page: pageOf(search.get('page')),
-    sort: oneOf(TICKET_SORTS, search.get('sort')) ?? DEFAULT_SORT,
+    // Sorting by the filtered field needs a field filter.
+    sort: sort === undefined || (sort === 'field' && field.fieldCode === undefined) ? DEFAULT_SORT : sort,
     direction: oneOf(SORT_DIRECTIONS, search.get('dir')) ?? DEFAULT_DIRECTION,
   };
 }

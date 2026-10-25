@@ -288,6 +288,18 @@ describe('GET /tickets filters and GET /tickets/counts', () => {
       expect((await list(reader, 'view=all')).items.every((item) => item.filteredValue === null)).toBe(true);
     });
 
+    it('sorts by the value of the field filtered by (as in the help desk), a page at a time', async () => {
+      const order = async (direction: string) => (await list(reader, `view=all&fieldCode=DUE_ON&fieldOperator=filled&sort=field&direction=${direction}`)).items.map((item) => item.id);
+      const among = (ids: readonly string[]) => ids.filter((id) => [field.early.id, field.late.id, field.other.id].includes(id));
+      expect(among(await order('asc'))).toEqual([field.early.id, field.late.id, field.other.id]);
+      expect(among(await order('desc'))).toEqual([field.other.id, field.late.id, field.early.id]);
+      const paged = (await reader.client.get('/tickets?view=all&fieldCode=DUE_ON&fieldOperator=filled&sort=field&direction=asc&pageSize=1&page=2').expect(200)).body;
+      expect(paged.items).toHaveLength(1);
+      expect(paged.total).toBeGreaterThanOrEqual(3);
+      // Without a field filter there is no field to sort by: the latest activity first.
+      await reader.client.get('/tickets?view=all&sort=field').expect(200);
+    });
+
     it('contains a text, ignoring case and only in that field', async () => {
       expect(await byField('fieldCode=REFERENCE&fieldOperator=contains&fieldValue=fac-0')).toEqual(fieldIds('early'));
       expect(await byField('fieldCode=AMOUNT&fieldOperator=contains&fieldValue=AB')).toEqual(fieldIds('other'));

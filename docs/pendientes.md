@@ -74,7 +74,7 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Última actualización:** nueva columna `tickets.last_activity_at`, que un trigger en `ticket_events` mantiene (cualquier evento: crear, avanzar, asignar, comentar...). La migración la llena con el último evento de cada ticket sin tocar `updated_at`.
   - **Orden:** `GET /tickets` acepta `sort` (`lastActivity` por defecto, `number`, `title`, `status`, `requester`, `priority`, `workflowPriority`, `createdAt`) y `direction` (`desc` por defecto). En la web cada encabezado ordena y el segundo clic invierte; queda en la URL (`sort`, `dir`).
   - **Campo filtrado:** con `fieldCode`, cada fila trae `filteredValue` (el valor tal como se guardó).
-  - **Por confirmar:** ordenar por la columna del campo filtrado (la mesa lo hace) no está; el valor se muestra como se guardó (sin formato de moneda ni nombre de la opción).
+  - **Columna del campo filtrado (2026-10-25, pedido del usuario):** se ordena como las demás (`sort=field`, en SQL, con los vacíos al final) y el valor se lee por su tipo: fechas como fecha, números con separadores y el nombre de la opción en las listas fijas. La moneda y los decimales propios del campo no se conocen en la bandeja.
 - **Ranking como la mesa (2026-10-25, `feat/ranking-like-help-desk`, decisión B5 del usuario):**
   - **Fórmula:** con n gestionados (cada vez que la persona tuvo un paso: sus relojes, como las asignaciones de la mesa), o a tiempo y e errores de proceso:
     - puntaje = 70·o/n + 30·(1 − e/n);

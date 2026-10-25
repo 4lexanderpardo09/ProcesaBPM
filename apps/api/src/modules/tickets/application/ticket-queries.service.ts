@@ -65,7 +65,7 @@ export class TicketQueriesService {
   list(principal: Principal, ability: AppAbility, query: ListTicketsQuery): Promise<Page<TicketSummaryResponse>> {
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.context.require().tenantId;
-      const { rows, total } = await this.tickets.list(tx, tenantId, this.filtersFor(principal, ability, query.view, query), pageWindow(query), principal.userId, { sort: query.sort, direction: query.direction });
+      const { rows, total } = await this.tickets.list(tx, tenantId, this.filtersFor(principal, ability, query.view, query), pageWindow(query), principal.userId, { sort: query.sort, direction: query.direction, fieldCode: query.fieldCode });
       // As in the help desk, a listing filtered by a field shows that field's value in a column of its own.
       const values = query.fieldCode === undefined ? new Map<string, unknown>() : await this.tickets.valuesOfField(tx, tenantId, rows.map((row) => row.id), query.fieldCode);
       const now = this.clock.now();
