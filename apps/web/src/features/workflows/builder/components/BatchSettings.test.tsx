@@ -44,4 +44,20 @@ describe('BatchSettings', () => {
     await userEvent.selectOptions(screen.getByRole('combobox', { name: /Dato 1/ }), 'Ninguno');
     expect(onChange).toHaveBeenLastCalledWith({ maxTickets: 100 });
   });
+
+  it('groups by a field that reads alone, and drops it when the grouping changes', async () => {
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Agrupar los tickets por' }), 'Un dato del formulario');
+    expect(onChange).toHaveBeenLastCalledWith({ groupBy: 'FIELD', groupFieldCode: 'NAME', maxTickets: 100 });
+    const byField = screen.getByRole('combobox', { name: 'Dato por el que se agrupa' });
+    expect([...byField.querySelectorAll('option')].map((option) => option.textContent)).toEqual(['Ninguno', 'Nombre (NAME)', 'Monto (AMOUNT)']);
+    await userEvent.selectOptions(byField, 'Monto (AMOUNT)');
+    expect(onChange).toHaveBeenLastCalledWith({ groupBy: 'FIELD', groupFieldCode: 'AMOUNT', maxTickets: 100 });
+
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Agrupar los tickets por' }), 'Empresa');
+    expect(onChange).toHaveBeenLastCalledWith({ groupBy: 'COMPANY', maxTickets: 100 });
+    expect(screen.queryByRole('combobox', { name: 'Dato por el que se agrupa' })).not.toBeInTheDocument();
+  });
 });

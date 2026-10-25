@@ -28,6 +28,7 @@ export const tickets = {
       REQUESTER_SITE: 'Sin sede',
       REQUESTER_DEPARTMENT: 'Sin departamento',
       EXPORT_CUTOFF: 'Sin plano',
+      FIELD: 'Sin dato',
     },
     fromCutoff: 'Solo los tickets que salieron en un archivo del plano.',
     allTickets: 'Ver todos',

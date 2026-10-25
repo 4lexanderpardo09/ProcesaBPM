@@ -59,7 +59,14 @@ export function BatchGroupCard({ group, timeZone }: { readonly group: TicketBatc
     });
   const tooMany = ids.length > group.maxTickets;
   const title = group.title ?? group.stepName;
-  const sectionName = (section: Section) => (section.key === '' && group.groupBy !== null ? t(`batch.none.${group.groupBy}`) : section.name);
+  const sectionName = (section: Section) => {
+    if (section.key === '' && group.groupBy !== null) return t(`batch.none.${group.groupBy}`);
+    const first = section.tickets[0];
+    if (group.groupField === null || first === undefined) return section.name;
+    // By a field, the part reads its value as the field writes it (an option's label, a date, an amount).
+    const display = fieldValueDisplay(group.groupField, first.values[group.groupField.code], NO_NAMES, timeZone);
+    return display?.kind === 'text' ? display.text : section.name;
+  };
 
   const columns: readonly TableColumn<BatchTicket>[] = [
     {

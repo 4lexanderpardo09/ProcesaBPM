@@ -24,6 +24,7 @@ describe('answering several tickets of a step at once', () => {
   let payments: PublishedFlow;
   let single: PublishedFlow;
   let tray: PublishedFlow;
+  let byBank: PublishedFlow;
 
   const create = async (flow: PublishedFlow): Promise<Created> => (await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: unique('Payment'), values: {} }).expect(201)).body as Created;
   const itemOf = (ticket: Created) => ({ ticketId: ticket.id, visitId: ticket.openVisitId });
@@ -47,6 +48,10 @@ describe('answering several tickets of a step at once', () => {
     tray = await publishFlow(world.admin, {
       ...simpleFlow({ assignmentMode: 'USERS', allowsBatch: true, config: { batch: { maxTickets: 5, title: 'Pagos del día', showFields: ['AMOUNT'], groupBy: 'COMPANY' } } }, toWorker),
       fields: [{ step: 'start', code: 'AMOUNT', type: 'NUMBER', capture: 'CREATION' }],
+    });
+    byBank = await publishFlow(world.admin, {
+      ...simpleFlow({ assignmentMode: 'USERS', allowsBatch: true, config: { batch: { maxTickets: 5, groupBy: 'FIELD', groupFieldCode: 'BANK' } } }, toWorker),
+      fields: [{ step: 'start', code: 'BANK', type: 'TEXT', capture: 'CREATION' }],
     });
   });
 
@@ -72,7 +77,7 @@ describe('answering several tickets of a step at once', () => {
 
     const groups = ticketBatchGroupsResponseSchema.parse((await worker.client.get('/ticket-batches').expect(200)).body);
     const group = groups.find((candidate) => candidate.stepId === tray.step.task)!;
-    expect(group).toMatchObject({ title: 'Pagos del día', groupBy: 'COMPANY', shownFields: [{ code: 'AMOUNT', label: 'AMOUNT', type: 'NUMBER', config: {} }] });
+    expect(group).toMatchObject({ title: 'Pagos del día', groupBy: 'COMPANY', groupField: null, shownFields: [{ code: 'AMOUNT', label: 'AMOUNT', type: 'NUMBER', config: {} }] });
     const row = group.tickets.find((candidate) => candidate.id === ticket.id)!;
     expect(row.values).toEqual({ AMOUNT: 1500 });
     expect(row.subgroup).toEqual({ key: expect.any(String), name: row.companyName });
@@ -81,6 +86,19 @@ describe('answering several tickets of a step at once', () => {
     const none = ticketBatchGroupsResponseSchema.parse((await worker.client.get('/ticket-batches?cutoffId=018f0000-0000-7000-8000-000000000000').expect(200)).body);
     expect(none).toEqual([]);
     await worker.client.get('/ticket-batches?cutoffId=nope').expect(400);
+  });
+
+  it('splits the tray by the value of a field, with the value beside each ticket', async () => {
+    const open = async (values: Record<string, unknown>) => ((await requester.client.post('/tickets', { subcategoryId: byBank.subcategoryId, title: unique('Payment'), values }).expect(201)).body as Created).id;
+    const [first, second, none] = [await open({ BANK: 'Bancolombia' }), await open({ BANK: 'Davivienda' }), await open({})];
+
+    const groups = ticketBatchGroupsResponseSchema.parse((await worker.client.get('/ticket-batches').expect(200)).body);
+    const group = groups.find((candidate) => candidate.stepId === byBank.step.task)!;
+    expect(group).toMatchObject({ groupBy: 'FIELD', groupField: { code: 'BANK', type: 'TEXT' }, shownFields: [] });
+    const row = (id: string) => group.tickets.find((candidate) => candidate.id === id)!;
+    expect(row(first)).toMatchObject({ values: { BANK: 'Bancolombia' }, subgroup: { key: '"Bancolombia"', name: 'Bancolombia' } });
+    expect(row(second).subgroup).toEqual({ key: '"Davivienda"', name: 'Davivienda' });
+    expect(row(none)).toMatchObject({ values: {}, subgroup: { key: '', name: '' } });
   });
 
   it('moves every ticket it can with the same values, and says why the others stayed', async () => {

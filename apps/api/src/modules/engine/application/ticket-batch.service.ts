@@ -66,8 +66,8 @@ export class TicketBatchService {
           companyName: row.companyName,
           createdAt: row.createdAt.toISOString(),
           dueAt: row.dueAt?.toISOString() ?? null,
-          values: Object.fromEntries(group.shownFields.flatMap((field) => (row.values[field.code] === undefined ? [] : [[field.code, row.values[field.code]]]))),
-          subgroup: batchSubgroupOf(group.groupBy, row),
+          values: Object.fromEntries([...group.shownFields, ...(group.groupField === null ? [] : [group.groupField])].flatMap((field) => (row.values[field.code] === undefined ? [] : [[field.code, row.values[field.code]]]))),
+          subgroup: batchSubgroupOf(group, row),
         });
       }
       return [...groups.values()];

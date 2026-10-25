@@ -8,6 +8,9 @@ import { ticketMutationResponseSchema } from './mutation-responses.js';
 /** The most tickets one batch request moves, whatever the step allows (each one is a full transition). */
 export const MAX_BATCH_TICKETS = 100;
 
+/** A field of the ticket the tray reads: code, label, type and how the field reads its value. */
+const trayFieldSchema = z.object({ code: z.string(), label: z.string(), type: z.enum(FIELD_TYPES), config: z.record(z.string(), z.unknown()) });
+
 /**
  * `GET /ticket-batches`: the open tickets the caller holds on steps that can be answered in a batch, one group per
  * step of a workflow version (the decisions differ between versions). `maxTickets` is the step's own limit.
@@ -21,9 +24,11 @@ export const ticketBatchGroupSchema = z.object({
   /** The step's own title for its tray (`config.batch.title`), or `null` for the step's name. */
   title: z.string().nullable(),
   /** The data of each ticket the tray shows beside it, in order: code, label, type and how the field reads its value. */
-  shownFields: z.array(z.object({ code: z.string(), label: z.string(), type: z.enum(FIELD_TYPES), config: z.record(z.string(), z.unknown()) })),
+  shownFields: z.array(trayFieldSchema),
   /** How the tray splits its tickets; `null` keeps them in one list. */
   groupBy: z.enum(BATCH_GROUP_BY).nullable(),
+  /** With `groupBy` `FIELD`, the field whose value splits it (its value is in each ticket's `values`); `null` otherwise. */
+  groupField: trayFieldSchema.nullable(),
   decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string() })),
   tickets: z.array(
     z.object({
@@ -35,9 +40,9 @@ export const ticketBatchGroupSchema = z.object({
       companyName: z.string(),
       createdAt: z.string(),
       dueAt: z.string().nullable(),
-      /** The values of `shownFields`, by code (absent when the ticket has none). */
+      /** The values of `shownFields` and `groupField`, by code (absent when the ticket has none). */
       values: z.record(z.string(), z.unknown()),
-      /** Its part of the tray under `groupBy`; `null` without grouping. `key` is `''` for "none" (no site, not in a file). */
+      /** Its part of the tray under `groupBy`; `null` without grouping. `key` is `''` for "none" (no site, not in a file, no value). */
       subgroup: z.object({ key: z.string(), name: z.string() }).nullable(),
     }),
   ),
