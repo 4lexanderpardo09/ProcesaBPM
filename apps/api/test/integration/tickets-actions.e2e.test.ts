@@ -227,9 +227,9 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
       await expectAgreement(supervisor, () => paused(single), ['resolveIncident', 'comment', 'edit']);
     });
 
-    it('a closed ticket is reopened by whoever may, and commented on', async () => {
-      await expectAgreement(supervisor, closed, ['reopen', 'comment']);
-      await expectAgreement(worker, closed, ['comment']);
+    it('a closed ticket is only reopened, by whoever may; nobody comments on it any more', async () => {
+      await expectAgreement(supervisor, closed, ['reopen']);
+      await expectAgreement(worker, closed, []);
     });
 
     it('on a parallel step a pending signer signs; after signing, nothing is left but commenting; a supervisor moves it or a signature', async () => {

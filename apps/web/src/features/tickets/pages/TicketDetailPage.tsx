@@ -60,7 +60,7 @@ export function TicketDetailPage() {
           <Card title={t('detail.description.title')}>
             {ticket.descriptionHtml === '' ? <p className={styles.muted}>{t('detail.description.empty')}</p> : <RichText html={ticket.descriptionHtml} />}
           </Card>
-          <TicketActivity ticketId={ticket.id} timeline={timeline} canComment={ticket.actions.comment} timeZone={timeZone} fields={form.data?.fields ?? []} valueNames={ticket.valueNames} documents={documents.data ?? []} />
+          <TicketActivity ticketId={ticket.id} timeline={timeline} canComment={ticket.actions.comment} closed={ticket.status === 'CLOSED'} timeZone={timeZone} fields={form.data?.fields ?? []} valueNames={ticket.valueNames} documents={documents.data ?? []} />
         </div>
         <aside className={styles.side}>
           <TicketParallelSignatures tasks={ticket.parallelTasks} timeZone={timeZone} />
