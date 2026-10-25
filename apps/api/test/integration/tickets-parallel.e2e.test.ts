@@ -283,6 +283,31 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       await sign(b, ticket).expect(200);
     });
 
+    it('reassign + addSigner adds one more signer, as in the help desk: the step then also waits for that signature', async () => {
+      const ticket = (await create(flow)).body;
+      const reassign = (body: Record<string, unknown>) => supervisor.client.post(`/tickets/${ticket.id}/reassign`, { visitId: ticket.openVisitId, ...body });
+      expect((await reassign({ toUserId: b.userId, addSigner: true })).body.error.code).toBe('INVALID_ASSIGNEE');
+      expect((await reassign({ toUserId: c.userId, addSigner: true, fromUserId: a.userId })).status).toBe(400);
+      await reassign({ toUserId: c.userId, addSigner: true, comment: 'Also legal' }).then((r) => expect(r.status, JSON.stringify(r.body)).toBe(200));
+
+      expect((await tasks(ticket.id)).map((task) => [task.user_id, task.status]).sort()).toEqual([a, b, c].map((member) => [member.userId, 'PENDING']).sort());
+      expect((await world.assignees(ticket.id)).map((row) => row.type)).toEqual(['PARALLEL', 'PARALLEL', 'PARALLEL']);
+      expect((await world.clocks(ticket.id)).filter((clock) => clock.completed_at === null).map((clock) => clock.responsible_id).sort()).toEqual([a.userId, b.userId, c.userId].sort());
+      expect((await world.events(ticket.id)).at(-1)).toMatchObject({ type: 'REASSIGNED', actor_id: supervisor.userId, assignee_id: c.userId, data: { fromUserIds: [], addedSigner: true } });
+      expect((await world.outbox('ticket.assigned', ticket.id)).length).toBe(3);
+
+      await sign(a, ticket).expect(200);
+      expect((await sign(b, ticket).expect(200)).body.currentStepId).toBe(flow.step.sign);
+      expect((await sign(c, ticket).expect(200)).body.currentStepId).toBe(flow.step.next);
+    });
+
+    it('addSigner only applies to a parallel step', async () => {
+      const single = await publishFlow(world.admin, { steps: [{ key: 'start', type: 'START' }, { key: 'work', type: 'TASK', extra: { assignmentMode: 'CREATOR' } }, { key: 'end', type: 'END' }], transitions: [{ from: 'start', to: 'work', type: 'DEFAULT' }, { from: 'work', to: 'end', type: 'DECISION', label: 'Done' }] });
+      const ticket = (await create(single)).body;
+      const refused = await supervisor.client.post(`/tickets/${ticket.id}/reassign`, { visitId: ticket.openVisitId, toUserId: c.userId, addSigner: true });
+      expect(refused.body.error.code).toBe('INVALID_STATE');
+    });
+
     it('an incident cannot hand a parallel step to a named person: the signatures would be left pending', async () => {
       const opener = await world.member([...WORKER_GRANTS, grant('open_incident')]);
       const incidentFlow = await publishFlow(world.admin, spec([signer(opener), signer(b)]));
