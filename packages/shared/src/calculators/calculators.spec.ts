@@ -5,39 +5,59 @@ import { FormulaRuntimeError } from '../engine/formulas/evaluate.js';
 import { findCalculator, listCalculators } from './registry.js';
 
 const config = {
-  meals: [
-    { code: 'BREAKFAST', from: '06:00', to: '08:00', amount: '10000' },
-    { code: 'LUNCH', from: '12:00', to: '14:00', amount: '15000.50' },
-    { code: 'DINNER', from: '18:00', to: '20:00', amount: '20000' },
+  tables: [
+    {
+      code: 'COMIDAS',
+      name: 'Comidas',
+      slots: [
+        { name: 'Desayuno', from: '06:00', to: '08:00', amount: '10000' },
+        { name: 'Almuerzo', from: '12:00', to: '14:00', amount: '15000.50' },
+        { name: 'Cena', from: '18:00', to: '20:00', amount: '20000' },
+      ],
+    },
+    { code: 'NOCTURNO', name: 'Recargo nocturno', slots: [{ name: 'Noche', from: '22:00', to: '06:00', amount: '30000' }] },
   ],
 };
-const meals = findCalculator('MEAL_ALLOWANCE')!;
-const compute = (departure: string | null, back: string | null, timeZone = 'America/Bogota') => meals.compute({ departure, return: back }, config, { timeZone })?.toPlainString() ?? null;
+const slots = findCalculator('TIME_SLOTS')!;
+const compute = (departure: string | null, back: string | null, timeZone = 'America/Bogota', table?: string) =>
+  slots.compute({ departure, return: back }, config, { timeZone, ...(table === undefined ? {} : { options: { table } }) })?.toPlainString() ?? null;
 
-describe('MEAL_ALLOWANCE', () => {
-  it('is one of the built-in calculators and validates its configuration', () => {
-    expect(listCalculators().map((calculator) => calculator.code)).toEqual(['MEAL_ALLOWANCE', 'TRAVEL_BALANCE']);
-    expect(meals.configSchema.safeParse(config).success).toBe(true);
-    expect(meals.configSchema.safeParse({ meals: [] }).success).toBe(false);
-    expect(meals.configSchema.safeParse({ meals: [{ code: 'A', from: '09:00', to: '08:00', amount: '1' }] }).success).toBe(false);
-    expect(meals.configSchema.safeParse({ meals: [config.meals[0], config.meals[0]] }).success).toBe(false);
-    expect(meals.configSchema.safeParse({ meals: config.meals, extra: 1 }).success).toBe(false);
+describe('TIME_SLOTS', () => {
+  it('is the built-in calculator; the old meal allowance code still finds it', () => {
+    expect(listCalculators().map((calculator) => calculator.code)).toEqual(['TIME_SLOTS']);
+    expect(findCalculator('MEAL_ALLOWANCE')).toBe(slots);
+    expect(findCalculator('NOPE')).toBeUndefined();
   });
 
-  it('pays each meal whose window start the trip covers, on every local day', () => {
+  it('validates the organization\'s rate tables: their codes, names, slots and amounts', () => {
+    expect(slots.configSchema.safeParse(config).success).toBe(true);
+    expect(slots.configSchema.safeParse({ tables: [] }).success).toBe(false);
+    expect(slots.configSchema.safeParse({ tables: [config.tables[0], config.tables[0]] }).success).toBe(false);
+    expect(slots.configSchema.safeParse({ tables: [{ code: 'mal', name: 'x', slots: config.tables[1]!.slots }] }).success).toBe(false);
+    expect(slots.configSchema.safeParse({ tables: [{ code: 'A', name: 'x', slots: [{ name: 'S', from: '09:00', to: '09:00', amount: '1' }] }] }).success).toBe(false);
+    expect(slots.configSchema.safeParse({ tables: [{ code: 'A', name: 'x', slots: [config.tables[1]!.slots[0], config.tables[1]!.slots[0]] }] }).success).toBe(false);
+    expect(slots.configSchema.safeParse({ meals: [] }).success).toBe(false);
+  });
+
+  it('pays each slot of the chosen table whose start the span covers, on every local day', () => {
     // Mon 11:00 to Tue 13:00 in Bogota: lunch + dinner, then breakfast + lunch.
-    expect(compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z')).toBe('60001');
+    expect(compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z', 'America/Bogota', 'COMIDAS')).toBe('60001');
+    // The same span on the night table: 22:00 on Monday only.
+    expect(compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z', 'America/Bogota', 'NOCTURNO')).toBe('30000');
   });
 
-  it('pays nothing for a trip between meals and uses the company time zone', () => {
+  it('uses the first table when the field names none, and refuses a table the organization does not have', () => {
+    expect(compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z')).toBe('60001');
+    expect(() => compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z', 'America/Bogota', 'GONE')).toThrow(FormulaRuntimeError);
+  });
+
+  it('pays nothing for a span between slots and uses the company time zone', () => {
     expect(compute('2026-10-05T20:30:00.000Z', '2026-10-05T21:00:00.000Z')).toBe('0');
-    // 23:30 UTC on the 5th is 18:30 in Bogota: dinner already started, so it is not covered.
     expect(compute('2026-10-05T23:30:00.000Z', '2026-10-06T00:30:00.000Z')).toBe('0');
-    // The same instants in UTC: the 6th starts 00:30 UTC, nothing either, but 12:00Z..13:00Z on the 5th pays lunch.
     expect(compute('2026-10-05T11:30:00.000Z', '2026-10-05T12:30:00.000Z', 'UTC')).toBe('15000.5');
   });
 
-  it('is blank while an input is missing and refuses a return before the departure', () => {
+  it('is blank while an input is missing and refuses an end before the start', () => {
     expect(compute(null, '2026-10-05T16:00:00.000Z')).toBeNull();
     expect(() => compute('2026-10-06T16:00:00.000Z', '2026-10-05T16:00:00.000Z')).toThrow(FormulaRuntimeError);
     expect(() => compute('not a date', '2026-10-05T16:00:00.000Z')).toThrow(FormulaRuntimeError);
@@ -49,38 +69,14 @@ function field(code: string, type: FieldDocument['type'], fieldConfig: Record<st
   return { id: code, stepId: 'S', code, label: code, type, capture: 'STEP', isRequired: false, isReadOnly: false, sortOrder: 0, config: fieldConfig, dataSource: null } as FieldDocument;
 }
 
-describe('TRAVEL_BALANCE', () => {
-  const balance = findCalculator('TRAVEL_BALANCE')!;
-  const compute = (advance: unknown, spent: unknown) => balance.compute({ advance, spent }, {}, { timeZone: 'UTC' })?.toPlainString() ?? null;
-
-  it('is what was advanced minus what was spent: positive to give back, negative owed to the person', () => {
-    expect(compute(500000, 420000.5)).toBe('79999.5');
-    expect(compute('300000', 350000)).toBe('-50000');
-    expect(compute(100, 100)).toBe('0');
-  });
-
-  it('counts an empty side as zero, and is blank while both are empty', () => {
-    expect(compute(250000, null)).toBe('250000');
-    expect(compute('', 80000)).toBe('-80000');
-    expect(compute(null, undefined)).toBeNull();
-  });
-
-  it('takes no configuration and refuses what is not a number', () => {
-    expect(balance.configSchema.safeParse({}).success).toBe(true);
-    expect(balance.configSchema.safeParse({ extra: 1 }).success).toBe(false);
-    expect(() => compute('mucho', 1)).toThrow(FormulaRuntimeError);
-    expect(() => compute({ value: 1 }, 1)).toThrow(FormulaRuntimeError);
-  });
-});
-
 describe('CALCULATOR fields in computeFieldValues', () => {
   const fields = [
     field('LEAVES', 'DATETIME'),
     field('BACK', 'DATETIME'),
-    field('ALLOWANCE', 'CALCULATOR', { calculatorCode: 'MEAL_ALLOWANCE', inputs: { departure: 'LEAVES', return: 'BACK' } }),
+    field('ALLOWANCE', 'CALCULATOR', { calculatorCode: 'TIME_SLOTS', inputs: { departure: 'LEAVES', return: 'BACK' }, table: 'COMIDAS' }),
     field('TOTAL', 'FORMULA', { expression: 'ALLOWANCE * 2', resultType: 'CURRENCY' }),
   ];
-  const context = { today: '2026-10-05', timeZone: 'America/Bogota', calculatorConfigs: new Map([['MEAL_ALLOWANCE', config]]) };
+  const context = { today: '2026-10-05', timeZone: 'America/Bogota', calculatorConfigs: new Map([['TIME_SLOTS', config]]) };
 
   it('feeds the formulas that read it', () => {
     const result = computeFieldValues(fields, { LEAVES: '2026-10-05T16:00:00.000Z', BACK: '2026-10-06T18:00:00.000Z' }, context);

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type CalculatorDefinition, type CalculatorResponse, findCalculator, listCalculators, NotFoundError, ValidationFailedError } from '@procesabpm/shared';
+import { type CalculatorChoicesResponse, type CalculatorDefinition, type CalculatorResponse, findCalculator, listCalculators, NotFoundError, ValidationFailedError } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { AuditTrail } from '../../audit/application/audit-trail.js';
@@ -30,15 +30,28 @@ export class CalculatorsService {
     });
   }
 
+  /** The switched-on calculators and the code and name of each of their tables; nothing else of the settings. */
+  choices(): Promise<CalculatorChoicesResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      const configs = await this.configs.all(tx, this.context.require().tenantId);
+      return listCalculators().flatMap((calculator) => {
+        const config = configs.get(calculator.code);
+        if (config === undefined) return [];
+        const tables = calculator.usesTable && Array.isArray(config.tables) ? (config.tables as Array<{ code: string; name: string }>).map(({ code, name }) => ({ code, name })) : [];
+        return [{ code: calculator.code, tables }];
+      });
+    });
+  }
+
   configure(code: string, config: unknown): Promise<CalculatorResponse> {
     const calculator = this.require(code);
     const parsed = calculator.configSchema.safeParse(config);
     if (!parsed.success) throw new ValidationFailedError(parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })));
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.context.require().tenantId;
-      const before = (await this.configs.all(tx, tenantId)).get(code);
-      await this.configs.save(tx, tenantId, code, parsed.data);
-      await this.audit.record(tx, { action: 'calculator.config_updated', subjectType: 'Setting', subjectId: null, before: { calculator: code, config: before ?? null }, after: { calculator: code, config: parsed.data } });
+      const before = (await this.configs.all(tx, tenantId)).get(calculator.code);
+      await this.configs.save(tx, tenantId, calculator.code, parsed.data);
+      await this.audit.record(tx, { action: 'calculator.config_updated', subjectType: 'Setting', subjectId: null, before: { calculator: calculator.code, config: before ?? null }, after: { calculator: calculator.code, config: parsed.data } });
       return describe(calculator, parsed.data);
     });
   }
@@ -47,9 +60,9 @@ export class CalculatorsService {
     const calculator = this.require(code);
     return this.runner.withTenantTransaction(async (tx) => {
       const tenantId = this.context.require().tenantId;
-      const before = (await this.configs.all(tx, tenantId)).get(code);
-      await this.configs.remove(tx, tenantId, code);
-      await this.audit.record(tx, { action: 'calculator.config_removed', subjectType: 'Setting', subjectId: null, before: { calculator: code, config: before ?? null } });
+      const before = (await this.configs.all(tx, tenantId)).get(calculator.code);
+      await this.configs.remove(tx, tenantId, calculator.code);
+      await this.audit.record(tx, { action: 'calculator.config_removed', subjectType: 'Setting', subjectId: null, before: { calculator: calculator.code, config: before ?? null } });
       return describe(calculator, undefined);
     });
   }

@@ -52,6 +52,7 @@ interface CalculatorBlockConfig {
   readonly calculatorCode: string;
   readonly inputs: Readonly<Record<string, string>>;
   readonly outputFieldCode: string;
+  readonly table?: string;
 }
 
 /** Runs one CALCULATOR block: stores its result in the output field, or blank when it cannot produce one. */
@@ -66,7 +67,7 @@ function runCalculatorBlock(config: CalculatorBlockConfig, values: Record<string
   if (calculatorConfig === undefined) return fail('CALCULATOR_NOT_CONFIGURED');
   try {
     const named = Object.fromEntries(Object.entries(config.inputs).map(([name, code]) => [name, values[code]]));
-    const result = calculator.compute(named, calculatorConfig, { timeZone: context.timeZone ?? 'UTC' });
+    const result = calculator.compute(named, calculatorConfig, { timeZone: context.timeZone ?? 'UTC', ...(config.table === undefined ? {} : { options: { table: config.table } }) });
     values[config.outputFieldCode] = result === null ? null : storableNumber(result.round(calculator.output === 'CURRENCY' ? 2 : 6));
   } catch (error) {
     if (!(error instanceof FormulaRuntimeError)) throw error;

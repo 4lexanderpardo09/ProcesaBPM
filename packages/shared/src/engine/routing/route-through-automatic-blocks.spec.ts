@@ -75,8 +75,9 @@ describe('routeThroughAutomaticBlocks', () => {
   });
 
   describe('CALCULATOR blocks', () => {
-    const meals = { meals: [{ code: 'LUNCH', from: '12:00', to: '14:00', amount: '15000' }] };
-    const context = { today: '2026-10-05', timeZone: 'America/Bogota', calculatorConfigs: new Map([['MEAL_ALLOWANCE', meals]]) };
+    const rates = { tables: [{ code: 'COMIDAS', name: 'Comidas', slots: [{ name: 'Almuerzo', from: '12:00', to: '14:00', amount: '15000' }] }] };
+    // A block of a version published before the rename: its old code still reaches the configured calculator.
+    const context = { today: '2026-10-05', timeZone: 'America/Bogota', calculatorConfigs: new Map([['TIME_SLOTS', rates]]) };
     const doc = version({
       steps: [step('start', 'START'), step('calc', 'CALCULATOR', { config: { calculatorCode: 'MEAL_ALLOWANCE', inputs: { departure: 'LEAVES', return: 'BACK' }, outputFieldCode: 'ALLOWANCE' } }), step('check', 'CONDITION'), step('boss', 'TASK'), step('clerk', 'TASK')],
       transitions: [

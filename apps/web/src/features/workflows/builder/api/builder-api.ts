@@ -1,4 +1,4 @@
-import { pageResponseSchema, type SaveGraphRequest, type WorkflowProblem, type WorkflowValidation, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { calculatorChoicesSchema, pageResponseSchema, type SaveGraphRequest, type WorkflowProblem, type WorkflowValidation, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
@@ -106,5 +106,13 @@ export function datasetsQueryOptions(client: HttpClient, workflowId: string) {
     queryKey: ['datasets', 'choices'] as const,
     queryFn: ({ signal }) => client.request('/datasets?pageSize=100&includeInactive=true', { schema: pageResponseSchema(datasetSchema), signal }),
     select: (page) => page.items.filter((dataset) => dataset.workflowId === null || dataset.workflowId === workflowId),
+  });
+}
+
+/** The tables of each switched-on calculator (rate tables), by name only, to pick one in a field or block. */
+export function calculatorChoicesQueryOptions(client: HttpClient) {
+  return queryOptions({
+    queryKey: ['calculators', 'choices'] as const,
+    queryFn: ({ signal }) => client.request('/calculators/choices', { schema: calculatorChoicesSchema, signal }),
   });
 }

@@ -56,7 +56,7 @@ export const BLOCK_CONFIG_SCHEMAS: Readonly<Record<StepType, z.ZodType<Record<st
   WEBHOOK: z
     .object({ webhookId: uuid, bodyTemplate: z.string().max(20_000).optional(), timeoutMs: z.number().int().min(1000).max(30_000).default(10_000), maxRetries: z.number().int().min(0).max(5).default(3) })
     .strict(),
-  CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100), inputs: z.record(z.string().min(1).max(100), fieldCode), outputFieldCode: fieldCode }).strict(),
+  CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100), inputs: z.record(z.string().min(1).max(100), fieldCode), outputFieldCode: fieldCode, table: z.string().min(1).max(50).optional() }).strict(),
   WAIT: wait,
   END: z.object({}).strict(),
 };

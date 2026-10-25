@@ -56,7 +56,8 @@ function calculatorComputation(field: FieldDocument, context: ComputeContext): C
     references: Object.values(inputs),
     run(values) {
       const named = Object.fromEntries(Object.entries(inputs).map(([name, code]) => [name, values[code]]));
-      const result = calculator.compute(named, config, { timeZone: context.timeZone ?? 'UTC' });
+      const table = typeof field.config.table === 'string' ? field.config.table : undefined;
+      const result = calculator.compute(named, config, { timeZone: context.timeZone ?? 'UTC', ...(table === undefined ? {} : { options: { table } }) });
       return result === null ? null : storableNumber(result.round(calculator.output === 'CURRENCY' ? 2 : 6));
     },
   };

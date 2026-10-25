@@ -71,7 +71,8 @@ export const FIELD_CONFIG_SCHEMAS: Readonly<Record<FieldType, z.ZodType<Record<s
     .strict(),
   FILE: z.object({ maxFiles: z.number().int().min(1).max(15).default(1), accept: fileKinds.default(['PDF', 'IMAGE', 'OFFICE', 'ZIP']) }).strict(),
   FORMULA: z.object({ expression: z.string().min(1).max(2000), resultType: z.enum(['NUMBER', 'CURRENCY', 'DATE', 'TEXT']), decimals: z.number().int().min(0).max(6).optional() }).strict(),
-  CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100), inputs: z.record(z.string().min(1).max(100), code).default({}) }).strict(),
+  // `table`: which of the organization's tables the calculator uses, when it has several (rate tables of TIME_SLOTS).
+  CALCULATOR: z.object({ calculatorCode: z.string().min(1).max(100), inputs: z.record(z.string().min(1).max(100), code).default({}), table: z.string().min(1).max(50).optional() }).strict(),
 };
 
 /** Where a field takes its values from (a preset list, an uploaded dataset or a calculator). */
