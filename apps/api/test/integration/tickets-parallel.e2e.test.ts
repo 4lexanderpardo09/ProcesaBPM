@@ -81,7 +81,7 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect(detail.parallelTasks.map((task: { status: string }) => task.status)).toEqual(['PENDING', 'PENDING']);
     });
 
-    it('resolves a position to its least loaded holder, repeats a person once, and a signer nobody can be fails everything', async () => {
+    it('resolves a position to its least loaded holder, repeats a person once, and asks who signs for a signer nobody can be', async () => {
       const position = await world.position();
       const [busy, free] = [await world.member(WORKER_GRANTS, { positionId: position }), await world.member(WORKER_GRANTS, { positionId: position })];
       await create(await publishFlow(world.admin, spec([signer(busy)], { sla: false }))).then((r) => expectStatus(r, 201));
@@ -93,9 +93,50 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       const emptyPosition = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: await world.position() }]));
       const before = Number((await db.platform.query(`SELECT count(*)::int AS n FROM tickets WHERE tenant_id = $1`, [world.tenant.tenantId])).rows[0].n);
       const refused = await create(emptyPosition);
-      expect([refused.status, refused.body.error.code]).toEqual([422, 'NO_ASSIGNEE_CANDIDATES']);
+      expect([refused.status, refused.body.error.code]).toEqual([422, 'SIGNER_SELECTION_REQUIRED']);
       expect(Number((await db.platform.query(`SELECT count(*)::int AS n FROM tickets WHERE tenant_id = $1`, [world.tenant.tenantId])).rows[0].n)).toBe(before);
       void busy;
+    });
+
+    describe('a signer that resolves to nobody is chosen by hand or left out, as in the help desk', () => {
+      let unresolved: PublishedFlow;
+      let signerId: string;
+      const createWith = (signerChoices: ReadonlyArray<Record<string, unknown>>) => requester.client.post('/tickets', { subcategoryId: unresolved.subcategoryId, title: 'Request', values: {}, signerChoices });
+
+      beforeAll(async () => {
+        unresolved = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: await world.position(), label: 'Gerente' }, signer(a)]));
+        const preview = (await requester.client.post('/tickets/creation-preview', { subcategoryId: unresolved.subcategoryId, values: {} }).expect(200)).body;
+        expect(preview).toMatchObject({ outcome: 'STEP', assignment: 'PARALLEL', people: [{ id: a.userId }] });
+        expect(preview.signerChoices).toHaveLength(1);
+        expect(preview.signerChoices[0]).toMatchObject({ signerType: 'POSITION', label: 'Gerente' });
+        expect(preview.signerChoices[0].candidates.map((candidate: { id: string }) => candidate.id)).toEqual(expect.arrayContaining([a.userId, b.userId, c.userId, requester.userId]));
+        signerId = preview.signerChoices[0].signerId;
+      });
+
+      it('without a choice the answer asks for one and names the signer', async () => {
+        const refused = await createWith([]);
+        expect([refused.status, refused.body.error.code, refused.body.error.details.signerIds]).toEqual([422, 'SIGNER_SELECTION_REQUIRED', [signerId]]);
+      });
+
+      it('the person chosen signs in its place', async () => {
+        const ticket = (await createWith([{ signerId, userId: c.userId }]).expect(201)).body;
+        expect((await tasks(ticket.id)).map((task) => task.user_id).sort()).toEqual([a.userId, c.userId].sort());
+      });
+
+      it('a signature left out is not asked for, but leaving every one out is refused', async () => {
+        const ticket = (await createWith([{ signerId, userId: null }]).expect(201)).body;
+        expect((await tasks(ticket.id)).map((task) => task.user_id)).toEqual([a.userId]);
+
+        const lonely = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: await world.position() }]));
+        const onlySigner = (await requester.client.post('/tickets/creation-preview', { subcategoryId: lonely.subcategoryId, values: {} }).expect(200)).body.signerChoices[0].signerId;
+        const refused = await requester.client.post('/tickets', { subcategoryId: lonely.subcategoryId, title: 'Request', values: {}, signerChoices: [{ signerId: onlySigner, userId: null }] });
+        expect([refused.status, refused.body.error.code]).toEqual([422, 'NO_ASSIGNEE_CANDIDATES']);
+      });
+
+      it('someone who is not a member of the company cannot be chosen', async () => {
+        const refused = await createWith([{ signerId, userId: '00000000-0000-7000-8000-000000000001' }]);
+        expect([refused.status, refused.body.error.code]).toEqual([422, 'INVALID_ASSIGNEE']);
+      });
     });
   });
 
@@ -240,6 +281,31 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect((await sign(a, ticket)).status).toBe(403);
       await sign(c, ticket).expect(200);
       await sign(b, ticket).expect(200);
+    });
+
+    it('reassign + addSigner adds one more signer, as in the help desk: the step then also waits for that signature', async () => {
+      const ticket = (await create(flow)).body;
+      const reassign = (body: Record<string, unknown>) => supervisor.client.post(`/tickets/${ticket.id}/reassign`, { visitId: ticket.openVisitId, ...body });
+      expect((await reassign({ toUserId: b.userId, addSigner: true })).body.error.code).toBe('INVALID_ASSIGNEE');
+      expect((await reassign({ toUserId: c.userId, addSigner: true, fromUserId: a.userId })).status).toBe(400);
+      await reassign({ toUserId: c.userId, addSigner: true, comment: 'Also legal' }).then((r) => expect(r.status, JSON.stringify(r.body)).toBe(200));
+
+      expect((await tasks(ticket.id)).map((task) => [task.user_id, task.status]).sort()).toEqual([a, b, c].map((member) => [member.userId, 'PENDING']).sort());
+      expect((await world.assignees(ticket.id)).map((row) => row.type)).toEqual(['PARALLEL', 'PARALLEL', 'PARALLEL']);
+      expect((await world.clocks(ticket.id)).filter((clock) => clock.completed_at === null).map((clock) => clock.responsible_id).sort()).toEqual([a.userId, b.userId, c.userId].sort());
+      expect((await world.events(ticket.id)).at(-1)).toMatchObject({ type: 'REASSIGNED', actor_id: supervisor.userId, assignee_id: c.userId, data: { fromUserIds: [], addedSigner: true } });
+      expect((await world.outbox('ticket.assigned', ticket.id)).length).toBe(3);
+
+      await sign(a, ticket).expect(200);
+      expect((await sign(b, ticket).expect(200)).body.currentStepId).toBe(flow.step.sign);
+      expect((await sign(c, ticket).expect(200)).body.currentStepId).toBe(flow.step.next);
+    });
+
+    it('addSigner only applies to a parallel step', async () => {
+      const single = await publishFlow(world.admin, { steps: [{ key: 'start', type: 'START' }, { key: 'work', type: 'TASK', extra: { assignmentMode: 'CREATOR' } }, { key: 'end', type: 'END' }], transitions: [{ from: 'start', to: 'work', type: 'DEFAULT' }, { from: 'work', to: 'end', type: 'DECISION', label: 'Done' }] });
+      const ticket = (await create(single)).body;
+      const refused = await supervisor.client.post(`/tickets/${ticket.id}/reassign`, { visitId: ticket.openVisitId, toUserId: c.userId, addSigner: true });
+      expect(refused.body.error.code).toBe('INVALID_STATE');
     });
 
     it('an incident cannot hand a parallel step to a named person: the signatures would be left pending', async () => {

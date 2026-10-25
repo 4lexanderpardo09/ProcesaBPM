@@ -14,7 +14,7 @@ const BLOCKING_CODES: ReadonlySet<ErrorCode> = new Set([
   ERROR_CODES.exportCutoffPending,
 ]);
 
-const EMPTY = { via: [], step: null, assignment: null, people: [], fields: [], resumeAt: null, blocked: null } as const;
+const EMPTY = { via: [], step: null, assignment: null, people: [], fields: [], resumeAt: null, blocked: null, signerChoices: [] } as const;
 
 /** What a preview of the arrival says to the person: the blocks on the way, the step, who gets it and what is filled there. */
 export function previewResponse(arrival: ArrivalPreview, document: WorkflowVersionDocument): TransitionPreviewResponse {
@@ -32,6 +32,7 @@ export function previewResponse(arrival: ArrivalPreview, document: WorkflowVersi
     assignment: arrival.assignment,
     people: arrival.people.map((person) => ({ id: person.userId, name: person.name })),
     fields: captureFieldsFor(document.fields, 'STEP', arrival.step.id).map((field) => field.label),
+    signerChoices: arrival.signerChoices,
   };
 }
 

@@ -47,6 +47,7 @@ export const ERROR_CODES = {
   initiatorNotAllowed: 'INITIATOR_NOT_ALLOWED',
   noAssigneeCandidates: 'NO_ASSIGNEE_CANDIDATES',
   assigneeSelectionRequired: 'ASSIGNEE_SELECTION_REQUIRED',
+  signerSelectionRequired: 'SIGNER_SELECTION_REQUIRED',
   invalidAssignee: 'INVALID_ASSIGNEE',
   invalidTransition: 'INVALID_TRANSITION',
   exportCutoffPending: 'EXPORT_CUTOFF_PENDING',
@@ -454,6 +455,13 @@ export interface AssigneeCandidate {
 export class AssigneeSelectionRequiredError extends DomainError {
   constructor(stepId: string, candidates: readonly AssigneeCandidate[]) {
     super(ERROR_CODES.assigneeSelectionRequired, 'Choose who the step is assigned to', { details: { stepId, candidates } });
+  }
+}
+
+/** Some signers of the next PARALLEL step resolved to nobody: choose who signs for each, or leave it out (`signerIds`). */
+export class SignerSelectionRequiredError extends DomainError {
+  constructor(stepId: string, signerIds: readonly string[]) {
+    super(ERROR_CODES.signerSelectionRequired, 'Choose who signs for the signers that resolved to nobody', { details: { stepId, signerIds } });
   }
 }
 

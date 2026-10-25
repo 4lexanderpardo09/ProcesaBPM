@@ -38,6 +38,31 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - ~~**Editor de texto como el de la mesa:** títulos, colores, resaltado, alineación, enlaces y tablas (también pegadas de Excel) en comentarios, descripciones, respuestas y plantillas~~ (hecho, arquitectura «Editor de texto enriquecido»). ~~Adjuntos sueltos al comentar, avanzar y cerrar~~ (hecho, arquitectura «Adjuntos sueltos»). ~~Las instrucciones del paso precargadas en la respuesta y un panel más grande~~ (hecho, arquitectura «Instrucciones del paso»). ~~Filtros de la actividad, visor de PDF, imprimir y a tiempo/tarde por paso~~ (hecho, arquitectura «Herramientas del historial»). ~~«Editar datos registrados»~~ (hecho, arquitectura «Editar datos registrados»). ~~Plantillas y «Limpiar» al avanzar y cerrar; no enviar las instrucciones sin tocar; el visor de PDF descarga si no puede mostrar~~ (hecho, arquitectura «Respuesta como en la mesa»). **Decidido con el usuario:** las instrucciones siguen precargadas (como la mesa) y el editor no se carga aparte (la mesa tampoco lo hace).
   - **Consola de la plataforma en la web:** ~~sesión de plataforma, organizaciones (lista, alta, detalle, plan, suspender y reactivar) y avisos (mantenimiento y notas de cambios de la mesa)~~ (hecho, arquitectura §10 «Consola de plataforma en la web»); ~~planes, administradores y cuentas (reinicio del MFA)~~ (hecho); ~~países y festivos, operación, auditoría y eliminación~~ (hecho); ~~la visita de soporte (abrir la organización en modo lectura con el token de soporte)~~ (hecho, arquitectura §10 «Visita de soporte»).
     - **Decidido (con criterio, el usuario delegó):** la visita reusa las pantallas de la organización en la misma pestaña, sin una vista aparte; la visita dura lo que la sesión de la consola (15 min), como en el API.
+- **Agregar un firmante al reasignar (2026-10-25, `feat/add-parallel-signer`, A4 de paridad):**
+  - **API:** `POST /tickets/:id/reassign` con `addSigner: true` en un paso paralelo suma a `toUserId` como un firmante más (firma pendiente, asignación PARALLEL y su reloj), sin tocar las otras firmas; el paso espera también esa firma. Quien ya firma ese paso: 422 `INVALID_ASSIGNEE`; en un paso que no es paralelo: `INVALID_STATE`; con `fromUserId` a la vez: 400.
+  - **Web:** el diálogo de reasignar, en un paso paralelo, pregunta «Qué firma»: pasar una firma pendiente (antes la web no podía reasignar firmas) o «Agregar un firmante nuevo». El historial dice «agregó como firmante a …».
+- **Firmantes y aprobador a mano (2026-10-25, `feat/manual-signers`, A2 de paridad):**
+  - **Firmantes paralelos:** el que no se resuelve (cargo sin titulares, sin aprobador, persona inactiva) ya no frena el avance:
+    - la vista previa lo trae en `signerChoices`, con los miembros de la empresa como candidatos;
+    - al crear, avanzar o firmar se manda `signerChoices` (`userId` o `null` para omitir esa firma);
+    - sin respuesta: 422 `SIGNER_SELECTION_REQUIRED`; omitir todas: 422 `NO_ASSIGNEE_CANDIDATES`; alguien fuera de la empresa: 422 `INVALID_ASSIGNEE`.
+  - **Paso del aprobador sin aprobador:** se elige a mano entre los miembros de la empresa (`CHOOSE` en la vista previa, `assigneeId` al enviar), en vez de fallar con `APPROVER_NOT_FOUND`.
+  - **Web:** «Firmantes por elegir» en el diálogo de avanzar y al crear la solicitud, con «Omitir esta firma».
+  - **Por confirmar:** un cargo con varios titulares sigue tomando al de menos carga (la mesa deja elegir); firmar la última firma paralela no tiene vista previa, así que si el paso que sigue tiene firmantes sin resolver solo muestra el aviso.
+- **A quién se avisa, como la mesa (2026-10-25, `feat/notify-like-help-desk`, decisión B4 del usuario):**
+  - **Destinatarios por evento** (`recipient-policy.ts`):
+    - crear: el solicitante, aunque lo haya creado él (la constancia que manda la mesa), y los observadores;
+    - asignar: la persona asignada;
+    - avanzar y cada firma paralela: solo los observadores;
+    - cerrar: el solicitante, todos los que tuvieron el ticket (responsables de sus relojes) y los observadores;
+    - reabrir: el solicitante y quien lo tiene de nuevo;
+    - comentar: nadie;
+    - novedad: a quien se le entrega; al resolverla, a quien recupera el ticket;
+    - vencido: el responsable, sin observadores.
+  - **Se queda de ProcesaBPM:**
+    - el preaviso al 80 % (solo al responsable);
+    - nadie recibe aviso de lo que hizo él mismo, salvo la constancia de creación.
+  - **Correo por defecto** solo para asignaciones, bloques de notificación y el aviso de almacenamiento a los administradores (`defaultChannels`). Cada persona puede activar más en sus preferencias.
 - **No se comenta un ticket cerrado (2026-10-25, `feat/no-comments-on-closed`, decisión B11 del usuario: como la mesa):** `POST /tickets/:id/comments` responde 422 `TICKET_NOT_OPEN` con el ticket cerrado (en pausa sí se comenta). La acción `comment` sale apagada y la actividad dice «El ticket está cerrado: ya no recibe comentarios. Si hace falta algo más, reábrelo.».
 - **Dos prioridades, como la mesa (2026-10-25, `feat/two-priorities`, decisión B6 del usuario):**
   - **Del usuario:** la que elige quien crea el ticket (`tickets.priority_id`). Si no elige, toma la prioridad marcada «por defecto» del catálogo (nueva columna `priorities.is_default`, una por organización; la migración marca «Media», como la mesa). Ya no se copia la de la subcategoría.

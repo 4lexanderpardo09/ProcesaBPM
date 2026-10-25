@@ -1,4 +1,4 @@
-import { type CreationFormStart, DESCRIPTION_HTML_MAX } from '@procesabpm/shared';
+import { type CreationFormStart, DESCRIPTION_HTML_MAX, type SignerChoices } from '@procesabpm/shared';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
@@ -8,10 +8,12 @@ import { useApiClient, useCurrentUser } from '@/shared/session';
 import { Button, ButtonLink, Card, isBlankRichText, RichText, RichTextEditor, TextField } from '@/shared/ui';
 import { createTicket, previewCreation } from '../../api/new-ticket-api';
 import { useNextAssignee } from '../../hooks/use-next-assignee';
+import { useSignerChoices } from '../../hooks/use-signer-choices';
 import { choicesOfPreview, useNextStepPreview } from '../../hooks/use-next-step-preview';
 import { typedFields, useStepFields } from '../../hooks/use-step-fields';
 import { useTicketMutation } from '../../hooks/use-ticket-mutation';
 import { NextAssigneeField } from '../actions/NextAssigneeField';
+import { SignerChoicesField } from '../actions/SignerChoicesField';
 import { FilePicker } from '../advance/FileInput';
 import { StepFieldInput } from '../advance/StepFieldInput';
 import { NextStepSummary } from '../next-step/NextStepSummary';
@@ -37,6 +39,7 @@ interface CreateArgs {
   readonly values: Record<string, unknown>;
   readonly attachments: readonly string[];
   readonly assigneeId: string | undefined;
+  readonly signerChoices: SignerChoices | undefined;
 }
 
 /**
@@ -67,6 +70,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
       values: args.values,
       attachments: [...args.attachments],
       ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
+      ...(args.signerChoices === undefined ? {} : { signerChoices: args.signerChoices }),
     }),
   );
   const stepFields = useStepFields(fields, {}, create.error);
@@ -74,6 +78,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
     previewCreation(client, { subcategoryId, startStepId: start.stepId, companyId, ...(requesterId === undefined ? {} : { requesterId }), values: { ...values } }),
   );
   const next = useNextAssignee(choicesOfPreview(preview.data));
+  const signers = useSignerChoices(preview.data?.signerChoices);
   const titleMissing = submitted && title.trim() === '';
   const busy = create.isPending || stepFields.busy || attaching;
 
@@ -81,9 +86,10 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
     setSubmitted(true);
     const collected = stepFields.collect();
     const assignee = next.request();
-    if (title.trim() === '' || !collected.ok || !assignee.ok) return;
+    const signing = signers.request();
+    if (title.trim() === '' || !collected.ok || !assignee.ok || !signing.ok) return;
     create.mutate(
-      { title: title.trim(), description, values: collected.values, attachments, assigneeId: assignee.assigneeId },
+      { title: title.trim(), description, values: collected.values, attachments, assigneeId: assignee.assigneeId, signerChoices: signing.signerChoices },
       { onSuccess: (ticket) => void navigate(ticketPath(ticket.id)), onError: next.onError },
     );
   };
@@ -117,6 +123,7 @@ export function RequestForm({ subcategoryId, companyId, requesterId, priorityId,
           <FilePicker label={t('new.data.attachments')} required={false} value={attachments} knownNames={{}} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />
           <NextStepSummary preview={preview.data} loading={preview.isFetching} failed={preview.isError} timeZone={timeZone} />
           <NextAssigneeField next={next} />
+          <SignerChoicesField choices={signers} />
         </div>
       </Card>
       <div className={styles.footer}>

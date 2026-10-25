@@ -66,35 +66,35 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
   });
 
   describe('who is told about what', () => {
-    it('creating: the assignee and the observers who can read it; not the creator, who did it, nor an observer who cannot read it', async () => {
+    it('creating: the assignee, the requester (the receipt of their ticket, as the help desk sends) and the observers who can read it', async () => {
       const ticket = await create();
       await fanOut();
       expect(await typesOf(worker, ticket.id)).toEqual(['TICKET_ASSIGNED']);
       expect(await typesOf(observer, ticket.id)).toEqual(['OBSERVER_UPDATE']);
-      expect(await typesOf(requester, ticket.id)).toEqual([]);
+      expect(await typesOf(requester, ticket.id)).toEqual(['TICKET_CREATED']);
       expect(await typesOf(blindObserver, ticket.id)).toEqual([]);
       expect(await typesOf(stranger, ticket.id)).toEqual([]);
       expect(await typesOf(supervisor, ticket.id)).toEqual([]);
     });
 
-    it('advancing: the creator and the observers, not the person who did it', async () => {
+    it('closing: the requester, whoever held the ticket and the observers, not the person who did it', async () => {
       const ticket = await create();
       await done(ticket);
       await fanOut();
-      expect(await typesOf(requester, ticket.id)).toEqual(['TICKET_CLOSED']);
+      expect((await typesOf(requester, ticket.id)).sort()).toEqual(['TICKET_CLOSED', 'TICKET_CREATED']);
       expect(await typesOf(observer, ticket.id)).toEqual(['OBSERVER_UPDATE', 'OBSERVER_UPDATE']);
       expect((await typesOf(worker, ticket.id)).filter((type) => type !== 'TICKET_ASSIGNED')).toEqual([]);
     });
 
-    it('commenting: the other side of the conversation, not the author, and not the observers', async () => {
+    it('commenting tells nobody, as in the help desk', async () => {
       const ticket = await create();
       await fanOut();
       await requester.client.post(`/tickets/${ticket.id}/comments`, { comment: 'Please hurry' }).expect(201);
       await worker.client.post(`/tickets/${ticket.id}/comments`, { comment: 'On it' }).expect(201);
       await fanOut();
-      expect(await typesOf(worker, ticket.id)).toEqual(['TICKET_ASSIGNED', 'TICKET_COMMENTED']);
-      expect(await typesOf(requester, ticket.id)).toEqual(['TICKET_COMMENTED']);
-      expect((await typesOf(observer, ticket.id)).includes('TICKET_COMMENTED')).toBe(false);
+      expect(await typesOf(worker, ticket.id)).toEqual(['TICKET_ASSIGNED']);
+      expect(await typesOf(requester, ticket.id)).toEqual(['TICKET_CREATED']);
+      expect(await typesOf(observer, ticket.id)).toEqual(['OBSERVER_UPDATE']);
     });
 
     it('taking and reassigning: the new holder is told, and whoever acted is not', async () => {
@@ -108,7 +108,7 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
       expect(await typesOf(supervisor, ticket.id)).toEqual([]);
     });
 
-    it('an incident: the person it is handed to and, when resolved, whoever opened it', async () => {
+    it('an incident: the person it is handed to and, when resolved, whoever gets the ticket back', async () => {
       const ticket = await create();
       const helper = await world.member([grant('read_assigned'), grant('transition')]);
       const opened = (await worker.client.post(`/tickets/${ticket.id}/incidents`, { visitId: ticket.openVisitId, assignedToId: helper.userId, description: 'Blocked' }).expect(201)).body as { incidentId: string };
@@ -119,14 +119,14 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
       expect((await typesOf(worker, ticket.id)).includes('INCIDENT_RESOLVED')).toBe(true);
     });
 
-    it('an overdue SLA clock: the responsible person and the observers', async () => {
+    it('an overdue SLA clock: the responsible person only', async () => {
       const ticket = await create();
       await fanOut();
       await db.owner.query(`UPDATE ticket_sla_clocks SET due_at = now() - interval '1 hour' WHERE ticket_id = $1 AND completed_at IS NULL`, [ticket.id]);
       await mail.module.get(SlaOverdueJob).runOnce();
       await fanOut();
       expect((await typesOf(worker, ticket.id)).includes('SLA_OVERDUE')).toBe(true);
-      expect((await typesOf(observer, ticket.id)).filter((type) => type === 'OBSERVER_UPDATE').length).toBeGreaterThanOrEqual(2);
+      expect(await typesOf(observer, ticket.id)).toEqual(['OBSERVER_UPDATE']);
     });
 
     it('an SLA clock at 80 % of its time: only the responsible person, once (observers hear if it goes overdue)', async () => {
@@ -316,11 +316,12 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
       await worker.client.post('/notifications/not-a-uuid/read').expect(400);
     });
 
-    it('preferences list every type with the defaults, and saving one changes only that type', async () => {
+    it('preferences list every type with the defaults (e-mail only for assignments and notification blocks), and saving one changes only that type', async () => {
       const fresh = await world.member([grant('read_created')]);
       const before = (await fresh.client.get('/notifications/preferences').expect(200)).body as Array<{ type: string; inApp: boolean; email: boolean }>;
       expect(before).toHaveLength(13);
-      expect(before.every((preference) => preference.inApp && preference.email)).toBe(true);
+      expect(before.every((preference) => preference.inApp)).toBe(true);
+      expect(before.filter((preference) => preference.email).map((preference) => preference.type)).toEqual(['TICKET_ASSIGNED', 'STORAGE_QUOTA', 'SYSTEM']);
       expect((await fresh.client.put('/notifications/preferences/TICKET_CLOSED', { inApp: false, email: false }).expect(200)).body).toEqual({ type: 'TICKET_CLOSED', inApp: false, email: false });
       const after = (await fresh.client.get('/notifications/preferences').expect(200)).body as typeof before;
       expect(after.filter((preference) => !preference.inApp)).toEqual([{ type: 'TICKET_CLOSED', inApp: false, email: false }]);

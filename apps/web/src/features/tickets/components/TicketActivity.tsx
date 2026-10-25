@@ -145,7 +145,7 @@ function ActivityEvent({ event, changes, files, downloading, onDownload, onView,
       <Avatar name={actor} />
       <div className={styles.eventBody}>
         <p className={styles.eventLine}>
-          <strong>{actor}</strong> {t(`detail.events.${type}`)}
+          <strong>{actor}</strong> {addedSigner(event) ? t('detail.events.SIGNER_ADDED') : t(`detail.events.${type}`)}
           {assignee}
           {decision}
           {event.step !== null && <> · {event.step.name}</>} · <time dateTime={event.createdAt}>{formatDateTime(event.createdAt, timeZone)}</time>
@@ -213,4 +213,9 @@ function ChangeList({ changes }: { readonly changes: readonly FieldChange[] }) {
       ))}
     </ul>
   );
+}
+
+/** A reassignment that added one more signer to a parallel step instead of moving a signature. */
+function addedSigner(event: TicketEventResponse): boolean {
+  return event.type === 'REASSIGNED' && typeof event.data === 'object' && event.data !== null && (event.data as { addedSigner?: unknown }).addedSigner === true;
 }

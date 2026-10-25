@@ -72,7 +72,7 @@ export function TicketActions({ ticket, form }: TicketActionsProps) {
         {buttons}
       </div>
       {take.isError && <ActionError error={take.error} />}
-      {dialog === 'reassign' && visitId !== undefined && <ReassignDialog ticketId={ticket.id} visitId={visitId} onClose={closeDialog} />}
+      {dialog === 'reassign' && visitId !== undefined && <ReassignDialog ticketId={ticket.id} visitId={visitId} signatures={ticket.parallelTasks} onClose={closeDialog} />}
       {dialog === 'close' && visitId !== undefined && <CloseDialog ticketId={ticket.id} visitId={visitId} onClose={closeDialog} />}
       {dialog === 'incident' && visitId !== undefined && <OpenIncidentDialog ticketId={ticket.id} visitId={visitId} onClose={closeDialog} />}
       {typeof dialog === 'object' && dialog !== null && 'parallel' in dialog && visitId !== undefined && (

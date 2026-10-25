@@ -18,7 +18,7 @@ const hops = [
 
 describe('previewResponse', () => {
   it('names the step, who gets it and the fields filled there, and the blocks passed without the START', () => {
-    const response = previewResponse({ kind: 'PEOPLE', hops, step: work, assignment: 'CHOOSE', people: [{ userId: 'u1', name: 'Ana' }] }, document);
+    const response = previewResponse({ kind: 'PEOPLE', hops, step: work, assignment: 'CHOOSE', people: [{ userId: 'u1', name: 'Ana' }], signerChoices: [] }, document);
     expect(response).toEqual({
       outcome: 'STEP',
       via: [{ name: 'Amount', blockType: 'CONDITION' }],
@@ -28,6 +28,7 @@ describe('previewResponse', () => {
       fields: ['Result'],
       resumeAt: null,
       blocked: null,
+      signerChoices: [],
     });
   });
 
