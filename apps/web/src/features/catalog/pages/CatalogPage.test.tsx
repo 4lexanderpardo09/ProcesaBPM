@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
+import { typeInEditor } from '@/test/rich-text-editor';
 
 const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 const at = '2026-10-21T15:00:00.000Z';
@@ -93,12 +94,12 @@ describe('CatalogPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Nueva subcategoría' }));
     const dialog = screen.getByRole('dialog', { name: 'Nueva subcategoría' });
     await userEvent.type(within(dialog).getByRole('textbox', { name: /Nombre/ }), 'Acuerdo de pago');
-    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Descripción' }), 'Cuotas atrasadas');
+    typeInEditor(within(dialog).getByRole('textbox', { name: 'Descripción' }), 'Cuotas atrasadas');
     await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Prioridad por defecto' }), await within(dialog).findByRole('option', { name: 'Alta' }));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
 
     await vi.waitFor(() =>
-      expect(fake.calls.find((call) => call.path === '/subcategories' && call.options.method === 'POST')?.options.body).toEqual({ categoryId: CARTERA, name: 'Acuerdo de pago', description: 'Cuotas atrasadas', defaultPriorityId: HIGH }),
+      expect(fake.calls.find((call) => call.path === '/subcategories' && call.options.method === 'POST')?.options.body).toEqual({ categoryId: CARTERA, name: 'Acuerdo de pago', description: '<p>Cuotas atrasadas</p>', defaultPriorityId: HIGH }),
     );
   });
 

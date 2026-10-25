@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { Card } from '@/shared/ui';
+import { textAsHtml } from '@/shared/lib/text-as-html';
+import { Card, RichText } from '@/shared/ui';
 import styles from './NewTicket.module.css';
 
 export interface RequestSummaryProps {
@@ -34,7 +35,11 @@ export function RequestSummary({ requester, company, category, subcategory, subc
           </div>
         ))}
       </dl>
-      {subcategoryDescription !== null && subcategoryDescription !== undefined && subcategoryDescription !== '' && <p className={styles.note}>{subcategoryDescription}</p>}
+      {subcategoryDescription !== null && subcategoryDescription !== undefined && subcategoryDescription !== '' && (
+        <div className={styles.note}>
+          <RichText html={textAsHtml(subcategoryDescription)} />
+        </div>
+      )}
       <p className={styles.note}>{t('new.summary.slaNote')}</p>
     </Card>
   );

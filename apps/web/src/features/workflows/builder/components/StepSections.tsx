@@ -164,7 +164,7 @@ export function AssignmentSection({ step, steps, readOnly, onChange }: SectionPr
   );
 }
 
-/** Deadline, closing, loops, instructions and what each kind of person's step adds. */
+/** Deadline, closing, loops and what each kind of person's step adds (the instructions are the step's description). */
 export function PeopleSection({ step, fields, readOnly, onChange, workflowId }: SectionProps) {
   const { t } = useTranslation('workflows');
   const config = step.config;
@@ -199,7 +199,6 @@ export function PeopleSection({ step, fields, readOnly, onChange, workflowId }: 
           onChange={(event) => onChange({ closeRule: event.target.value as StepDocument['closeRule'] })}
         />
         <WholeNumberField label={t('builder.maxLoops')} hint={t('builder.maxLoopsHint')} min={1} max={1000} disabled={readOnly} value={step.maxLoops} onChange={(value) => onChange({ maxLoops: value })} />
-        <TextArea label={t('builder.instructions')} hint={t('builder.instructionsHint')} maxLength={5000} disabled={readOnly} value={text(config.instructions)} onChange={(event) => setConfig({ instructions: event.target.value === '' ? undefined : event.target.value })} />
         {step.type === 'APPROVAL' && (
           <Checkbox label={t('builder.rejectRequiresComment')} disabled={readOnly} checked={config.rejectRequiresComment !== false} onChange={(event) => setConfig({ rejectRequiresComment: event.target.checked })} />
         )}

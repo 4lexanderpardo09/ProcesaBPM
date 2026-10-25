@@ -99,6 +99,16 @@ describe('catalog API', () => {
       expect(updated).toMatchObject({ description: null, defaultPriorityId: null, categoryId: category.id });
     });
 
+    it('keeps only the editor\'s formatting in the description, and one that cleans to nothing is none', async () => {
+      const category = (await admin.post('/categories', { name: unique('Cat') }).expect(201)).body;
+      const html = '<p><strong>Adjunte</strong> el soporte</p><script>alert(1)</script><p onclick="x()">Gracias</p>';
+      const sub = (await admin.post('/subcategories', { categoryId: category.id, name: unique('Rich'), description: html }).expect(201)).body;
+      expect(sub.description).toBe('<p><strong>Adjunte</strong> el soporte</p><p>Gracias</p>');
+      expect((await admin.patch(`/subcategories/${sub.id}`, { description: '<p><img src="x" onerror="y()"></p>' }).expect(200)).body.description).toBeNull();
+      const empty = (await admin.post('/subcategories', { categoryId: category.id, name: unique('Empty'), description: '<script>x</script>' }).expect(201)).body;
+      expect(empty.description).toBeNull();
+    });
+
     it('the name is unique within the category only', async () => {
       const first = (await admin.post('/categories', { name: unique('First') }).expect(201)).body;
       const second = (await admin.post('/categories', { name: unique('Second') }).expect(201)).body;

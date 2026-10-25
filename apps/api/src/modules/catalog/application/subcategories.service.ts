@@ -10,6 +10,7 @@ import {
 import { compact } from '../../../common/crud/compact.js';
 import { toPage } from '../../../common/crud/pagination.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
+import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { SubcategoryRepository, type SubcategoryRow, type SubcategoryWrite } from '../data/subcategory.repository.js';
 
@@ -34,21 +35,26 @@ export class SubcategoriesService {
     return this.runner.withTenantTransaction(async (tx) => toResponse(await this.require(tx, id)));
   }
 
-  /** The category and the default priority must be of the tenant: the composite foreign keys enforce it (422). */
+  /**
+   * The category and the default priority must be of the tenant: the composite foreign keys enforce it (422). The
+   * description is shown as HTML when a ticket is opened: only the editor's formatting is kept, and nothing left is none.
+   */
   create(request: CreateSubcategoryRequest): Promise<SubcategoryResponse> {
+    const description = sanitizeOptionalRichText(request.description) ?? undefined;
     return this.runner.withTenantTransaction(async (tx) =>
       toResponse(
         await this.repository.create(tx, this.tenantId, {
           categoryId: request.categoryId,
           name: request.name,
-          ...compact({ description: request.description, defaultPriorityId: request.defaultPriorityId }),
+          ...compact({ description, defaultPriorityId: request.defaultPriorityId }),
         }),
       ),
     );
   }
 
   update(id: string, request: UpdateSubcategoryRequest): Promise<SubcategoryResponse> {
-    return this.change(id, compact(request));
+    const { description, ...rest } = request;
+    return this.change(id, compact({ ...rest, ...(description === undefined ? {} : { description: description === null ? null : sanitizeOptionalRichText(description) }) }));
   }
 
   activate(id: string): Promise<SubcategoryResponse> {
