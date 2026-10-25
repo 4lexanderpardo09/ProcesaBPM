@@ -20,10 +20,11 @@ import { rankPeople } from '../domain/ranking-score.js';
 import { type ReportAccess, ReportRunner } from './report-runner.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
-const toRankingRow = (row: ClockStatsRow, errors: number): Omit<RankingRow, 'rank' | 'compliance' | 'quality' | 'score'> & { userId: string; medianMin: number | null } => ({
+const toRankingRow = (row: ClockStatsRow, errors: number): Omit<RankingRow, 'rank' | 'compliance' | 'quality' | 'score' | 'weighted' | 'classification'> & { userId: string; medianMin: number | null } => ({
   userId: row.userId!,
   name: row.name ?? '',
   delivered: row.delivered,
+  handled: row.clocks,
   onTime: row.onTime,
   late: row.late,
   errors,
@@ -171,9 +172,9 @@ export class PerformanceReportsService {
 
   private async rankingOf(tx: TenantTransaction, query: ReportQuery, minVolume: number, userId?: string): Promise<{ ranked: RankingRow[]; unranked: RankingRow[] }> {
     const clocks = (await this.repository.clockStats(tx, query, userId)).filter((row) => row.userId !== null);
-    const errors = new Map((await this.repository.reopeningErrors(tx, query, userId)).map((row) => [row.userId, row]));
+    const errors = new Map((await this.repository.processErrors(tx, query, userId)).map((row) => [row.userId, row]));
     const people = clocks.map((row) => toRankingRow(row, errors.get(row.userId!)?.errors ?? 0));
-    for (const [id, row] of errors) if (!people.some((person) => person.userId === id)) people.push({ userId: id, name: row.name, delivered: 0, onTime: 0, late: 0, errors: row.errors, medianMin: null });
+    for (const [id, row] of errors) if (!people.some((person) => person.userId === id)) people.push({ userId: id, name: row.name, delivered: 0, handled: 0, onTime: 0, late: 0, errors: row.errors, medianMin: null });
     const { ranked, unranked } = rankPeople(people, minVolume);
     return {
       ranked: ranked.map((person) => ({ ...person, rank: person.rank })),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { backlogSheets, commentText, categoriesSheets, distributionSheets, incidentsSheets, rankingSheets, responsiblesSheets, rowCount, stepsSheets, summarySheets, userDetailSheets } from './report-sheets.js';
 
-const ranking = { rank: 1, userId: 'u', name: 'Ana', delivered: 5, onTime: 5, late: 1, errors: 1, compliance: 5 / 6, quality: 0.8, score: 66.7, medianMin: 120 };
+const ranking = { rank: 1, userId: 'u', name: 'Ana', delivered: 5, handled: 6, onTime: 5, late: 1, errors: 1, compliance: 5 / 6, quality: 0.8, score: 66.7, weighted: 76.6, classification: 'GREEN' as const, medianMin: 120 };
 
 describe('report sheets', () => {
   it('a sheet has as many cells in each row as headers', () => {
@@ -9,7 +9,7 @@ describe('report sheets', () => {
       ...summarySheets({ timeZones: [], created: 1, closed: 1, open: 0, stepOnTimePct: null, responsibleOnTimePct: 50, avgResolutionMin: 10, medianResolutionMin: 10, unmeasuredTickets: 0 }),
       ...responsiblesSheets([{ userId: null, name: null, clocks: 1, onTime: 1, late: 0, handedOff: 0, noSla: 0, compliancePct: 100, avgMin: 1, medianMin: 1, avgPausedMin: 0 }]),
       ...stepsSheets([{ workflowId: 'w', workflowName: 'W', stepName: 'S', visits: 1, onTime: 1, late: 0, noSla: 0, compliancePct: 100, avgMin: 1, medianMin: 1, p90Min: 1, avgPausedMin: 0, reprocesses: 0 }]),
-      ...rankingSheets({ minVolume: 1, ranked: [ranking], unranked: [{ ...ranking, rank: null, score: null, compliance: null, quality: null }] }),
+      ...rankingSheets({ minVolume: 1, ranked: [ranking], unranked: [{ ...ranking, rank: null, score: null, compliance: null, quality: null, weighted: null, classification: null }] }),
       ...distributionSheets({ byStep: [{ workflowId: 'w', workflowName: 'W', stepName: 'S', visits: 1, min: 1, p25: 1, median: 1, p75: 1, p90: 1, max: 1 }], byWorkflow: [{ workflowId: 'w', workflowName: 'W', tickets: 1, min: 1, p25: 1, median: 1, p75: 1, p90: 1, max: 1 }] }),
       ...incidentsSheets({ byStep: [{ key: 'k', label: 'L', count: 1, open: 0, resolved: 1, avgPausedMin: 1, medianPausedMin: 1 }], byOpener: [], byAssignee: [] }),
       ...categoriesSheets([{ categoryId: 'c', categoryName: 'C', subcategoryId: null, subcategoryName: null, created: 1, open: 0, closed: 1, avgResolutionMin: 1 }]),
@@ -27,7 +27,7 @@ describe('report sheets', () => {
 
   it('shows the compliance and the quality of the ranking as percentages', () => {
     const [ranked] = rankingSheets({ minVolume: 1, ranked: [ranking], unranked: [] });
-    expect(ranked!.rows[0]).toEqual([1, 'Ana', 5, 5, 1, 1, 83.3, 80, 66.7, 120]);
+    expect(ranked!.rows[0]).toEqual([1, 'Ana', 6, 5, 5, 1, 1, 83.3, 80, 66.7, 76.6, 'Verde', 120]);
   });
 
   it('turns a comment into the plain text of a cell: paragraphs and breaks kept, tags and entities gone', () => {
