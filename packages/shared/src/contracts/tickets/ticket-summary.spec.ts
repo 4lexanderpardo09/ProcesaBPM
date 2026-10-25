@@ -18,6 +18,7 @@ const summary = {
   subcategory: { id: '018f0000-0000-7000-8000-000000000004', name: 'Pagos', category: { id: '018f0000-0000-7000-8000-000000000007', name: 'Cartera' } },
   currentStep: { id: '018f0000-0000-7000-8000-000000000006', name: 'Revisión' },
   priority: null,
+  workflowPriority: null,
   assignees: [{ userId: '018f0000-0000-7000-8000-000000000008', name: 'Luis Gómez', type: 'PRIMARY', assignedAt: '2026-10-18T10:05:00.000Z' }],
   sla: { dueAt: '2026-10-19T10:00:00.000Z', overdue: false, paused: false },
 };
