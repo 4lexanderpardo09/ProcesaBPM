@@ -26,8 +26,9 @@ test.describe('ticket detail', () => {
     await page.getByRole('textbox', { name: 'Agregar un comentario' }).fill('Ya lo revisé <ok>');
     await page.getByRole('button', { name: 'Comentar', exact: true }).click();
 
-    await expect(page.getByText('Ya lo revisé <ok>')).toBeVisible();
+    // The editor empties once the comment is saved; until then its text is on the page twice (editor and activity).
     await expect(page.getByRole('textbox', { name: 'Agregar un comentario' })).toHaveText('');
+    await expect(page.getByText('Ya lo revisé <ok>')).toBeVisible();
     const comment = api.requests.find((request) => request.method === 'POST' && request.path === `/api/tickets/${TICKET}/comments`);
     expect(comment?.authorization?.startsWith('Bearer ')).toBe(true);
   });
