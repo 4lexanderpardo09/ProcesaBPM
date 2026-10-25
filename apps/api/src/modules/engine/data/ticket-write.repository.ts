@@ -229,13 +229,6 @@ export class TicketWriteRepository {
     return clock?.responsibleId ?? undefined;
   }
 
-  /** How many tickets each person holds right now (to spread positions' signatures). */
-  async assignmentLoads(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, number>> {
-    if (userIds.length === 0) return new Map();
-    const rows = await tx.ticketAssignee.groupBy({ by: ['userId'], where: { tenantId, userId: { in: [...userIds] } }, _count: { _all: true } });
-    return new Map(rows.map((row) => [row.userId, row._count._all]));
-  }
-
   /** The clocks of the visit that are running stand still from `at`. */
   async pauseClocks(tx: TenantTransaction, tenantId: string, visitId: string, at: Date): Promise<void> {
     await tx.ticketSlaClock.updateMany({ where: { tenantId, visitId, completedAt: null, pausedAt: null }, data: { pausedAt: at } });

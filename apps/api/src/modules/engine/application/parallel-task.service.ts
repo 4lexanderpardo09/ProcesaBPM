@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   InvalidReferenceError,
   CommentRequiredError,
+  type ParallelSignPreviewRequest,
+  type ParallelSignPreviewResponse,
   type ParallelTaskActionRequest,
   RejectionNotAllowedError,
   type TicketMutationResponse,
@@ -17,6 +19,7 @@ import { parallelExits, parallelOutcome } from '../domain/parallel-policy.js';
 import { signatureRefusal } from '../domain/ticket-action-rules.js';
 import type { EventPlan, TicketMutation } from '../domain/plan.js';
 import { arrivalEvents, ArrivalPlanner } from './arrival-planner.js';
+import { previewOrBlocked, previewResponse } from './next-step-preview.js';
 import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { SignatureCapture } from './signature-capture.js';
 import { TicketMutationApplier } from './ticket-mutation-applier.js';
@@ -50,6 +53,50 @@ export class ParallelTaskService {
 
   reject(actor: TicketActor, ticketId: string, request: ParallelTaskActionRequest): Promise<TicketMutationResponse> {
     return this.act(actor, ticketId, request, 'REJECT');
+  }
+
+  /**
+   * What signing would do, without signing: whether the caller's is the last pending signature and, if so, where the
+   * step's approval takes the ticket and who gets it there (the same preview as a decision). Nothing changes.
+   */
+  previewSign(actor: TicketActor, ticketId: string, request: ParallelSignPreviewRequest): Promise<ParallelSignPreviewResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      const { tenantId } = this.context.require();
+      const at = this.clock.now();
+      const { ticket, visit } = await this.loader.load(tx, tenantId, ticketId, request.visitId, actor);
+      const document = await this.versions.documentOf(tx, tenantId, ticket.workflowVersionId);
+      const found = document.steps.find((candidate) => candidate.id === visit.stepId);
+      const parallel = found?.assignmentMode === 'PARALLEL';
+      const tasks = parallel ? await this.writes.findParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop) : [];
+      const refusal = signatureRefusal(parallel, tasks, actor.userId);
+      if (refusal !== null) throw refusal;
+      if (parallelOutcome(tasks, actor.userId, 'SIGN').kind === 'WAIT') return { last: false, next: null };
+      const exit = parallelExits(document, found!.id).approval;
+      const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
+      const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, company.calendarId, at);
+      const values = await this.loader.valuesOf(tx, tenantId, ticket.id, document);
+      const next = await previewOrBlocked(async () =>
+        previewResponse(
+          await this.planner.preview(tx, {
+            tenantId,
+            ticketId: ticket.id,
+            workflowVersionId: ticket.workflowVersionId,
+            document,
+            entryStepId: exit.toStepId,
+            values,
+            companyId: ticket.companyId,
+            siteId: ticket.siteId,
+            creatorId: ticket.creatorId,
+            calendar,
+            timeZone: company.timeZone,
+            at,
+            chosenAssigneeId: undefined,
+          }),
+          document,
+        ),
+      );
+      return { last: true, next };
+    });
   }
 
   private act(actor: TicketActor, ticketId: string, request: ParallelTaskActionRequest, action: 'SIGN' | 'REJECT'): Promise<TicketMutationResponse> {

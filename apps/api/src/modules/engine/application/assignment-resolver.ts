@@ -14,7 +14,6 @@ import { ApproverResolver } from '../../approvals/application/approver-resolver.
 import { AssignmentCandidatesRepository, type CandidateRow } from '../data/assignment-candidates.repository.js';
 import { TicketContextRepository } from '../data/ticket-context.repository.js';
 import { TicketWriteRepository } from '../data/ticket-write.repository.js';
-import { pickSignerHolder } from '../domain/parallel-policy.js';
 import { filterBySiteScope } from '../domain/site-scope.js';
 
 export interface AssignmentContext {
@@ -30,11 +29,23 @@ export interface AssignmentContext {
 
 type Signer = StepDocument['signers'][number];
 
-/** The signers of a PARALLEL step: the people they resolved to, and the signers that resolved to nobody (to choose by hand). */
+/**
+ * A signer row to choose for by hand: among `among` (the holders of its position, when it has several), or among the
+ * company's members when `among` is `null` (it resolved to nobody).
+ */
+export interface MissingSigner {
+  readonly signer: Signer;
+  readonly among: readonly AssigneeCandidate[] | null;
+}
+
+/** The signers of a PARALLEL step: the people they resolved to, and the signers to choose for by hand. */
 export interface SignerResolution {
   readonly people: readonly string[];
-  readonly missing: readonly Signer[];
+  readonly missing: readonly MissingSigner[];
 }
+
+/** One person, or a choice among `among` (see `MissingSigner`). */
+type SignerOutcome = { readonly userId: string } | { readonly among: readonly AssigneeCandidate[] | null };
 
 const unique = (rows: readonly CandidateRow[]): CandidateRow[] => [...new Map(rows.map((row) => [row.userId, row])).values()];
 const participantIds = (step: StepDocument, type: 'USER' | 'POSITION' | 'GROUP'): string[] =>
@@ -56,36 +67,39 @@ export class AssignmentResolver {
   }
 
   /**
-   * Resolves each signer row of a PARALLEL step to one person (a position to its least loaded holder); the rows that
-   * resolve to nobody (no holder, no approver, a person no longer active) are returned apart, to be chosen by hand.
+   * Resolves each signer row of a PARALLEL step to one person. As in the help desk, the rows that do not name exactly
+   * one person are returned apart, to be chosen by hand: a position with several holders (among them), and a row that
+   * resolves to nobody (no holder, no approver, a person no longer active: among the company's members).
    */
   async resolveSigners(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext): Promise<SignerResolution> {
     const people: string[] = [];
-    const missing: Signer[] = [];
+    const missing: MissingSigner[] = [];
     for (const signer of [...step.signers].sort((a, b) => a.sortOrder - b.sortOrder)) {
-      const userId = await this.signerUser(tx, step, signer, ticket);
-      if (userId === undefined) missing.push(signer);
-      else people.push(userId);
+      const outcome = await this.signerOutcome(tx, step, signer, ticket);
+      if ('userId' in outcome) people.push(outcome.userId);
+      else missing.push({ signer, among: outcome.among });
     }
     return { people, missing };
   }
 
   /**
-   * The people who each sign a PARALLEL step; repeated people count once. As in the help desk, a signer that resolves
-   * to nobody takes the person chosen for it among the company's members, or is left out when the choice is `null`;
-   * without a choice for it the arrival asks for one. Leaving every signature out is refused: someone has to sign.
+   * The people who each sign a PARALLEL step; repeated people count once. As in the help desk, a signer to choose for
+   * (see `resolveSigners`) takes the person chosen for it, who must be one of its candidates, or is left out when the
+   * choice is `null`; without a choice for it the arrival asks for one. Leaving every signature out is refused.
    */
   async signersFor(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext, choices: SignerChoices = []): Promise<string[]> {
     const { people, missing } = await this.resolveSigners(tx, step, ticket);
-    const unanswered = missing.filter((signer) => !choices.some((choice) => choice.signerId === signer.id));
-    if (unanswered.length > 0) throw new SignerSelectionRequiredError(step.id, unanswered.map((signer) => signer.id));
-    const chosen = missing.flatMap((signer) => {
+    const unanswered = missing.filter(({ signer }) => !choices.some((choice) => choice.signerId === signer.id));
+    if (unanswered.length > 0) throw new SignerSelectionRequiredError(step.id, unanswered.map(({ signer }) => signer.id));
+    let members: ReadonlySet<string> | undefined;
+    const chosen: string[] = [];
+    for (const { signer, among } of missing) {
       const userId = choices.find((choice) => choice.signerId === signer.id)!.userId;
-      return userId === null ? [] : [userId];
-    });
-    if (chosen.length > 0) {
-      const members = new Set((await this.candidates.byCompany(tx, ticket.tenantId, ticket.companyId)).map((member) => member.userId));
-      if (chosen.some((userId) => !members.has(userId))) throw new InvalidAssigneeError();
+      if (userId === null) continue;
+      if (among === null) members ??= new Set((await this.candidates.byCompany(tx, ticket.tenantId, ticket.companyId)).map((member) => member.userId));
+      const allowed = among === null ? members!.has(userId) : among.some((candidate) => candidate.userId === userId);
+      if (!allowed) throw new InvalidAssigneeError();
+      chosen.push(userId);
     }
     const everyone = [...new Set([...people, ...chosen])];
     if (everyone.length === 0) throw new NoAssigneeCandidatesError(step.id, 'PARALLEL');
@@ -114,22 +128,22 @@ export class AssignmentResolver {
     return people;
   }
 
-  private async signerUser(tx: TenantTransaction, step: StepDocument, signer: Signer, ticket: AssignmentContext): Promise<string | undefined> {
+  private async signerOutcome(tx: TenantTransaction, step: StepDocument, signer: Signer, ticket: AssignmentContext): Promise<SignerOutcome> {
+    const one = (row: CandidateRow | undefined): SignerOutcome => (row === undefined ? { among: null } : { userId: row.userId });
     switch (signer.signerType) {
       case 'USER':
-        return signer.userId === null ? undefined : (await this.single(tx, ticket, signer.userId))[0]?.userId;
+        return signer.userId === null ? { among: null } : one((await this.single(tx, ticket, signer.userId))[0]);
       case 'CREATOR':
-        return (await this.single(tx, ticket, ticket.creatorId))[0]?.userId;
+        return one((await this.single(tx, ticket, ticket.creatorId))[0]);
       case 'APPROVER': {
         const approverId = await this.approverOrNone(tx, step, ticket);
-        return approverId === undefined ? undefined : (await this.single(tx, ticket, approverId))[0]?.userId;
+        return approverId === undefined ? { among: null } : one((await this.single(tx, ticket, approverId))[0]);
       }
       case 'POSITION': {
-        if (signer.positionId === null) return undefined;
+        if (signer.positionId === null) return { among: null };
         const holders = await this.byPosition(tx, [signer.positionId], step, ticket);
-        if (holders.length === 0) return undefined;
-        const ids = holders.map((holder) => holder.userId);
-        return pickSignerHolder(ids, await this.writes.assignmentLoads(tx, ticket.tenantId, ids));
+        if (holders.length <= 1) return one(holders[0]);
+        return { among: holders.map(({ userId, name }) => ({ userId, name })) };
       }
       case 'STEP_ASSIGNEE':
         throw new InvalidStateError('A parallel step cannot have signers that are the step assignee');

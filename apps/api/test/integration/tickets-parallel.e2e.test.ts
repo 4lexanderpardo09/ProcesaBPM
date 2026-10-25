@@ -81,21 +81,35 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect(detail.parallelTasks.map((task: { status: string }) => task.status)).toEqual(['PENDING', 'PENDING']);
     });
 
-    it('resolves a position to its least loaded holder, repeats a person once, and asks who signs for a signer nobody can be', async () => {
+    it('a position with one holder resolves to them, repeats a person once, and asks who signs for a signer nobody can be', async () => {
       const position = await world.position();
-      const [busy, free] = [await world.member(WORKER_GRANTS, { positionId: position }), await world.member(WORKER_GRANTS, { positionId: position })];
-      await create(await publishFlow(world.admin, spec([signer(busy)], { sla: false }))).then((r) => expectStatus(r, 201));
+      const holder = await world.member(WORKER_GRANTS, { positionId: position });
       const positional = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: position }, { signerType: 'CREATOR' }, signer(a), signer(a)]));
       const ticket = (await create(positional)).body;
       const people = (await tasks(ticket.id)).map((task) => task.user_id).sort();
-      expect(people).toEqual([free.userId, requester.userId, a.userId].sort());
+      expect(people).toEqual([holder.userId, requester.userId, a.userId].sort());
 
       const emptyPosition = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: await world.position() }]));
       const before = Number((await db.platform.query(`SELECT count(*)::int AS n FROM tickets WHERE tenant_id = $1`, [world.tenant.tenantId])).rows[0].n);
       const refused = await create(emptyPosition);
       expect([refused.status, refused.body.error.code]).toEqual([422, 'SIGNER_SELECTION_REQUIRED']);
       expect(Number((await db.platform.query(`SELECT count(*)::int AS n FROM tickets WHERE tenant_id = $1`, [world.tenant.tenantId])).rows[0].n)).toBe(before);
-      void busy;
+    });
+
+    it('a position with several holders asks which of them signs, as in the help desk, and takes only one of them', async () => {
+      const position = await world.position();
+      const [first, second] = [await world.member(WORKER_GRANTS, { positionId: position }), await world.member(WORKER_GRANTS, { positionId: position })];
+      const several = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: position }, signer(a)]));
+      const preview = (await requester.client.post('/tickets/creation-preview', { subcategoryId: several.subcategoryId, values: {} }).expect(200)).body;
+      expect(preview.people.map((person: { id: string }) => person.id)).toEqual([a.userId]);
+      expect(preview.signerChoices).toHaveLength(1);
+      expect(preview.signerChoices[0].candidates.map((candidate: { id: string }) => candidate.id).sort()).toEqual([first.userId, second.userId].sort());
+      const signerId = preview.signerChoices[0].signerId as string;
+      const post = (signerChoices: unknown) => requester.client.post('/tickets', { subcategoryId: several.subcategoryId, title: 'Request', values: {}, signerChoices });
+      expect((await post([])).body.error.code).toBe('SIGNER_SELECTION_REQUIRED');
+      expect((await post([{ signerId, userId: b.userId }])).body.error.code).toBe('INVALID_ASSIGNEE');
+      const ticket = (await post([{ signerId, userId: second.userId }]).expect(201)).body;
+      expect((await tasks(ticket.id)).map((task) => task.user_id).sort()).toEqual([a.userId, second.userId].sort());
     });
 
     describe('a signer that resolves to nobody is chosen by hand or left out, as in the help desk', () => {
@@ -141,6 +155,38 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
   });
 
   describe('signing', () => {
+    it('previews the last signature: where the ticket goes and which signers of the next step to choose for', async () => {
+      const chained = await publishFlow(world.admin, {
+        steps: [
+          { key: 'start', type: 'START' },
+          { key: 'sign', type: 'TASK', extra: { assignmentMode: 'PARALLEL' }, signers: [signer(a), signer(b)] },
+          { key: 'again', type: 'TASK', extra: { assignmentMode: 'PARALLEL' }, signers: [{ signerType: 'POSITION', positionId: await world.position(), label: 'Gerente' }, signer(c)] },
+          { key: 'end', type: 'END' },
+        ],
+        transitions: [
+          { from: 'start', to: 'sign', type: 'DEFAULT' },
+          { from: 'sign', to: 'again', type: 'DECISION', label: 'Signed' },
+          { from: 'again', to: 'end', type: 'DECISION', label: 'Signed again' },
+        ],
+      });
+      const ticket = (await create(chained).expect(201)).body;
+      const preview = (as: Member) => as.client.post(`/tickets/${ticket.id}/parallel-tasks/sign-preview`, { visitId: ticket.openVisitId });
+
+      expect((await preview(a).expect(200)).body).toEqual({ last: false, next: null });
+      // Someone who is not a signer of the step (here, who cannot even see the ticket) gets no preview.
+      expect((await preview(c)).status).toBe(404);
+      await sign(a, ticket).expect(200);
+      const last = (await preview(b).expect(200)).body;
+      expect(last).toMatchObject({ last: true, next: { outcome: 'STEP', step: { id: chained.step.again }, assignment: 'PARALLEL', people: [{ id: c.userId }] } });
+      expect(last.next.signerChoices).toHaveLength(1);
+      expect(last.next.signerChoices[0]).toMatchObject({ signerType: 'POSITION', label: 'Gerente' });
+      expect(await taskStatus(ticket.id, b)).toBe('PENDING');
+
+      expect((await sign(b, ticket)).body.error.code).toBe('SIGNER_SELECTION_REQUIRED');
+      const moved = await sign(b, ticket, { signerChoices: [{ signerId: last.next.signerChoices[0].signerId, userId: null }] }).expect(200);
+      expect(moved.body.currentStepId).toBe(chained.step.again);
+    });
+
     it('everybody must sign: each signature closes only the signer\'s clock, the last one advances the step', async () => {
       const ticket = (await create(flow)).body;
       const first = await sign(a, ticket, { comment: 'Fine' });
