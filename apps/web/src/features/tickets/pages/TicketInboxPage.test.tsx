@@ -11,6 +11,10 @@ interface FakeTicket {
   readonly title: string;
   readonly status: 'OPEN' | 'PAUSED' | 'CLOSED';
   readonly tags?: readonly { id: string; name: string; color: string }[];
+  readonly assignees?: readonly { userId: string; name: string; type: string; assignedAt: string }[];
+  readonly priority?: { id: string; name: string; color: string | null } | null;
+  readonly workflowPriority?: { id: string; name: string; color: string | null } | null;
+  readonly filteredValue?: string | number | boolean | null;
 }
 
 type View = TicketView;
@@ -44,6 +48,8 @@ function ticketsApi(byView: Partial<Record<View, readonly FakeTicket[]>>) {
       currentStep: null,
       priority: null,
       workflowPriority: null,
+      lastActivityAt: '2026-10-17T16:00:00.000Z',
+      filteredValue: null,
       assignees: [],
       sla: null,
       ...item,
@@ -66,7 +72,14 @@ const rowTitles = async () => within(await table()).queryAllByRole('link').map((
 
 describe('TicketInboxPage', () => {
   it('opens on the assigned tickets with the count of every tab', async () => {
-    const api = ticketsApi({ assigned: [ticket(1, { title: 'Pago de crédito' }), ticket(2, { status: 'PAUSED' })], created: [ticket(3)], all: many(5) });
+    const api = ticketsApi({
+      assigned: [
+        ticket(1, { title: 'Pago de crédito', assignees: [{ userId: ticketId(950), name: 'Luis Gómez', type: 'PRIMARY', assignedAt: '2026-10-17T15:00:00.000Z' }], priority: { id: ticketId(960), name: 'Alta', color: null }, workflowPriority: { id: ticketId(961), name: 'Media', color: null } }),
+        ticket(2, { status: 'PAUSED' }),
+      ],
+      created: [ticket(3)],
+      all: many(5),
+    });
     renderRoute('/tickets', { handlers: api.handlers });
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Tickets' })).toBeInTheDocument();
@@ -78,8 +91,40 @@ describe('TicketInboxPage', () => {
 
     const rows = within(await table()).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]!).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['T-1001', 'Pago de crédito', 'Abierto', '17 de oct de 2026', '']);
-    expect(within(rows[1]!).getByText('Pausado')).toBeInTheDocument();
+    // The columns of the help desk: requester, who holds it, both priorities and the last activity.
+    expect(within(rows[0]!).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['T-1001', 'Pago de crédito', 'Ana Pérez', 'Luis Gómez', 'Abierto', 'Alta', 'Media', '', '17 de oct de 2026, 11:00 a. m.']);
+    expect(within(rows[1]!).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['T-1002', expect.any(String), 'Ana Pérez', 'Sin asignar', 'Pausado', '—', '—', '', expect.any(String)]);
+    expect(api.listQueries().at(-1)?.get('sort')).toBe('lastActivity');
+    expect(within(await table()).getByRole('columnheader', { name: /Última actualización/ })).toHaveAttribute('aria-sort', 'descending');
+  });
+
+  it('sorts by a column from its header, turning the order around on a second click, and keeps it in the URL', async () => {
+    const api = ticketsApi({ assigned: [ticket(1)] });
+    const { router } = renderRoute('/tickets', { handlers: api.handlers });
+
+    await userEvent.click(within(await table()).getByRole('button', { name: /Prioridad flujo/ }));
+    await vi.waitFor(() => expect(router.state.location.search).toBe('?sort=workflowPriority&dir=desc'));
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('sort')).toBe('workflowPriority'));
+    expect(within(await table()).getByRole('columnheader', { name: /Prioridad flujo/ })).toHaveAttribute('aria-sort', 'descending');
+    expect(within(await table()).getByRole('columnheader', { name: /Última actualización/ })).toHaveAttribute('aria-sort', 'none');
+
+    await userEvent.click(within(await table()).getByRole('button', { name: /Prioridad flujo/ }));
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('direction')).toBe('asc'));
+    expect(router.state.location.search).toBe('?sort=workflowPriority&dir=asc');
+    // The counts of the tabs do not depend on the order.
+    expect(api.queries.filter((search) => !search.has('pageSize')).every((search) => !search.has('sort'))).toBe(true);
+  });
+
+  it('adds a column with the field the inbox is filtered by, named as its form calls it', async () => {
+    const api = ticketsApi({ assigned: [ticket(1, { filteredValue: '2026-03-01' }), ticket(2)] });
+    renderRoute('/tickets?field=DUE_ON&op=filled', {
+      handlers: { ...api.handlers, '/tickets/filter-fields': () => [{ code: 'DUE_ON', label: 'Fecha de pago', type: 'DATE', options: null }] },
+    });
+
+    expect(await within(await table()).findByRole('columnheader', { name: 'Fecha de pago' })).toBeInTheDocument();
+    const rows = within(await table()).getAllByRole('row').slice(1);
+    expect(within(rows[0]!).getAllByRole('cell')[2]).toHaveTextContent('2026-03-01');
+    expect(within(rows[1]!).getAllByRole('cell')[2]).toHaveTextContent('—');
   });
 
   it('searches and filters by priority and category, sends the same filters to the counts, and clears them', async () => {
@@ -112,7 +157,7 @@ describe('TicketInboxPage', () => {
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Categoría' }), 'Cartera');
 
     await vi.waitFor(() =>
-      expect(api.listQueries().at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&workflowPriorityId=${PRIORITY}&categoryId=${CATEGORY}&view=assigned&page=1&pageSize=25`),
+      expect(api.listQueries().at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&workflowPriorityId=${PRIORITY}&categoryId=${CATEGORY}&view=assigned&page=1&pageSize=25&sort=lastActivity&direction=desc`),
     );
     expect(api.queries.filter((search) => !search.has('pageSize')).at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&workflowPriorityId=${PRIORITY}&categoryId=${CATEGORY}`);
 

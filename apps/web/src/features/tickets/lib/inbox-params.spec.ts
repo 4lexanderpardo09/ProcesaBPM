@@ -5,7 +5,7 @@ const read = (query: string) => readInboxParams(new URLSearchParams(query));
 const PRIORITY = '018f0000-0000-7000-8000-000000000001';
 const CATEGORY = '018f0000-0000-7000-8000-000000000002';
 const COMPANY = '018f0000-0000-7000-8000-000000000003';
-const defaults = { view: 'assigned', page: 1, ...NO_FILTERS } as const;
+const defaults = { view: 'assigned', page: 1, sort: 'lastActivity', direction: 'desc', ...NO_FILTERS } as const;
 
 describe('readInboxParams', () => {
   it('opens on the assigned tickets, no filters, first page', () => {
@@ -22,6 +22,8 @@ describe('readInboxParams', () => {
       categoryId: CATEGORY,
       companyId: COMPANY,
       page: 3,
+      sort: 'lastActivity',
+      direction: 'desc',
     });
   });
 
@@ -31,6 +33,7 @@ describe('readInboxParams', () => {
     ['an id that is not one', 'priority=7', { priorityId: undefined }],
     ['a page that is not a positive integer', 'page=-2', { page: 1 }],
     ['a fractional page', 'page=1.5', { page: 1 }],
+    ['an unknown sort', 'sort=color&dir=up', { sort: 'lastActivity', direction: 'desc' }],
     ['a page that is not a number', 'page=two', { page: 1 }],
   ])('ignores %s', (_, query, expected) => {
     expect(read(query)).toMatchObject(expected);
@@ -44,6 +47,12 @@ describe('writeInboxParams', () => {
 
   it('round-trips what differs from the defaults', () => {
     const params = { ...defaults, view: 'all', status: 'CLOSED', search: 'PAG-12', searchMessages: true, categoryId: CATEGORY, page: 2 } as const;
+    expect(readInboxParams(writeInboxParams(params))).toEqual(params);
+  });
+
+  it('keeps an order other than the latest activity first', () => {
+    const params = { ...defaults, sort: 'workflowPriority', direction: 'asc' } as const;
+    expect(writeInboxParams(params).toString()).toBe('sort=workflowPriority&dir=asc');
     expect(readInboxParams(writeInboxParams(params))).toEqual(params);
   });
 });

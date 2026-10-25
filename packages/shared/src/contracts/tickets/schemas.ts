@@ -158,6 +158,13 @@ export interface TicketSummaryResponse {
   readonly priorityId: string | null;
   readonly createdAt: string;
   readonly closedAt: string | null;
+  /** When something last happened on the ticket (its latest event): the inbox's «última actualización». */
+  readonly lastActivityAt: string;
+  /**
+   * In a listing filtered by a field (`fieldCode`), the ticket's value of that field as stored (text, number, date as
+   * `YYYY-MM-DD`...), for its column; `null` when it has none or the listing is not filtered by a field.
+   */
+  readonly filteredValue: string | number | boolean | null;
   /** The caller's own tags on this ticket (nobody else's). */
   readonly tags: readonly TagResponse[];
   readonly creator: NamedRefResponse;
@@ -187,6 +194,8 @@ export const ticketSummaryResponseSchema = z.object({
   priorityId: uuidSchema.nullable(),
   createdAt: z.string(),
   closedAt: z.string().nullable(),
+  lastActivityAt: z.string(),
+  filteredValue: z.union([z.string(), z.number(), z.boolean()]).nullable(),
   tags: z.array(tagResponseSchema),
   creator: namedRefSchema,
   subcategory: namedRefSchema.extend({ category: namedRefSchema }),

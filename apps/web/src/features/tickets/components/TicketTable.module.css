@@ -13,3 +13,7 @@
   color: var(--slate);
   white-space: nowrap;
 }
+
+.muted {
+  color: var(--muted);
+}

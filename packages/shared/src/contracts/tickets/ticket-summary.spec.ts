@@ -19,6 +19,8 @@ const summary = {
   currentStep: { id: '018f0000-0000-7000-8000-000000000006', name: 'Revisión' },
   priority: null,
   workflowPriority: null,
+  lastActivityAt: '2026-10-17T16:00:00.000Z',
+  filteredValue: null,
   assignees: [{ userId: '018f0000-0000-7000-8000-000000000008', name: 'Luis Gómez', type: 'PRIMARY', assignedAt: '2026-10-18T10:05:00.000Z' }],
   sla: { dueAt: '2026-10-19T10:00:00.000Z', overdue: false, paused: false },
 };

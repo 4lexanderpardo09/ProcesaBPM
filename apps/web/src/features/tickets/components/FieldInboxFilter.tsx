@@ -1,19 +1,12 @@
-import { type FilterableFieldType, type TicketFilterFieldResponse, ticketFilterFieldsResponseSchema } from '@procesabpm/shared';
-import { queryOptions, useQuery } from '@tanstack/react-query';
+import { type FilterableFieldType, type TicketFilterFieldResponse } from '@procesabpm/shared';
+import { useQuery } from '@tanstack/react-query';
 import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { HttpClient } from '@/shared/api';
 import { useApiClient } from '@/shared/session';
 import { Select, TextField } from '@/shared/ui';
+import { filterFieldsQueryOptions } from '../api/tickets-api';
 import type { FieldOperator, InboxFilters as Filters } from '../lib/inbox-params';
 import styles from './InboxFilters.module.css';
-
-const filterFieldsQueryOptions = (client: HttpClient) =>
-  queryOptions({
-    queryKey: ['tickets', 'filter-fields'] as const,
-    queryFn: ({ signal }) => client.request('/tickets/filter-fields', { schema: ticketFilterFieldsResponseSchema, signal }),
-    staleTime: 5 * 60_000,
-  });
 
 type FieldKind = 'text' | 'choice' | 'number' | 'date';
 

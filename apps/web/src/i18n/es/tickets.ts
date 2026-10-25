@@ -146,10 +146,15 @@ export const tickets = {
   },
   columns: {
     number: 'Nº',
-    title: 'Título',
+    title: 'Asunto',
+    requester: 'Solicitante',
+    assignees: 'Asignado a',
+    unassigned: 'Sin asignar',
     status: 'Estado',
-    createdAt: 'Creado',
+    priority: 'Prioridad usuario',
+    workflowPriority: 'Prioridad flujo',
     tags: 'Etiquetas',
+    lastActivity: 'Última actualización',
   },
   new: {
     requester: {

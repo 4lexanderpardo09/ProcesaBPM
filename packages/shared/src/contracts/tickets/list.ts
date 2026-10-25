@@ -85,9 +85,18 @@ const FIELD_FILTER_COMPLETE = { message: 'fieldCode, fieldOperator and the value
 export const ticketFiltersQuerySchema = ticketFiltersObject.refine(datesInOrder, DATES_IN_ORDER).refine(fieldFilterComplete, FIELD_FILTER_COMPLETE);
 export type TicketFiltersQuery = z.infer<typeof ticketFiltersQuerySchema>;
 
+/**
+ * How the inbox sorts, as in the help desk: by default the latest activity first (`lastActivity`, the last event of the
+ * ticket). `requester` sorts by the requester's name; the priorities by their place in the catalog.
+ */
+export const TICKET_SORTS = ['lastActivity', 'number', 'title', 'status', 'requester', 'priority', 'workflowPriority', 'createdAt'] as const;
+export type TicketSort = (typeof TICKET_SORTS)[number];
+export const SORT_DIRECTIONS = ['asc', 'desc'] as const;
+export type SortDirection = (typeof SORT_DIRECTIONS)[number];
+
 export const listTicketsQuerySchema = pageQuerySchema
   .pick({ page: true, pageSize: true })
-  .extend({ view: z.enum(TICKET_VIEWS).default('assigned') })
+  .extend({ view: z.enum(TICKET_VIEWS).default('assigned'), sort: z.enum(TICKET_SORTS).default('lastActivity'), direction: z.enum(SORT_DIRECTIONS).default('desc') })
   .extend(ticketFiltersObject.shape)
   .refine(datesInOrder, DATES_IN_ORDER)
   .refine(fieldFilterComplete, FIELD_FILTER_COMPLETE);

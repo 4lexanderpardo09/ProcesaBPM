@@ -10,6 +10,8 @@ export interface TableColumn<T> {
   readonly width?: string;
   /** Identifiers and numbers: monospaced with tabular figures. */
   readonly code?: boolean;
+  /** Makes the header a button that sorts by this column; `direction` is set on the column the rows are sorted by. */
+  readonly sort?: { readonly direction: 'asc' | 'desc' | undefined; readonly onSort: () => void };
 }
 
 export interface TableProps<T> {
@@ -42,8 +44,17 @@ export function Table<T>({ label, columns, rows, rowKey, empty, loading = false,
           <thead>
             <tr>
               {columns.map((column) => (
-                <th key={column.key} scope="col" className={cx('text-overline', styles.header)}>
-                  {column.header}
+                <th key={column.key} scope="col" className={cx('text-overline', styles.header)} aria-sort={ariaSortOf(column.sort)}>
+                  {column.sort === undefined ? (
+                    column.header
+                  ) : (
+                    <button type="button" className={styles.sortButton} onClick={column.sort.onSort}>
+                      {column.header}
+                      <span aria-hidden="true" className={styles.sortMark}>
+                        {column.sort.direction === 'asc' ? '▲' : column.sort.direction === 'desc' ? '▼' : '↕'}
+                      </span>
+                    </button>
+                  )}
                 </th>
               ))}
             </tr>
@@ -72,4 +83,9 @@ export function Table<T>({ label, columns, rows, rowKey, empty, loading = false,
       {footer !== undefined && <div className={styles.footer}>{footer}</div>}
     </div>
   );
+}
+
+function ariaSortOf(sort: TableColumn<unknown>['sort']): 'ascending' | 'descending' | 'none' | undefined {
+  if (sort === undefined) return undefined;
+  return sort.direction === 'asc' ? 'ascending' : sort.direction === 'desc' ? 'descending' : 'none';
 }

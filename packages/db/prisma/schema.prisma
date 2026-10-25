@@ -1825,6 +1825,8 @@ model Ticket {
   forcedClose       Boolean                  @default(false) @map("forced_close")
   /// Shared by the tickets answered together in one batch, until each moves on its own (RANDOM_DISPATCH keeps them together).
   batchId           String?                  @map("batch_id") @db.Uuid
+  /// When the ticket's latest event happened (kept by a trigger on ticket_events): the inbox's «última actualización».
+  lastActivityAt    DateTime                 @default(now()) @map("last_activity_at") @db.Timestamptz(3)
   createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt         DateTime?                @map("deleted_at") @db.Timestamptz(3)

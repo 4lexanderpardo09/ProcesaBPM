@@ -24,8 +24,11 @@ const slaOf = (row: TicketSummaryRow, now: Date): TicketSummaryResponse['sla'] =
   return sla === null ? null : { dueAt: sla.dueAt.toISOString(), overdue: sla.overdue, paused: sla.paused };
 };
 
-/** `now` decides whether the current step is overdue. */
-export const toSummary = (row: TicketSummaryRow, now: Date): TicketSummaryResponse => ({
+/** A stored value shown as is in a column: text, numbers and yes/no; anything else (lists, tables, files) shows nothing. */
+const scalarOf = (value: unknown): string | number | boolean | null => (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : null);
+
+/** `now` decides whether the current step is overdue; `filteredValue` is the value of the field the listing is filtered by. */
+export const toSummary = (row: TicketSummaryRow, now: Date, filteredValue?: unknown): TicketSummaryResponse => ({
   id: row.id,
   number: row.number.toString(),
   title: row.title,
@@ -37,6 +40,8 @@ export const toSummary = (row: TicketSummaryRow, now: Date): TicketSummaryRespon
   priorityId: row.priorityId,
   createdAt: row.createdAt.toISOString(),
   closedAt: row.closedAt?.toISOString() ?? null,
+  lastActivityAt: row.lastActivityAt.toISOString(),
+  filteredValue: scalarOf(filteredValue),
   tags: row.tags.map((entry) => entry.tag),
   creator: personRef(row.creatorId, row.creator),
   subcategory: { id: row.subcategoryId, name: row.subcategory.name, category: row.subcategory.category },

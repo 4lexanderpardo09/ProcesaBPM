@@ -1,4 +1,4 @@
-import { FIELD_CODE_PATTERN, FIELD_FILTER_OPERATORS, fieldRangeKind, TICKET_VIEWS, ticketStatusSchema } from '@procesabpm/shared';
+import { FIELD_CODE_PATTERN, FIELD_FILTER_OPERATORS, fieldRangeKind, SORT_DIRECTIONS, type SortDirection, TICKET_SORTS, TICKET_VIEWS, type TicketSort, ticketStatusSchema } from '@procesabpm/shared';
 import type { z } from 'zod';
 
 export type TicketView = (typeof TICKET_VIEWS)[number];
@@ -9,6 +9,9 @@ export const INBOX_VIEWS: readonly TicketView[] = ['assigned', 'created', 'obser
 export const TICKET_STATUSES: readonly TicketStatus[] = ticketStatusSchema.options;
 
 const DEFAULT_VIEW: TicketView = 'assigned';
+/** As in the help desk, the inbox opens with the latest activity first. */
+export const DEFAULT_SORT: TicketSort = 'lastActivity';
+const DEFAULT_DIRECTION: SortDirection = 'desc';
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The API takes a search of 1 to 100 characters. */
@@ -58,6 +61,8 @@ export type InboxFilters = { readonly [K in IdFilter]: string | undefined } & {
 export interface InboxParams extends InboxFilters {
   readonly view: TicketView;
   readonly page: number;
+  readonly sort: TicketSort;
+  readonly direction: SortDirection;
 }
 
 export const NO_FILTERS: InboxFilters = {
@@ -77,7 +82,7 @@ export const NO_FILTERS: InboxFilters = {
 export const MORE_FILTERS = ['subcategoryId', 'siteId', 'creatorId', 'assigneeId', 'tagId', 'createdFrom', 'createdTo', 'fieldCode'] as const;
 
 export const filtersOf = (params: InboxParams): InboxFilters => {
-  const { view: _view, page: _page, ...filters } = params;
+  const { view: _view, page: _page, sort: _sort, direction: _direction, ...filters } = params;
   return filters;
 };
 
@@ -98,6 +103,8 @@ export function readInboxParams(search: URLSearchParams): InboxParams {
     createdTo: createdFrom !== undefined && createdTo !== undefined && createdTo < createdFrom ? undefined : createdTo,
     ...fieldFilterOf(search),
     page: pageOf(search.get('page')),
+    sort: oneOf(TICKET_SORTS, search.get('sort')) ?? DEFAULT_SORT,
+    direction: oneOf(SORT_DIRECTIONS, search.get('dir')) ?? DEFAULT_DIRECTION,
   };
 }
 
@@ -127,6 +134,10 @@ export function writeInboxParams(params: InboxParams): URLSearchParams {
   if (params.fieldValue !== undefined) query.set('fv', params.fieldValue);
   if (params.fieldValueTo !== undefined) query.set('fv2', params.fieldValueTo);
   if (params.page > 1) query.set('page', String(params.page));
+  if (params.sort !== DEFAULT_SORT || params.direction !== DEFAULT_DIRECTION) {
+    query.set('sort', params.sort);
+    query.set('dir', params.direction);
+  }
   return query;
 }
 

@@ -31,3 +31,11 @@ export const WithRows: Story = {};
 export const Empty: Story = { args: { rows: [] } };
 export const Loading: Story = { args: { loading: true } };
 export const WithFooter: Story = { args: { footer: 'Mostrando 1–2 de 2' } };
+/** Sortable headers: the column the rows are sorted by shows its direction; the others offer to sort. */
+export const Sortable: Story = {
+  args: {
+    columns: columns.map((column) =>
+      column.key === 'status' ? column : { ...column, sort: { direction: column.key === 'number' ? 'desc' : undefined, onSort: () => undefined } },
+    ),
+  },
+};

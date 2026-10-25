@@ -40,6 +40,8 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
   currentStep: { id: STEP, name: 'Revisión' },
   priority: null,
   workflowPriority: null,
+  lastActivityAt: '2026-10-17T16:00:00.000Z',
+  filteredValue: null,
   sla: null,
   workflowId: id(105),
   workflowVersionId: id(106),

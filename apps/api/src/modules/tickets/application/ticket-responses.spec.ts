@@ -18,6 +18,7 @@ const row = (overrides: Partial<TicketSummaryRow> = {}): TicketSummaryRow => ({
   priorityId: id(6),
   createdAt: new Date('2026-10-18T10:00:00.000Z'),
   closedAt: null,
+  lastActivityAt: new Date('2026-10-18T10:05:00.000Z'),
   tags: [],
   creator: person('Ana', 'Pérez'),
   subcategory: { name: 'Pagos', category: { id: id(7), name: 'Cartera' }, defaultPriority: { id: id(9), name: 'Media', color: null } },
