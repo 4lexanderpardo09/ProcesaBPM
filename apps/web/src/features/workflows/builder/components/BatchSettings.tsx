@@ -1,4 +1,4 @@
-import { BATCH_GROUP_BY, type BatchGroupBy, type FieldDocument, MAX_BATCH_TICKETS } from '@procesabpm/shared';
+import { BATCH_FIELD_TYPES, BATCH_GROUP_BY, type BatchGroupBy, type FieldDocument, MAX_BATCH_TICKETS } from '@procesabpm/shared';
 import { useTranslation } from 'react-i18next';
 import { Select, TextField } from '@/shared/ui';
 import { WholeNumberField } from './WholeNumberField';
@@ -8,6 +8,7 @@ export interface BatchConfig {
   readonly title?: string;
   readonly showFields?: readonly string[];
   readonly groupBy?: BatchGroupBy;
+  readonly groupFieldCode?: string;
 }
 
 /** How many data the tray shows beside each ticket. */
@@ -17,6 +18,8 @@ const HIDDEN_TYPES: ReadonlySet<string> = new Set(['FILE', 'TABLE', 'USER', 'SIT
 
 /** A field the tray can show: one value that reads by itself (a list from presets holds ids, so it is left out). */
 const showable = (field: FieldDocument) => !HIDDEN_TYPES.has(field.type) && field.dataSource === null;
+/** A field the tray can split by: one value that reads by itself; a list from an Excel holds its own text, so it goes. */
+const groupable = (field: FieldDocument) => BATCH_FIELD_TYPES.includes(field.type) && field.dataSource?.['kind'] !== 'PRESET';
 
 /**
  * The step's batch tray: how many tickets go in one batch, its title, up to four data of each ticket beside it and how
@@ -45,8 +48,21 @@ export function BatchSettings({ batch, fields, readOnly, onChange }: { readonly 
         placeholder={t('builder.batch.noGroup')}
         options={BATCH_GROUP_BY.map((value) => ({ value, label: t(`builder.batch.groups.${value}`) }))}
         value={current.groupBy ?? ''}
-        onChange={(event) => set({ groupBy: event.target.value === '' ? undefined : (event.target.value as BatchGroupBy) })}
+        onChange={(event) => {
+          const groupBy = event.target.value === '' ? undefined : (event.target.value as BatchGroupBy);
+          set({ groupBy, groupFieldCode: groupBy === 'FIELD' ? (current.groupFieldCode ?? fields.find(groupable)?.code) : undefined });
+        }}
       />
+      {current.groupBy === 'FIELD' && (
+        <Select
+          label={t('builder.batch.groupField')}
+          disabled={readOnly}
+          placeholder={t('builder.batch.noField')}
+          options={fields.filter(groupable).map((field) => ({ value: field.code, label: `${field.label} (${field.code})` }))}
+          value={current.groupFieldCode ?? ''}
+          onChange={(event) => set({ groupFieldCode: event.target.value === '' ? undefined : event.target.value })}
+        />
+      )}
       {slots.map((code, index) => (
         <Select
           key={`${String(index)}:${code}`}

@@ -1,6 +1,6 @@
 import { isAutomaticStep, PEOPLE_STEP_TYPES } from '../constants.js';
 import { effectiveFieldType } from '../transition-condition.js';
-import { parseBlockConfig } from '../block-config.js';
+import { BATCH_FIELD_TYPES, parseBlockConfig } from '../block-config.js';
 import { type RuleContext } from './context.js';
 
 const TEMPLATE_CODE = /\{\{\s*([A-Z][A-Z0-9_]*)\s*\}\}/g;
@@ -59,6 +59,12 @@ export function checkSteps({ doc, graph, stepById, fieldByCode, problems }: Rule
       if ('batch' in config.config && config.config.batch !== undefined && !step.allowsBatch) problems.error('BATCH_CONFIG_WITHOUT_ALLOWS_BATCH', at);
       const shown = ((config.config.batch as { showFields?: string[] } | undefined)?.showFields ?? []).filter((code) => !fieldByCode.has(code));
       if (shown.length > 0) problems.error('BATCH_FIELD_UNKNOWN', { ...at, params: { codes: shown } });
+      const groupCode = (config.config.batch as { groupFieldCode?: string } | undefined)?.groupFieldCode;
+      if (groupCode !== undefined) {
+        const groupField = fieldByCode.get(groupCode);
+        if (groupField === undefined) problems.error('BATCH_FIELD_UNKNOWN', { ...at, params: { codes: [groupCode] } });
+        else if (!BATCH_FIELD_TYPES.includes(groupField.type) || groupField.dataSource?.['kind'] === 'PRESET') problems.error('BATCH_GROUP_FIELD_INVALID', { ...at, params: { code: groupCode } });
+      }
       const codes = templateCodes(config.config.bodyTemplate);
       const unknown = [...new Set(codes.filter((code) => !fieldByCode.has(code)))];
       if (unknown.length > 0) problems.warning('TEMPLATE_UNKNOWN_FIELD', { ...at, params: { codes: unknown } });

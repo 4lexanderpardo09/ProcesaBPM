@@ -1,21 +1,28 @@
 import { z } from 'zod';
-import { FIELD_CODE_PATTERN, SLA_UNITS, type StepType } from './constants.js';
+import { FIELD_CODE_PATTERN, type FieldType, SLA_UNITS, type StepType } from './constants.js';
 
 const instructions = z.string().max(5000).optional();
 const uuid = z.uuid();
 const fieldCode = z.string().regex(FIELD_CODE_PATTERN);
-/** How a step's batch tray can split its tickets: by company, by the requester's site or department, or by export file. */
-export const BATCH_GROUP_BY = ['COMPANY', 'REQUESTER_SITE', 'REQUESTER_DEPARTMENT', 'EXPORT_CUTOFF'] as const;
+/** How a step's batch tray can split its tickets: by company, by the requester's site or department, by export file or by a field's value. */
+export const BATCH_GROUP_BY = ['COMPANY', 'REQUESTER_SITE', 'REQUESTER_DEPARTMENT', 'EXPORT_CUTOFF', 'FIELD'] as const;
 export type BatchGroupBy = (typeof BATCH_GROUP_BY)[number];
-/** How the batch tray of a step reads: its title, up to four data of the ticket beside each one, and how it splits them. */
+/** Field types whose value reads by itself in the tray: no people or sites to name, no files or tables. */
+export const BATCH_FIELD_TYPES: readonly FieldType[] = ['TEXT', 'TEXTAREA', 'NUMBER', 'CURRENCY', 'SELECT', 'MULTI_SELECT', 'DATE', 'DATETIME', 'DAYS', 'FORMULA', 'CALCULATOR'];
+/**
+ * How the batch tray of a step reads: its title, up to four data of the ticket beside each one, and how it splits them.
+ * `groupFieldCode` is the field whose value splits it, and goes only with `groupBy: 'FIELD'`.
+ */
 const batch = z
   .object({
     maxTickets: z.number().int().min(1).max(500),
     title: z.string().trim().min(1).max(120).optional(),
     showFields: z.array(fieldCode).max(4).optional(),
     groupBy: z.enum(BATCH_GROUP_BY).optional(),
+    groupFieldCode: fieldCode.optional(),
   })
   .strict()
+  .refine((value) => (value.groupBy === 'FIELD') === (value.groupFieldCode !== undefined), { message: 'groupFieldCode goes with groupBy FIELD, and only with it', path: ['groupFieldCode'] })
   .optional();
 /** The ticket cannot leave the step while its line in this export has not come out in a file ("exige corte del plano"). */
 const requiredExportId = uuid.optional();

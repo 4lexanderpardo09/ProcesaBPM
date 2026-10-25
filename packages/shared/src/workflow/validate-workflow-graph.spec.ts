@@ -502,6 +502,20 @@ describe('validateWorkflowGraph: block config', () => {
     expect(codes(task(['AMOUNT']))).toEqual([]);
     expect(codes(task(['AMOUNT', 'GHOST']))).toContain('BATCH_FIELD_UNKNOWN');
   });
+
+  it('the batch tray groups by a field of the version that reads by itself', () => {
+    const task = (batch: Record<string, unknown>) =>
+      withParts({
+        fields: [field('f', 'start', 'BANK', { type: 'TEXT' }), field('g', 'start', 'WHO', { type: 'USER' }), field('h', 'start', 'FIRM', { type: 'SELECT', dataSource: { kind: 'PRESET', preset: 'COMPANIES' } })],
+        steps: [step('start', 'START'), step('task', 'TASK', { allowsBatch: true, config: { batch: { maxTickets: 10, ...batch } } }), step('end', 'END')],
+      });
+    expect(codes(task({ groupBy: 'FIELD', groupFieldCode: 'BANK' }))).toEqual([]);
+    expect(codes(task({ groupBy: 'FIELD', groupFieldCode: 'GHOST' }))).toContain('BATCH_FIELD_UNKNOWN');
+    expect(codes(task({ groupBy: 'FIELD', groupFieldCode: 'WHO' }))).toContain('BATCH_GROUP_FIELD_INVALID');
+    expect(codes(task({ groupBy: 'FIELD', groupFieldCode: 'FIRM' }))).toContain('BATCH_GROUP_FIELD_INVALID');
+    expect(codes(task({ groupBy: 'FIELD' }))).toContain('BLOCK_CONFIG_INVALID');
+    expect(codes(task({ groupBy: 'COMPANY', groupFieldCode: 'BANK' }))).toContain('BLOCK_CONFIG_INVALID');
+  });
 });
 
 describe('validateWorkflowGraph: close_rule REQUIRED', () => {

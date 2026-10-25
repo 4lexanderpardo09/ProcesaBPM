@@ -18,7 +18,7 @@ const ticket = (index: number, name: string) => ({
   values: {},
   subgroup: null,
 });
-const group = { workflowVersionId: id(1), stepId: STEP, stepName: 'Tesorería', workflowName: 'Viáticos', maxTickets: 2, title: null, shownFields: [], groupBy: null, decisions: [{ transitionId: PAID, label: 'Pagado' }], tickets: [ticket(1, 'Ana Pérez'), ticket(2, 'Luis Gómez'), ticket(3, 'Olga Ruiz')] };
+const group = { workflowVersionId: id(1), stepId: STEP, stepName: 'Tesorería', workflowName: 'Viáticos', maxTickets: 2, title: null, shownFields: [], groupBy: null, groupField: null, decisions: [{ transitionId: PAID, label: 'Pagado' }], tickets: [ticket(1, 'Ana Pérez'), ticket(2, 'Luis Gómez'), ticket(3, 'Olga Ruiz')] };
 const form = {
   ticketId: id(101),
   versionId: id(1),
@@ -103,6 +103,17 @@ describe('TicketBatchPage', () => {
     await userEvent.click(within(parts[0]!).getByRole('checkbox', { name: 'Elegir estos 2' }));
     expect(screen.getByText('2 elegidos de máximo 10 por lote')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Elegir el ticket T-1001' })).not.toBeChecked();
+  });
+
+  it('splits the tray by a field, naming each part as the field writes its value', async () => {
+    const at = (index: number, bank: string | undefined) => ({ ...ticket(index, 'Ana Pérez'), values: bank === undefined ? {} : { BANK: bank }, subgroup: bank === undefined ? { key: '', name: '' } : { key: JSON.stringify(bank), name: bank } });
+    const options = [{ value: 'B1', label: 'Bancolombia' }, { value: 'B2', label: 'Davivienda' }];
+    const tray = { ...group, maxTickets: 10, groupBy: 'FIELD', groupField: { code: 'BANK', label: 'Banco', type: 'SELECT', config: { options } }, tickets: [at(1, undefined), at(2, 'B2'), at(3, 'B1')] };
+    renderRoute('/tickets/batch', { handlers: { '/ticket-batches': () => [tray] } });
+
+    await screen.findByRole('heading', { name: 'Tesorería · Viáticos' });
+    const parts = screen.getAllByRole('region').map((region) => region.getAttribute('aria-label')).filter((name) => ['Bancolombia', 'Davivienda', 'Sin dato'].includes(name ?? ''));
+    expect(parts).toEqual(['Davivienda', 'Bancolombia', 'Sin dato']);
   });
 
   it('says when there is nothing to answer in a batch', async () => {
