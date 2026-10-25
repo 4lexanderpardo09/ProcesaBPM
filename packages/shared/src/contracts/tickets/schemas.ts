@@ -182,7 +182,10 @@ export interface TicketSummaryResponse {
   readonly creator: NamedRefResponse;
   readonly subcategory: NamedRefResponse & { readonly category: NamedRefResponse };
   readonly currentStep: NamedRefResponse | null;
+  /** The requester's priority (as in the help desk, the organization's default when they chose none). */
   readonly priority: (NamedRefResponse & { readonly color: string | null }) | null;
+  /** The workflow's priority: the one of its subcategory, shown and filtered apart from the requester's. */
+  readonly workflowPriority: (NamedRefResponse & { readonly color: string | null }) | null;
   /** Who holds the current step now (empty when closed, parked on a WAIT block or awaiting dispatch). */
   readonly assignees: readonly TicketAssigneeResponse[];
   readonly sla: TicketSlaResponse | null;
@@ -208,6 +211,7 @@ export const ticketSummaryResponseSchema = z.object({
   subcategory: namedRefSchema.extend({ category: namedRefSchema }),
   currentStep: namedRefSchema.nullable(),
   priority: namedRefSchema.extend({ color: z.string().nullable() }).nullable(),
+  workflowPriority: namedRefSchema.extend({ color: z.string().nullable() }).nullable(),
   assignees: z.array(z.object({ userId: uuidSchema, name: z.string(), type: assigneeTypeSchema, assignedAt: z.string() })),
   sla: z.object({ dueAt: z.string(), overdue: z.boolean(), paused: z.boolean() }).nullable(),
 }) satisfies z.ZodType<TicketSummaryResponse>;

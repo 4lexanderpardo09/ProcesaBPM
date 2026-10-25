@@ -3,15 +3,20 @@ import { hexColorSchema, nameSchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 
 // ---- Priorities ----
+/**
+ * `isDefault` marks the priority a ticket takes when its requester chooses none (the help desk's «Media»); marking one
+ * unmarks the others. A ticket also shows its workflow's priority (the subcategory's), apart from this one.
+ */
 export const createPriorityRequestSchema = z.object({
   name: nameSchema,
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   color: hexColorSchema.optional(),
+  isDefault: z.boolean().optional(),
 });
 export type CreatePriorityRequest = z.infer<typeof createPriorityRequestSchema>;
 
 export const updatePriorityRequestSchema = z
-  .object({ name: nameSchema, sortOrder: z.number().int().min(0).max(10_000), color: hexColorSchema.nullable() })
+  .object({ name: nameSchema, sortOrder: z.number().int().min(0).max(10_000), color: hexColorSchema.nullable(), isDefault: z.boolean() })
   .partial()
   .refine((value) => Object.keys(value).length > 0, 'Send at least one field');
 export type UpdatePriorityRequest = z.infer<typeof updatePriorityRequestSchema>;
@@ -22,6 +27,7 @@ export const priorityResponseSchema = z.object({
   sortOrder: z.number().int(),
   color: z.string().nullable(),
   isActive: z.boolean(),
+  isDefault: z.boolean(),
 });
 export type PriorityResponse = z.infer<typeof priorityResponseSchema>;
 

@@ -23,9 +23,9 @@ export const catalog = {
     new: 'Nueva subcategoría',
     edit: 'Editar subcategoría',
     descriptionHint: 'Quien abre un ticket la ve al elegir la subcategoría.',
-    defaultPriority: 'Prioridad por defecto',
-    defaultPriorityHint: 'La que recibe un ticket nuevo si la persona no elige otra.',
-    noPriority: 'Sin prioridad por defecto',
+    defaultPriority: 'Prioridad del flujo',
+    defaultPriorityHint: 'Se muestra y se filtra aparte de la que elige quien crea el ticket.',
+    noPriority: 'Sin prioridad del flujo',
   },
   priorities: {
     title: 'Prioridades',
@@ -37,6 +37,8 @@ export const catalog = {
     orderInvalid: 'Escribe un número entero entre 0 y {{max}}.',
     color: 'Color',
     withColor: 'Usar un color propio',
+    default: 'Por defecto: la toma un ticket cuando quien lo crea no elige prioridad (solo una puede serlo)',
+    defaultTag: 'Por defecto',
   },
   errorTypes: {
     title: 'Tipos de error',

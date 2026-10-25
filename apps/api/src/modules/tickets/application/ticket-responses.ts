@@ -42,6 +42,7 @@ export const toSummary = (row: TicketSummaryRow, now: Date): TicketSummaryRespon
   subcategory: { id: row.subcategoryId, name: row.subcategory.name, category: row.subcategory.category },
   currentStep: row.currentStep,
   priority: row.priority,
+  workflowPriority: row.subcategory.defaultPriority,
   assignees: row.assignees.map((assignee) => ({ userId: assignee.userId, name: fullName(assignee.membership), type: assignee.type, assignedAt: assignee.assignedAt.toISOString() })),
   sla: slaOf(row, now),
 });

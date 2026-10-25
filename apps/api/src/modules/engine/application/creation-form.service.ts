@@ -34,7 +34,9 @@ export class CreationFormService {
       const published = await this.versions.findForSubcategory(tx, tenantId, subcategoryId);
       if (published === null) throw new WorkflowNotAvailableError();
       assertRunnable(published.document);
-      const record = { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId, workflowId: published.workflowId, priorityId: subcategory.defaultPriorityId, creatorId: requester.userId };
+      // As in the help desk, the requester's priority starts at the organization's default, not the workflow's.
+      const defaultPriorityId = await this.people.findDefaultPriorityId(tx, tenantId);
+      const record = { companyId: company.id, departmentId: requester.departmentId, siteId: requester.siteId, subcategoryId, workflowId: published.workflowId, priorityId: defaultPriorityId, creatorId: requester.userId };
       if (!actor.mayCreate(requesterId === actor.userId ? 'create' : 'create_for_others', record)) throw new PermissionDeniedError('Not allowed to create tickets for this person');
       const starts = await this.gate.allowedStarts(tx, tenantId, published.document.steps.filter((step) => step.type === 'START'), requester, company);
       if (starts.length === 0) throw new InitiatorNotAllowedError();
@@ -43,7 +45,7 @@ export class CreationFormService {
         workflowId: published.workflowId,
         versionId: published.versionId,
         companyId: company.id,
-        defaultPriorityId: subcategory.defaultPriorityId,
+        defaultPriorityId,
         starts: starts.map((start) => ({ stepId: start.id, name: start.name, description: start.description, fields: formFieldsOf(captureFieldsFor(published.document.fields, 'CREATION', start.id)) })),
       };
     });

@@ -1269,6 +1269,8 @@ model Priority {
   sortOrder Int     @default(0) @map("sort_order")
   color     String?
   isActive  Boolean @default(true) @map("is_active")
+  /// The priority a ticket takes when its requester chooses none (one per tenant: partial unique index in SQL).
+  isDefault Boolean @default(false) @map("is_default")
 
   tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   subcategories Subcategory[]

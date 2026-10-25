@@ -21,6 +21,7 @@ const detail = {
   subcategory: { id: id(4), name: 'Pagos', category: { id: id(11), name: 'Cartera' } },
   currentStep: { id: id(5), name: 'Revisión' },
   priority: null,
+  workflowPriority: null,
   sla: null,
   workflowId: id(6),
   workflowVersionId: id(7),

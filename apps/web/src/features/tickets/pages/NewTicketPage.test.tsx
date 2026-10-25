@@ -42,9 +42,9 @@ const catalog = {
 
 const priorities = {
   items: [
-    { id: MEDIUM, name: 'Media', sortOrder: 2, color: null, isActive: true },
-    { id: HIGH, name: 'Alta', sortOrder: 1, color: null, isActive: true },
-    { id: id(42), name: 'Vieja', sortOrder: 3, color: null, isActive: false },
+    { id: MEDIUM, name: 'Media', sortOrder: 2, color: null, isActive: true, isDefault: true },
+    { id: HIGH, name: 'Alta', sortOrder: 1, color: null, isActive: true, isDefault: false },
+    { id: id(42), name: 'Vieja', sortOrder: 3, color: null, isActive: false, isDefault: false },
   ],
   page: 1,
   pageSize: 100,

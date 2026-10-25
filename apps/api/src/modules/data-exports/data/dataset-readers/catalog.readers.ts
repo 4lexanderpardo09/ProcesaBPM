@@ -7,7 +7,7 @@ export const CATALOG_READERS = {
   priorities: {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`
-      SELECT tenant_id, id, name, sort_order, color, is_active
+      SELECT tenant_id, id, name, sort_order, color, is_active, is_default
       FROM priorities WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
   },

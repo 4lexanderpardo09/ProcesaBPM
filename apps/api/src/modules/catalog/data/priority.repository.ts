@@ -9,6 +9,7 @@ export interface PriorityRow {
   readonly sortOrder: number;
   readonly color: string | null;
   readonly isActive: boolean;
+  readonly isDefault: boolean;
 }
 
 export interface PriorityWrite {
@@ -16,9 +17,10 @@ export interface PriorityWrite {
   readonly sortOrder?: number;
   readonly color?: string | null;
   readonly isActive?: boolean;
+  readonly isDefault?: boolean;
 }
 
-const SELECT = { id: true, name: true, sortOrder: true, color: true, isActive: true } as const;
+const SELECT = { id: true, name: true, sortOrder: true, color: true, isActive: true, isDefault: true } as const;
 
 @Injectable()
 export class PriorityRepository {
@@ -35,8 +37,13 @@ export class PriorityRepository {
     return tx.priority.findFirst({ where: { tenantId, id }, select: SELECT });
   }
 
-  create(tx: TenantTransaction, tenantId: string, data: { name: string; sortOrder?: number; color?: string }): Promise<PriorityRow> {
+  create(tx: TenantTransaction, tenantId: string, data: { name: string; sortOrder?: number; color?: string; isDefault?: boolean }): Promise<PriorityRow> {
     return tx.priority.create({ data: { tenantId, ...data }, select: SELECT });
+  }
+
+  /** Leaves the tenant without a default priority (before marking another one: one default at most). */
+  async clearDefault(tx: TenantTransaction, tenantId: string): Promise<void> {
+    await tx.priority.updateMany({ where: { tenantId, isDefault: true }, data: { isDefault: false } });
   }
 
   async update(tx: TenantTransaction, tenantId: string, id: string, data: PriorityWrite): Promise<void> {

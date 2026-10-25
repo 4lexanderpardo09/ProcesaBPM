@@ -43,6 +43,7 @@ function ticketsApi(byView: Partial<Record<View, readonly FakeTicket[]>>) {
       subcategory: { id: ticketId(902), name: 'Pagos', category: { id: ticketId(903), name: 'Cartera' } },
       currentStep: null,
       priority: null,
+      workflowPriority: null,
       assignees: [],
       sla: null,
       ...item,
@@ -103,12 +104,17 @@ describe('TicketInboxPage', () => {
     expect(router.state.location.search).toBe('?q=cr%C3%A9dito&msgs=1');
     await userEvent.click(screen.getByRole('checkbox', { name: 'Buscar también en la descripción y los comentarios' }));
     await vi.waitFor(() => expect(api.listQueries().at(-1)?.has('searchMessages')).toBe(false));
-    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Prioridad' }), 'Alta');
+    await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Prioridad del usuario' }), 'Alta');
     await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('priorityId')).toBe(PRIORITY));
+    // The workflow's priority is filtered apart from the requester's, as in the help desk.
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Prioridad del flujo' }), 'Alta');
+    await vi.waitFor(() => expect(api.listQueries().at(-1)?.get('workflowPriorityId')).toBe(PRIORITY));
     await userEvent.selectOptions(await screen.findByRole('combobox', { name: 'Categoría' }), 'Cartera');
 
-    await vi.waitFor(() => expect(api.listQueries().at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&categoryId=${CATEGORY}&view=assigned&page=1&pageSize=25`));
-    expect(api.queries.filter((search) => !search.has('pageSize')).at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&categoryId=${CATEGORY}`);
+    await vi.waitFor(() =>
+      expect(api.listQueries().at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&workflowPriorityId=${PRIORITY}&categoryId=${CATEGORY}&view=assigned&page=1&pageSize=25`),
+    );
+    expect(api.queries.filter((search) => !search.has('pageSize')).at(-1)?.toString()).toBe(`search=cr%C3%A9dito&priorityId=${PRIORITY}&workflowPriorityId=${PRIORITY}&categoryId=${CATEGORY}`);
 
     await userEvent.click(screen.getByRole('button', { name: 'Quitar filtros' }));
     expect(router.state.location.search).toBe('');

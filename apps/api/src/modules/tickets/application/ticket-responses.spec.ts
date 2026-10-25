@@ -20,7 +20,7 @@ const row = (overrides: Partial<TicketSummaryRow> = {}): TicketSummaryRow => ({
   closedAt: null,
   tags: [],
   creator: person('Ana', 'Pérez'),
-  subcategory: { name: 'Pagos', category: { id: id(7), name: 'Cartera' } },
+  subcategory: { name: 'Pagos', category: { id: id(7), name: 'Cartera' }, defaultPriority: { id: id(9), name: 'Media', color: null } },
   currentStep: { id: id(5), name: 'Revisión' },
   priority: { id: id(6), name: 'Alta', color: '#be123c' },
   assignees: [{ userId: id(8), type: 'PRIMARY', assignedAt: new Date('2026-10-18T10:05:00.000Z'), membership: person('Luis', 'Gómez') }],
@@ -41,6 +41,7 @@ describe('toSummary', () => {
       subcategory: { id: id(4), name: 'Pagos', category: { id: id(7), name: 'Cartera' } },
       currentStep: { id: id(5), name: 'Revisión' },
       priority: { id: id(6), name: 'Alta', color: '#be123c' },
+      workflowPriority: { id: id(9), name: 'Media', color: null },
       assignees: [{ userId: id(8), name: 'Luis Gómez', type: 'PRIMARY', assignedAt: '2026-10-18T10:05:00.000Z' }],
     });
   });

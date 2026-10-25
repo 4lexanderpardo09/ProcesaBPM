@@ -27,6 +27,7 @@ const UPCOMING_DAYS_MAX = 365;
 /** The filters that pick one record by id: their key, their name in the inbox URL and in the API query. */
 const ID_FILTERS = [
   { key: 'priorityId', url: 'priority' },
+  { key: 'workflowPriorityId', url: 'workflowPriority' },
   { key: 'categoryId', url: 'category' },
   { key: 'subcategoryId', url: 'subcategory' },
   { key: 'companyId', url: 'company' },

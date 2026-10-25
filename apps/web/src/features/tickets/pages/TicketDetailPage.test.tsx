@@ -39,6 +39,7 @@ const detail = (overrides: Record<string, unknown> = {}) => ({
   subcategory: { id: id(104), name: 'Pagos', category: { id: id(108), name: 'Cartera' } },
   currentStep: { id: STEP, name: 'Revisión' },
   priority: null,
+  workflowPriority: null,
   sla: null,
   workflowId: id(105),
   workflowVersionId: id(106),
@@ -538,12 +539,15 @@ describe('TicketDetailPage', () => {
     expect(screen.getByRole('list', { name: 'Convenciones del diagrama' })).toHaveTextContent('RecorridoPaso actualPendiente');
   });
 
-  it('shows the SLA left and the priority', async () => {
+  it('shows the SLA left and both priorities apart, the requester\'s and the workflow\'s, as in the help desk', async () => {
     const dueAt = new Date(Date.now() + (2 * 24 + 3) * 3_600_000 + 60_000).toISOString();
-    renderRoute(base, { handlers: ticketHandlers({ [base]: () => detail({ sla: { dueAt, overdue: false, paused: false }, priority: { id: id(700), name: 'Alta', color: null } }) }) });
+    renderRoute(base, {
+      handlers: ticketHandlers({ [base]: () => detail({ sla: { dueAt, overdue: false, paused: false }, priority: { id: id(700), name: 'Alta', color: null }, workflowPriority: { id: id(701), name: 'Media', color: null } }) }),
+    });
 
     expect(await screen.findByText('SLA 2 d 3 h')).toBeInTheDocument();
-    expect(screen.getByText('Prioridad Alta')).toBeInTheDocument();
+    expect(screen.getByText('Prioridad Alta (usuario)')).toBeInTheDocument();
+    expect(screen.getByText('Prioridad Media (flujo)')).toBeInTheDocument();
   });
 
   it('marks an overdue ticket and explains an open incident', async () => {
@@ -910,7 +914,7 @@ describe('TicketDetailPage', () => {
     });
 
     it('edits the subject and the priority, sending only what changed and keeping the rich description untouched', async () => {
-      const priorities = { items: [{ id: id(730), name: 'Alta', sortOrder: 1, color: null, isActive: true }, { id: id(731), name: 'Retirada', sortOrder: 2, color: null, isActive: false }], page: 1, pageSize: 100, total: 2 };
+      const priorities = { items: [{ id: id(730), name: 'Alta', sortOrder: 1, color: null, isActive: true, isDefault: false }, { id: id(731), name: 'Retirada', sortOrder: 2, color: null, isActive: false, isDefault: false }], page: 1, pageSize: 100, total: 2 };
       const { fake } = renderRoute(base, {
         handlers: ticketHandlers({
           '/priorities': () => priorities,

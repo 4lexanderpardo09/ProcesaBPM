@@ -15,7 +15,7 @@ export interface TicketDetailHeaderProps {
   readonly actions?: ReactNode;
 }
 
-/** Where the ticket sits (back to the inbox), its number and title, and its state, SLA and priority at a glance. */
+/** Where the ticket sits (back to the inbox), its number and title, and its state, SLA and both priorities (the requester's and the workflow's) at a glance. */
 export function TicketDetailHeader({ ticket, sla, actions }: TicketDetailHeaderProps) {
   const { t } = useTranslation('tickets');
   return (
@@ -31,6 +31,7 @@ export function TicketDetailHeader({ ticket, sla, actions }: TicketDetailHeaderP
             <TicketStatusBadge status={ticket.status} />
             {sla !== undefined && <Badge tone={sla.tone}>{slaText(sla)}</Badge>}
             {ticket.priority !== null && <Badge>{t('detail.priority', { name: ticket.priority.name })}</Badge>}
+            {ticket.workflowPriority !== null && <Badge>{t('detail.workflowPriority', { name: ticket.workflowPriority.name })}</Badge>}
           </div>
         </div>
         {actions}

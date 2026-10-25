@@ -40,6 +40,7 @@ export interface CreationFormResponse {
   readonly workflowId: string;
   readonly versionId: string;
   readonly companyId: string;
+  /** The organization's default priority, preselected as the requester's (the workflow's own is shown apart). */
   readonly defaultPriorityId: string | null;
   readonly starts: readonly CreationFormStart[];
 }
