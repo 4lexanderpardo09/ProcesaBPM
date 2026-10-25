@@ -8,9 +8,9 @@ export interface Channels {
 /**
  * As in the help desk, a notice is mailed by default only when it hands someone work (an assignment); the others stay
  * in the app unless the person asks for them by e-mail too. A workflow's own notification block (`SYSTEM`) mails when
- * its author chose to.
+ * its author chose to. The storage warning is an alert to the administrators, not a ticket notice, so it keeps its e-mail.
  */
-const MAILED_BY_DEFAULT: ReadonlySet<NotificationTypeValue> = new Set(['TICKET_ASSIGNED', 'SYSTEM']);
+const MAILED_BY_DEFAULT: ReadonlySet<NotificationTypeValue> = new Set(['TICKET_ASSIGNED', 'STORAGE_QUOTA', 'SYSTEM']);
 
 export function defaultChannels(type: NotificationTypeValue): Channels {
   return { inApp: true, email: MAILED_BY_DEFAULT.has(type) };

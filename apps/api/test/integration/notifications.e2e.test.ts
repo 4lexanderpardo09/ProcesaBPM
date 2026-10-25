@@ -321,7 +321,7 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
       const before = (await fresh.client.get('/notifications/preferences').expect(200)).body as Array<{ type: string; inApp: boolean; email: boolean }>;
       expect(before).toHaveLength(13);
       expect(before.every((preference) => preference.inApp)).toBe(true);
-      expect(before.filter((preference) => preference.email).map((preference) => preference.type)).toEqual(['TICKET_ASSIGNED', 'SYSTEM']);
+      expect(before.filter((preference) => preference.email).map((preference) => preference.type)).toEqual(['TICKET_ASSIGNED', 'STORAGE_QUOTA', 'SYSTEM']);
       expect((await fresh.client.put('/notifications/preferences/TICKET_CLOSED', { inApp: false, email: false }).expect(200)).body).toEqual({ type: 'TICKET_CLOSED', inApp: false, email: false });
       const after = (await fresh.client.get('/notifications/preferences').expect(200)).body as typeof before;
       expect(after.filter((preference) => !preference.inApp)).toEqual([{ type: 'TICKET_CLOSED', inApp: false, email: false }]);
