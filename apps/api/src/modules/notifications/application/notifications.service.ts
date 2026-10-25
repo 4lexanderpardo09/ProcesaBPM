@@ -17,7 +17,7 @@ import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { NotificationRepository } from '../data/notification.repository.js';
-import { DEFAULT_CHANNELS } from '../domain/channels.js';
+import { defaultChannels } from '../domain/channels.js';
 
 /** A person's own notifications and preferences: every call is scoped to the caller, in the query and by row-level security. */
 @Injectable()
@@ -61,7 +61,7 @@ export class NotificationsService {
   preferences(who: Principal): Promise<NotificationPreferenceResponse[]> {
     return this.runner.withTenantTransaction(async (tx) => {
       const stored = new Map((await this.notifications.preferences(tx, who.tenantId, who.userId)).map((preference) => [preference.type, preference]));
-      return NOTIFICATION_TYPES.map((type) => stored.get(type) ?? { type, ...DEFAULT_CHANNELS });
+      return NOTIFICATION_TYPES.map((type) => stored.get(type) ?? { type, ...defaultChannels(type) });
     });
   }
 

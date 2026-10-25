@@ -325,6 +325,7 @@ export const tickets = {
       PARALLEL_TASK_COMPLETED: 'completó su firma',
     },
     comment: {
+      closed: 'El ticket está cerrado: ya no recibe comentarios. Si hace falta algo más, reábrelo.',
       template: 'Insertar plantilla',
       chooseTemplate: 'Elige una plantilla',
       clear: 'Limpiar',

@@ -836,7 +836,7 @@ describe('TicketDetailPage', () => {
       const subtypes = { items: [{ id: id(710), errorTypeId: id(701), name: 'Faltó un soporte', description: null, isActive: true }], page: 1, pageSize: 100, total: 1 };
       const { fake } = renderRoute(base, {
         handlers: ticketHandlers({
-          [base]: () => detail({ status: 'CLOSED', openVisit: null, closedAt: at, closedById: OTHER, closedBy: { id: OTHER, name: 'Luis Gómez' }, actions: allowed('reopen') }),
+          [base]: () => detail({ status: 'CLOSED', openVisit: null, closedAt: at, closedById: OTHER, closedBy: { id: OTHER, name: 'Luis Gómez' }, actions: { ...allowed('reopen'), comment: false } }),
           '/error-types': () => types,
           [`/error-types/${id(701)}/subtypes`]: () => subtypes,
           [`${base}/reopen`]: () => mutation,
@@ -844,6 +844,9 @@ describe('TicketDetailPage', () => {
       });
 
       await userEvent.click(await screen.findByRole('button', { name: 'Reabrir ticket' }));
+      // A closed ticket takes no more comments, as in the help desk.
+      expect(screen.queryByRole('textbox', { name: 'Agregar un comentario' })).not.toBeInTheDocument();
+      expect(screen.getByText('El ticket está cerrado: ya no recibe comentarios. Si hace falta algo más, reábrelo.')).toBeInTheDocument();
       const dialog = screen.getByRole('dialog', { name: 'Reabrir ticket' });
       await userEvent.click(within(dialog).getByRole('button', { name: 'Reabrir' }));
       expect(within(dialog).getByRole('combobox', { name: /Tipo de error/ })).toHaveAccessibleDescription('Elige el tipo de error.');

@@ -46,6 +46,21 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - **Paso del aprobador sin aprobador:** se elige a mano entre los miembros de la empresa (`CHOOSE` en la vista previa, `assigneeId` al enviar), en vez de fallar con `APPROVER_NOT_FOUND`.
   - **Web:** «Firmantes por elegir» en el diálogo de avanzar y al crear la solicitud, con «Omitir esta firma».
   - **Por confirmar:** un cargo con varios titulares sigue tomando al de menos carga (la mesa deja elegir); firmar la última firma paralela no tiene vista previa, así que si el paso que sigue tiene firmantes sin resolver solo muestra el aviso.
+- **A quién se avisa, como la mesa (2026-10-25, `feat/notify-like-help-desk`, decisión B4 del usuario):**
+  - **Destinatarios por evento** (`recipient-policy.ts`):
+    - crear: el solicitante, aunque lo haya creado él (la constancia que manda la mesa), y los observadores;
+    - asignar: la persona asignada;
+    - avanzar y cada firma paralela: solo los observadores;
+    - cerrar: el solicitante, todos los que tuvieron el ticket (responsables de sus relojes) y los observadores;
+    - reabrir: el solicitante y quien lo tiene de nuevo;
+    - comentar: nadie;
+    - novedad: a quien se le entrega; al resolverla, a quien recupera el ticket;
+    - vencido: el responsable, sin observadores.
+  - **Se queda de ProcesaBPM:**
+    - el preaviso al 80 % (solo al responsable);
+    - nadie recibe aviso de lo que hizo él mismo, salvo la constancia de creación.
+  - **Correo por defecto** solo para asignaciones, bloques de notificación y el aviso de almacenamiento a los administradores (`defaultChannels`). Cada persona puede activar más en sus preferencias.
+- **No se comenta un ticket cerrado (2026-10-25, `feat/no-comments-on-closed`, decisión B11 del usuario: como la mesa):** `POST /tickets/:id/comments` responde 422 `TICKET_NOT_OPEN` con el ticket cerrado (en pausa sí se comenta). La acción `comment` sale apagada y la actividad dice «El ticket está cerrado: ya no recibe comentarios. Si hace falta algo más, reábrelo.».
 - **Ranking como la mesa (2026-10-25, `feat/ranking-like-help-desk`, decisión B5 del usuario):**
   - **Fórmula:** con n gestionados (cada vez que la persona tuvo un paso: sus relojes, como las asignaciones de la mesa), o a tiempo y e errores de proceso:
     - puntaje = 70·o/n + 30·(1 − e/n);

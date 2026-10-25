@@ -11,9 +11,10 @@ import { LockedTicketLoader, type TicketActor } from './locked-ticket.js';
 import { SubmissionFilesChecker } from './submission-files.js';
 
 /**
- * A comment on a ticket, with files if the person attaches any. It does not move the ticket and is allowed in
- * any status (people keep talking after a ticket is closed), but the caller must be able to see the ticket and
- * hold the `comment` permission for this very ticket. The row is locked like for any other action on a ticket.
+ * A comment on a ticket, with files if the person attaches any. It does not move the ticket. As in the help desk, a
+ * closed ticket takes no more comments (422 `TICKET_NOT_OPEN`; reopen it instead); a paused one does. The caller must
+ * be able to see the ticket and hold the `comment` permission for this very ticket. The row is locked like for any
+ * other action on a ticket, so a comment racing a close is decided after it.
  */
 @Injectable()
 export class CommentTicketService {
@@ -32,7 +33,7 @@ export class CommentTicketService {
       const { tenantId } = this.context.require();
       const at = this.clock.now();
       const { ticket } = await this.loader.lockForAction(tx, tenantId, ticketId, actor);
-      const refusal = commentRefusal(await actor.can(tx, ticket.id, 'comment'));
+      const refusal = commentRefusal(await actor.can(tx, ticket.id, 'comment'), ticket.status);
       if (refusal !== null) throw refusal;
       const commentHtml = sanitizeRichText(request.comment);
       if (commentHtml === '') throw new CommentRequiredError();

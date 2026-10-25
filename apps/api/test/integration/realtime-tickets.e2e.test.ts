@@ -161,7 +161,10 @@ describe('realtime tickets and notifications: subscriptions and per-recipient au
       expect((await first).unreadCount).toBe(expected);
       expect((await second).unreadCount).toBe(expected);
       await routerIdle();
-      expect(requesterEvents.filter(([event]) => event === 'notifications.changed')).toEqual([]);
+      // The requester gets the receipt of the creation (as in the help desk), with their own counter.
+      const ownCount = (await a.requester.client.get('/notifications/unread-count').expect(200)).body.count as number;
+      const toRequester = requesterEvents.filter(([event]) => event === 'notifications.changed').map(([, payload]) => (payload as { unreadCount: number }).unreadCount);
+      expect(toRequester.at(-1)).toBe(ownCount);
 
       // A bare signal (as the worker sends it) is only a hint: the counter is read fresh from the database.
       const again = nextEvent<{ unreadCount: number }>(tab1, 'notifications.changed');

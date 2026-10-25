@@ -125,7 +125,7 @@ describe('ticketActionsOf', () => {
   describe('closed ticket', () => {
     const closed = (overrides: Partial<TicketActionState> = {}) => state({ status: 'CLOSED', visit: null, step: undefined, hasDecisionExit: false, assignees: [], hasReopenTarget: true, grants: ALL, ...overrides });
 
-    it('is reopened and commented on, nothing else', () => expect(allowed(closed())).toEqual(['comment', 'reopen']));
+    it('is reopened, nothing else: no more comments either', () => expect(allowed(closed())).toEqual(['reopen']));
     it('is not reopened without the permission', () => expect(ticketActionsOf(closed({ grants: { ...ALL, reopen: false } })).reopen).toBe(false));
     it('one that never reached a person has nowhere to reopen into', () => {
       expect(ticketActionRefusals(closed({ hasReopenTarget: false })).reopen).toBeInstanceOf(InvalidReopenStepError);
