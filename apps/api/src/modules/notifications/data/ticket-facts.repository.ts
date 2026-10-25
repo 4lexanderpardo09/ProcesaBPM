@@ -52,6 +52,12 @@ export class TicketFactsRepository {
     return tx.ticketAssignee.findMany({ where: { tenantId, ticketId }, select: { userId: true, type: true }, orderBy: { userId: 'asc' } });
   }
 
+  /** Everybody who was ever responsible for a step of the ticket (each clock has its person), as the help desk tells on closing. */
+  async participantIds(tx: TenantTransaction, tenantId: string, ticketId: string): Promise<string[]> {
+    const rows = await tx.ticketSlaClock.findMany({ where: { tenantId, ticketId, responsibleId: { not: null } }, select: { responsibleId: true }, distinct: ['responsibleId'] });
+    return rows.flatMap((row) => (row.responsibleId === null ? [] : [row.responsibleId]));
+  }
+
   /** People who observe the workflow: by name, through an active group or by position. Resolved now, so changes apply at once. */
   async observerIds(tx: TenantTransaction, tenantId: string, workflowId: string): Promise<string[]> {
     const observers = await tx.workflowObserver.findMany({ where: { tenantId, workflowId }, select: { userId: true, groupId: true, positionId: true } });

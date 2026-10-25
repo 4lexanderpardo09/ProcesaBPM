@@ -267,13 +267,14 @@ describe('files on tickets: attachments, FILE fields, comments, closing document
       expect((await fileRow(theirs)).linked_at).toBeNull();
     });
 
-    it('closing documents get the CLOSING role, and comments are still allowed on the closed ticket', async () => {
+    it('a ticket closed by a transition takes no more comments (as in the help desk)', async () => {
       const closing = await upload(worker, 'closing.pdf');
       await worker.client.post(`/tickets/${ticketId}/transition`, { transitionId: flow.transition.Done!, visitId, values: {}, attachments: [closing] }).expect(200);
       expect((await world.ticketRow(ticketId)).status).toBe('CLOSED');
       const late = await upload(requester, 'late.pdf');
-      await requester.client.post(`/tickets/${ticketId}/comments`, { comment: 'thanks', attachments: [late] }).expect(201);
-      expect((await documentsOf(ticketId)).some((document) => document.file.id === late)).toBe(true);
+      await requester.client.post(`/tickets/${ticketId}/comments`, { comment: 'thanks', attachments: [late] }).expect(422);
+      const documents = await documentsOf(ticketId);
+      expect(documents.some((document) => document.file.id === late)).toBe(false);
     });
 
     it('a ticket closed with the close action stores its documents as CLOSING', async () => {

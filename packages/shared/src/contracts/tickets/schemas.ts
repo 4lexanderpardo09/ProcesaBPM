@@ -8,6 +8,17 @@ const values = z.record(z.string(), z.unknown()).default({});
 /** An HTML fragment, sanitized by the server; the length limit applies to what is sent. */
 const comment = z.string().trim().min(1).max(RICH_TEXT_MAX).optional();
 /**
+ * Who signs in place of each signer of the next PARALLEL step that resolved to nobody (a position without holders, no
+ * approver, a person no longer active): one of the company's members, or `null` to leave that signature out. The
+ * preview lists them as `signerChoices`.
+ */
+export const signerChoicesSchema = z
+  .array(z.object({ signerId: uuidSchema, userId: uuidSchema.nullable() }))
+  .max(50)
+  .refine((list) => new Set(list.map((choice) => choice.signerId)).size === list.length, 'One choice per signer')
+  .optional();
+export type SignerChoices = NonNullable<z.infer<typeof signerChoicesSchema>>;
+/**
  * The inboxes: created by me, assigned to me now, observed, all I may read; and, like the help desk, the ones I worked
  * on before (`history`), the ones reopened, and those with errors I reported or that were attributed to me.
  */
@@ -29,6 +40,7 @@ export const createTicketRequestSchema = z.object({
   values,
   /** Who takes the first people step when that step has `manual_selection`. */
   assigneeId: uuidSchema.optional(),
+  signerChoices: signerChoicesSchema,
   attachments: attachmentIdsSchema,
 });
 export type CreateTicketRequest = z.infer<typeof createTicketRequestSchema>;
@@ -59,6 +71,7 @@ export const transitionTicketRequestSchema = z.object({
   values,
   comment,
   assigneeId: uuidSchema.optional(),
+  signerChoices: signerChoicesSchema,
   attachments: attachmentIdsSchema,
   /**
    * The signature drawn (or chosen) when answering the step: the caller's own confirmed PNG or JPEG upload. The step's
@@ -122,6 +135,7 @@ export const parallelTaskActionRequestSchema = z.object({
   visitId: uuidSchema,
   comment,
   assigneeId: uuidSchema.optional(),
+  signerChoices: signerChoicesSchema,
   /** Only when signing: the signature drawn at that moment (see `transitionTicketRequestSchema`). */
   signatureFileId: uuidSchema.optional(),
 });

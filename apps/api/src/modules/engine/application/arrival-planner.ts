@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AssigneeCandidate, AssigneeSelectionRequiredError, cutoffDeadline, type CutoffTerm, type FormulaFailure, InvalidCalendarError, type NextAssignment, type RouteHop, routeThroughAutomaticBlocks, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { type AssigneeCandidate, AssigneeSelectionRequiredError, type SignerChoice, type SignerChoices, cutoffDeadline, type CutoffTerm, type FormulaFailure, InvalidCalendarError, type NextAssignment, type RouteHop, routeThroughAutomaticBlocks, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { type OpenedSla, openSla, type SlaTerms } from '../../sla/domain/clock-math.js';
 import { type ResolvedCalendar, TicketContextRepository } from '../data/ticket-context.repository.js';
@@ -29,6 +29,8 @@ export interface ArrivalRequest {
   readonly timeZone: string;
   readonly at: Date;
   readonly chosenAssigneeId: string | undefined;
+  /** Who signs for the signers of a PARALLEL step that resolve to nobody (see `signerChoicesSchema`). */
+  readonly signerChoices?: SignerChoices | undefined;
   /** People who get the step as they are (a reopening gives it back to its last holders): the assignment mode is not asked. */
   readonly holders?: readonly string[];
   /** A deliberate reopening is not bound by the step's `max_loops`. */
@@ -54,7 +56,7 @@ export type Arrival =
 export type ArrivalPreview =
   | { readonly kind: 'END'; readonly hops: readonly RouteHop[] }
   | { readonly kind: 'WAIT'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly resumeAt: Date }
-  | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly assignment: NextAssignment; readonly people: readonly AssigneeCandidate[] };
+  | { readonly kind: 'PEOPLE'; readonly hops: readonly RouteHop[]; readonly step: StepDocument; readonly assignment: NextAssignment; readonly people: readonly AssigneeCandidate[]; readonly signerChoices: readonly SignerChoice[] };
 
 const SIDE_EFFECT_OUTBOX: Readonly<Record<string, string>> = { DOCUMENT: 'block.document', NOTIFICATION: 'block.notification', WEBHOOK: 'block.webhook', EXPORT: 'block.export' };
 
@@ -129,13 +131,24 @@ export class ArrivalPlanner {
   ) {}
 
   private async signers(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
-    const userIds = await this.resolver.signersFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, ticketId: request.ticketId, at: request.at });
+    const userIds = await this.resolver.signersFor(tx, step, ticketOf(request), request.signerChoices);
     return { type: 'PARALLEL' as const, userIds };
   }
 
+  /**
+   * The candidates and how they are picked. As in the help desk, a step for the approver with no approver to find is
+   * not stuck: its approver is chosen by hand among the company's members.
+   */
+  private async choice(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
+    const ticket = ticketOf(request);
+    const candidates = await this.resolver.candidatesFor(tx, step, ticket);
+    if (step.assignmentMode !== 'APPROVER' || candidates.length > 0) return { candidates, mode: step.assignmentMode, manualSelection: step.manualSelection };
+    return { candidates: await this.resolver.companyMembers(tx, ticket), mode: 'USERS' as const, manualSelection: true };
+  }
+
   private async decide(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
-    const candidates = await this.resolver.candidatesFor(tx, step, { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, ticketId: request.ticketId, at: request.at });
-    return decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: request.chosenAssigneeId });
+    const { candidates, mode, manualSelection } = await this.choice(tx, request, step);
+    return decideAssignees({ stepId: step.id, mode, manualSelection, candidates, chosenId: request.chosenAssigneeId });
   }
 
   /** A WAIT block holds the ticket without a person, an SLA or a loop limit: it is the clock of the workflow, not of anyone. */
@@ -164,21 +177,30 @@ export class ArrivalPlanner {
     if (route.arrival.kind === 'WAIT') return { kind: 'WAIT', hops: route.hops, step, resumeAt: route.arrival.resumeAt };
     const previousLoops = request.ticketId === null ? [] : await this.tickets.loopsOf(tx, request.tenantId, request.ticketId, step.id);
     nextLoop(previousLoops, step.maxLoops, step.id);
-    const ticket = { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, ticketId: request.ticketId, at: request.at };
-    if (step.assignmentMode === 'PARALLEL') {
-      const signers = await this.resolver.signersFor(tx, step, ticket);
-      return { kind: 'PEOPLE', hops: route.hops, step, assignment: 'PARALLEL', people: await this.resolver.named(tx, request.tenantId, signers) };
-    }
-    const candidates = await this.resolver.candidatesFor(tx, step, ticket);
+    if (step.assignmentMode === 'PARALLEL') return this.previewSigners(tx, request, route.hops, step);
+    const { candidates, mode, manualSelection } = await this.choice(tx, request, step);
     try {
-      const decision = decideAssignees({ stepId: step.id, mode: step.assignmentMode, manualSelection: step.manualSelection, candidates, chosenId: undefined });
+      const decision = decideAssignees({ stepId: step.id, mode, manualSelection, candidates, chosenId: undefined });
       const assignment = decision.type === 'PRIMARY' ? 'PERSON' : decision.type;
       const people = decision.type === 'DISPATCH' ? candidates : candidates.filter((candidate) => decision.userIds.includes(candidate.userId));
-      return { kind: 'PEOPLE', hops: route.hops, step, assignment, people };
+      return { kind: 'PEOPLE', hops: route.hops, step, assignment, people, signerChoices: [] };
     } catch (error) {
-      if (error instanceof AssigneeSelectionRequiredError) return { kind: 'PEOPLE', hops: route.hops, step, assignment: 'CHOOSE', people: candidates };
+      if (error instanceof AssigneeSelectionRequiredError) return { kind: 'PEOPLE', hops: route.hops, step, assignment: 'CHOOSE', people: candidates, signerChoices: [] };
       throw error;
     }
+  }
+
+  /** The signers that resolved, and the ones to choose for (each offered the company's members). */
+  private async previewSigners(tx: TenantTransaction, request: ArrivalRequest, hops: readonly RouteHop[], step: StepDocument): Promise<ArrivalPreview> {
+    const ticket = ticketOf(request);
+    const { people, missing } = await this.resolver.resolveSigners(tx, step, ticket);
+    const members = missing.length === 0 ? [] : (await this.resolver.companyMembers(tx, ticket)).map((member) => ({ id: member.userId, name: member.name }));
+    const signerChoices: SignerChoice[] = [];
+    for (const signer of missing) {
+      if (signer.signerType === 'STEP_ASSIGNEE') continue;
+      signerChoices.push({ signerId: signer.id, signerType: signer.signerType, label: await this.resolver.signerLabel(tx, request.tenantId, signer), candidates: members });
+    }
+    return { kind: 'PEOPLE', hops, step, assignment: 'PARALLEL', people: await this.resolver.named(tx, request.tenantId, [...new Set(people)]), signerChoices };
   }
 
   async plan(tx: TenantTransaction, request: ArrivalRequest): Promise<Arrival> {
@@ -210,6 +232,10 @@ export class ArrivalPlanner {
       },
     };
   }
+}
+
+function ticketOf(request: ArrivalRequest) {
+  return { tenantId: request.tenantId, companyId: request.companyId, siteId: request.siteId, creatorId: request.creatorId, ticketId: request.ticketId, at: request.at };
 }
 
 /** What the ticket's history and the outbox record about an arrival: the blocks passed, who was assigned, or the end. */

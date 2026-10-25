@@ -137,7 +137,11 @@ export function signatureRefusal(parallelStep: boolean, signatures: readonly Sig
 }
 
 /** Commenting is allowed in any status, with `comment` on this ticket. */
-export const commentRefusal = (mayComment: boolean): DomainError | null => (mayComment ? null : new PermissionDeniedError('Not allowed to comment on this ticket'));
+/** As in the help desk, a closed ticket takes no more comments: whatever is left is said by reopening it. */
+export const commentRefusal = (mayComment: boolean, status: string): DomainError | null => {
+  if (!mayComment) return new PermissionDeniedError('Not allowed to comment on this ticket');
+  return status === 'CLOSED' ? new TicketNotOpenError(status) : null;
+};
 
 /** The DECISION ways out of a step, in the builder's order: what a person chooses from when advancing. */
 export const decisionExits = (document: WorkflowVersionDocument, stepId: string) =>

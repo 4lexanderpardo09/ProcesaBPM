@@ -83,9 +83,11 @@ describe('reassign, comment and their permission', () => {
     expect(reassignRefusal(true)).toBeNull();
     expect(reassignRefusal(false)).toBeInstanceOf(PermissionDeniedError);
   });
-  it('comment needs comment', () => {
-    expect(commentRefusal(true)).toBeNull();
-    expect(commentRefusal(false)).toBeInstanceOf(PermissionDeniedError);
+  it('comment needs comment, on a ticket that is not closed', () => {
+    expect(commentRefusal(true, 'OPEN')).toBeNull();
+    expect(commentRefusal(true, 'PAUSED')).toBeNull();
+    expect(commentRefusal(false, 'OPEN')).toBeInstanceOf(PermissionDeniedError);
+    expect(commentRefusal(true, 'CLOSED')).toBeInstanceOf(TicketNotOpenError);
   });
   it('a signature can only be moved while one is pending', () => {
     expect(hasPendingSignature([{ userId: 'a', status: 'SIGNED' }, { userId: 'b', status: 'PENDING' }])).toBe(true);

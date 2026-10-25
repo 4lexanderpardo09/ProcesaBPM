@@ -863,7 +863,7 @@ describe('TicketDetailPage', () => {
       const subtypes = { items: [{ id: id(710), errorTypeId: id(701), name: 'Faltó un soporte', description: null, isActive: true }], page: 1, pageSize: 100, total: 1 };
       const { fake } = renderRoute(base, {
         handlers: ticketHandlers({
-          [base]: () => detail({ status: 'CLOSED', openVisit: null, closedAt: at, closedById: OTHER, closedBy: { id: OTHER, name: 'Luis Gómez' }, actions: allowed('reopen') }),
+          [base]: () => detail({ status: 'CLOSED', openVisit: null, closedAt: at, closedById: OTHER, closedBy: { id: OTHER, name: 'Luis Gómez' }, actions: { ...allowed('reopen'), comment: false } }),
           '/error-types': () => types,
           [`/error-types/${id(701)}/subtypes`]: () => subtypes,
           [`${base}/reopen`]: () => mutation,
@@ -871,6 +871,9 @@ describe('TicketDetailPage', () => {
       });
 
       await userEvent.click(await screen.findByRole('button', { name: 'Reabrir ticket' }));
+      // A closed ticket takes no more comments, as in the help desk.
+      expect(screen.queryByRole('textbox', { name: 'Agregar un comentario' })).not.toBeInTheDocument();
+      expect(screen.getByText('El ticket está cerrado: ya no recibe comentarios. Si hace falta algo más, reábrelo.')).toBeInTheDocument();
       const dialog = screen.getByRole('dialog', { name: 'Reabrir ticket' });
       await userEvent.click(within(dialog).getByRole('button', { name: 'Reabrir' }));
       expect(within(dialog).getByRole('combobox', { name: /Tipo de error/ })).toHaveAccessibleDescription('Elige el tipo de error.');
@@ -1090,6 +1093,41 @@ describe('TicketDetailPage', () => {
       await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
       await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ assigneeId: id(51) });
+    });
+
+    it('asks who signs for a parallel signer that resolved to nobody, or to leave that signature out, as in the help desk', async () => {
+      const MANAGER = id(701);
+      const APPROVER_SIGNER = id(702);
+      const candidates = [{ id: OTHER, name: 'Luis Gómez' }, { id: id(51), name: 'Marta Ruiz' }];
+      const previews = () =>
+        preview({
+          assignment: 'PARALLEL',
+          people: [{ id: id(52), name: 'Ana Pérez' }],
+          signerChoices: [
+            { signerId: MANAGER, signerType: 'POSITION', label: 'Gerente regional', candidates },
+            { signerId: APPROVER_SIGNER, signerType: 'APPROVER', label: null, candidates },
+          ],
+        });
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition-preview`]: previews, [`${base}/transition`]: () => mutation }, { fields: [], editableFieldCodes: [] }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Aprobar y avanzar' }));
+      const dialog = screen.getByRole('dialog', { name: 'Aprobar y avanzar' });
+      const manager = await within(dialog).findByRole('combobox', { name: /Gerente regional/ });
+      const approver = within(dialog).getByRole('combobox', { name: /Aprobador/ });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      expect(manager).toHaveAccessibleDescription(/Elige quién firma u omite la firma\./);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+
+      await userEvent.selectOptions(manager, 'Marta Ruiz');
+      await userEvent.selectOptions(approver, 'Omitir esta firma');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Aprobar y avanzar' }));
+      await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({
+        signerChoices: [
+          { signerId: MANAGER, userId: id(51) },
+          { signerId: APPROVER_SIGNER, userId: null },
+        ],
+      });
     });
 
     it('names the parallel signers, a hand-out in turns, the end, and warns when the workflow cannot go on', async () => {
