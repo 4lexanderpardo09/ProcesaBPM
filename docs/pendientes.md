@@ -38,6 +38,20 @@ Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](an
   - ~~**Editor de texto como el de la mesa:** títulos, colores, resaltado, alineación, enlaces y tablas (también pegadas de Excel) en comentarios, descripciones, respuestas y plantillas~~ (hecho, arquitectura «Editor de texto enriquecido»). ~~Adjuntos sueltos al comentar, avanzar y cerrar~~ (hecho, arquitectura «Adjuntos sueltos»). ~~Las instrucciones del paso precargadas en la respuesta y un panel más grande~~ (hecho, arquitectura «Instrucciones del paso»). ~~Filtros de la actividad, visor de PDF, imprimir y a tiempo/tarde por paso~~ (hecho, arquitectura «Herramientas del historial»). ~~«Editar datos registrados»~~ (hecho, arquitectura «Editar datos registrados»). ~~Plantillas y «Limpiar» al avanzar y cerrar; no enviar las instrucciones sin tocar; el visor de PDF descarga si no puede mostrar~~ (hecho, arquitectura «Respuesta como en la mesa»). **Decidido con el usuario:** las instrucciones siguen precargadas (como la mesa) y el editor no se carga aparte (la mesa tampoco lo hace).
   - **Consola de la plataforma en la web:** ~~sesión de plataforma, organizaciones (lista, alta, detalle, plan, suspender y reactivar) y avisos (mantenimiento y notas de cambios de la mesa)~~ (hecho, arquitectura §10 «Consola de plataforma en la web»); ~~planes, administradores y cuentas (reinicio del MFA)~~ (hecho); ~~países y festivos, operación, auditoría y eliminación~~ (hecho); ~~la visita de soporte (abrir la organización en modo lectura con el token de soporte)~~ (hecho, arquitectura §10 «Visita de soporte»).
     - **Decidido (con criterio, el usuario delegó):** la visita reusa las pantallas de la organización en la misma pestaña, sin una vista aparte; la visita dura lo que la sesión de la consola (15 min), como en el API.
+- **A quién se avisa, como la mesa (2026-10-25, `feat/notify-like-help-desk`, decisión B4 del usuario):**
+  - **Destinatarios por evento** (`recipient-policy.ts`):
+    - crear: el solicitante, aunque lo haya creado él (la constancia que manda la mesa), y los observadores;
+    - asignar: la persona asignada;
+    - avanzar y cada firma paralela: solo los observadores;
+    - cerrar: el solicitante, todos los que tuvieron el ticket (responsables de sus relojes) y los observadores;
+    - reabrir: el solicitante y quien lo tiene de nuevo;
+    - comentar: nadie;
+    - novedad: a quien se le entrega; al resolverla, a quien recupera el ticket;
+    - vencido: el responsable, sin observadores.
+  - **Se queda de ProcesaBPM:**
+    - el preaviso al 80 % (solo al responsable);
+    - nadie recibe aviso de lo que hizo él mismo, salvo la constancia de creación.
+  - **Correo por defecto** solo para asignaciones y bloques de notificación (`defaultChannels`). Cada persona puede activar más en sus preferencias.
 - **Nada atado a un proceso en las calculadoras (2026-10-26, `feat/time-slot-rates`, pedido del usuario: «nada hardcodeado»):**
   - **«Pago por franjas horarias» (`TIME_SLOTS`) reemplaza al auxilio de alimentación:**
     - Cada organización crea sus **tarifas** (comidas, recargo nocturno, turnos…), cada una con nombre, código y franjas.
