@@ -94,7 +94,7 @@ export function routeThroughAutomaticBlocks(doc: WorkflowVersionDocument, entryS
     if (PEOPLE_STEP_TYPES.has(step.type)) return result({ stepId: step.id, kind: 'PEOPLE' });
     if (context === undefined && (step.type === 'WAIT' || step.type === 'CALCULATOR')) throw new NotImplementedError(`${step.type} blocks`);
     if (hops.length >= MAX_HOPS) throw new InvalidStateError('The workflow loops through automatic blocks without reaching a person');
-    if (step.type === 'CALCULATOR') recalculateAfter(doc, step, current, context!, failures);
+    if (step.type === 'CALCULATOR') recalculateAfter(doc, step, current, { ...context!, stepIds: new Set([...hops.map((hop) => hop.stepId), step.id]) }, failures);
     let data: RouteHop['data'];
     if (step.type === 'WAIT') {
       const wait = planWait({ config: waitConfigOf(step), values: current, calendar: context!.calendar ?? null, timeZone: context!.timeZone ?? 'UTC', at: context!.at ?? new Date(), cutoffs: context!.cutoffs ?? [] });
@@ -116,6 +116,7 @@ function waitConfigOf(step: StepDocument): WaitConfig {
 
 function recalculateAfter(doc: WorkflowVersionDocument, step: StepDocument, current: Record<string, unknown>, context: ComputeContext, failures: FormulaFailure[]): void {
   runCalculatorBlock(step.config as unknown as CalculatorBlockConfig, current, context, failures);
+  // `context.stepIds`: the blocks this route went through, so the steps the ticket has not reached stay empty.
   const recomputed = computeFieldValues(doc.fields, current, context);
   for (const failure of recomputed.failures) if (current[failure.fieldCode] !== null) failures.push({ ...failure, strict: false });
   Object.assign(current, recomputed.values);

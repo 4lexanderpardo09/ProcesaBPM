@@ -90,7 +90,7 @@ export class ResumeWaitService {
   /** Computed fields are recalculated when the ticket wakes: a date formula may read today's date. Failures are recorded, never fatal. */
   private async recalculate(tx: TenantTransaction, tenantId: string, document: Parameters<ComputeEnvironment['build']>[2], existing: Readonly<Record<string, unknown>>, source: Parameters<ComputeEnvironment['build']>[3]) {
     const environment = await this.environments.build(tx, tenantId, document, source);
-    const result = computeFieldValues(document.fields, existing, environment);
+    const result = computeFieldValues(document.fields, existing, { ...environment, stepIds: new Set() });
     const fieldIdOf = new Map(document.fields.map((field) => [field.code, field.id]));
     const changed = Object.entries(result.values).filter(([code, value]) => JSON.stringify(existing[code] ?? null) !== JSON.stringify(value ?? null));
     const fieldWrites: FieldWrite[] = changed.map(([code, value]) => ({ fieldId: fieldIdOf.get(code)!, value }));
