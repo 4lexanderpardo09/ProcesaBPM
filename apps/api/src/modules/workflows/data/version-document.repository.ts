@@ -17,7 +17,7 @@ export class VersionDocumentRepository {
     const steps = await tx.step.findMany({
       where: { tenantId, versionId },
       orderBy: [{ uiY: 'asc' }, { uiX: 'asc' }, { id: 'asc' }],
-      include: { candidates: true, initiators: true, slaOverrides: true, signers: { orderBy: { sortOrder: 'asc' } }, files: { orderBy: { sortOrder: 'asc' } } },
+      include: { candidates: true, initiators: true, slaOverrides: true, signers: { orderBy: { sortOrder: 'asc' }, include: { extraPositions: { select: { positionId: true } } } }, files: { orderBy: { sortOrder: 'asc' } } },
     });
     const transitions = await tx.transition.findMany({ where: { tenantId, versionId }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }] });
     const fields = await tx.field.findMany({ where: { tenantId, versionId }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] });
@@ -65,7 +65,7 @@ export class VersionDocumentRepository {
             siteId: row.siteId,
           })),
           slaOverrides: step.slaOverrides.map((row) => ({ companyId: row.companyId, slaValue: row.slaValue, slaUnit: row.slaUnit })),
-          signers: step.signers.map((row) => ({ id: row.id, signerType: row.signerType, userId: row.userId, positionId: row.positionId, label: row.label, sortOrder: row.sortOrder })),
+          signers: step.signers.map((row) => ({ id: row.id, signerType: row.signerType, userId: row.userId, positionId: row.positionId, extraPositionIds: row.extraPositions.map((extra) => extra.positionId).sort(), label: row.label, sortOrder: row.sortOrder })),
           files: step.files.map((row) => ({ fileId: row.fileId, label: row.label, sortOrder: row.sortOrder })),
         }),
       ),
@@ -236,6 +236,9 @@ export class VersionDocumentRepository {
     await tx.stepSlaOverride.createMany({ data: steps.flatMap((step) => step.slaOverrides.map((row) => ({ tenantId, stepId: step.id, companyId: row.companyId, slaValue: row.slaValue, slaUnit: row.slaUnit }))) });
     await tx.stepSigner.createMany({
       data: steps.flatMap((step) => step.signers.map((row) => ({ tenantId, stepId: step.id, id: row.id, signerType: row.signerType, userId: row.userId, positionId: row.positionId, label: row.label, sortOrder: row.sortOrder }))),
+    });
+    await tx.stepSignerPosition.createMany({
+      data: steps.flatMap((step) => step.signers.flatMap((row) => row.extraPositionIds.map((positionId) => ({ tenantId, stepId: step.id, signerId: row.id, positionId })))),
     });
     await tx.stepFile.createMany({ data: steps.flatMap((step) => step.files.map((row) => ({ tenantId, stepId: step.id, fileId: row.fileId, label: row.label, sortOrder: row.sortOrder }))) });
   }

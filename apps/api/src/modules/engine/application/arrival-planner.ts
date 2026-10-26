@@ -203,9 +203,10 @@ export class ArrivalPlanner {
     const asOptions = (people: readonly AssigneeCandidate[]) => people.map((person) => ({ id: person.userId, name: person.name }));
     const members = missing.some(({ among }) => among === null) ? asOptions(await this.resolver.companyMembers(tx, ticket)) : [];
     const signerChoices: SignerChoice[] = [];
-    for (const { signer, among } of missing) {
+    for (const { signer, among, suggested } of missing) {
       if (signer.signerType === 'STEP_ASSIGNEE') continue;
-      signerChoices.push({ signerId: signer.id, signerType: signer.signerType, label: await this.resolver.signerLabel(tx, request.tenantId, signer), candidates: among === null ? members : asOptions(among) });
+      const label = await this.resolver.signerLabel(tx, request.tenantId, signer);
+      signerChoices.push({ signerId: signer.id, signerType: signer.signerType, label, candidates: among === null ? members : asOptions(among), suggestedId: suggested ?? null });
     }
     return { kind: 'PEOPLE', hops, step, assignment: 'PARALLEL', people: await this.resolver.named(tx, request.tenantId, [...new Set(people)]), signerChoices };
   }

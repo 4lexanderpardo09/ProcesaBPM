@@ -99,6 +99,7 @@ export const EXPORT_DATASETS = [
   table('step_initiators', 'workflows', ['tenant_id', 'id', 'step_id', 'participant_type', 'user_id', 'position_id', 'group_id', 'department_id', 'company_id', 'site_id'], ['id']),
   table('step_sla_overrides', 'workflows', ['tenant_id', 'step_id', 'company_id', 'sla_value', 'sla_unit'], ['step_id', 'company_id']),
   table('step_signers', 'workflows', ['tenant_id', 'id', 'step_id', 'signer_type', 'user_id', 'position_id', 'label', 'sort_order'], ['id']),
+  table('step_signer_positions', 'workflows', ['tenant_id', 'step_id', 'signer_id', 'position_id'], ['signer_id', 'position_id']),
   table('step_files', 'workflows', ['tenant_id', 'step_id', 'file_id', 'label', 'sort_order'], ['step_id', 'file_id']),
   table('transitions', 'workflows', ['tenant_id', 'id', 'version_id', 'from_step_id', 'to_step_id', 'type', 'label', 'condition', 'sort_order', 'ui_points', 'requires_comment'], ['id']),
   table('fields', 'workflows', ['tenant_id', 'id', 'version_id', 'step_id', 'code', 'label', 'type', 'capture', 'is_required', 'is_read_only', 'sort_order', 'config', 'data_source'], ['id']),

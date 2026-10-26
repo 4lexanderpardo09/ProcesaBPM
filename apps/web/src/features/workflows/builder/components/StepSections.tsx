@@ -42,7 +42,8 @@ export interface SectionProps {
 
 const FORBIDDEN = 403;
 const POSITION_MODES: ReadonlySet<AssignmentMode> = new Set(['POSITION', 'POOL', 'RANDOM_DISPATCH']);
-const MANUAL_MODES: ReadonlySet<AssignmentMode> = new Set(['POSITION', 'USERS', 'GROUP', 'POOL']);
+// PARALLEL: whoever sends the ticket there can give each signature to someone else or leave it out.
+const MANUAL_MODES: ReadonlySet<AssignmentMode> = new Set(['POSITION', 'USERS', 'GROUP', 'POOL', 'PARALLEL']);
 const APPROVAL_LEVELS = [1, 2, 3, 4, 5];
 const PEOPLE_MODES = ASSIGNMENT_MODES.filter((mode) => mode !== 'NONE');
 
@@ -161,7 +162,7 @@ export function AssignmentSection({ step, steps, readOnly, onChange }: SectionPr
           onChange={(event) => onChange({ siteScope: event.target.value as StepDocument['siteScope'] })}
         />
       )}
-      {MANUAL_MODES.has(mode) && <Checkbox label={t('builder.assignment.manualSelection')} disabled={readOnly} checked={step.manualSelection} onChange={(event) => onChange({ manualSelection: event.target.checked })} />}
+      {MANUAL_MODES.has(mode) && <Checkbox label={t(mode === 'PARALLEL' ? 'builder.assignment.manualSigners' : 'builder.assignment.manualSelection')} disabled={readOnly} checked={step.manualSelection} onChange={(event) => onChange({ manualSelection: event.target.checked })} />}
     </Section>
   );
 }

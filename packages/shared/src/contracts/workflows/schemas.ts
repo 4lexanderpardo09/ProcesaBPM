@@ -266,12 +266,22 @@ export type ReplaceInitiatorsRequest = z.infer<typeof replaceInitiatorsRequestSc
 const signerLabel = z.string().max(200).nullable().default(null);
 const signerSchema = z.discriminatedUnion('signerType', [
   z.object({ signerType: z.literal('USER'), userId: uuidSchema, label: signerLabel }).strict(),
-  z.object({ signerType: z.literal('POSITION'), positionId: uuidSchema, label: signerLabel }).strict(),
+  // `extraPositionIds`: more positions it accepts (as the help desk's signature for several positions).
+  z.object({ signerType: z.literal('POSITION'), positionId: uuidSchema, extraPositionIds: z.array(uuidSchema).max(19).default([]), label: signerLabel }).strict(),
   z.object({ signerType: z.literal('APPROVER'), label: signerLabel }).strict(),
   z.object({ signerType: z.literal('CREATOR'), label: signerLabel }).strict(),
   z.object({ signerType: z.literal('STEP_ASSIGNEE'), label: signerLabel }).strict(),
 ]);
-export const replaceSignersRequestSchema = z.object({ signers: z.array(signerSchema).max(50) }).strict();
+export const replaceSignersRequestSchema = z
+  .object({ signers: z.array(signerSchema).max(50) })
+  .strict()
+  .superRefine((request, context) =>
+    request.signers.forEach((signer, index) => {
+      if (signer.signerType !== 'POSITION') return;
+      const positions = [signer.positionId, ...signer.extraPositionIds];
+      if (new Set(positions).size !== positions.length) context.addIssue({ code: 'custom', message: 'Repeated positions', path: ['signers', index, 'extraPositionIds'] });
+    }),
+  );
 export type ReplaceSignersRequest = z.infer<typeof replaceSignersRequestSchema>;
 
 export const replaceSlaOverridesRequestSchema = z

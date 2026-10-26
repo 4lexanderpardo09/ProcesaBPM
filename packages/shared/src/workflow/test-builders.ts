@@ -31,7 +31,7 @@ export function step(id: string, type: StepType, overrides: Partial<StepDocument
     candidates: [],
     initiators: [],
     slaOverrides: [],
-    signers: type === 'SIGNATURE' ? [{ id: `${id}-signer`, signerType: 'CREATOR', userId: null, positionId: null, label: null, sortOrder: 0 }] : [],
+    signers: type === 'SIGNATURE' ? [{ id: `${id}-signer`, signerType: 'CREATOR', userId: null, positionId: null, extraPositionIds: [], label: null, sortOrder: 0 }] : [],
     files: [],
     ...overrides,
   };

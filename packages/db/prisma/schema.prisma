@@ -722,6 +722,7 @@ model Tenant {
   stepInitiators          StepInitiator[]
   stepSlaOverrides        StepSlaOverride[]
   stepSigners             StepSigner[]
+  stepSignerPositions     StepSignerPosition[]
   stepFiles               StepFile[]
   transitions             Transition[]
   fields                  Field[]
@@ -1057,6 +1058,7 @@ model Position {
   stepCandidates StepCandidate[]
   stepInitiators StepInitiator[]
   stepSigners    StepSigner[]
+  signerPositions StepSignerPosition[]
   amountRules    AmountRule[]
   observers      WorkflowObserver[]
 
@@ -1477,6 +1479,7 @@ model Step {
   initiators       StepInitiator[]
   slaOverrides     StepSlaOverride[]
   signers          StepSigner[]
+  signerPositions  StepSignerPosition[]
   files            StepFile[]
   outgoing         Transition[]         @relation("TransitionFrom")
   incoming         Transition[]         @relation("TransitionTo")
@@ -1604,12 +1607,32 @@ model StepSigner {
   membership Membership? @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
   position   Position?   @relation(fields: [tenantId, positionId], references: [tenantId, id], onDelete: NoAction)
   tasks      TicketParallelTask[]
+  extraPositions StepSignerPosition[]
 
   @@id([tenantId, id])
   @@index([tenantId, stepId])
   @@index([tenantId, positionId])
   @@index([tenantId, userId])
   @@map("step_signers")
+}
+
+/// More positions a POSITION signer accepts besides its own (the help desk's "Coordinador de crédito y cartera, Gestor
+/// de cartera"): whoever holds any of them signs for it. `stepId` lets the draft guard protect published versions.
+model StepSignerPosition {
+  tenantId   String @map("tenant_id") @db.Uuid
+  stepId     String @map("step_id") @db.Uuid
+  signerId   String @map("signer_id") @db.Uuid
+  positionId String @map("position_id") @db.Uuid
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  step     Step       @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: Cascade)
+  signer   StepSigner @relation(fields: [tenantId, signerId], references: [tenantId, id], onDelete: Cascade)
+  position Position   @relation(fields: [tenantId, positionId], references: [tenantId, id], onDelete: NoAction)
+
+  @@id([tenantId, signerId, positionId])
+  @@index([tenantId, stepId])
+  @@index([tenantId, positionId])
+  @@map("step_signer_positions")
 }
 
 /// Downloadable files offered in a step (forms to fill, instructions).

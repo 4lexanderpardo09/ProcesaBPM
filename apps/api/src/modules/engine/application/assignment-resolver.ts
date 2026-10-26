@@ -31,12 +31,14 @@ export interface AssignmentContext {
 type Signer = StepDocument['signers'][number];
 
 /**
- * A signer row to choose for by hand: among `among` (the holders of its position, when it has several), or among the
- * company's members when `among` is `null` (it resolved to nobody).
+ * A signer row to choose for by hand: among `among` (the holders of its positions, when they are several), or among the
+ * company's members when `among` is `null` (it resolved to nobody, or the step lets every signature be chosen).
+ * `suggested`: the person it resolved to, when it did (a step with manual selection offers them first).
  */
 export interface MissingSigner {
   readonly signer: Signer;
   readonly among: readonly AssigneeCandidate[] | null;
+  readonly suggested?: string;
 }
 
 /** The signers of a PARALLEL step: the people they resolved to, and the signers to choose for by hand. */
@@ -70,15 +72,17 @@ export class AssignmentResolver {
 
   /**
    * Resolves each signer row of a PARALLEL step to one person. As in the help desk, the rows that do not name exactly
-   * one person are returned apart, to be chosen by hand: a position with several holders (among them), and a row that
-   * resolves to nobody (no holder, no approver, a person no longer active: among the company's members).
+   * one person are returned apart, to be chosen by hand: positions with several holders (among them), and a row that
+   * resolves to nobody (no holder, no approver, a person no longer active: among the company's members). A step with
+   * `manualSelection` returns every row apart: each signature can be given to someone else or left out.
    */
   async resolveSigners(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext): Promise<SignerResolution> {
     const people: SignerAssignment[] = [];
     const missing: MissingSigner[] = [];
     for (const signer of [...step.signers].sort((a, b) => a.sortOrder - b.sortOrder)) {
       const outcome = await this.signerOutcome(tx, step, signer, ticket);
-      if ('userId' in outcome) people.push({ userId: outcome.userId, signerId: signer.id });
+      if ('userId' in outcome && step.manualSelection) missing.push({ signer, among: null, suggested: outcome.userId });
+      else if ('userId' in outcome) people.push({ userId: outcome.userId, signerId: signer.id });
       else missing.push({ signer, among: outcome.among });
     }
     return { people, missing };
@@ -145,7 +149,7 @@ export class AssignmentResolver {
       }
       case 'POSITION': {
         if (signer.positionId === null) return { among: null };
-        const holders = await this.byPosition(tx, [signer.positionId], step, ticket);
+        const holders = await this.byPosition(tx, [signer.positionId, ...signer.extraPositionIds], step, ticket);
         if (holders.length <= 1) return one(holders[0]);
         return { among: holders.map(({ userId, name }) => ({ userId, name })) };
       }
