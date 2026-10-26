@@ -113,7 +113,7 @@ describe('ticketFormResponseSchema', () => {
   });
 
   it('rejects a field type the builder does not have', () => {
-    const field = { id: id(11), stepId: id(5), code: 'amount', label: 'Monto', type: 'MONEY', isRequired: true, isReadOnly: false, sortOrder: 1, config: {}, dataSource: null };
+    const field = { id: id(11), stepId: id(5), code: 'amount', label: 'Monto', type: 'MONEY', isRequired: true, isReadOnly: false, isImmutable: false, sortOrder: 1, config: {}, dataSource: null };
     expect(ticketFormResponseSchema.safeParse({ ticketId: id(1), versionId: id(7), visitId: id(8), step: null, fields: [field], editableFieldCodes: [], decisions: [] }).success).toBe(false);
   });
 });

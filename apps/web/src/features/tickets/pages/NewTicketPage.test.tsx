@@ -59,6 +59,7 @@ const field = (index: number, code: string, label: string, type: string, extra: 
   type,
   isRequired: false,
   isReadOnly: false,
+    isImmutable: false,
   sortOrder: index,
   config: {},
   dataSource: null,

@@ -115,6 +115,7 @@ describe('workflow content', () => {
       capture: 'CREATION',
       isRequired: true,
       isReadOnly: false,
+    isImmutable: false,
       sortOrder: 0,
       config: { currencyCode: 'COP' },
       dataSource: null,

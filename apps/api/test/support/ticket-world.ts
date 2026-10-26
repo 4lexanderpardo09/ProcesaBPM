@@ -57,6 +57,7 @@ export interface FieldSpec {
   readonly capture?: 'CREATION' | 'STEP' | 'BOTH';
   readonly isRequired?: boolean;
   readonly isReadOnly?: boolean;
+  readonly isImmutable?: boolean;
   readonly config?: Record<string, unknown>;
   readonly dataSource?: Record<string, unknown>;
 }
@@ -128,7 +129,7 @@ export async function publishVersion(admin: ApiClient, workflowId: string, versi
   }
   for (const field of spec.fields ?? []) {
     await admin
-      .post(`${base}/fields`, { stepId: id(field.step), code: field.code, label: field.code, type: field.type, capture: field.capture ?? 'BOTH', isRequired: field.isRequired ?? false, isReadOnly: field.isReadOnly ?? false, config: field.config ?? {}, dataSource: field.dataSource ?? null })
+      .post(`${base}/fields`, { stepId: id(field.step), code: field.code, label: field.code, type: field.type, capture: field.capture ?? 'BOTH', isRequired: field.isRequired ?? false, isReadOnly: field.isReadOnly ?? false, isImmutable: field.isImmutable ?? false, config: field.config ?? {}, dataSource: field.dataSource ?? null })
       .expect(201);
   }
   for (const rule of spec.rules ?? []) {

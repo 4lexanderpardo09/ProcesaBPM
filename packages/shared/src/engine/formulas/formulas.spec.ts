@@ -169,7 +169,7 @@ describe('formula compilation', () => {
 });
 
 function field(partial: Partial<FieldDocument> & Pick<FieldDocument, 'code' | 'type'>): FieldDocument {
-  return { id: partial.code, stepId: 'S', label: partial.code, capture: 'STEP', isRequired: false, isReadOnly: false, sortOrder: 0, config: {}, dataSource: null, ...partial } as FieldDocument;
+  return { id: partial.code, stepId: 'S', label: partial.code, capture: 'STEP', isRequired: false, isReadOnly: false, isImmutable: false, sortOrder: 0, config: {}, dataSource: null, ...partial } as FieldDocument;
 }
 
 describe('computeFieldValues', () => {

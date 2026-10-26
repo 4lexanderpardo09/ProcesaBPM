@@ -77,6 +77,7 @@ export class RenderFactsRepository {
       capture: row.capture,
       isRequired: row.isRequired,
       isReadOnly: row.isReadOnly,
+      isImmutable: row.isImmutable,
       sortOrder: row.sortOrder,
       config: asObject(row.config),
       dataSource: row.dataSource === null ? null : asObject(row.dataSource),

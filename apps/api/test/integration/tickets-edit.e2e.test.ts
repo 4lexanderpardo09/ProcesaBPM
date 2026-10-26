@@ -104,6 +104,7 @@ describe('editing what a ticket says', () => {
           { step: 'start', code: 'AMOUNT', type: 'CURRENCY', capture: 'CREATION', isRequired: true },
           { step: 'start', code: 'BRANCH', type: 'TEXT', capture: 'CREATION' },
           { step: 'start', code: 'FIXED', type: 'TEXT', capture: 'CREATION', isReadOnly: true },
+          { step: 'start', code: 'LEAVES', type: 'DATE', capture: 'CREATION', isImmutable: true },
           { step: 'task', code: 'NOTE', type: 'TEXT', capture: 'STEP' },
         ],
         rules: [{ step: 'start', fieldCode: 'AMOUNT', maxAmount: '100000.00', action: 'BLOCK', message: 'Over the absolute limit' }],
@@ -111,7 +112,7 @@ describe('editing what a ticket says', () => {
     });
 
     const createWithValues = async () =>
-      (await requester.client.post('/tickets', { subcategoryId: withFields.subcategoryId, title: 'Refund', values: { AMOUNT: '1500', BRANCH: 'North' } }).expect(201)).body as { id: string; openVisitId: string };
+      (await requester.client.post('/tickets', { subcategoryId: withFields.subcategoryId, title: 'Refund', values: { AMOUNT: '1500', BRANCH: 'North', LEAVES: '2026-11-10' } }).expect(201)).body as { id: string; openVisitId: string };
 
     it('changes a recorded value, validated like an answer, and keeps the previous one in the timeline', async () => {
       const ticket = await createWithValues();
@@ -134,9 +135,11 @@ describe('editing what a ticket says', () => {
 
       expect((await refused({ NOTE: 'later' })).details.issues).toEqual([{ code: 'NOT_EDITABLE', fieldCode: 'NOTE' }]);
       expect((await refused({ NOPE: 'x' })).details.issues).toEqual([{ code: 'NOT_EDITABLE', fieldCode: 'NOPE' }]);
+      // Captured once, like the dates of a trip in the help desk: nobody corrects it afterwards.
+      expect((await refused({ LEAVES: '2026-11-11' })).details.issues).toEqual([{ code: 'NOT_EDITABLE', fieldCode: 'LEAVES' }]);
       expect((await refused({ AMOUNT: 'abc' })).details.issues).toEqual([expect.objectContaining({ fieldCode: 'AMOUNT' })]);
       expect((await refused({ AMOUNT: '200000' })).code).toBe('AMOUNT_LIMIT_EXCEEDED');
-      expect(await values(ticket.id)).toMatchObject({ AMOUNT: 1500 });
+      expect(await values(ticket.id)).toMatchObject({ AMOUNT: 1500, LEAVES: '2026-11-10' });
     });
   });
 });

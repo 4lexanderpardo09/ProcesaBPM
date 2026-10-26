@@ -39,7 +39,8 @@ export function storableNumber(value: Decimal): number | string {
   return value.significantDigits() <= 15 ? Number(value.toPlainString()) : value.toPlainString();
 }
 
-type Computation = { readonly references: readonly string[]; run(values: Record<string, unknown>): unknown } | 'INVALID';
+/** `extra`: other fields the computation writes besides its own (a calculator's breakdown table), by code. */
+type Computation = { readonly references: readonly string[]; run(values: Record<string, unknown>): unknown; readonly extraCodes?: readonly string[]; extra?(values: Record<string, unknown>): Record<string, unknown> } | 'INVALID';
 
 function formulaComputation(field: FieldDocument, compiled: CompiledFormula | undefined, context: ComputeContext): Computation {
   if (compiled === undefined) return 'INVALID';
@@ -58,14 +59,26 @@ function calculatorComputation(field: FieldDocument, context: ComputeContext): C
   const config = context.calculatorConfigs?.get(calculator.code);
   if (config === undefined) return 'CALCULATOR_NOT_CONFIGURED';
   const inputs = (field.config.inputs ?? {}) as Record<string, string>;
+  const named = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(inputs).map(([name, code]) => [name, values[code]]));
+  const table = typeof field.config.table === 'string' ? field.config.table : undefined;
+  const calculatorContext = { timeZone: context.timeZone ?? 'UTC', ...(table === undefined ? {} : { options: { table } }) };
+  const breakdownCode = typeof field.config.breakdownFieldCode === 'string' ? field.config.breakdownFieldCode : undefined;
   return {
     references: Object.values(inputs),
     run(values) {
-      const named = Object.fromEntries(Object.entries(inputs).map(([name, code]) => [name, values[code]]));
-      const table = typeof field.config.table === 'string' ? field.config.table : undefined;
-      const result = calculator.compute(named, config, { timeZone: context.timeZone ?? 'UTC', ...(table === undefined ? {} : { options: { table } }) });
+      const result = calculator.compute(named(values), config, calculatorContext);
       return result === null ? null : storableNumber(result.round(calculator.output === 'CURRENCY' ? 2 : 6));
     },
+    ...(breakdownCode === undefined || calculator.breakdown === undefined
+      ? {}
+      : {
+          extraCodes: [breakdownCode],
+          extra: (values: Record<string, unknown>) => {
+            const lines = calculator.breakdown!(named(values), config, calculatorContext) ?? [];
+            const money = (amount: string) => storableNumber(Decimal.parse(amount).round(2));
+            return { [breakdownCode]: lines.map((line) => ({ CONCEPTO: line.concept, CANTIDAD: line.quantity, VALOR_UNIT: money(line.unitAmount), SUBTOTAL: money(line.amount) })) };
+          },
+        }),
   };
 }
 
@@ -133,9 +146,18 @@ export function computeFieldValues(fields: readonly FieldDocument[], current: Re
         const stored = computation.run(values);
         computed[code] = stored;
         values[code] = stored;
+        for (const [extraCode, extraValue] of Object.entries(computation.extra?.(values) ?? {})) {
+          computed[extraCode] = extraValue;
+          values[extraCode] = extraValue;
+        }
       } catch (error) {
         if (!(error instanceof FormulaRuntimeError)) throw error;
         fail(code, error.code);
+        // A breakdown never outlives the result it explained.
+        for (const extraCode of computation.extraCodes ?? []) {
+          computed[extraCode] = [];
+          values[extraCode] = [];
+        }
       }
     }
   }

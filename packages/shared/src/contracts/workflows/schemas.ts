@@ -177,6 +177,8 @@ export const createFieldRequestSchema = z
     capture: z.enum(CAPTURE_STAGES).default('BOTH'),
     isRequired: z.boolean().default(false),
     isReadOnly: z.boolean().default(false),
+    /** Kept as captured: «Editar datos» does not offer it (the help desk's fields that do not change after creation). */
+    isImmutable: z.boolean().default(false),
     sortOrder: z.number().int().min(0).max(100_000).default(0),
     config: jsonObject.default({}),
     dataSource: jsonObject.nullable().default(null),
@@ -192,6 +194,7 @@ export const updateFieldRequestSchema = z
     capture: z.enum(CAPTURE_STAGES),
     isRequired: z.boolean(),
     isReadOnly: z.boolean(),
+    isImmutable: z.boolean(),
     sortOrder: z.number().int().min(0).max(100_000),
     config: jsonObject,
     dataSource: jsonObject.nullable(),

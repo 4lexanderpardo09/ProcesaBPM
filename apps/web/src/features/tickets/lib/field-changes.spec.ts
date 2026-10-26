@@ -6,7 +6,7 @@ const NAMES = { users: {}, sites: {}, companies: {}, departments: {}, positions:
 const PRIORITY = '018f0000-0000-7000-8000-000000000001';
 
 const field = (code: string, label: string, type: string, config: Record<string, unknown> = {}): FormFieldResponse =>
-  ({ id: '018f0000-0000-7000-8000-000000000010', stepId: '018f0000-0000-7000-8000-000000000011', code, label, type, isRequired: false, isReadOnly: false, sortOrder: 1, config, dataSource: null }) as FormFieldResponse;
+  ({ id: '018f0000-0000-7000-8000-000000000010', stepId: '018f0000-0000-7000-8000-000000000011', code, label, type, isRequired: false, isReadOnly: false, isImmutable: false, sortOrder: 1, config, dataSource: null }) as FormFieldResponse;
 
 describe('fieldChanges', () => {
   it('reads an edit of the header: subject, description and priority', () => {

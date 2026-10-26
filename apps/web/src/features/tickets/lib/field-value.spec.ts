@@ -10,6 +10,7 @@ const field = (type: FormFieldResponse['type'], config: Record<string, unknown> 
   type,
   isRequired: false,
   isReadOnly: false,
+    isImmutable: false,
   sortOrder: 1,
   config,
   dataSource: null,

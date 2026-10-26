@@ -5,7 +5,8 @@ import styles from './SignerChoicesField.module.css';
 
 /**
  * As in the help desk: for each signer of the next step that resolved to nobody (a position without holders, no
- * approver...), who signs in its place among the company's members, or that signature left out.
+ * approver...), or every signer when the step asks to choose them (the suggested person comes chosen), who signs among
+ * the company's members, or that signature left out.
  */
 export function SignerChoicesField({ choices }: { readonly choices: SignerChoicesState }) {
   const { t } = useTranslation('tickets');

@@ -13,6 +13,7 @@ const field = (code: string, type: FieldDocument['type'], label: string, config:
   capture: 'CREATION',
   isRequired: false,
   isReadOnly: false,
+    isImmutable: false,
   sortOrder: 0,
   config,
   dataSource: null,

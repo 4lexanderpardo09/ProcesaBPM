@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { comparableName, datasetMatches, isFilledFrom } from './dataset-fill';
 
 const field = (code: string, type: FieldDocument['type'] = 'TEXT', dataSource: FieldDocument['dataSource'] = null) =>
-  ({ id: code, stepId: 's', code, label: code, type, capture: 'CREATION', isRequired: false, isReadOnly: false, sortOrder: 0, config: {}, dataSource }) as FieldDocument;
+  ({ id: code, stepId: 's', code, label: code, type, capture: 'CREATION', isRequired: false, isReadOnly: false, isImmutable: false, sortOrder: 0, config: {}, dataSource }) as FieldDocument;
 const employees: DatasetResponse = {
   id: 'd1',
   name: 'Empleados',

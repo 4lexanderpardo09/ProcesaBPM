@@ -1,5 +1,5 @@
 import { findCalculator } from '../../calculators/registry.js';
-import type { CalculatorInputType } from '../../calculators/types.js';
+import { CALCULATOR_BREAKDOWN_COLUMNS, type CalculatorInputType } from '../../calculators/types.js';
 import type { FieldDocument } from '../document.js';
 import { effectiveFieldType } from '../transition-condition.js';
 import { type RuleContext } from './context.js';
@@ -41,11 +41,21 @@ function checkUse(context: RuleContext, at: Record<string, string>, calculatorCo
 
 const isPlainOutput = (field: FieldDocument): boolean => OUTPUT_FIELD_TYPES.has(field.type);
 
+/** The breakdown of a calculator field: a read-only TABLE with the line columns, of a calculator that gives lines. */
+function checkBreakdown({ problems, fieldByCode }: RuleContext, field: FieldDocument): void {
+  const code = String(field.config.breakdownFieldCode);
+  const target = fieldByCode.get(code);
+  const columns = new Set(Array.isArray(target?.config.columns) ? (target.config.columns as Array<{ code?: unknown }>).map((column) => String(column.code)) : []);
+  const fits = target !== undefined && target.type === 'TABLE' && target.isReadOnly && CALCULATOR_BREAKDOWN_COLUMNS.every((column) => columns.has(column));
+  if (!fits || findCalculator(String(field.config.calculatorCode ?? ''))?.breakdown === undefined) problems.error('CALCULATOR_BREAKDOWN_INVALID', { fieldId: field.id, params: { code, columns: CALCULATOR_BREAKDOWN_COLUMNS.join(', ') } });
+}
+
 /** CALCULATOR fields and blocks. Whether the tenant switched the calculator on is checked by the API (it needs the tenant's data). */
 export function checkCalculators(context: RuleContext): void {
   const { doc, problems, fieldByCode } = context;
   for (const field of doc.fields.filter((candidate) => candidate.type === 'CALCULATOR')) {
     checkUse(context, { fieldId: field.id }, String(field.config.calculatorCode ?? ''), (field.config.inputs ?? {}) as Record<string, string>);
+    if (typeof field.config.breakdownFieldCode === 'string') checkBreakdown(context, field);
   }
   for (const step of doc.steps.filter((candidate) => candidate.type === 'CALCULATOR')) {
     const config = step.config as { calculatorCode?: string; inputs?: Record<string, string>; outputFieldCode?: string };

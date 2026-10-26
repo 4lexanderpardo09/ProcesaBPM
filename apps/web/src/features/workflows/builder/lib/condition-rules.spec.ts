@@ -11,6 +11,7 @@ const field = (type: string, config: Record<string, unknown> = {}): FieldDocumen
   capture: 'BOTH',
   isRequired: false,
   isReadOnly: false,
+    isImmutable: false,
   sortOrder: 0,
   config,
   dataSource: null,

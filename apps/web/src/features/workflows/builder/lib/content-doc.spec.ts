@@ -2,7 +2,7 @@ import type { FieldDocument, WorkflowVersionDocument } from '@procesabpm/shared'
 import { describe, expect, it } from 'vitest';
 import { codeFromLabel, fieldsOf, isFieldCode, removeField, setStepChildren, upsertField } from './content-doc';
 
-const field = (id: string, sortOrder: number, label: string): FieldDocument => ({ id, stepId: 's', code: id.toUpperCase(), label, type: 'TEXT', capture: 'BOTH', isRequired: false, isReadOnly: false, sortOrder, config: {}, dataSource: null });
+const field = (id: string, sortOrder: number, label: string): FieldDocument => ({ id, stepId: 's', code: id.toUpperCase(), label, type: 'TEXT', capture: 'BOTH', isRequired: false, isReadOnly: false, isImmutable: false, sortOrder, config: {}, dataSource: null });
 const empty: WorkflowVersionDocument = { steps: [], transitions: [], fields: [], amountRules: [] };
 
 describe('content document', () => {

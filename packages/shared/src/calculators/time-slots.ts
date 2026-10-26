@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { FormulaRuntimeError } from '../engine/formulas/evaluate.js';
 import { addDaysToLocalDate, localDateOf, zonedTimeToInstant } from '../engine/business-time/time-zone.js';
 import { Decimal, DecimalError } from '../engine/money/fixed-decimal.js';
-import type { CalculatorDefinition } from './types.js';
+import type { CalculatorContext, CalculatorDefinition, CalculatorLine } from './types.js';
 
 const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const TABLE_CODE = /^[A-Z][A-Z0-9_]{0,49}$/;
@@ -52,6 +52,39 @@ function addAmount(total: Decimal, amount: string): Decimal {
   }
 }
 
+/** Each slot of the chosen table with how many days it was paid, in the table's order; slots never paid are left out. */
+function paidSlots(inputs: Readonly<Record<string, unknown>>, config: Record<string, unknown>, context: CalculatorContext): CalculatorLine[] | null {
+  const start = instantOf(inputs.departure);
+  const end = instantOf(inputs.return);
+  if (start === null || end === null) return null;
+  if (end < start) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
+  const parsed = timeSlotsConfigSchema.safeParse(config);
+  if (!parsed.success) throw new FormulaRuntimeError('INVALID_VALUE');
+  const wanted = context.options?.table;
+  const rates = wanted === undefined ? parsed.data.tables[0] : parsed.data.tables.find((entry) => entry.code === wanted);
+  if (rates === undefined) throw new FormulaRuntimeError('INVALID_VALUE');
+  const lastDay = localDateOf(end, context.timeZone);
+  const atHome = new Set(Array.isArray(inputs.daysAtHome) ? inputs.daysAtHome.filter((day): day is string => typeof day === 'string') : []);
+  const counts = new Map<string, number>(rates.slots.map((entry) => [entry.name, 0]));
+  let day = localDateOf(start, context.timeZone);
+  for (let counted = 0; ; counted += 1) {
+    if (counted > MAX_SPAN_DAYS) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
+    for (const entry of atHome.has(day) ? [] : rates.slots) {
+      const begins = zonedTimeToInstant(day, minuteOf(entry.from), context.timeZone);
+      if (begins >= start && begins <= end) counts.set(entry.name, counts.get(entry.name)! + 1);
+    }
+    if (day >= lastDay) break;
+    day = addDaysToLocalDate(day, 1);
+  }
+  return rates.slots.flatMap((entry) => {
+    const quantity = counts.get(entry.name)!;
+    if (quantity === 0) return [];
+    let amount = Decimal.ZERO;
+    for (let index = 0; index < quantity; index += 1) amount = addAmount(amount, entry.amount);
+    return [{ concept: entry.name, quantity, unitAmount: entry.amount, amount: amount.toPlainString() }];
+  });
+}
+
 /**
  * Pay by time slots between a start and an end (a trip, a shift): on every local day of the span, each slot of the
  * chosen rate table is paid when the span covers the moment the slot starts. Nothing is fixed in the code: each
@@ -71,27 +104,10 @@ export const TIME_SLOTS: CalculatorDefinition = {
   usesTable: true,
   configSchema: timeSlotsConfigSchema,
   compute(inputs, config, context) {
-    const start = instantOf(inputs.departure);
-    const end = instantOf(inputs.return);
-    if (start === null || end === null) return null;
-    if (end < start) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
-    const parsed = timeSlotsConfigSchema.safeParse(config);
-    if (!parsed.success) throw new FormulaRuntimeError('INVALID_VALUE');
-    const wanted = context.options?.table;
-    const rates = wanted === undefined ? parsed.data.tables[0] : parsed.data.tables.find((entry) => entry.code === wanted);
-    if (rates === undefined) throw new FormulaRuntimeError('INVALID_VALUE');
-    const lastDay = localDateOf(end, context.timeZone);
-    const atHome = new Set(Array.isArray(inputs.daysAtHome) ? inputs.daysAtHome.filter((day): day is string => typeof day === 'string') : []);
-    let total = Decimal.ZERO;
-    let day = localDateOf(start, context.timeZone);
-    for (let counted = 0; ; counted += 1) {
-      if (counted > MAX_SPAN_DAYS) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
-      for (const entry of atHome.has(day) ? [] : rates.slots) {
-        const begins = zonedTimeToInstant(day, minuteOf(entry.from), context.timeZone);
-        if (begins >= start && begins <= end) total = addAmount(total, entry.amount);
-      }
-      if (day >= lastDay) return total;
-      day = addDaysToLocalDate(day, 1);
-    }
+    const lines = paidSlots(inputs, config, context);
+    return lines === null ? null : lines.reduce((total, line) => addAmount(total, line.amount), Decimal.ZERO);
+  },
+  breakdown(inputs, config, context) {
+    return paidSlots(inputs, config, context);
   },
 };

@@ -16,6 +16,7 @@ export interface FormFieldResponse {
   readonly type: FieldType;
   readonly isRequired: boolean;
   readonly isReadOnly: boolean;
+  readonly isImmutable: boolean;
   readonly sortOrder: number;
   readonly config: Readonly<Record<string, unknown>>;
   /** Where the values come from (preset list, dataset or calculator); `null` for a free field. */
@@ -117,6 +118,7 @@ export const formFieldResponseSchema = z.object({
   type: z.enum(FIELD_TYPES),
   isRequired: z.boolean(),
   isReadOnly: z.boolean(),
+  isImmutable: z.boolean(),
   sortOrder: z.number(),
   config: z.record(z.string(), z.unknown()),
   dataSource: z.record(z.string(), z.unknown()).nullable(),

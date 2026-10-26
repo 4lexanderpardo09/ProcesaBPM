@@ -307,6 +307,17 @@ describe('validateWorkflowGraph: fields', () => {
     expect(codes(withParts({ fields: [field('1', 'start', 'A', { type: 'TEXT', config: { regex: '(a+)+$' } })] }))).toContain('FIELD_CONFIG_INVALID');
   });
 
+  it('a calculator breakdown goes to a read-only TABLE with the line columns', () => {
+    const columns = ['CONCEPTO', 'CANTIDAD', 'VALOR_UNIT', 'SUBTOTAL'].map((code) => ({ code, label: code, type: code === 'CONCEPTO' ? 'TEXT' : 'NUMBER' }));
+    const meals = (overrides: Record<string, unknown> = {}) => field('4', 'start', 'MEALS', { type: 'TABLE', isReadOnly: true, config: { columns }, ...overrides });
+    const calculator = field('3', 'start', 'ALLOWANCE', { type: 'CALCULATOR', config: { calculatorCode: 'TIME_SLOTS', inputs: { departure: 'LEAVES', return: 'BACK' }, breakdownFieldCode: 'MEALS' } });
+    const dates = [field('1', 'start', 'LEAVES', { type: 'DATETIME' }), field('2', 'start', 'BACK', { type: 'DATETIME' })];
+    expect(codes(withParts({ fields: [...dates, calculator, meals()] }))).toEqual([]);
+    expect(codes(withParts({ fields: [...dates, calculator, meals({ isReadOnly: false })] }))).toEqual(['CALCULATOR_BREAKDOWN_INVALID']);
+    expect(codes(withParts({ fields: [...dates, calculator, meals({ config: { columns: columns.slice(1) } })] }))).toEqual(['CALCULATOR_BREAKDOWN_INVALID']);
+    expect(codes(withParts({ fields: [...dates, calculator] }))).toEqual(['CALCULATOR_BREAKDOWN_INVALID']);
+  });
+
   it('a TRIP_DAYS field runs between two date fields of the version', () => {
     const days = (start: string, end: string) => field('3', 'start', 'DIAS_FUERA', { type: 'TRIP_DAYS', config: { startFieldCode: start, endFieldCode: end } });
     const leaves = field('1', 'start', 'SALIDA', { type: 'DATETIME' });
