@@ -9,6 +9,7 @@ const INPUT_FIELD_TYPES: Readonly<Record<CalculatorInputType, ReadonlySet<string
   DATE: new Set(['DATE']),
   NUMBER: new Set(['NUMBER', 'CURRENCY', 'DAYS']),
   TEXT: new Set(['TEXT', 'TEXTAREA', 'SELECT']),
+  DAY_LIST: new Set(['TRIP_DAYS']),
 };
 const OUTPUT_FIELD_TYPES: ReadonlySet<string> = new Set(['NUMBER', 'CURRENCY']);
 

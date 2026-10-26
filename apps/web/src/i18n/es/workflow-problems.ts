@@ -58,6 +58,7 @@ export const workflowProblems = {
   CALCULATOR_INPUT_UNKNOWN: 'La calculadora no tiene un dato llamado {{name}}.',
   CALCULATOR_INPUT_MISSING: 'Falta el campo del dato «{{name}}» de la calculadora.',
   CALCULATOR_UNKNOWN_FIELD: 'El campo {{code}} no existe en esta versión.',
+  TRIP_DAYS_BOUND_INVALID: '«Días fuera» va de una fecha a otra del formulario: {{code}} no es un campo de fecha.',
   CALCULATOR_INPUT_TYPE_MISMATCH: 'El campo {{code}} no sirve para el dato «{{name}}» (se espera {{expected}}).',
   CALCULATOR_OUTPUT_TYPE_MISMATCH: 'El resultado debe guardarse en un campo de número o moneda; {{code}} no lo es.',
   CALCULATOR_OUTPUT_NOT_READ_ONLY: 'El campo {{code}} donde se guarda el resultado debe ser de solo lectura.',

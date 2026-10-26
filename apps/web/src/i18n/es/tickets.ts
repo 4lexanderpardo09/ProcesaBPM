@@ -350,6 +350,8 @@ export const tickets = {
       title: 'Datos de la solicitud',
       loading: 'Cargando datos…',
       empty: 'Sin datos registrados.',
+      tripDaysAll: 'Todos los días del viaje',
+      tripDaysExcept: 'Todos menos {{days}}',
       days_one: '{{count}} día',
       days_other: '{{count}} días',
       rows_one: '{{count}} fila',
@@ -583,6 +585,9 @@ export const tickets = {
     choose: 'Elige una opción',
     daysHint: 'Número entero de días',
     defaultToday: 'Si lo dejas vacío, queda la fecha de hoy.',
+    tripDays: {
+      pending: 'Llena las fechas de salida y regreso para ver los días del viaje. Desmarca los días en que no estuviste fuera.',
+    },
     defaultNow: 'Si lo dejas vacío, queda la fecha y la hora del envío.',
     choices: {
       search: 'Buscar en «{{field}}»',

@@ -25,6 +25,13 @@ export function checkFields({ doc, stepById, fieldByCode, problems }: RuleContex
     if (!config.valid) problems.error('FIELD_CONFIG_INVALID', { ...at, params: { issues: config.issues } });
     const dataSource = checkFieldDataSource(field.type, field.dataSource);
     if (!dataSource.valid) problems.error('FIELD_DATA_SOURCE_INVALID', { ...at, params: { issues: dataSource.issues } });
+    if (field.type === 'TRIP_DAYS' && config.valid) {
+      // The days it lists run from one date of the form to another.
+      for (const code of [field.config.startFieldCode, field.config.endFieldCode]) {
+        const bound = fieldByCode.get(String(code));
+        if (bound === undefined || (bound.type !== 'DATE' && bound.type !== 'DATETIME')) problems.error('TRIP_DAYS_BOUND_INVALID', { ...at, params: { code: String(code) } });
+      }
+    }
   }
 
   // Formula columns of tables: a number from the other columns of the same row.

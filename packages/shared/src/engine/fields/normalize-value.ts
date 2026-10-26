@@ -40,6 +40,24 @@ function resolveDateBound(bound: unknown, today: string): string | undefined {
 
 const isRealDate = (text: string): boolean => DATE.test(text) && new Date(`${text}T00:00:00Z`).toISOString().startsWith(text);
 
+/** The longest trip whose days can be unticked: the meal calculator stops at 90 days too. */
+const MAX_TRIP_DAYS = 92;
+const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * TRIP_DAYS keeps the days the person was NOT away (`YYYY-MM-DD`, sorted, without repeats), like the help desk's
+ * «Días fuera»: nothing unticked means every day of the trip counts.
+ */
+function normalizeTripDays(raw: unknown): Normalized {
+  if (!Array.isArray(raw) || raw.length > MAX_TRIP_DAYS) return bad('INVALID_TYPE');
+  const days = new Set<string>();
+  for (const day of raw) {
+    if (typeof day !== 'string' || !LOCAL_DATE.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00Z`))) return bad('INVALID_TYPE');
+    days.add(day);
+  }
+  return { ok: true, value: [...days].sort(), references: [] };
+}
+
 function normalizeDate(raw: unknown, config: Config, context: ValidationContext): Normalized {
   if (typeof raw !== 'string' || !isRealDate(raw.trim())) return bad('INVALID_TYPE');
   const value = raw.trim();
@@ -199,6 +217,8 @@ export function normalizeValue(type: FieldDocument['type'] | TableColumn['type']
       return normalizeNumber(raw, config, asNumber(config, 'decimals') ?? 0);
     case 'CURRENCY':
       return normalizeNumber(raw, config, 2);
+    case 'TRIP_DAYS':
+      return normalizeTripDays(raw);
     case 'DAYS':
       return typeof raw === 'number' && Number.isInteger(raw) ? normalizeNumber(raw, config, 0) : bad('INVALID_TYPE');
     case 'SELECT':

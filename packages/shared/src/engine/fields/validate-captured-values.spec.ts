@@ -30,6 +30,14 @@ describe('validateCapturedValues', () => {
     expect(validateCapturedValues({ fields, input: {}, existing: { D: '2026-09-01', T: '2026-09-01T10:00:00.000Z' }, context: now }).values).toEqual({});
   });
 
+  it('keeps the days of a trip the person was not away, sorted and once each', () => {
+    const days = [field('d', 's', 'DIAS_FUERA', { type: 'TRIP_DAYS', config: { startFieldCode: 'SALIDA', endFieldCode: 'REGRESO' } })];
+    expect(run(days, { DIAS_FUERA: ['2026-11-12', '2026-11-11', '2026-11-12'] }).values).toEqual({ DIAS_FUERA: ['2026-11-11', '2026-11-12'] });
+    expect(run(days, { DIAS_FUERA: [] }).values).toEqual({});
+    expect(codes(run(days, { DIAS_FUERA: ['11/11/2026'] }))).toEqual(['DIAS_FUERA:INVALID_TYPE']);
+    expect(codes(run(days, { DIAS_FUERA: '2026-11-11' }))).toEqual(['DIAS_FUERA:INVALID_TYPE']);
+  });
+
   it('rejects codes the step does not capture', () => expect(codes(run([field('a', 's', 'A')], { OTHER: 'x' }))).toEqual(['OTHER:UNKNOWN_FIELD']));
 
   it('does not demand a read-only field', () => expect(codes(run([field('a', 's', 'A', { isReadOnly: true, isRequired: true })], {}))).toEqual([]));

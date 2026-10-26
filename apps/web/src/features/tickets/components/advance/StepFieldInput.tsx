@@ -21,12 +21,14 @@ export interface StepFieldInputProps {
   /** Names of the files the ticket already has, by id. */
   readonly knownFiles: Readonly<Record<string, string>>;
   readonly onChange: (value: InputValue) => void;
+  /** What the rest of the form holds, by field code: «Días fuera» lists the days between two of its dates. */
+  readonly formInputs?: Readonly<Record<string, InputValue>>;
   /** A file field says when an upload starts and ends. */
   readonly onBusyChange: (busy: boolean) => void;
 }
 
 /** One field of the step, with the input its type needs; a field the web cannot capture yet says so. */
-export function StepFieldInput({ field, value, error, knownLabels, knownFiles, onChange, onBusyChange }: StepFieldInputProps) {
+export function StepFieldInput({ field, value, error, knownLabels, knownFiles, onChange, onBusyChange, formInputs = {} }: StepFieldInputProps) {
   const { t } = useTranslation('tickets');
   const common = { label: field.label, required: field.isRequired, error };
   const text = typeof value === 'string' ? value : '';
@@ -34,6 +36,7 @@ export function StepFieldInput({ field, value, error, knownLabels, knownFiles, o
 
   const source = choiceSourceOf(field);
   if (field.type === 'FILE') return <FileInput field={field} value={Array.isArray(value) ? (value as readonly string[]) : []} knownNames={knownFiles} error={error} onChange={onChange} onBusyChange={onBusyChange} />;
+  if (field.type === 'TRIP_DAYS') return <TripDays field={field} atHome={Array.isArray(value) ? (value as readonly string[]) : []} formInputs={formInputs} error={error} onChange={onChange} />;
   if (field.type === 'TABLE') return <TableInput field={field} rows={Array.isArray(value) ? (value as readonly TableRow[]) : []} error={error} onChange={onChange} knownFiles={knownFiles} onBusyChange={onBusyChange} />;
   if (source === 'DATASET' && field.type === 'TEXT') return <DatasetText field={field} value={text} error={error} onChange={onChange} />;
   if (source !== undefined) {
@@ -88,6 +91,49 @@ function MultiSelect({ field, selected, error, onChange }: { readonly field: For
       {optionsOf(field).map((option) => (
         <Checkbox key={option.value} label={option.label} checked={selected.includes(option.value)} onChange={(event) => toggle(option.value, event.target.checked)} />
       ))}
+      {error !== undefined && <span className={styles.pendingError}>{error}</span>}
+    </fieldset>
+  );
+}
+
+/** The longest trip listed day by day (the API keeps at most 92 days). */
+const MAX_TRIP_DAYS = 92;
+const LOCAL_DAY = /^(\d{4})-(\d{2})-(\d{2})/;
+const DAY_LABEL = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+/** The local days from one date input to another, both included; empty while either is missing or they are reversed. */
+export function tripDaysBetween(start: InputValue | undefined, end: InputValue | undefined): readonly string[] {
+  const first = typeof start === 'string' ? LOCAL_DAY.exec(start.trim()) : null;
+  const last = typeof end === 'string' ? LOCAL_DAY.exec(end.trim()) : null;
+  if (first === null || last === null) return [];
+  const days: string[] = [];
+  const day = new Date(Date.UTC(Number(first[1]), Number(first[2]) - 1, Number(first[3])));
+  const until = Date.UTC(Number(last[1]), Number(last[2]) - 1, Number(last[3]));
+  while (day.getTime() <= until && days.length < MAX_TRIP_DAYS) {
+    days.push(day.toISOString().slice(0, 10));
+    day.setUTCDate(day.getUTCDate() + 1);
+  }
+  return days;
+}
+
+/**
+ * «Días fuera», as in the help desk: one box per day of the trip, all ticked; the person unticks the days they were not
+ * away, and those are what is kept (the meal calculator pays nothing on them).
+ */
+function TripDays({ field, atHome, formInputs, error, onChange }: { readonly field: FormFieldResponse; readonly atHome: readonly string[]; readonly formInputs: Readonly<Record<string, InputValue>>; readonly error: string | undefined; readonly onChange: (value: InputValue) => void }) {
+  const { t } = useTranslation('tickets');
+  const days = tripDaysBetween(formInputs[stringOf(field.config['startFieldCode']) ?? ''], formInputs[stringOf(field.config['endFieldCode']) ?? '']);
+  const toggle = (day: string, away: boolean) => onChange(away ? atHome.filter((entry) => entry !== day) : [...atHome, day].sort());
+  return (
+    <fieldset className={styles.choices} aria-invalid={error !== undefined}>
+      <legend className="text-label">{field.label}</legend>
+      {days.length === 0 ? (
+        <span className="text-caption">{t('advance.tripDays.pending')}</span>
+      ) : (
+        days.map((day) => (
+          <Checkbox key={day} label={DAY_LABEL.format(new Date(`${day}T12:00:00Z`))} checked={!atHome.includes(day)} onChange={(event) => toggle(day, event.target.checked)} />
+        ))
+      )}
       {error !== undefined && <span className={styles.pendingError}>{error}</span>}
     </fieldset>
   );

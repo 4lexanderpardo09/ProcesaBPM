@@ -402,6 +402,7 @@ const INPUT_TYPES: Readonly<Record<string, ReadonlySet<string>>> = {
   DATE: new Set(['DATE']),
   NUMBER: new Set(['NUMBER', 'CURRENCY', 'DAYS']),
   TEXT: new Set(['TEXT', 'TEXTAREA', 'SELECT']),
+  DAY_LIST: new Set(['TRIP_DAYS']),
 };
 
 export function CalculatorSection({ step, fields, readOnly, onChange }: SectionProps) {
