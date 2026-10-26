@@ -788,6 +788,7 @@ Diseño y revisión final de un subagente Opus (parte crítica). El token de acc
     - Después cada ticket pasa por `TransitionTicketService` en su propia transacción. El que falla no detiene a los demás, y la respuesta dice ticket por ticket qué pasó (código de error del dominio).
     - Ambas rutas piden `transition Ticket`.
   - **Web (`/tickets/batch`, «Procesar en lote» en la bandeja):**
+    - **El resultado no se pierde (2026-10-26):** el diálogo vive en la página, no en la tarjeta del paso, y guarda el grupo y los tickets elegidos al abrirse: al enviar, esos tickets salen de la bandeja (la tarjeta puede desaparecer si se vacía) y el diálogo igual muestra cuántos avanzaron y por qué se quedaron los demás. Antes quedaba en «0 tickets · No se pudo cargar el formulario del paso».
     - Una tarjeta por paso con casillas, «Elegir todos», el conteo frente al límite y las decisiones.
     - El diálogo usa el formulario del primer ticket (`useStepFields`, sin los campos de archivo, que son de un solo ticket) y muestra el resultado con el motivo de cada ticket que se quedó.
   - **Bandeja configurable por paso (2026-10-23, `feat/batch-tray`), como la de la mesa de ayuda:**

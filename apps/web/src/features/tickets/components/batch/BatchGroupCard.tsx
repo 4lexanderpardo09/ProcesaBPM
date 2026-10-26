@@ -7,7 +7,6 @@ import { ticketPath } from '@/shared/lib/paths';
 import { Button, Card, Checkbox, Table, type TableColumn } from '@/shared/ui';
 import { fieldValueDisplay } from '../../lib/field-value';
 import { DisplayedValue } from '../TicketFieldValues';
-import { BatchAdvanceDialog } from './BatchAdvanceDialog';
 import styles from './Batch.module.css';
 
 type BatchTicket = TicketBatchGroup['tickets'][number];
@@ -41,10 +40,9 @@ function sectionsOf(group: TicketBatchGroup): readonly Section[] {
  * One step's tickets with a box each, and its decisions for the ones chosen (up to the step's limit). The step can name
  * its tray, show some of each ticket's data beside it and split the tickets in parts, each chosen at once.
  */
-export function BatchGroupCard({ group, timeZone }: { readonly group: TicketBatchGroup; readonly timeZone: string | undefined }) {
+export function BatchGroupCard({ group, timeZone, onDecide }: { readonly group: TicketBatchGroup; readonly timeZone: string | undefined; readonly onDecide: (decision: TicketBatchGroup['decisions'][number], ticketIds: readonly string[]) => void }) {
   const { t } = useTranslation('tickets');
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
-  const [decision, setDecision] = useState<TicketBatchGroup['decisions'][number] | null>(null);
   // A ticket that left the group (moved here or elsewhere) is no longer chosen.
   const ids = group.tickets.map((ticket) => ticket.id).filter((id) => chosen.has(id));
   const all = ids.length === group.tickets.length;
@@ -121,23 +119,12 @@ export function BatchGroupCard({ group, timeZone }: { readonly group: TicketBatc
         {tooMany && <p className={styles.error}>{t('batch.tooMany', { max: group.maxTickets })}</p>}
         <div className={styles.bar} role="group" aria-label={t('batch.decisions')}>
           {group.decisions.map((option) => (
-            <Button key={option.transitionId} variant={group.decisions.length === 1 ? 'primary' : 'secondary'} disabled={ids.length === 0 || tooMany} onClick={() => setDecision(option)}>
+            <Button key={option.transitionId} variant={group.decisions.length === 1 ? 'primary' : 'secondary'} disabled={ids.length === 0 || tooMany} onClick={() => onDecide(option, ids)}>
               {option.label}
             </Button>
           ))}
         </div>
       </div>
-      {decision !== null && (
-        <BatchAdvanceDialog
-          group={group}
-          ticketIds={ids}
-          decision={decision}
-          onClose={() => {
-            setDecision(null);
-            setChosen(new Set());
-          }}
-        />
-      )}
     </Card>
   );
 }
