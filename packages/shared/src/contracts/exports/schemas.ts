@@ -14,12 +14,49 @@ export const EXPORT_FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY', 'EVERY_N_DAYS']
 export const EXPORT_DELIMITERS = [';', ',', '|', '\t'] as const;
 
 const header = z.string().trim().min(1).max(100);
+
+/** One part of a TABLE_SUM reference: a column of a table, only the rows whose `filter.column` is one of `filter.values`; or a whole number field. */
+export interface TableSumPart {
+  readonly field: string;
+  readonly column: string | null;
+  readonly filter: { readonly column: string; readonly values: readonly string[] } | null;
+}
+
+/**
+ * Reads a TABLE_SUM reference, the help desk's own syntax: parts separated by `;`, each `TABLE:COLUMN`, optionally
+ * `:KEY=a|b` to add only the rows whose KEY is one of those values, or just `FIELD` to add a number field. So
+ * `ALIMENTACION;CONCEPTOS:SUBTOTAL:TIPO=Alimentación` is the meals the calculator gave plus the meals asked as concepts.
+ * Null when a part is malformed.
+ */
+export function parseTableSumReference(reference: string): readonly TableSumPart[] | null {
+  const parts = reference.split(';').map((part) => part.trim());
+  if (parts.length === 0 || parts.length > 20) return null;
+  const parsed: TableSumPart[] = [];
+  for (const part of parts) {
+    const [field, column, filter, ...rest] = part.split(':').map((piece) => piece.trim());
+    if (field === undefined || !FIELD_CODE.test(field) || rest.length > 0) return null;
+    if (column === undefined) {
+      parsed.push({ field, column: null, filter: null });
+      continue;
+    }
+    if (column === '') return null;
+    if (filter === undefined) {
+      parsed.push({ field, column, filter: null });
+      continue;
+    }
+    const [key, list] = filter.split('=');
+    const values = (list ?? '').split('|').map((value) => value.trim()).filter((value) => value !== '');
+    if (key === undefined || key.trim() === '' || values.length === 0) return null;
+    parsed.push({ field, column, filter: { column: key.trim(), values } });
+  }
+  return parsed;
+}
 const CATALOG_NAME = /^[A-Za-z0-9_-]{1,50}$/;
 const FIELD_CODE = /^[A-Z][A-Z0-9_]*$/;
 
 /**
  * One column of the file. `sourceRef` by source: FIELD and DERIVED a field code; CONSTANT the text; REQUESTER one of
- * `EXPORT_REQUESTER_ATTRIBUTES`; TABLE_SUM `TABLE:COLUMN`; CATALOG `catalog:FIELD` (the field's value translated by the
+ * `EXPORT_REQUESTER_ATTRIBUTES`; TABLE_SUM `TABLE:COLUMN[:KEY=a|b]` or a number field, several joined by `;` (`parseTableSumReference`); CATALOG `catalog:FIELD` (the field's value translated by the
  * catalog, or kept when it has no entry); FORMULA a formula over the ticket's fields. COMPANY, SEQUENCE (the row number
  * in the file), CUTOFF_DATE and TICKET_DATE take none.
  */
@@ -37,11 +74,9 @@ export const exportColumnSchema = z
       case 'REQUESTER':
         if (!(EXPORT_REQUESTER_ATTRIBUTES as readonly string[]).includes(ref)) fail('A requester attribute is needed');
         break;
-      case 'TABLE_SUM': {
-        const [table, cell] = ref.split(':');
-        if (table === undefined || cell === undefined || !FIELD_CODE.test(table) || cell.trim() === '') fail('TABLE:COLUMN is needed');
+      case 'TABLE_SUM':
+        if (parseTableSumReference(ref) === null) fail('TABLE:COLUMN[:KEY=a|b] or FIELD, several separated by ; is needed');
         break;
-      }
       case 'CATALOG': {
         const [catalog, field] = ref.split(':');
         if (catalog === undefined || field === undefined || !CATALOG_NAME.test(catalog) || !FIELD_CODE.test(field)) fail('catalog:FIELD is needed');

@@ -1,4 +1,4 @@
-import type { ExportColumn, ExportFilterRule } from '@procesabpm/shared';
+import { type ExportColumn, type ExportFilterRule, parseTableSumReference } from '@procesabpm/shared';
 import { formatValue, parseLocaleNumber } from './value-format.js';
 
 /** What a line is built from: the ticket's values and the few facts about it a column can name. */
@@ -24,16 +24,33 @@ export function textOf(value: unknown): string {
   return '';
 }
 
-/** The sum of one column of a table field (`TABLE:COLUMN`); cells that are not numbers count as nothing. */
+/** A number a cell or a field holds; anything else counts as nothing. */
+const amountOf = (value: unknown): number => (typeof value === 'number' ? value : (parseLocaleNumber(textOf(value)) ?? 0));
+
+/**
+ * The sum a TABLE_SUM reference names (`parseTableSumReference`): columns of table fields, only the rows that pass a
+ * part's filter (compared without case or outer spaces, like the help desk's pockets), plus whole number fields.
+ * A malformed reference sums nothing.
+ */
 export function tableSum(values: Readonly<Record<string, unknown>>, reference: string): number {
-  const [table, column] = reference.split(':');
-  const rows = values[table ?? ''];
-  if (!Array.isArray(rows) || column === undefined) return 0;
-  return rows.reduce((total: number, row: unknown) => {
-    const cell = typeof row === 'object' && row !== null ? (row as Record<string, unknown>)[column] : undefined;
-    const amount = typeof cell === 'number' ? cell : parseLocaleNumber(textOf(cell));
-    return total + (amount ?? 0);
-  }, 0);
+  const parts = parseTableSumReference(reference) ?? [];
+  let total = 0;
+  for (const part of parts) {
+    const value = values[part.field];
+    if (part.column === null) {
+      if (!Array.isArray(value)) total += amountOf(value);
+      continue;
+    }
+    if (!Array.isArray(value)) continue;
+    const wanted = part.filter === null ? null : new Set(part.filter.values.map((option) => option.trim().toLowerCase()));
+    for (const row of value) {
+      if (typeof row !== 'object' || row === null) continue;
+      const cells = row as Record<string, unknown>;
+      if (wanted !== null && part.filter !== null && !wanted.has(textOf(cells[part.filter.column]).trim().toLowerCase())) continue;
+      total += amountOf(cells[part.column]);
+    }
+  }
+  return total;
 }
 
 function requesterAttribute(source: LineSource, attribute: string): string {
