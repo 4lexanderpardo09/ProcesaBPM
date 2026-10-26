@@ -219,11 +219,15 @@ export class TicketWriteRepository {
     return line?.definition.name;
   }
 
-  /** Who delivered the step last in this ticket (SAME_AS_STEP): the person on the newest clock that ended by leaving it. */
+  /**
+   * Who handled the step last in this ticket (SAME_AS_STEP), as in the help desk: whoever holds it now when it is the
+   * step being left (its clock is still open while the next one is planned), else the person on the newest clock that
+   * ended by leaving it.
+   */
   async lastDelivererOf(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<string | undefined> {
     const clock = await tx.ticketSlaClock.findFirst({
-      where: { tenantId, ticketId, stepId, completionReason: 'STEP_EXITED', responsibleId: { not: null } },
-      orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+      where: { tenantId, ticketId, stepId, responsibleId: { not: null }, OR: [{ completionReason: 'STEP_EXITED' }, { completedAt: null }] },
+      orderBy: [{ completedAt: { sort: 'desc', nulls: 'first' } }, { id: 'desc' }],
       select: { responsibleId: true },
     });
     return clock?.responsibleId ?? undefined;
