@@ -1,4 +1,5 @@
-import { PDFArray, PDFDict, PDFDocument, PDFName, PDFString, StandardFonts, degrees } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { decodePDFRawStream, PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFString, StandardFonts, degrees } from 'pdf-lib';
 import { extractText, getDocumentProxy } from 'unpdf';
 import { describe, expect, it } from 'vitest';
 import { defaultCanvasStyle, PdfTemplateInvalidError } from '@procesabpm/shared';
@@ -42,6 +43,20 @@ describe('PdfLibRenderer.renderDesign', () => {
     expect(loaded.getProducer()).toBe('ProcesaBPM');
     expect(loaded.getCreationDate()?.toISOString()).toBe('2026-10-02T10:00:00.000Z');
     expect(bytes.length).toBeLessThan(120_000);
+  });
+
+  it('embeds every glyph of the subset with the same outline as the font file (viewers draw the real letters)', async () => {
+    // Noto Sans has glyphs of odd length: a short `loca` table (offsets / 2) shifted them and viewers drew garbage.
+    const sample = 'Paz y salvo – Marta Muñoz, cédula 1061701999: ¿firmó? ¡Sí! Jorge Jaramillo QWXKV';
+    const { bytes } = await renderer.renderDesign(designJob([{ type: 'text', text: sample }]));
+    const loaded = await PDFDocument.load(bytes);
+    const regularDescriptor = (object: unknown): object is PDFDict => object instanceof PDFDict && object.get(PDFName.of('FontFile2')) !== undefined && String(object.get(PDFName.of('FontName'))).includes('Regular');
+    const fontFiles = loaded.context.enumerateIndirectObjects().flatMap(([, object]) => (regularDescriptor(object) ? [object.lookup(PDFName.of('FontFile2'))].filter((file): file is PDFRawStream => file instanceof PDFRawStream) : []));
+    expect(fontFiles).toHaveLength(1);
+    const subset = fontkit.create(Buffer.from(decodePDFRawStream(fontFiles[0]!).decode()));
+    const original = fontkit.create(Buffer.from(await new FileFontProvider().regular()));
+    const embedded = new Set(Array.from({ length: subset.numGlyphs }, (_v, gid) => subset.getGlyph(gid).path.toSVG()));
+    for (const character of new Set(sample)) expect(embedded.has(original.glyphForCodePoint(character.codePointAt(0)!).path.toSVG()), character).toBe(true);
   });
 
   it('a character the font does not have becomes a question mark instead of breaking the document', async () => {

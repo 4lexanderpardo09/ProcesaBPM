@@ -3,6 +3,7 @@
 Actualizado: 2026-10-02. Las decisiones tomadas están en [analisis.md §0.1](analisis.md).
 
 ## 0. Hecho
+- **Pruebas de punta a punta en el EC2 (2026-10-26):** 9 flujos (soporte, compras, paz y salvo, viáticos, confirmación de pagos, anticipo, retiro de personal y gestión financiera como en la mesa) con 16 usuarios invitados por correo. Bugs encontrados y su PR: PDF con letras faltantes (`fix/pdf-font-subset`), firmas del paralelo por orden de llegada, «mismo responsable» del paso inmediatamente anterior, rol Solicitante sin poder responder lo que le devuelven, fórmulas de pasos posteriores calculadas desde la creación; y, pedidos por el usuario, conservar firmas al reenviar, firma de varios cargos y «Omitir», solo quien tiene el paso lo avanza, y comentario obligatorio al rechazar.
 - **Paridad con la mesa de ayuda (inventario, 2026-10-21):** se revisó `main` de la mesa (front y back) contra ProcesaBPM. Lo que falta:
   - **Solo en la web (el API ya lo tiene):**
     - ~~recuperar contraseña e invitaciones; cambiar de organización y enlaces con `?tenant=`~~ (hecho, §4.21);

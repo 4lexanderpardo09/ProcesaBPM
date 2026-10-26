@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@pdf-lib/fontkit@1.1.1': ddb62f74b8eb0813e3f3e11773749dc8ef9749689be21aa37d38b4dbd034bb20
+
 importers:
 
   .:
@@ -46,7 +49,7 @@ importers:
         version: 2.2.1
       '@pdf-lib/fontkit':
         specifier: 1.1.1
-        version: 1.1.1
+        version: 1.1.1(patch_hash=ddb62f74b8eb0813e3f3e11773749dc8ef9749689be21aa37d38b4dbd034bb20)
       '@prisma/adapter-pg':
         specifier: 7.10.0
         version: 7.10.0
@@ -5484,7 +5487,7 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
 
-  '@pdf-lib/fontkit@1.1.1':
+  '@pdf-lib/fontkit@1.1.1(patch_hash=ddb62f74b8eb0813e3f3e11773749dc8ef9749689be21aa37d38b4dbd034bb20)':
     dependencies:
       pako: 1.0.11
 
@@ -6885,7 +6888,7 @@ snapshots:
   css-tree@3.2.1:
     dependencies:
       mdn-data: 2.27.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   css.escape@1.5.1: {}
 
