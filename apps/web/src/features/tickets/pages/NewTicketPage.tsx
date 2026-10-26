@@ -111,7 +111,7 @@ export function NewTicketPage() {
                     />
                   </Card>
                 )}
-                <RequestForm key={`${requesterId}:${companyId}:${type.subcategoryId}:${start.stepId}`} subcategoryId={type.subcategoryId} companyId={companyId} requesterId={forOther ? requesterId : undefined} priorityId={type.priorityId} start={start} />
+                <RequestForm key={`${requesterId}:${companyId}:${type.subcategoryId}:${start.stepId}`} subcategoryId={type.subcategoryId} companyId={companyId} requesterId={forOther ? requesterId : undefined} priorityId={type.priorityId} start={start} descriptionTemplate={subcategory?.description} />
               </>
             )}
           </div>
