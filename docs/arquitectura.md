@@ -937,7 +937,7 @@ Durante los 30 días de `PENDING_DELETION` el dueño o un administrador puede ll
     - al cerrar el ticket (`CLOSING`);
     - o al pasar por un bloque `EXPORT` que la nombre.
   - **Qué filtra:** el filtro por valor de campo (todas las reglas, sin mayúsculas ni espacios) y, si se indica, solo una empresa.
-  - **Columnas:** campo, derivado, constante, empresa, solicitante (nombre, apellido, completo, correo, documento), suma de una columna de tabla, catálogo de traducción, fórmula (el lenguaje de los campos calculados), fecha del ticket, número de fila y fecha del corte.
+  - **Columnas:** campo, derivado, constante, empresa, solicitante (nombre, apellido, completo, correo, documento), suma de una columna de tabla (como los bolsillos del plano Bincard de la mesa: `TABLA:COLUMNA`, con `:CLAVE=a|b` solo suma las filas cuya CLAVE es uno de esos valores, un código solo suma un campo numérico, y varias partes se unen con `;`; por ejemplo `ALIMENTACION;CONCEPTOS:SUBTOTAL:TIPO=Alimentación`), catálogo de traducción, fórmula (el lenguaje de los campos calculados), fecha del ticket, número de fila y fecha del corte.
   - **Formatos de valor:** recortar, mayúsculas, entero, entero o vacío, 2 decimales y dd/mm/aaaa. Los números se leen como se escriben aquí (`1.234.567,89`).
 - **Líneas** (`export_lines`, una por definición y ticket):
   - Las escriben los handlers transaccionales del outbox (`ExportLineHandlers`: `ticket.transitioned`, `ticket.closed`, `block.export`), así que son idempotentes.

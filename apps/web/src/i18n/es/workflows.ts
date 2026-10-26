@@ -187,7 +187,7 @@ export const workflows = {
         CATALOG: 'Catálogo:campo',
         FORMULA: 'Fórmula',
       },
-      refHints: { TABLE_SUM: 'Por ejemplo GASTOS:VALOR.', CATALOG: 'Por ejemplo BANCOS:BANCO.', FORMULA: 'Con los códigos de los campos, como en los campos calculados: {VALOR} * 2.' },
+      refHints: { TABLE_SUM: 'Por ejemplo GASTOS:VALOR. Solo algunas filas: CONCEPTOS:SUBTOTAL:TIPO=Transporte|Peajes. Varias sumas juntas, separadas por punto y coma: ALIMENTACION;CONCEPTOS:SUBTOTAL:TIPO=Alimentación.', CATALOG: 'Por ejemplo BANCOS:BANCO.', FORMULA: 'Con los códigos de los campos, como en los campos calculados: {VALOR} * 2.' },
       requester: { FIRST_NAME: 'Nombre', LAST_NAME: 'Apellido', FULL_NAME: 'Nombre completo', EMAIL: 'Correo', DOCUMENT_NUMBER: 'Documento' },
       valueFormat: 'Formato',
       noFormat: 'Tal cual',

@@ -57,6 +57,24 @@ describe('projectLine', () => {
     expect(tableSum({ T: [{ A: 2 }, { A: 'nope' }] }, 'T:A')).toBe(2);
     expect(tableSum({ T: 'not a table' }, 'T:A')).toBe(0);
   });
+
+  it('adds only the rows of the asked types and joins several tables and fields, like the help desk pockets', () => {
+    const values = {
+      CONCEPTOS: [
+        { TIPO: 'Transporte', SUBTOTAL: 120000 },
+        { TIPO: ' combustible ', SUBTOTAL: '80.000' },
+        { TIPO: 'Peajes', SUBTOTAL: 21000 },
+        { TIPO: 'Otros', SUBTOTAL: 50000 },
+        { TIPO: 'Alimentación', SUBTOTAL: 15000 },
+      ],
+      ALIMENTACION: 135000,
+    };
+    expect(tableSum(values, 'CONCEPTOS:SUBTOTAL:TIPO=Transporte|Combustible|Peajes')).toBe(221000);
+    expect(tableSum(values, 'ALIMENTACION;CONCEPTOS:SUBTOTAL:TIPO=Alimentación')).toBe(150000);
+    expect(tableSum(values, 'CONCEPTOS:SUBTOTAL:TIPO=Alojamiento|Otros')).toBe(50000);
+    expect(tableSum(values, 'CONCEPTOS:SUBTOTAL; ALIMENTACION')).toBe(421000);
+    expect(tableSum(values, 'CONCEPTOS:SUBTOTAL:TIPO=')).toBe(0);
+  });
 });
 
 describe('passesFilter', () => {
