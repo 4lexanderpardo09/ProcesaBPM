@@ -66,6 +66,28 @@ describe('a step for the same person who delivered an earlier one', () => {
     expect(await world.assignees(created.id)).toEqual([{ user_id: second.userId, type: 'PRIMARY' }]);
   });
 
+  it('also works when the step it points to is the one being left (the help desk resolves it the same way)', async () => {
+    const next = await publishFlow(world.admin, {
+      steps: [
+        { key: 'start', type: 'START' },
+        { key: 'review', type: 'TASK', extra: { assignmentMode: 'POOL' }, candidates: [user(worker), user(second)] },
+        { key: 'settle', type: 'TASK', extra: { assignmentMode: 'SAME_AS_STEP', sameAssigneeStepId: 'new:review' } },
+        { key: 'end', type: 'END' },
+      ],
+      transitions: [
+        { from: 'start', to: 'review', type: 'DEFAULT' },
+        { from: 'review', to: 'settle', type: 'DECISION', label: 'Reviewed' },
+        { from: 'settle', to: 'end', type: 'DECISION', label: 'Settled' },
+      ],
+    });
+    const created = (await requester.client.post('/tickets', { subcategoryId: next.subcategoryId, title: unique('Refund'), values: {} }).expect(201)).body;
+    // Answering from the pool takes it implicitly: the step right after goes to that same person.
+    await second.client.post(`/tickets/${created.id}/transition`, { transitionId: next.transition.Reviewed, visitId: created.openVisitId }).expect(200);
+
+    expect((await world.ticketRow(created.id)).current_step_id).toBe(next.step.settle);
+    expect(await world.assignees(created.id)).toEqual([{ user_id: second.userId, type: 'PRIMARY' }]);
+  });
+
   it('refuses to publish a step that points to one the ticket cannot have visited before', async () => {
     const category = (await world.admin.post('/categories', { name: unique('Cat') }).expect(201)).body.id as string;
     const subcategoryId = (await world.admin.post('/subcategories', { categoryId: category, name: unique('Sub') }).expect(201)).body.id as string;
