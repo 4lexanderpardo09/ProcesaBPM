@@ -46,6 +46,15 @@ describe('TIME_SLOTS', () => {
     expect(compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z', 'America/Bogota', 'NOCTURNO')).toBe('30000');
   });
 
+  it('pays nothing on the days a TRIP_DAYS field says the person was at home, like the help desk «Días fuera»', () => {
+    const away = (atHome: unknown) => slots.compute({ departure: '2026-10-05T16:00:00.000Z', return: '2026-10-06T18:00:00.000Z', daysAtHome: atHome }, config, { timeZone: 'America/Bogota', options: { table: 'COMIDAS' } })?.toPlainString();
+    expect(away([])).toBe('60001');
+    expect(away(['2026-10-05'])).toBe('25000.5');
+    expect(away(['2026-10-05', '2026-10-06', '2026-12-25'])).toBe('0');
+    expect(away(null)).toBe('60001');
+    expect(slots.parameters.find((parameter) => parameter.name === 'daysAtHome')).toEqual({ name: 'daysAtHome', type: 'DAY_LIST', required: false });
+  });
+
   it('uses the first table when the field names none, and refuses a table the organization does not have', () => {
     expect(compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z')).toBe('60001');
     expect(() => compute('2026-10-05T16:00:00.000Z', '2026-10-06T18:00:00.000Z', 'America/Bogota', 'GONE')).toThrow(FormulaRuntimeError);

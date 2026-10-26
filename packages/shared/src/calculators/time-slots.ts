@@ -57,13 +57,15 @@ function addAmount(total: Decimal, amount: string): Decimal {
  * chosen rate table is paid when the span covers the moment the slot starts. Nothing is fixed in the code: each
  * organization names its rate tables and their slots, hours and amounts (meals, night surcharges, weekend turns…),
  * and each field or block picks a table (`options.table`; the first one when it names none, as fields made before
- * there were several tables do).
+ * there were several tables do). The days a TRIP_DAYS field (`daysAtHome`) says the person was not away pay nothing,
+ * like the help desk's «Días fuera».
  */
 export const TIME_SLOTS: CalculatorDefinition = {
   code: 'TIME_SLOTS',
   parameters: [
     { name: 'departure', type: 'DATETIME', required: true },
     { name: 'return', type: 'DATETIME', required: true },
+    { name: 'daysAtHome', type: 'DAY_LIST', required: false },
   ],
   output: 'CURRENCY',
   usesTable: true,
@@ -79,11 +81,12 @@ export const TIME_SLOTS: CalculatorDefinition = {
     const rates = wanted === undefined ? parsed.data.tables[0] : parsed.data.tables.find((entry) => entry.code === wanted);
     if (rates === undefined) throw new FormulaRuntimeError('INVALID_VALUE');
     const lastDay = localDateOf(end, context.timeZone);
+    const atHome = new Set(Array.isArray(inputs.daysAtHome) ? inputs.daysAtHome.filter((day): day is string => typeof day === 'string') : []);
     let total = Decimal.ZERO;
     let day = localDateOf(start, context.timeZone);
     for (let counted = 0; ; counted += 1) {
       if (counted > MAX_SPAN_DAYS) throw new FormulaRuntimeError('ARGUMENT_OUT_OF_RANGE');
-      for (const entry of rates.slots) {
+      for (const entry of atHome.has(day) ? [] : rates.slots) {
         const begins = zonedTimeToInstant(day, minuteOf(entry.from), context.timeZone);
         if (begins >= start && begins <= end) total = addAmount(total, entry.amount);
       }

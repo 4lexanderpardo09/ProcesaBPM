@@ -27,6 +27,8 @@ function sampleScalar(type: string, config: Record<string, unknown>, label: stri
       return 'Nombre de ejemplo';
     case 'FILE':
       return 'documento-ejemplo.pdf';
+    case 'TRIP_DAYS':
+      return 'Todos los días del viaje';
     default:
       return `${label} (ejemplo)`;
   }

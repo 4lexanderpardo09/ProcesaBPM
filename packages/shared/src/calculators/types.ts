@@ -1,7 +1,8 @@
 import type { z } from 'zod';
 import type { Decimal } from '../engine/money/fixed-decimal.js';
 
-export type CalculatorInputType = 'DATETIME' | 'DATE' | 'NUMBER' | 'TEXT';
+/** `DAY_LIST`: the local days (`YYYY-MM-DD`) a TRIP_DAYS field says the person was not away. */
+export type CalculatorInputType = 'DATETIME' | 'DATE' | 'NUMBER' | 'TEXT' | 'DAY_LIST';
 
 export interface CalculatorParameter {
   readonly name: string;

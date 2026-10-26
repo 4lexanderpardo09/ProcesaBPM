@@ -206,6 +206,7 @@ enum FieldType {
   DATE
   DATETIME
   DAYS
+  TRIP_DAYS
   SITE
   USER
   TABLE

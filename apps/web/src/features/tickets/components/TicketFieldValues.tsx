@@ -100,6 +100,8 @@ export function DisplayedValue({ display }: { readonly display: FieldValueDispla
       return t('detail.fields.days', { count: display.count });
     case 'rows':
       return t('detail.fields.rows', { count: display.count });
+    case 'tripDays':
+      return display.atHome === '' ? t('detail.fields.tripDaysAll') : t('detail.fields.tripDaysExcept', { days: display.atHome });
     case 'unknown':
       return <span className={styles.unknown}>{t('detail.fields.unknown')}</span>;
   }

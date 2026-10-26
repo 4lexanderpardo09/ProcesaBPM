@@ -39,7 +39,7 @@ export const DEADLINE_TYPES = ['SLA', 'CUTOFF'] as const;
 export const TRANSITION_TYPES = ['DECISION', 'CONDITION', 'DEFAULT', 'SYSTEM_ONLY'] as const;
 export type TransitionType = (typeof TRANSITION_TYPES)[number];
 
-export const FIELD_TYPES = ['TEXT', 'TEXTAREA', 'NUMBER', 'CURRENCY', 'SELECT', 'MULTI_SELECT', 'DATE', 'DATETIME', 'DAYS', 'SITE', 'USER', 'TABLE', 'FILE', 'FORMULA', 'CALCULATOR'] as const;
+export const FIELD_TYPES = ['TEXT', 'TEXTAREA', 'NUMBER', 'CURRENCY', 'SELECT', 'MULTI_SELECT', 'DATE', 'DATETIME', 'DAYS', 'TRIP_DAYS', 'SITE', 'USER', 'TABLE', 'FILE', 'FORMULA', 'CALCULATOR'] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
 export const CAPTURE_STAGES = ['CREATION', 'STEP', 'BOTH'] as const;

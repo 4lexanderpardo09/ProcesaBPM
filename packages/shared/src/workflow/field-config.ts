@@ -56,6 +56,8 @@ export const FIELD_CONFIG_SCHEMAS: Readonly<Record<FieldType, z.ZodType<Record<s
   DATE: z.object({ min: dateBound.optional(), max: dateBound.optional(), defaultNow: z.boolean().optional() }).strict(),
   DATETIME: z.object({ min: dateBound.optional(), max: dateBound.optional(), defaultNow: z.boolean().optional() }).strict(),
   DAYS: z.object({ min: z.number().int().optional(), max: z.number().int().optional() }).strict(),
+  // The days of a trip, between two date fields of the form: the person unticks the days they were not away.
+  TRIP_DAYS: z.object({ startFieldCode: code, endFieldCode: code }).strict(),
   SITE: z.object({ level: z.number().int().min(1).max(20).optional() }).strict(),
   USER: z.object({ positionIds: z.array(uuid).max(100).optional() }).strict(),
   TABLE: z

@@ -20,6 +20,10 @@ const noNames = { users: {}, sites: {}, companies: {}, departments: {}, position
 const textOf = (display: ReturnType<typeof fieldValueDisplay>) => (display?.kind === 'text' ? display.text.replace(/\s/g, ' ') : display);
 
 describe('fieldValueDisplay', () => {
+  it('reads «Días fuera» as the days the person was not away', () => {
+    expect(fieldValueDisplay(field('TRIP_DAYS'), ['2026-11-11', '2026-11-12'], noNames)).toEqual({ kind: 'tripDays', atHome: '11 de nov de 2026, 12 de nov de 2026' });
+  });
+
   it('shows nothing for an empty value or a file', () => {
     expect(fieldValueDisplay(field('TEXT'), '', noNames)).toBeUndefined();
     expect(fieldValueDisplay(field('MULTI_SELECT'), [], noNames)).toBeUndefined();

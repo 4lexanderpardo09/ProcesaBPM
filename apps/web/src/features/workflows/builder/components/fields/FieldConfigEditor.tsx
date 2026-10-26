@@ -37,6 +37,7 @@ const INPUT_TYPES: Readonly<Record<string, ReadonlySet<string>>> = {
   DATE: new Set(['DATE']),
   NUMBER: new Set(['NUMBER', 'CURRENCY', 'DAYS']),
   TEXT: new Set(['TEXT', 'TEXTAREA', 'SELECT']),
+  DAY_LIST: new Set(['TRIP_DAYS']),
 };
 
 const num = (value: unknown): number | null => (typeof value === 'number' ? value : null);
@@ -113,6 +114,18 @@ export function FieldConfigEditor({ type, config, dataSource, fields, onChange }
           <WholeNumberField label={label('max')} value={num(config.max)} onChange={(value) => set({ max: value ?? undefined })} />
         </div>
       );
+    case 'TRIP_DAYS': {
+      const dates = fields.filter((field) => field.type === 'DATE' || field.type === 'DATETIME').map((field) => ({ value: field.code, label: `${field.label} (${field.code})` }));
+      return (
+        <>
+          <div className={styles.pair}>
+            <Select label={label('tripStart')} placeholder={label('tripPick')} options={dates} value={str(config.startFieldCode)} onChange={(event) => set({ startFieldCode: event.target.value || undefined })} />
+            <Select label={label('tripEnd')} placeholder={label('tripPick')} options={dates} value={str(config.endFieldCode)} onChange={(event) => set({ endFieldCode: event.target.value || undefined })} />
+          </div>
+          <p className={styles.note}>{label('tripHint')}</p>
+        </>
+      );
+    }
     case 'SITE':
       return <WholeNumberField label={label('siteLevel')} hint={label('siteLevelHint')} min={1} max={20} value={num(config.level)} onChange={(value) => set({ level: value ?? undefined })} />;
     case 'USER':

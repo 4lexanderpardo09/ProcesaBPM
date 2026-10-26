@@ -189,6 +189,8 @@ function ChangeList({ changes }: { readonly changes: readonly FieldChange[] }) {
         return t('detail.fields.days', { count: display.count });
       case 'rows':
         return t('detail.fields.rows', { count: display.count });
+      case 'tripDays':
+        return display.atHome === '' ? t('detail.fields.tripDaysAll') : t('detail.fields.tripDaysExcept', { days: display.atHome });
       case 'unknown':
         return t('detail.fields.unknown');
     }

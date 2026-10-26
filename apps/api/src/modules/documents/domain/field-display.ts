@@ -34,6 +34,8 @@ export function fieldValue(field: Pick<FieldDocument, 'type' | 'config'>, raw: u
       return Array.isArray(raw) ? es.files(raw.flatMap((id) => (typeof id === 'string' && names.files.has(id) ? [names.files.get(id)!] : []))) : null;
     case 'TABLE':
       return Array.isArray(raw) ? es.rows(raw.length) : null;
+    case 'TRIP_DAYS':
+      return Array.isArray(raw) ? es.tripDays(raw.filter((day): day is string => typeof day === 'string')) : null;
     case 'DATETIME':
       return typeof raw === 'string' && !Number.isNaN(Date.parse(raw)) ? new Date(raw) : String(raw);
     case 'NUMBER':

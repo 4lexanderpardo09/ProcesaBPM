@@ -9,6 +9,8 @@ export type FieldValueDisplay =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'days'; readonly count: number }
   | { readonly kind: 'rows'; readonly count: number }
+  /** «Días fuera»: the days of the trip the person was not away (`DD/MM/YYYY`, joined); none means every day. */
+  | { readonly kind: 'tripDays'; readonly atHome: string }
   | { readonly kind: 'unknown' };
 
 interface Option {
@@ -37,6 +39,8 @@ export function fieldValueDisplay(field: ReadField, value: unknown, names: Ticke
       return text(dateText(String(value), timeZone));
     case 'DATETIME':
       return text(formatDateTime(String(value), timeZone));
+    case 'TRIP_DAYS':
+      return { kind: 'tripDays', atHome: (Array.isArray(value) ? value : []).map((day) => dateText(String(day), timeZone)).join(', ') };
     case 'TABLE':
       return { kind: 'rows', count: Array.isArray(value) ? value.length : 0 };
     case 'SITE':
@@ -60,6 +64,7 @@ export function filteredValueText(field: Pick<TicketFilterFieldResponse, 'type' 
   if (field === undefined) return isEmpty(value) ? '—' : String(value);
   const display = fieldValueDisplay({ type: field.type, config: { options: field.options ?? [], decimals: 6 } }, value, NO_NAMES, timeZone);
   if (display === undefined || display.kind === 'unknown') return '—';
+  if (display.kind === 'tripDays') return display.atHome === '' ? '—' : display.atHome;
   return display.kind === 'text' ? display.text : String(display.count);
 }
 

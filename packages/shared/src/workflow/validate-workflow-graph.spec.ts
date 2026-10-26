@@ -307,6 +307,16 @@ describe('validateWorkflowGraph: fields', () => {
     expect(codes(withParts({ fields: [field('1', 'start', 'A', { type: 'TEXT', config: { regex: '(a+)+$' } })] }))).toContain('FIELD_CONFIG_INVALID');
   });
 
+  it('a TRIP_DAYS field runs between two date fields of the version', () => {
+    const days = (start: string, end: string) => field('3', 'start', 'DIAS_FUERA', { type: 'TRIP_DAYS', config: { startFieldCode: start, endFieldCode: end } });
+    const leaves = field('1', 'start', 'SALIDA', { type: 'DATETIME' });
+    const back = field('2', 'start', 'REGRESO', { type: 'DATE' });
+    expect(codes(withParts({ fields: [leaves, back, days('SALIDA', 'REGRESO')] }))).toEqual([]);
+    expect(codes(withParts({ fields: [leaves, field('2', 'start', 'REGRESO'), days('SALIDA', 'REGRESO')] }))).toEqual(['TRIP_DAYS_BOUND_INVALID']);
+    expect(codes(withParts({ fields: [leaves, days('SALIDA', 'NADA')] }))).toEqual(['TRIP_DAYS_BOUND_INVALID']);
+    expect(codes(withParts({ fields: [field('3', 'start', 'DIAS_FUERA', { type: 'TRIP_DAYS' })] }))).toContain('FIELD_CONFIG_INVALID');
+  });
+
   it('formulas reference existing fields and no cycles', () => {
     const formula = (id: string, code: string, expression: string) => field(id, 'start', code, { type: 'FORMULA', config: { expression, resultType: 'NUMBER' } });
     expect(codes(withParts({ fields: [formula('1', 'TOTAL', 'PRICE * 2')] }))).toContain('FORMULA_UNKNOWN_FIELD');

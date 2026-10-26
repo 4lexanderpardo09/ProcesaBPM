@@ -39,6 +39,7 @@ export function useStepFields(fields: readonly FormFieldResponse[], initialValue
     rejected: serverIssues !== undefined,
     inputProps: (field: FormFieldResponse) => ({
       value: inputs[field.code] ?? '',
+      formInputs: inputs,
       error: messageOf(field),
       onChange: (value: InputValue) => {
         setInputs((current) => ({ ...current, [field.code]: value }));
