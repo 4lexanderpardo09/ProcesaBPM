@@ -56,6 +56,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
     systemRole: 'REQUESTER',
     name: 'Solicitante',
     isAdmin: false,
-    permissions: [...ticket('create', 'read_created', 'comment'), ...read(...CATALOG_SUBJECTS)],
+    // Answers what a workflow hands back to them (correct, legalize): `transition` and `close` need to hold the step.
+    permissions: [...ticket('create', 'read_created', 'read_assigned', 'comment', 'transition', 'close'), ...read(...CATALOG_SUBJECTS)],
   },
 ];
