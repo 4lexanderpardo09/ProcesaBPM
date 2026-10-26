@@ -542,6 +542,7 @@ export const tickets = {
       forbidden: 'No tienes permiso para hacer esto en este ticket.',
       changed: 'El ticket cambió mientras tanto. Revisa su estado y vuelve a intentarlo.',
       rejected: 'Este paso no permite hacerlo así. Revisa los datos del paso.',
+      amountLimit: 'Un monto supera el tope permitido. {{messages}}',
       assigneeRequired: 'El siguiente paso pide elegir a su responsable, y eso todavía no se puede hacer desde la web.',
       noCandidates: 'El siguiente paso no tiene a quién asignarse. Avísale a quien administra el flujo.',
       signersRequired: 'Hay firmantes del siguiente paso sin a quién asignarse. Revisa «Firmantes por elegir».',

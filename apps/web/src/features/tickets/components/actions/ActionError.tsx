@@ -7,6 +7,6 @@ export function ActionError({ error }: { readonly error: unknown }) {
   const { t } = useTranslation('tickets');
   const { t: tCommon } = useTranslation();
   const message = actionErrorMessage(error);
-  if (message.namespace === 'tickets') return <Alert tone="danger">{t(message.key)}</Alert>;
+  if (message.namespace === 'tickets') return <Alert tone="danger">{'values' in message ? t(message.key, message.values) : t(message.key)}</Alert>;
   return <Alert tone="danger">{'values' in message ? tCommon(message.key, message.values) : tCommon(message.key)}</Alert>;
 }
