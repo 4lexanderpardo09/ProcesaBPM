@@ -48,8 +48,8 @@ describe('ticketActionsOf', () => {
     expect(allowed(state({ assignees: [{ userId: 'other', type: 'PRIMARY' }], grants: NONE }))).toEqual([]);
   });
 
-  it('a supervisor advances and reassigns a step they do not hold, but does not close it', () => {
-    expect(allowed(state({ assignees: [{ userId: 'other', type: 'PRIMARY' }], grants: { ...NONE, transition: true, reassign: true, close: true } }))).toEqual(['advance', 'reassign']);
+  it('a supervisor reassigns a step they do not hold, but neither advances nor closes it', () => {
+    expect(allowed(state({ assignees: [{ userId: 'other', type: 'PRIMARY' }], grants: { ...NONE, transition: true, reassign: true, close: true } }))).toEqual(['reassign']);
   });
 
   it('a pool member takes it, advances and closes it (taking it implicitly)', () => {
@@ -61,9 +61,9 @@ describe('ticketActionsOf', () => {
     expect(refusals.take).toBeInstanceOf(StaleTicketError);
   });
 
-  it('a ticket waiting for dispatch is not taken; only a supervisor moves it', () => {
+  it('a ticket waiting for dispatch is not taken nor advanced; a supervisor hands it to someone', () => {
     expect(ticketActionsOf(state({ assignees: [] })).take).toBe(false);
-    expect(allowed(state({ assignees: [], grants: { ...NONE, transition: true, reassign: true } }))).toEqual(['advance', 'reassign']);
+    expect(allowed(state({ assignees: [], grants: { ...NONE, transition: true, reassign: true } }))).toEqual(['reassign']);
   });
 
   describe('the step', () => {

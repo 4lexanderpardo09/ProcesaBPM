@@ -56,15 +56,15 @@ export function openVisitRefusal(status: TicketStatus, visit: { readonly id: str
 export interface ActAuthority {
   /** The action itself (`transition` or `close`) on this ticket. */
   readonly may: boolean;
-  /** `reassign` on this ticket: lets a supervisor move a step they do not hold. */
-  readonly mayReassign: boolean;
   readonly ownType: AssigneeType | undefined;
 }
 
-/** `transition`: whoever holds the step, or a supervisor with `reassign`; `close`: whoever holds it. Both need the action on this ticket. */
-export function actRefusal(action: 'transition' | 'close', { may, mayReassign, ownType }: ActAuthority): DomainError | null {
-  const allowed = may && (holdsStep(ownType) || (action === 'transition' && mayReassign));
-  return allowed ? null : new PermissionDeniedError('Not allowed to act on this ticket');
+/**
+ * `transition` and `close`: only whoever holds the step, with the action on this ticket. A supervisor does not answer
+ * someone else's step (they would fill in its data in that person's name): they reassign it.
+ */
+export function actRefusal({ may, ownType }: ActAuthority): DomainError | null {
+  return may && holdsStep(ownType) ? null : new PermissionDeniedError('Not allowed to act on this ticket');
 }
 
 /**

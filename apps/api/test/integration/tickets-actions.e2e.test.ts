@@ -199,8 +199,8 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
       await expectAgreement(reader, () => create(single), []);
     });
 
-    it('a supervisor advances, reassigns, opens incidents and edits on a step they do not hold, but does not close it', async () => {
-      await expectAgreement(supervisor, () => create(single), ['advance', 'reassign', 'openIncident', 'comment', 'reportError', 'edit']);
+    it('a supervisor reassigns, opens incidents and edits on a step they do not hold, but neither advances nor closes it', async () => {
+      await expectAgreement(supervisor, () => create(single), ['reassign', 'openIncident', 'comment', 'reportError', 'edit']);
     });
 
     it('a pool member takes the ticket (and may answer it right away); once taken by someone else they lost it', async () => {
@@ -232,10 +232,10 @@ describe('what the caller may do on a ticket, and who they can hand it to', () =
       await expectAgreement(worker, closed, []);
     });
 
-    it('on a parallel step a pending signer signs; after signing, nothing is left but commenting; a supervisor moves it or a signature', async () => {
+    it('on a parallel step a pending signer signs; after signing, nothing is left but commenting; a supervisor moves a signature', async () => {
       await expectAgreement(worker, () => create(parallel), ['signParallelTask', 'openIncident', 'comment']);
       await expectAgreement(worker, signed, ['comment']);
-      await expectAgreement(supervisor, () => create(parallel), ['advance', 'reassign', 'openIncident', 'comment', 'reportError', 'edit']);
+      await expectAgreement(supervisor, () => create(parallel), ['reassign', 'openIncident', 'comment', 'reportError', 'edit']);
     });
 
     it('a ticket parked on a WAIT block only takes comments (and edits from whoever may)', async () => {

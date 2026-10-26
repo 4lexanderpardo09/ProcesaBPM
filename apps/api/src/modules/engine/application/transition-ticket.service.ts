@@ -107,12 +107,9 @@ export class TransitionTicketService {
       });
       if (request.assigneeId !== undefined && arrival.kind === 'END') throw new InvalidReferenceError('The ticket ends here: there is nobody to assign');
 
-      // A supervisor moving a parallel step on: the signatures still pending are cancelled with it.
-      const cancelled = step.assignmentMode === 'PARALLEL' ? await this.cancelPendingSignatures(tx, tenantId, ticket.id, step.id, visit.loop, at) : [];
-      const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId, 'STEP_EXITED', new Set(cancelled.map((task) => task.userId)));
+      const closed = await this.sla.closeVisit(tx, tenantId, ticket.id, company, visit, current.clocks, at, exit.transitionId, 'STEP_EXITED');
       const events: EventPlan[] = [
         ...submissionEvents(submission, step.id, visit.loop, actor.userId),
-        ...cancelled.map((task): EventPlan => ({ type: 'PARALLEL_TASK_COMPLETED', stepId: step.id, loop: visit.loop, actorId: actor.userId, assigneeId: task.userId, data: { taskId: task.id, status: 'CANCELLED' } })),
         ...submission.amounts.warnings.map((warning): EventPlan => ({ type: 'AMOUNT_WARNING', stepId: step.id, loop: visit.loop, actorId: actor.userId, data: { ...warning } })),
         {
           type: 'TRANSITIONED',
@@ -122,7 +119,7 @@ export class TransitionTicketService {
           actorId: actor.userId,
           commentHtml: sanitizeOptionalRichText(request.comment),
           attachments: attachmentsPlanOf(submission.files, step.id, 'ATTACHMENT'),
-          data: { ...(diverted ? { intendedTransitionId: chosen.id, amountRuleId: diversion.ruleId } : {}), ...(current.actorIsPoolMember ? { tookFromPool: true } : {}), ...(cancelled.length > 0 ? { parallelOverride: true, cancelledUserIds: cancelled.map((task) => task.userId) } : {}) },
+          data: { ...(diverted ? { intendedTransitionId: chosen.id, amountRuleId: diversion.ruleId } : {}), ...(current.actorIsPoolMember ? { tookFromPool: true } : {}) },
           outbox: [{ type: 'ticket.transitioned', payload: { fromStepId: step.id, toStepId: exit.toStepId, transitionId: exit.transitionId, actorId: actor.userId } }],
         },
         ...arrivalEvents(arrival, actor.userId, visit.loop),
@@ -185,11 +182,5 @@ export class TransitionTicketService {
         return previewResponse(arrival, document);
       });
     });
-  }
-
-  private async cancelPendingSignatures(tx: Parameters<TicketWriteRepository['findParallelTasks']>[0], tenantId: string, ticketId: string, stepId: string, loop: number, at: Date) {
-    const pending = (await this.writes.findParallelTasks(tx, tenantId, ticketId, stepId, loop)).filter((task) => task.status === 'PENDING');
-    for (const task of pending) await this.writes.completeParallelTask(tx, tenantId, task.id, 'CANCELLED', at, null);
-    return pending;
   }
 }
