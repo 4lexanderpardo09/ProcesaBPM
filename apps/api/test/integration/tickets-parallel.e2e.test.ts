@@ -339,6 +339,32 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
     const roundOf = async (ticketId: string, loop: number) =>
       (await db.platform.query(`SELECT user_id, signer_id, status, comment FROM ticket_parallel_tasks WHERE ticket_id = $1 AND loop = $2 ORDER BY user_id`, [ticketId, loop])).rows as Array<{ user_id: string; signer_id: string | null; status: string; comment: string | null }>;
 
+    it('keeps the signatures also when the step asks to choose its signers (the help desk «Retiro de personal»)', async () => {
+      const resend = await publishFlow(world.admin, {
+        steps: [
+          { key: 'start', type: 'START' },
+          { key: 'sign', type: 'TASK', extra: { assignmentMode: 'PARALLEL', manualSelection: true }, signers: [signer(a), signer(b), signer(c)] },
+          { key: 'fix', type: 'TASK', extra: { assignmentMode: 'CREATOR' } },
+          { key: 'end', type: 'END' },
+        ],
+        transitions: [
+          { from: 'start', to: 'sign', type: 'DEFAULT' },
+          { from: 'sign', to: 'end', type: 'DECISION', label: 'Signed' },
+          { from: 'sign', to: 'fix', type: 'SYSTEM_ONLY', label: 'Rejected' },
+          { from: 'fix', to: 'sign', type: 'DECISION', label: 'Resend' },
+        ],
+      });
+      const preview = (await requester.client.post('/tickets/creation-preview', { subcategoryId: resend.subcategoryId, values: {} }).expect(200)).body;
+      const choices = (preview.signerChoices as Array<{ signerId: string; suggestedId: string }>).map((choice) => ({ signerId: choice.signerId, userId: choice.suggestedId }));
+      const ticket = (await requester.client.post('/tickets', { subcategoryId: resend.subcategoryId, title: 'Retiro', values: {}, signerChoices: choices }).expect(201)).body;
+      await sign(a, ticket).expect(200);
+      const back = (await reject(b, ticket, { comment: 'Falta el radio' }).expect(200)).body;
+      await requester.client.post(`/tickets/${ticket.id}/transition`, { transitionId: resend.transition.Resend, visitId: back.openVisitId, signerChoices: choices }).expect(200);
+      const second = await roundOf(ticket.id, 2);
+      expect(second.find((task) => task.user_id === a.userId)?.status).toBe('SIGNED');
+      expect((await world.assignees(ticket.id)).map((row) => row.user_id).sort()).toEqual([b.userId, c.userId].sort());
+    });
+
     it('keeps the areas that had signed, asks again only the rejected and the pending ones, and ties each task to its signer row', async () => {
       const resend = await publishFlow(world.admin, {
         steps: [
