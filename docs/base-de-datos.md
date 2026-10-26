@@ -579,7 +579,7 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 | Planes (aprobados) | trial 1 GB (máx. 5 usuarios) · basic 10 GB + 1 GB/usuario · professional 25 GB + 2 GB/usuario · enterprise 100 GB + 5 GB/usuario. `features` = `{}` hasta definir la facturación. |
 | Permisos | `manage:all`; CRUD de la configuración; acciones de ticket (`create`, `create_for_others`, `read_created/assigned/observed/all`, `comment`, `transition`, `reassign`, `open_incident`, `close`, `reopen`, `report_error`, `delete`); Workflow (`read/update/publish`); Export; Report; AuditLog; Storage; Setting; Delegation. |
 
-`src/seed/role-templates.ts` define los roles base que el **servicio de aprovisionamiento** crea en cada tenant nuevo (Administrador, Supervisor, Agente, Solicitante). Hay una prueba que verifica que solo usan permisos del catálogo.
+`src/seed/role-templates.ts` define los roles base que el **servicio de aprovisionamiento** crea en cada tenant nuevo (Administrador, Supervisor, Agente, Solicitante). Hay una prueba que verifica que solo usan permisos del catálogo. El Solicitante tiene además `read_assigned`, `transition` y `close` (migración `20261028000000_requester_answers_own_steps`, también para los tenants que ya existían): un flujo que le devuelve el ticket (corregir, legalizar) lo dejaba asignado sin poder moverlo. Como avanzar y cerrar exigen tener el paso, solo responde lo suyo.
 
 ## 10. Pruebas
 `pnpm test` levanta PostgreSQL 18 en Docker (o usa `TEST_DATABASE_URL` si no hay Docker), aplica las migraciones, crea los roles de login como en producción y carga la semilla.
