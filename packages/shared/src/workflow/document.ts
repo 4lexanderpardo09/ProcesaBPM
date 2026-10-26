@@ -106,6 +106,8 @@ export interface FieldDocument {
   readonly capture: 'CREATION' | 'STEP' | 'BOTH';
   readonly isRequired: boolean;
   readonly isReadOnly: boolean;
+  /** Never corrected after it is captured. */
+  readonly isImmutable: boolean;
   readonly sortOrder: number;
   readonly config: Record<string, unknown>;
   readonly dataSource: Record<string, unknown> | null;

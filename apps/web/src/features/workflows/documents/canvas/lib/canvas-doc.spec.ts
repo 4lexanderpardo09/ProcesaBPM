@@ -22,7 +22,7 @@ describe('snap', () => {
 });
 
 describe('createElement', () => {
-  const table: FieldDocument = { id: 'f', stepId: 's', code: 'ITEMS', label: 'Ítems', type: 'TABLE', capture: 'CREATION', isRequired: false, isReadOnly: false, sortOrder: 0, config: { columns: [{ code: 'QTY', label: 'Cantidad' }, { code: 'NAME', label: 'Nombre' }] }, dataSource: null };
+  const table: FieldDocument = { id: 'f', stepId: 's', code: 'ITEMS', label: 'Ítems', type: 'TABLE', capture: 'CREATION', isRequired: false, isReadOnly: false, isImmutable: false, sortOrder: 0, config: { columns: [{ code: 'QTY', label: 'Cantidad' }, { code: 'NAME', label: 'Nombre' }] }, dataSource: null };
 
   it('centres a new element on the point, inside the sheet', () => {
     expect(createElement('text', { x: 100, y: 100 }, 0, sheet, { name: 'Texto' })).toMatchObject({ x: 70, y: 96, width: 60, height: 8 });

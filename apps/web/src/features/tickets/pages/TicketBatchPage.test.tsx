@@ -25,8 +25,8 @@ const form = {
   visitId: id(201),
   step: { id: STEP, name: 'Tesorería', type: 'TASK', description: null, closeRule: 'NOT_ALLOWED' },
   fields: [
-    { id: id(400), stepId: STEP, code: 'METHOD', label: 'Medio de pago', type: 'TEXT', isRequired: true, isReadOnly: false, sortOrder: 1, config: {}, dataSource: null },
-    { id: id(401), stepId: STEP, code: 'RECEIPT', label: 'Soporte', type: 'FILE', isRequired: false, isReadOnly: false, sortOrder: 2, config: {}, dataSource: null },
+    { id: id(400), stepId: STEP, code: 'METHOD', label: 'Medio de pago', type: 'TEXT', isRequired: true, isReadOnly: false, isImmutable: false, sortOrder: 1, config: {}, dataSource: null },
+    { id: id(401), stepId: STEP, code: 'RECEIPT', label: 'Soporte', type: 'FILE', isRequired: false, isReadOnly: false, isImmutable: false, sortOrder: 2, config: {}, dataSource: null },
   ],
   editableFieldCodes: ['METHOD', 'RECEIPT'],
   decisions: [{ transitionId: PAID, label: 'Pagado' }],

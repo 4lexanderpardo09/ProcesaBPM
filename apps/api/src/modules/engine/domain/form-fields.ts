@@ -12,6 +12,7 @@ export function formFieldsOf(fields: readonly FieldDocument[]): FormFieldRespons
       type: field.type,
       isRequired: field.isRequired,
       isReadOnly: field.isReadOnly,
+      isImmutable: field.isImmutable,
       sortOrder: field.sortOrder,
       config: field.config,
       dataSource: field.dataSource,

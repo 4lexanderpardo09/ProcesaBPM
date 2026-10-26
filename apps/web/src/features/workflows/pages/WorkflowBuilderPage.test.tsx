@@ -270,8 +270,8 @@ describe('workflow builder', () => {
       steps: [step(START, 'START', 'Inicio'), step(CHECK, 'CONDITION', 'Revisar monto'), step(END, 'END', 'Fin')],
       transitions: [link(id(40), START, CHECK), link(id(41), CHECK, END, { label: 'En otro caso' }), link(id(42), CHECK, END, { type: 'CONDITION', label: 'Grande', condition: [{ field: 'PAYMENT_TYPE', op: 'equals', value: 'cash' }], sortOrder: 1 })],
       fields: [
-        { id: id(50), stepId: START, code: 'AMOUNT', label: 'Monto', type: 'CURRENCY', capture: 'CREATION', isRequired: true, isReadOnly: false, sortOrder: 0, config: {}, dataSource: null },
-        { id: id(51), stepId: START, code: 'PAYMENT_TYPE', label: 'Tipo de pago', type: 'SELECT', capture: 'CREATION', isRequired: true, isReadOnly: false, sortOrder: 1, config: { options: [{ value: 'cash', label: 'Efectivo' }, { value: 'transfer', label: 'Transferencia' }] }, dataSource: null },
+        { id: id(50), stepId: START, code: 'AMOUNT', label: 'Monto', type: 'CURRENCY', capture: 'CREATION', isRequired: true, isReadOnly: false, isImmutable: false, sortOrder: 0, config: {}, dataSource: null },
+        { id: id(51), stepId: START, code: 'PAYMENT_TYPE', label: 'Tipo de pago', type: 'SELECT', capture: 'CREATION', isRequired: true, isReadOnly: false, isImmutable: false, sortOrder: 1, config: { options: [{ value: 'cash', label: 'Efectivo' }, { value: 'transfer', label: 'Transferencia' }] }, dataSource: null },
       ],
       amountRules: [],
     };

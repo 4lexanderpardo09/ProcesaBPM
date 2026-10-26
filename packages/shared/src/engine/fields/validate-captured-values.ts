@@ -31,11 +31,11 @@ export function captureFieldsFor(fields: readonly FieldDocument[], stage: 'CREAT
 
 /**
  * The recorded values that can be corrected afterwards ("Editar datos registrados"): the fields with a value that people
- * type. Computed fields follow their inputs, files are replaced by answering the step again, and read-only ones are not
- * typed by anyone.
+ * type. Computed fields follow their inputs, files are replaced by answering the step again, read-only ones are not
+ * typed by anyone, and immutable ones stay as captured (the help desk's dates, concepts and meals of a trip).
  */
-export function correctableFields<T extends Pick<FieldDocument, 'code' | 'type' | 'config' | 'isReadOnly'>>(fields: readonly T[], values: Readonly<Record<string, unknown>>): readonly T[] {
-  return fields.filter((field) => !COMPUTED_FIELD_TYPES.has(field.type) && !holdsFiles(field) && !field.isReadOnly && !isBlankValue(values[field.code]));
+export function correctableFields<T extends Pick<FieldDocument, 'code' | 'type' | 'config' | 'isReadOnly' | 'isImmutable'>>(fields: readonly T[], values: Readonly<Record<string, unknown>>): readonly T[] {
+  return fields.filter((field) => !COMPUTED_FIELD_TYPES.has(field.type) && !holdsFiles(field) && !field.isReadOnly && !field.isImmutable && !isBlankValue(values[field.code]));
 }
 
 /**

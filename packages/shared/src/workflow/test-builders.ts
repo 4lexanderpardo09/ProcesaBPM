@@ -44,7 +44,7 @@ export function transition(id: string, from: string, to: string, type: Transitio
 export const next = (from: string, to: string, type: 'DEFAULT' | 'DECISION' = 'DEFAULT'): TransitionDocument => transition(`${from}->${to}`, from, to, type);
 
 export function field(id: string, stepId: string, code: string, overrides: Partial<FieldDocument> = {}): FieldDocument {
-  return { id, stepId, code, label: code, type: 'TEXT', capture: 'BOTH', isRequired: false, isReadOnly: false, sortOrder: 0, config: {}, dataSource: null, ...overrides };
+  return { id, stepId, code, label: code, type: 'TEXT', capture: 'BOTH', isRequired: false, isReadOnly: false, isImmutable: false, sortOrder: 0, config: {}, dataSource: null, ...overrides };
 }
 
 export function amountRule(id: string, fieldCode: string, overrides: Partial<AmountRuleDocument> = {}): AmountRuleDocument {

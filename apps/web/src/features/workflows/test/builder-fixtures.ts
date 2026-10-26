@@ -64,6 +64,7 @@ export const field = (fieldId: string, stepId: string, code: string, label: stri
   capture: 'CREATION',
   isRequired: false,
   isReadOnly: false,
+  isImmutable: false,
   sortOrder: 0,
   config: {},
   dataSource: null,

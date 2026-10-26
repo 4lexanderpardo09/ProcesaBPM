@@ -1699,6 +1699,8 @@ model Field {
   capture    CaptureStage @default(BOTH)
   isRequired Boolean      @default(false) @map("is_required")
   isReadOnly Boolean      @default(false) @map("is_read_only")
+  /// Captured once: «Editar datos» never corrects it afterwards (the help desk's campo_inmutable).
+  isImmutable Boolean     @default(false) @map("is_immutable")
   sortOrder  Int          @default(0) @map("sort_order")
   config     Json         @default("{}")
   dataSource Json?        @map("data_source")

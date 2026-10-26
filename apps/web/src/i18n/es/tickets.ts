@@ -465,7 +465,7 @@ export const tickets = {
     },
     signerChoices: {
       title: 'Firmantes por elegir',
-      hint: 'Estos firmantes del siguiente paso no tienen a quién asignarse. Elige quién firma en su lugar u omite esa firma.',
+      hint: 'Elige quién hace cada firma del siguiente paso, u omítela. Si a la firma le corresponde alguien, ya viene elegido y puedes cambiarlo.',
       skip: 'Omitir esta firma',
       required: 'Elige quién firma u omite la firma.',
       type: { USER: 'Persona', POSITION: 'Cargo', APPROVER: 'Aprobador', CREATOR: 'Solicitante' },
@@ -545,7 +545,7 @@ export const tickets = {
       changed: 'El ticket cambió mientras tanto. Revisa su estado y vuelve a intentarlo.',
       rejected: 'Este paso no permite hacerlo así. Revisa los datos del paso.',
       amountLimit: 'Un monto supera el tope permitido. {{messages}}',
-      assigneeRequired: 'El siguiente paso pide elegir a su responsable, y eso todavía no se puede hacer desde la web.',
+      assigneeRequired: 'El siguiente paso pide elegir a su responsable: elígelo en «Quién recibe el siguiente paso».',
       noCandidates: 'El siguiente paso no tiene a quién asignarse. Avísale a quien administra el flujo.',
       signersRequired: 'Hay firmantes del siguiente paso sin a quién asignarse. Revisa «Firmantes por elegir».',
     },

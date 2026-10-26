@@ -52,6 +52,7 @@ export function FieldDialog({ field, stepId, isStart, fields, nextSortOrder, con
   const [dataSource, setDataSource] = useState<FieldDataSource>(field?.dataSource ?? null);
   const [isRequired, setRequired] = useState(field?.isRequired ?? false);
   const [isReadOnly, setReadOnly] = useState(field?.isReadOnly ?? false);
+  const [isImmutable, setImmutable] = useState(field?.isImmutable ?? false);
   const [submitted, setSubmitted] = useState(false);
 
   const nameError = submitted && label.trim() === '' ? t('builder.fields.dialog.nameRequired') : undefined;
@@ -65,11 +66,11 @@ export function FieldDialog({ field, stepId, isStart, fields, nextSortOrder, con
     const ok =
       field === undefined
         ? await content.run({
-            call: (api) => api.createField({ stepId, code, label: label.trim(), type, capture: isStart ? 'CREATION' : 'STEP', isRequired, isReadOnly, sortOrder: nextSortOrder, config, dataSource }),
+            call: (api) => api.createField({ stepId, code, label: label.trim(), type, capture: isStart ? 'CREATION' : 'STEP', isRequired, isReadOnly, isImmutable, sortOrder: nextSortOrder, config, dataSource }),
             apply: upsertField,
           })
         : await content.run({
-            call: (api) => api.updateField(field.id, { label: label.trim(), isRequired, isReadOnly, config, dataSource }),
+            call: (api) => api.updateField(field.id, { label: label.trim(), isRequired, isReadOnly, isImmutable, config, dataSource }),
             apply: upsertField,
           });
     if (ok) onClose();
@@ -135,6 +136,7 @@ export function FieldDialog({ field, stepId, isStart, fields, nextSortOrder, con
         />
         <Checkbox label={t('builder.fields.dialog.required')} checked={isRequired} onChange={(event) => setRequired(event.target.checked)} />
         <Checkbox label={t('builder.fields.dialog.readOnly')} checked={isReadOnly} onChange={(event) => setReadOnly(event.target.checked)} />
+        <Checkbox label={t('builder.fields.dialog.immutable')} checked={isImmutable} onChange={(event) => setImmutable(event.target.checked)} />
         <FieldConfigEditor
           type={type}
           config={config}

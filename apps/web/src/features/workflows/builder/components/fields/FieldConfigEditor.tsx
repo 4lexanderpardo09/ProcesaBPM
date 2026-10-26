@@ -203,6 +203,18 @@ export function FieldConfigEditor({ type, config, dataSource, fields, onChange }
               onChange={(event) => set({ inputs: patchConfig(inputs, { [parameter.name]: event.target.value === '' ? undefined : event.target.value }) })}
             />
           ))}
+          {calculator?.breakdown !== undefined && (
+            <>
+              <Select
+                label={t('builder.calculator.breakdown')}
+                placeholder={t('builder.calculator.noBreakdown')}
+                options={fields.filter((field) => field.type === 'TABLE' && field.isReadOnly).map((field) => ({ value: field.code, label: `${field.label} (${field.code})` }))}
+                value={str(config.breakdownFieldCode)}
+                onChange={(event) => set({ breakdownFieldCode: event.target.value === '' ? undefined : event.target.value })}
+              />
+              <p className={styles.note}>{t('builder.calculator.breakdownHint')}</p>
+            </>
+          )}
         </>
       );
     }

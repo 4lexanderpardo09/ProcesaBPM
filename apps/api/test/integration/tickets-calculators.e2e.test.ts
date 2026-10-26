@@ -123,7 +123,8 @@ describe('calculators: tenant settings, publication and the CALCULATOR block', (
         { step: 'start', code: 'SALIDA', type: 'DATETIME', capture: 'CREATION' as const, isRequired: true },
         { step: 'start', code: 'REGRESO', type: 'DATETIME', capture: 'CREATION' as const, isRequired: true },
         { step: 'start', code: 'DIAS_FUERA', type: 'TRIP_DAYS', capture: 'CREATION' as const, config: { startFieldCode: 'SALIDA', endFieldCode: 'REGRESO' } },
-        { step: 'start', code: 'ALIMENTACION', type: 'CALCULATOR', capture: 'CREATION' as const, config: { calculatorCode: 'TIME_SLOTS', inputs: { departure: 'SALIDA', return: 'REGRESO', daysAtHome: 'DIAS_FUERA' }, table: 'COMIDAS' } },
+        { step: 'start', code: 'ALIMENTACION', type: 'CALCULATOR', capture: 'CREATION' as const, config: { calculatorCode: 'TIME_SLOTS', inputs: { departure: 'SALIDA', return: 'REGRESO', daysAtHome: 'DIAS_FUERA' }, table: 'COMIDAS', breakdownFieldCode: 'DETALLE' } },
+        { step: 'start', code: 'DETALLE', type: 'TABLE', capture: 'CREATION' as const, isReadOnly: true, config: { columns: [{ code: 'CONCEPTO', label: 'Comida', type: 'TEXT' }, { code: 'CANTIDAD', label: 'Días', type: 'NUMBER' }, { code: 'VALOR_UNIT', label: 'Valor unitario', type: 'CURRENCY' }, { code: 'SUBTOTAL', label: 'Subtotal', type: 'CURRENCY', showTotal: true }] } },
       ],
     };
     await world.admin.put('/calculators/TIME_SLOTS/config', RATES).expect(200);
@@ -131,7 +132,14 @@ describe('calculators: tenant settings, publication and the CALCULATOR block', (
     // Mon 11:00 to Wed 21:00 Bogota: lunch and dinner three days; Tuesday unticked.
     const trip = { SALIDA: '2026-10-05T16:00:00.000Z', REGRESO: '2026-10-08T02:00:00.000Z' };
     const created = await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Viaje', values: { ...trip, DIAS_FUERA: ['2026-10-06'] } }).expect(201);
-    expect((await requester.client.get(`/tickets/${created.body.id}`).expect(200)).body.values).toMatchObject({ DIAS_FUERA: ['2026-10-06'], ALIMENTACION: 70001 });
+    expect((await requester.client.get(`/tickets/${created.body.id}`).expect(200)).body.values).toMatchObject({
+      DIAS_FUERA: ['2026-10-06'],
+      ALIMENTACION: 70001,
+      DETALLE: [
+        { CONCEPTO: 'Almuerzo', CANTIDAD: 2, VALOR_UNIT: 15000.5, SUBTOTAL: 30001 },
+        { CONCEPTO: 'Cena', CANTIDAD: 2, VALOR_UNIT: 20000, SUBTOTAL: 40000 },
+      ],
+    });
     const everyDay = await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Viaje', values: trip }).expect(201);
     expect((await requester.client.get(`/tickets/${everyDay.body.id}`).expect(200)).body.values.ALIMENTACION).toBe(105001.5);
     const wrong = await requester.client.post('/tickets', { subcategoryId: flow.subcategoryId, title: 'Viaje', values: { ...trip, DIAS_FUERA: ['6/10/2026'] } }).expect(422);

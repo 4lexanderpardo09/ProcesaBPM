@@ -75,7 +75,7 @@ describe('TIME_SLOTS', () => {
 });
 
 function field(code: string, type: FieldDocument['type'], fieldConfig: Record<string, unknown> = {}): FieldDocument {
-  return { id: code, stepId: 'S', code, label: code, type, capture: 'STEP', isRequired: false, isReadOnly: false, sortOrder: 0, config: fieldConfig, dataSource: null } as FieldDocument;
+  return { id: code, stepId: 'S', code, label: code, type, capture: 'STEP', isRequired: false, isReadOnly: false, isImmutable: false, sortOrder: 0, config: fieldConfig, dataSource: null } as FieldDocument;
 }
 
 describe('CALCULATOR fields in computeFieldValues', () => {
@@ -97,6 +97,22 @@ describe('CALCULATOR fields in computeFieldValues', () => {
     expect(computeFieldValues(fields, values, { today: '2026-10-05' }).failures).toEqual(expect.arrayContaining([{ fieldCode: 'ALLOWANCE', reason: 'CALCULATOR_NOT_CONFIGURED', strict: false }]));
     const unknown = [field('X', 'CALCULATOR', { calculatorCode: 'NOPE' })];
     expect(computeFieldValues(unknown, {}, context).failures).toEqual([{ fieldCode: 'X', reason: 'CALCULATOR_UNKNOWN', strict: false }]);
+  });
+
+  it('fills its breakdown table line by line, like the help desk meal table, and empties it when it fails', () => {
+    const withLines = [...fields.slice(0, 2), field('ALLOWANCE', 'CALCULATOR', { calculatorCode: 'TIME_SLOTS', inputs: { departure: 'LEAVES', return: 'BACK' }, table: 'COMIDAS', breakdownFieldCode: 'MEALS' }), field('MEALS', 'TABLE')];
+    // Mon 11:00 to Tue 13:00 Bogota: lunch twice, dinner once, breakfast once.
+    const result = computeFieldValues(withLines, { LEAVES: '2026-10-05T16:00:00.000Z', BACK: '2026-10-06T18:00:00.000Z' }, context);
+    expect(result.values).toEqual({
+      ALLOWANCE: 60001,
+      MEALS: [
+        { CONCEPTO: 'Desayuno', CANTIDAD: 1, VALOR_UNIT: 10000, SUBTOTAL: 10000 },
+        { CONCEPTO: 'Almuerzo', CANTIDAD: 2, VALOR_UNIT: 15000.5, SUBTOTAL: 30001 },
+        { CONCEPTO: 'Cena', CANTIDAD: 1, VALOR_UNIT: 20000, SUBTOTAL: 20000 },
+      ],
+    });
+    expect(computeFieldValues(withLines, { LEAVES: '2026-10-06T16:00:00.000Z', BACK: '2026-10-05T16:00:00.000Z' }, context).values).toEqual({ ALLOWANCE: null, MEALS: [] });
+    expect(computeFieldValues(withLines, { LEAVES: '2026-10-05T16:00:00.000Z' }, context).values).toEqual({ ALLOWANCE: null, MEALS: [] });
   });
 
   it('is strict when the inputs were just captured', () => {

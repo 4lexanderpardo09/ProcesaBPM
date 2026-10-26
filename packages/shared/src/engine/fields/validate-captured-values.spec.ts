@@ -184,7 +184,7 @@ describe('validateCapturedValues', () => {
 });
 
 describe('correctableFields', () => {
-  it('keeps the typed fields with a value: not computed, file, read-only or empty ones', () => {
+  it('keeps the typed fields with a value: not computed, file, read-only, immutable or empty ones', () => {
     const fields = [
       field('a', 's', 'AMOUNT', { type: 'CURRENCY' }),
       field('b', 's', 'TOTAL', { type: 'FORMULA' }),
@@ -192,8 +192,9 @@ describe('correctableFields', () => {
       field('d', 's', 'FIXED', { isReadOnly: true }),
       field('e', 's', 'NOTE'),
       field('f', 's', 'EMPTY'),
+      field('g', 's', 'LEAVES', { type: 'DATE', isImmutable: true }),
     ];
-    const values = { AMOUNT: 10, TOTAL: 20, RECEIPT: ['x'], FIXED: 'y', NOTE: 'ok', EMPTY: '' };
+    const values = { AMOUNT: 10, TOTAL: 20, RECEIPT: ['x'], FIXED: 'y', NOTE: 'ok', EMPTY: '', LEAVES: '2026-11-10' };
     expect(correctableFields(fields, values).map((entry) => entry.code)).toEqual(['AMOUNT', 'NOTE']);
   });
 });
