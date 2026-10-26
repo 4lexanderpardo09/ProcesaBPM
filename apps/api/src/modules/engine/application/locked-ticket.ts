@@ -76,14 +76,11 @@ export class LockedTicketLoader {
   }
 
   /**
-   * `transition`: the assignee, or a supervisor with `reassign` on this ticket; `close`: the assignee only.
-   * Both need the permission for this very ticket: a type-level check would ignore stored conditions.
+   * `transition` and `close`: the assignee only, with the permission for this very ticket (a type-level check would
+   * ignore stored conditions).
    */
   async assertMayAct(tx: TenantTransaction, current: TicketInProgress, actor: TicketActor, action: 'transition' | 'close'): Promise<void> {
-    const ticketId = current.ticket.id;
-    const may = await actor.can(tx, ticketId, action);
-    const mayReassign = action === 'transition' && !holdsStep(current.ownType) && (await actor.can(tx, ticketId, 'reassign'));
-    const refusal = actRefusal(action, { may, mayReassign, ownType: current.ownType });
+    const refusal = actRefusal({ may: await actor.can(tx, current.ticket.id, action), ownType: current.ownType });
     if (refusal !== null) throw refusal;
   }
 

@@ -57,11 +57,11 @@ export function ticketActionRefusals(state: TicketActionState): TicketActionRefu
   return {
     advance:
       onOpenVisit ??
-      actRefusal('transition', { may: grants.transition, mayReassign: grants.reassign, ownType }) ??
+      actRefusal({ may: grants.transition, ownType }) ??
       (step === undefined || !state.hasDecisionExit ? new InvalidTransitionError() : leaveByDecisionRefusal(step)),
     take: onOpenVisit ?? takeRefusal(grants.transition, ownType, state.assignees),
     reassign: onOpenVisit ?? reassignRefusal(grants.reassign) ?? (parallel && !hasPendingSignature(state.signatures) ? new InvalidAssigneeError() : null),
-    close: onOpenVisit ?? actRefusal('close', { may: grants.close, mayReassign: grants.reassign, ownType }) ?? (step === undefined ? new InvalidStateError('The ticket is not on a step of its version') : closeRefusal(step, false)),
+    close: onOpenVisit ?? actRefusal({ may: grants.close, ownType }) ?? (step === undefined ? new InvalidStateError('The ticket is not on a step of its version') : closeRefusal(step, false)),
     openIncident: onOpenVisit ?? openIncidentRefusal(grants.open_incident, grants.reassign, ownType),
     resolveIncident: resolveIncidentRefusal({
       actorId: state.actorId,

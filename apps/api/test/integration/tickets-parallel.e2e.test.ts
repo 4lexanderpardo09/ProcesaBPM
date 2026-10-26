@@ -303,15 +303,10 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
   });
 
   describe('interactions', () => {
-    it('a supervisor can move a parallel step on, cancelling what is pending; a signer cannot use transition', async () => {
+    it('nobody moves a parallel step on with transition, not a signer nor a supervisor: it moves when everybody signed', async () => {
       const ticket = (await create(flow)).body;
-      const asSigner = await a.client.post(`/tickets/${ticket.id}/transition`, { transitionId: flow.transition.Signed, visitId: ticket.openVisitId });
-      expectStatus(asSigner, 403);
-      const moved = await supervisor.client.post(`/tickets/${ticket.id}/transition`, { transitionId: flow.transition.Signed, visitId: ticket.openVisitId });
-      expectStatus(moved, 200);
-      expect(moved.body.currentStepId).toBe(flow.step.next);
-      expect((await tasks(ticket.id)).map((task) => task.status)).toEqual(['CANCELLED', 'CANCELLED']);
-      expect((await world.events(ticket.id)).find((event) => event.type === 'TRANSITIONED' && event.actor_id === supervisor.userId)?.data).toMatchObject({ parallelOverride: true });
+      for (const member of [a, supervisor]) expectStatus(await member.client.post(`/tickets/${ticket.id}/transition`, { transitionId: flow.transition.Signed, visitId: ticket.openVisitId }), 403);
+      expect((await tasks(ticket.id)).map((task) => task.status)).toEqual(['PENDING', 'PENDING']);
     });
 
     it('a signature can be passed to someone else with reassign + fromUserId', async () => {

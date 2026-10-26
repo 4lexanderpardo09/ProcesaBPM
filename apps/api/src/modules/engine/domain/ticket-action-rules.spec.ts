@@ -55,18 +55,17 @@ describe('openVisitRefusal', () => {
 });
 
 describe('actRefusal', () => {
-  it.each(['transition', 'close'] as const)('%s: whoever holds the step, with the permission', (action) => {
-    expect(actRefusal(action, { may: true, mayReassign: false, ownType: 'PRIMARY' })).toBeNull();
-    expect(actRefusal(action, { may: true, mayReassign: false, ownType: 'POOL' })).toBeNull();
-    expect(actRefusal(action, { may: false, mayReassign: true, ownType: 'PRIMARY' })).toBeInstanceOf(PermissionDeniedError);
+  it('whoever holds the step, with the permission', () => {
+    expect(actRefusal({ may: true, ownType: 'PRIMARY' })).toBeNull();
+    expect(actRefusal({ may: true, ownType: 'POOL' })).toBeNull();
+    expect(actRefusal({ may: false, ownType: 'PRIMARY' })).toBeInstanceOf(PermissionDeniedError);
   });
-  it('a supervisor with reassign advances a step they do not hold, but does not close it', () => {
-    expect(actRefusal('transition', { may: true, mayReassign: true, ownType: undefined })).toBeNull();
-    expect(actRefusal('close', { may: true, mayReassign: true, ownType: undefined })).toBeInstanceOf(PermissionDeniedError);
+  it('nobody answers a step they do not hold, not even a supervisor: they reassign it', () => {
+    expect(actRefusal({ may: true, ownType: undefined })).toBeInstanceOf(PermissionDeniedError);
   });
   it('a signer or the incident assignee does not hold the step', () => {
-    expect(actRefusal('transition', { may: true, mayReassign: false, ownType: 'PARALLEL' })).toBeInstanceOf(PermissionDeniedError);
-    expect(actRefusal('close', { may: true, mayReassign: false, ownType: 'INCIDENT' })).toBeInstanceOf(PermissionDeniedError);
+    expect(actRefusal({ may: true, ownType: 'PARALLEL' })).toBeInstanceOf(PermissionDeniedError);
+    expect(actRefusal({ may: true, ownType: 'INCIDENT' })).toBeInstanceOf(PermissionDeniedError);
   });
 });
 
