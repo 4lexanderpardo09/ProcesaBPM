@@ -26,6 +26,12 @@ export interface ComputeContext extends Omit<FormulaContext, 'values'> {
   readonly timeZone?: string;
   /** Per-tenant configuration of the calculators that are switched on, by calculator code. */
   readonly calculatorConfigs?: ReadonlyMap<string, Record<string, unknown>>;
+  /**
+   * The steps whose computed fields this run fills (the step being answered). Without it every computed field is
+   * computed; with it, theirs and the ones the ticket already holds (kept up to date when their inputs change), so a
+   * field of a step the ticket has not reached stays empty instead of showing a value nobody worked out yet.
+   */
+  readonly stepIds?: ReadonlySet<string>;
 }
 
 /** JSON number when 15 significant digits hold it exactly, otherwise the plain decimal text. */
@@ -90,7 +96,8 @@ function dependencyOrder(codes: ReadonlySet<string>, references: ReadonlyMap<str
  * `failures`; what to do about it (refuse the submission or only record it) is the caller's policy.
  */
 export function computeFieldValues(fields: readonly FieldDocument[], current: Readonly<Record<string, unknown>>, context: ComputeContext): ComputedFormulas {
-  const computedFields = fields.filter((field) => field.type === 'FORMULA' || field.type === 'CALCULATOR');
+  const inScope = (field: FieldDocument): boolean => context.stepIds === undefined || context.stepIds.has(field.stepId) || Object.hasOwn(current, field.code);
+  const computedFields = fields.filter((field) => (field.type === 'FORMULA' || field.type === 'CALCULATOR') && inScope(field));
   if (computedFields.length === 0) return { values: {}, failures: [] };
   const schema = buildFormulaSchema(fields);
   const byCode = new Map(computedFields.map((field) => [field.code, field]));

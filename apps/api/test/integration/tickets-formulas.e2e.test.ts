@@ -44,6 +44,8 @@ describe('computed fields: formulas recalculated on creation and on advance', ()
         { step: 'start', code: 'TOTAL', type: 'FORMULA', capture: 'CREATION', config: { expression: 'ROUND(PRICE * QTY * 1.19, 2)', resultType: 'CURRENCY' } },
         { step: 'start', code: 'UNIT', type: 'FORMULA', capture: 'CREATION', config: { expression: 'TOTAL / QTY', resultType: 'NUMBER', decimals: 3 } },
         { step: 'start', code: 'SAFE_UNIT', type: 'FORMULA', capture: 'CREATION', config: { expression: 'IFERROR(TOTAL / QTY, 0)', resultType: 'NUMBER' } },
+        { step: 'review', code: 'SPENT', type: 'CURRENCY', capture: 'STEP' },
+        { step: 'review', code: 'BALANCE', type: 'FORMULA', capture: 'STEP', config: { expression: 'IF(ISBLANK(SPENT), TOTAL, TOTAL - SPENT)', resultType: 'CURRENCY' } },
       ],
       rules: [{ step: 'start', fieldCode: 'TOTAL', maxAmount: '100000.00', action: 'BLOCK', message: 'Too expensive' }],
     });
@@ -58,6 +60,13 @@ describe('computed fields: formulas recalculated on creation and on advance', ()
     const created = await create({ PRICE: 1000, QTY: 3 }).expect(201);
     expect(await valuesOf(created.body.id)).toEqual({ PRICE: 1000, QTY: 3, TOTAL: 3570, UNIT: 1190, SAFE_UNIT: 1190 });
     expect(created.body.currentStepId).toBe(quote.step.review);
+  });
+
+  it('a formula of a later step stays empty until that step is answered', async () => {
+    const created = await create({ PRICE: 1000, QTY: 3 }).expect(201);
+    expect(await valuesOf(created.body.id)).not.toHaveProperty('BALANCE');
+    await worker.client.post(`/tickets/${created.body.id}/transition`, { transitionId: quote.transition.Done, visitId: created.body.openVisitId, values: { SPENT: 570 } }).expect(200);
+    expect(await valuesOf(created.body.id)).toMatchObject({ SPENT: 570, BALANCE: 3000 });
   });
 
   it('a small total takes the default branch', async () => {

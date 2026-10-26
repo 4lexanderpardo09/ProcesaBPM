@@ -185,6 +185,20 @@ describe('computeFieldValues', () => {
     field({ code: 'WRONG', type: 'FORMULA', config: { expression: '"text"', resultType: 'NUMBER' } }),
   ];
 
+  it('with steps in scope, fills only their computed fields and the ones the ticket already holds', () => {
+    const steps = [
+      field({ code: 'AMOUNT', type: 'CURRENCY', stepId: 'START' }),
+      field({ code: 'TOTAL', type: 'FORMULA', stepId: 'START', config: { expression: 'AMOUNT * 2', resultType: 'CURRENCY' } }),
+      field({ code: 'SPENT', type: 'CURRENCY', stepId: 'LEGALIZE' }),
+      field({ code: 'BALANCE', type: 'FORMULA', stepId: 'LEGALIZE', config: { expression: 'TOTAL - SPENT', resultType: 'CURRENCY' } }),
+    ];
+    expect(computeFieldValues(steps, { AMOUNT: 10 }, { ...context, stepIds: new Set(['START']) }).values).toEqual({ TOTAL: 20 });
+    expect(computeFieldValues(steps, { AMOUNT: 10, TOTAL: 20, SPENT: 15 }, { ...context, stepIds: new Set(['LEGALIZE']) }).values).toEqual({ TOTAL: 20, BALANCE: 5 });
+    // Later on (an edit, a calculator block, waking up) what the ticket holds stays up to date, and nothing else appears.
+    expect(computeFieldValues(steps, { AMOUNT: 12, TOTAL: 20, SPENT: 15, BALANCE: 5 }, { ...context, stepIds: new Set() }).values).toEqual({ TOTAL: 24, BALANCE: 9 });
+    expect(computeFieldValues(steps, { AMOUNT: 12, TOTAL: 20 }, { ...context, stepIds: new Set() }).values).toEqual({ TOTAL: 24 });
+  });
+
   it('computes dependencies first and rounds to the declared decimals', () => {
     const result = computeFieldValues(fields, { PRICE: 100.5, QTY: 3 }, context);
     expect(result.values).toMatchObject({ SUBTOTAL: 301.5, TOTAL: 358.79, DUE: '2026-10-05' });

@@ -78,7 +78,7 @@ export class SubmissionValidator {
     if (!document.fields.some((field) => field.type === 'FORMULA' || field.type === 'CALCULATOR')) return { values: {}, failures: [] };
     const calendar = await this.people.findBusinessCalendar(tx, request.tenantId, company.timeZone, company.calendarId, request.at);
     const environment = await this.environments.build(tx, request.tenantId, document, { timeZone: company.timeZone, calendar, at: request.at });
-    return computeFieldValues(document.fields, { ...request.existing, ...capturedValues }, { ...environment, captured: new Set(Object.keys(capturedValues)) });
+    return computeFieldValues(document.fields, { ...request.existing, ...capturedValues }, { ...environment, captured: new Set(Object.keys(capturedValues)), stepIds: new Set([request.step.id]) });
   }
 
   /**
