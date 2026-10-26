@@ -57,7 +57,7 @@ export const TICKETS_READERS = {
   ticket_parallel_tasks: {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`
-      SELECT tenant_id, id, ticket_id, step_id, loop, user_id, status, comment, completed_at,
+      SELECT tenant_id, id, ticket_id, step_id, loop, user_id, signer_id, status, comment, completed_at,
              created_at
       FROM ticket_parallel_tasks WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,

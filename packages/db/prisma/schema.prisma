@@ -1603,6 +1603,7 @@ model StepSigner {
   step       Step        @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: Cascade)
   membership Membership? @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
   position   Position?   @relation(fields: [tenantId, positionId], references: [tenantId, id], onDelete: NoAction)
+  tasks      TicketParallelTask[]
 
   @@id([tenantId, id])
   @@index([tenantId, stepId])
@@ -2048,20 +2049,24 @@ model TicketParallelTask {
   stepId      String             @map("step_id") @db.Uuid
   loop        Int                @default(1)
   userId      String             @map("user_id") @db.Uuid
+  /// The signer row (the area) this signature was asked for; null for a signer added on reassignment.
+  signerId    String?            @map("signer_id") @db.Uuid
   status      ParallelTaskStatus @default(PENDING)
   comment     String?
   completedAt DateTime?          @map("completed_at") @db.Timestamptz(3)
   createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ticket     Ticket     @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
-  step       Step       @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: NoAction)
-  membership Membership @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket     Ticket      @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
+  step       Step        @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: NoAction)
+  membership Membership  @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
+  signer     StepSigner? @relation(fields: [tenantId, signerId], references: [tenantId, id], onDelete: NoAction)
 
   @@id([tenantId, id])
   @@unique([tenantId, ticketId, stepId, loop, userId])
   @@index([tenantId, stepId])
   @@index([tenantId, userId])
+  @@index([tenantId, signerId])
   @@map("ticket_parallel_tasks")
 }
 

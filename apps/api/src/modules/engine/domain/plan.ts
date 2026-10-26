@@ -1,3 +1,4 @@
+import type { PreviousSignature, SignerAssignment } from './parallel-policy.js';
 import type { SlaTerms } from '../../sla/domain/clock-math.js';
 
 export type SlaResultValue = 'ON_TIME' | 'LATE';
@@ -80,8 +81,10 @@ export interface ArrivalPlan {
   readonly visit: VisitPlan;
   readonly clocks: readonly ClockPlan[];
   readonly assignees: readonly AssigneePlan[];
-  /** People who each have a signature to give in a PARALLEL step (one `ticket_parallel_tasks` row each). */
-  readonly parallelTasks: readonly string[];
+  /** Signatures to give in a PARALLEL step (one `ticket_parallel_tasks` row each), with the signer row each is for. */
+  readonly parallelTasks: readonly SignerAssignment[];
+  /** Signatures of the previous round that stand after a rejection: written as SIGNED, nobody is asked for them again. */
+  readonly keptSignatures: readonly PreviousSignature[];
 }
 
 export interface FieldWrite {

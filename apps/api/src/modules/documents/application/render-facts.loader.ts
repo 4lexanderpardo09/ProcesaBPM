@@ -61,7 +61,8 @@ export class RenderFactsLoader {
       files: await this.repository.fileNames(tx, tenantId, [...new Set(fields.flatMap((field) => fileIdsOf(field, values[field.code])))]),
     };
     const approvers = await this.approvers(tx, tenantId, { creatorId: base.ticket.creatorId, companyId: base.companyId, at: now }, approverAsks);
-    return { facts: { ticket: base.ticket, timeZone: base.timeZone, currencyCode: base.currencyCode, fields, values, names, signers, approvers, now }, workflowId: base.workflowId, companyId: base.companyId, imageStorageKeys };
+    const stepSigners = new Map(steps.filter((step) => step.signers.length > 0).map((step) => [step.name, step.signers]));
+    return { facts: { ticket: base.ticket, timeZone: base.timeZone, currencyCode: base.currencyCode, fields, values, names, signers, stepSigners, approvers, now }, workflowId: base.workflowId, companyId: base.companyId, imageStorageKeys };
   }
 
   /**

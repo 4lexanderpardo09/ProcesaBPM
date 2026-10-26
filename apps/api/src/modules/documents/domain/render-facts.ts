@@ -11,6 +11,15 @@ export interface SignerRecord {
   readonly positionId: string | null;
   /** The made-up signer of a preview, who fills a box whatever positions it keeps. */
   readonly anyPosition?: boolean;
+  /** In a PARALLEL step, the signer row (the area) the signature was given for; `null` for one added by hand. */
+  readonly signerId?: string | null;
+}
+
+/** A signer row of a step as configured in the workflow: what a signature slot of a document is matched against. */
+export interface ConfiguredSigner {
+  readonly id: string;
+  readonly signerType: 'USER' | 'POSITION' | 'APPROVER' | 'CREATOR' | 'STEP_ASSIGNEE';
+  readonly label: string | null;
 }
 
 export interface TicketFacts {
@@ -43,6 +52,8 @@ export interface RenderFacts {
   readonly names: NameLookups;
   /** By step name: who signed it, in the order they did. */
   readonly signers: ReadonlyMap<string, readonly SignerRecord[]>;
+  /** By step name: its configured signer rows (only the steps that have any). */
+  readonly stepSigners?: ReadonlyMap<string, readonly ConfiguredSigner[]>;
   /**
    * By `approverKey`: the requester's approver of that type and level and their delegate, for the signature boxes that
    * keep only that signature. Absent (or without the key), such a box finds nobody.

@@ -184,7 +184,7 @@ export class DesignResolver {
     slots.forEach((slot, index) => byStep.set(slot.stepName, [...(byStep.get(slot.stepName) ?? []), index]));
     const chosen: Array<SignerRecord | undefined> = slots.map(() => undefined);
     for (const [stepName, indexes] of byStep) {
-      const assigned = assignSigners(indexes.map((index) => slots[index]!), this.facts.signers.get(stepName) ?? [], this.facts.ticket.creatorId);
+      const assigned = assignSigners(indexes.map((index) => slots[index]!), this.facts.signers.get(stepName) ?? [], this.facts.ticket.creatorId, this.facts.stepSigners?.get(stepName) ?? []);
       indexes.forEach((slotIndex, position) => (chosen[slotIndex] = assigned[position]));
     }
     return slots.map((slot, index): ResolvedSignatureSlot => {

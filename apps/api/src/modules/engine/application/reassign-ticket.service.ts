@@ -87,7 +87,7 @@ export class ReassignTicketService {
     const calendar = await this.people.findBusinessCalendar(tx, tenantId, company.timeZone, visit.calendarId, at);
     const opened = openSla({ value: visit.slaValue, unit: visit.slaUnit }, calendar?.calendar ?? null, at);
     const visitPlan: VisitPlan = { stepId: visit.stepId, loop: visit.loop, enteredAt: visit.enteredAt, sla: { value: visit.slaValue, unit: visit.slaUnit }, calendarId: visit.calendarId, dueAt: visit.dueAt };
-    await this.writes.insertParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop, [target.userId]);
+    await this.writes.insertParallelTasks(tx, tenantId, ticket.id, visit.stepId, visit.loop, [{ userId: target.userId, signerId: null }]);
     await this.writes.insertAssignees(tx, tenantId, ticket.id, at, [{ userId: target.userId, type: 'PARALLEL' }]);
     await this.writes.insertClocks(tx, tenantId, ticket, visit.id, visitPlan, [{ responsibleId: target.userId, startedAt: at, sla: { value: opened.value, unit: opened.unit }, calendarId: visit.calendarId, dueAt: opened.dueAt }]);
     await this.writes.insertEvent(tx, tenantId, ticket.id, at, {

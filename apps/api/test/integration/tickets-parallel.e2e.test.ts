@@ -302,6 +302,47 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
     });
   });
 
+  describe('a round started again after a rejection (as in the help desk)', () => {
+    const roundOf = async (ticketId: string, loop: number) =>
+      (await db.platform.query(`SELECT user_id, signer_id, status, comment FROM ticket_parallel_tasks WHERE ticket_id = $1 AND loop = $2 ORDER BY user_id`, [ticketId, loop])).rows as Array<{ user_id: string; signer_id: string | null; status: string; comment: string | null }>;
+
+    it('keeps the areas that had signed, asks again only the rejected and the pending ones, and ties each task to its signer row', async () => {
+      const resend = await publishFlow(world.admin, {
+        steps: [
+          { key: 'start', type: 'START' },
+          { key: 'sign', type: 'TASK', extra: { assignmentMode: 'PARALLEL' }, signers: [signer(a), signer(b), signer(c)] },
+          { key: 'fix', type: 'TASK', extra: { assignmentMode: 'CREATOR' } },
+          { key: 'end', type: 'END' },
+        ],
+        transitions: [
+          { from: 'start', to: 'sign', type: 'DEFAULT' },
+          { from: 'sign', to: 'end', type: 'DECISION', label: 'Signed' },
+          { from: 'sign', to: 'fix', type: 'SYSTEM_ONLY', label: 'Rejected' },
+          { from: 'fix', to: 'sign', type: 'DECISION', label: 'Resend' },
+        ],
+      });
+      const ticket = (await create(resend).expect(201)).body;
+      const first = await roundOf(ticket.id, 1);
+      expect(first.every((task) => task.signer_id !== null)).toBe(true);
+      expect(new Set(first.map((task) => task.signer_id)).size).toBe(3);
+
+      await sign(a, ticket, { comment: 'Sin pendientes' }).expect(200);
+      const back = (await reject(b, ticket, { comment: 'Falta la dotación' }).expect(200)).body;
+      const resent = (await requester.client.post(`/tickets/${ticket.id}/transition`, { transitionId: resend.transition.Resend, visitId: back.openVisitId }).expect(200)).body;
+
+      const second = await roundOf(ticket.id, 2);
+      const statusOf = (member: Member) => second.find((task) => task.user_id === member.userId);
+      expect(statusOf(a)).toMatchObject({ status: 'SIGNED', comment: 'Sin pendientes', signer_id: first.find((task) => task.user_id === a.userId)!.signer_id });
+      expect([statusOf(b)?.status, statusOf(c)?.status]).toEqual(['PENDING', 'PENDING']);
+      expect((await world.assignees(ticket.id)).map((row) => row.user_id).sort()).toEqual([b.userId, c.userId].sort());
+      expect((await world.events(ticket.id)).some((event) => event.type === 'SYSTEM' && (event.data as { kind?: string }).kind === 'SIGNATURES_KEPT')).toBe(true);
+
+      await sign(b, resent).expect(200);
+      const done = (await sign(c, resent).expect(200)).body;
+      expect(done.status).toBe('CLOSED');
+    });
+  });
+
   describe('interactions', () => {
     it('nobody moves a parallel step on with transition, not a signer nor a supervisor: it moves when everybody signed', async () => {
       const ticket = (await create(flow)).body;
