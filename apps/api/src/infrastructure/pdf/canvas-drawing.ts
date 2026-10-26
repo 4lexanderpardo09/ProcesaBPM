@@ -1,6 +1,7 @@
 import { type CanvasStyle } from '@procesabpm/shared';
 import { clip, endPath, type PDFDocument, type PDFFont, type PDFPage, popGraphicsState, pushGraphicsState, rectangle, rgb, StandardFonts } from 'pdf-lib';
 import type { CanvasMeasurer, CanvasOp } from './canvas-document.js';
+import { drawnWidth } from './text-width.js';
 
 type EmbeddedImage = Awaited<ReturnType<PDFDocument['embedPng']>>;
 
@@ -57,7 +58,7 @@ export class CanvasFonts {
   }
 
   get measurer(): CanvasMeasurer {
-    return { width: (text, style) => this.font(style).widthOfTextAtSize(this.safe(text, style), style.size) };
+    return { width: (text, style) => drawnWidth(this.font(style), this.safe(text, style), style.size) };
   }
 }
 
@@ -115,12 +116,14 @@ export function drawCanvasOps(pages: readonly PDFPage[], ops: readonly CanvasOp[
             const text = fonts.safe(line.text, op.style);
             if (line.wordSpacing === 0) page.drawText(text, { x: pt(line.x), y: baseline, size: op.style.size, font, color });
             else {
-              // A justified line: each word on its own, the spaces stretched.
+              // A justified line: each word on its own, the spaces stretched so the words fill the line exactly.
               let x = pt(line.x);
-              const space = font.widthOfTextAtSize(' ', op.style.size) + pt(line.wordSpacing);
-              for (const word of text.split(' ')) {
+              const words = text.split(' ');
+              const inked = words.reduce((total, word) => total + drawnWidth(font, word, op.style.size), 0);
+              const space = words.length > 1 ? Math.max(font.widthOfTextAtSize(' ', op.style.size), (pt(line.width) - inked) / (words.length - 1)) : 0;
+              for (const word of words) {
                 if (word !== '') page.drawText(word, { x, y: baseline, size: op.style.size, font, color });
-                x += font.widthOfTextAtSize(word, op.style.size) + space;
+                x += drawnWidth(font, word, op.style.size) + space;
               }
             }
             if (op.style.underline) {

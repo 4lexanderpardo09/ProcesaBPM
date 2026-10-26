@@ -271,4 +271,12 @@ describe('PdfLibRenderer.renderCanvas', () => {
     expect(text).toContain('Total');
     expect(text).toContain('ok ? 2/2');
   });
+
+  it('a justified line keeps a space between every word, also after accented capitals (the F40 «POPAYÁN, quien»)', async () => {
+    const certificate = 'Por medio del presente documento se certifica que el(la) señor(a) LUCÍA LONDOÑO ÑÁÑEZ, identificado con documento de identidad No 1061702345 de POPAYÁN, quien se desempeñó en el cargo de AUXILIAR DE SISTEMAS, de la empresa ARPESOD ASOCIADOS SAS.';
+    const { bytes } = await renderer.renderCanvas(canvasJob([element('body', 30, { type: 'text', grow: true, width: 166, text: () => certificate, style: { ...style, size: 11, align: 'JUSTIFY', lineHeight: 1.85 } })]));
+    const text = (await textOf(bytes)).replace(/\s+/g, ' ');
+    expect(text).toContain('POPAYÁN, quien');
+    expect(text).toContain('LUCÍA LONDOÑO ÑÁÑEZ, identificado');
+  });
 });

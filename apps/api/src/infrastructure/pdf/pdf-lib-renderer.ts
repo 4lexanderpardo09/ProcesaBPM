@@ -3,6 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFCheckBox, PDFDropdown, PDFFont, PDFPage, PDFRadioGroup, PDFTextField, degrees, rgb } from 'pdf-lib';
 import { CanvasFonts, drawCanvasOps, PT_PER_MM } from './canvas-drawing.js';
 import { layoutCanvas } from './layout/canvas-layout.js';
+import { drawnWidth } from './text-width.js';
 import { layoutDocument, RenderLimitError } from './layout/flow-layout.js';
 import { alignedX, clampLines, wrapText } from './layout/text-wrap.js';
 import type { DrawCommand, TextMeasurer } from './resolved-document.js';
@@ -45,7 +46,7 @@ class Typography {
   }
 
   get measurer(): TextMeasurer {
-    return { width: (text, size, bold) => this.font(bold).widthOfTextAtSize(this.safe(text, bold), size) };
+    return { width: (text, size, bold) => drawnWidth(this.font(bold), this.safe(text, bold), size) };
   }
 }
 
@@ -178,7 +179,7 @@ function drawCoordinateText(pages: readonly PDFPage[], boxes: ReadonlyArray<Para
   const lines = field.maxWidth === null ? [field.value.replace(/\n/g, ' ')] : clampLines(wrapText(field.value, field.maxWidth, field.fontSize, false, typography.measurer), 3, field.maxWidth, field.fontSize, false, typography.measurer);
   const lineHeight = field.fontSize * 1.2;
   for (const [index, line] of lines.entries()) {
-    const width = typography.regular.widthOfTextAtSize(typography.safe(line, false), field.fontSize);
+    const width = drawnWidth(typography.regular, typography.safe(line, false), field.fontSize);
     const u = field.maxWidth === null ? field.x : alignedX(field.x, field.maxWidth, width, field.align);
     const at = toUserSpace(box, u, field.y - index * lineHeight);
     page.drawText(typography.safe(line, false), { x: at.x, y: at.y, size: field.fontSize, font: typography.regular, rotate: degrees(at.rotate) });
