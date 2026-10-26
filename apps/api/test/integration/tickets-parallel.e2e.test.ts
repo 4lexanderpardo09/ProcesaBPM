@@ -112,6 +112,39 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect((await tasks(ticket.id)).map((task) => task.user_id).sort()).toEqual([a.userId, second.userId].sort());
     });
 
+    it('a signer of several positions, as the help desk\'s «Coordinador de crédito y cartera, Gestor de cartera», is whoever holds any of them', async () => {
+      const [coordinator, manager] = [await world.position(), await world.position()];
+      const holder = await world.member(WORKER_GRANTS, { positionId: manager });
+      const several = await publishFlow(world.admin, spec([{ signerType: 'POSITION', positionId: coordinator, extraPositionIds: [manager], label: 'Cartera' }, signer(a)]));
+      const document = (await world.admin.get(`/workflows/${several.workflowId}/versions/${several.versionId}`).expect(200)).body.document;
+      expect(document.steps.find((step: { id: string }) => step.id === several.step.sign).signers[0]).toMatchObject({ positionId: coordinator, extraPositionIds: [manager] });
+      const copy = (await world.admin.post(`/workflows/${several.workflowId}/versions`, { fromVersionId: several.versionId }).expect(201)).body;
+      const copied = (await world.admin.get(`/workflows/${several.workflowId}/versions/${copy.id}`).expect(200)).body.document;
+      expect(copied.steps.find((step: { name: string }) => step.name === 'sign').signers[0].extraPositionIds).toEqual([manager]);
+
+      const ticket = (await create(several).expect(201)).body;
+      expect((await tasks(ticket.id)).map((task) => task.user_id).sort()).toEqual([holder.userId, a.userId].sort());
+      await world.member(WORKER_GRANTS, { positionId: coordinator });
+      const preview = (await requester.client.post('/tickets/creation-preview', { subcategoryId: several.subcategoryId, values: {} }).expect(200)).body;
+      expect(preview.signerChoices).toHaveLength(1);
+      expect(preview.signerChoices[0].candidates).toHaveLength(2);
+
+      const repeated = await world.admin.put(`/workflows/${several.workflowId}/versions/${copy.id}/steps/${copied.steps.find((step: { name: string }) => step.name === 'sign').id}/signers`, { signers: [{ signerType: 'POSITION', positionId: coordinator, extraPositionIds: [coordinator] }] });
+      expect(repeated.status).toBe(400);
+    });
+
+    it('a step with manual selection lets each signature be given to someone else or left out, offering who it resolved to', async () => {
+      const base = spec([signer(a), signer(b), signer(c)]);
+      const manual = await publishFlow(world.admin, { ...base, steps: base.steps.map((step) => (step.key === 'sign' ? { ...step, extra: { ...step.extra, manualSelection: true } } : step)) });
+      const preview = (await requester.client.post('/tickets/creation-preview', { subcategoryId: manual.subcategoryId, values: {} }).expect(200)).body;
+      expect(preview.people).toEqual([]);
+      expect(preview.signerChoices.map((choice: { suggestedId: string }) => choice.suggestedId)).toEqual([a.userId, b.userId, c.userId]);
+      const [first, second, third] = preview.signerChoices as Array<{ signerId: string }>;
+      const choices = [{ signerId: first!.signerId, userId: a.userId }, { signerId: second!.signerId, userId: null }, { signerId: third!.signerId, userId: supervisor.userId }];
+      const ticket = (await requester.client.post('/tickets', { subcategoryId: manual.subcategoryId, title: 'Request', values: {}, signerChoices: choices }).expect(201)).body;
+      expect((await tasks(ticket.id)).map((task) => task.user_id).sort()).toEqual([a.userId, supervisor.userId].sort());
+    });
+
     describe('a signer that resolves to nobody is chosen by hand or left out, as in the help desk', () => {
       let unresolved: PublishedFlow;
       let signerId: string;

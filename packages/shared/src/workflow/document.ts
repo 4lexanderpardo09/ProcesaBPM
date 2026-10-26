@@ -39,6 +39,8 @@ export interface SignerDocument {
   readonly signerType: 'USER' | 'POSITION' | 'APPROVER' | 'CREATOR' | 'STEP_ASSIGNEE';
   readonly userId: string | null;
   readonly positionId: string | null;
+  /** A POSITION signer also accepts these positions: whoever holds any of them signs for it. */
+  readonly extraPositionIds: readonly string[];
   readonly label: string | null;
   readonly sortOrder: number;
 }

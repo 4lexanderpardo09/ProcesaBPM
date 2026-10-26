@@ -36,6 +36,8 @@ export interface SignerChoice {
   readonly signerType: 'USER' | 'POSITION' | 'APPROVER' | 'CREATOR';
   readonly label: string | null;
   readonly candidates: ReadonlyArray<{ readonly id: string; readonly name: string }>;
+  /** Who it resolved to when the step lets every signature be chosen: offered first; `null` when it resolved to nobody. */
+  readonly suggestedId: string | null;
 }
 
 /**
@@ -74,6 +76,7 @@ export const transitionPreviewResponseSchema = z.object({
         signerType: z.enum(['USER', 'POSITION', 'APPROVER', 'CREATOR']),
         label: z.string().nullable(),
         candidates: z.array(z.object({ id: uuidSchema, name: z.string() })),
+        suggestedId: uuidSchema.nullable().default(null),
       }),
     )
     .default([]),

@@ -41,7 +41,8 @@ export function checkSteps({ doc, graph, stepById, fieldByCode, problems }: Rule
     }
     if (step.assignmentMode === 'PARALLEL' && step.signers.length === 0) problems.error('PARALLEL_WITHOUT_SIGNERS', at);
     if (step.type === 'SIGNATURE' && step.signers.length === 0) problems.error('SIGNATURE_WITHOUT_SIGNERS', at);
-    if (step.manualSelection && ['CREATOR', 'APPROVER', 'PARALLEL', 'RANDOM_DISPATCH', 'SAME_AS_STEP'].includes(step.assignmentMode)) problems.warning('MANUAL_SELECTION_NOT_APPLICABLE', at);
+    // In a PARALLEL step it lets each signature be given to someone else or left out when the ticket arrives.
+    if (step.manualSelection && ['CREATOR', 'APPROVER', 'RANDOM_DISPATCH', 'SAME_AS_STEP'].includes(step.assignmentMode)) problems.warning('MANUAL_SELECTION_NOT_APPLICABLE', at);
 
     if (step.deadlineType === 'CUTOFF') {
       if (automatic) problems.error('CUTOFF_ON_AUTOMATIC_BLOCK', at);

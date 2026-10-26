@@ -548,7 +548,7 @@ describe('validateWorkflowGraph: close_rule REQUIRED', () => {
 });
 
 describe('validateWorkflowGraph: PARALLEL and RANDOM_DISPATCH steps', () => {
-  const signer = (signerType: 'USER' | 'APPROVER' | 'CREATOR' | 'STEP_ASSIGNEE', id = signerType) => ({ id, signerType, userId: null, positionId: null, label: null, sortOrder: 0 });
+  const signer = (signerType: 'USER' | 'APPROVER' | 'CREATOR' | 'STEP_ASSIGNEE', id = signerType) => ({ id, signerType, userId: null, positionId: null, extraPositionIds: [], label: null, sortOrder: 0 });
   const parallel = (overrides: Partial<ReturnType<typeof step>> = {}, parts: Partial<WorkflowVersionDocument> = {}) =>
     version({
       steps: [step('start', 'START'), step('sign', 'TASK', { assignmentMode: 'PARALLEL', signers: [signer('CREATOR')], ...overrides }), step('end', 'END')],

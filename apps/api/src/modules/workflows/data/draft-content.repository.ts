@@ -89,17 +89,14 @@ export class DraftContentRepository {
 
   async replaceSigners(tx: TenantTransaction, tenantId: string, stepId: string, request: ReplaceSignersRequest): Promise<void> {
     await tx.stepSigner.deleteMany({ where: { tenantId, stepId } });
-    await tx.stepSigner.createMany({
-      data: request.signers.map((signer, index) => ({
-        tenantId,
-        stepId,
-        signerType: signer.signerType,
-        userId: 'userId' in signer ? signer.userId : null,
-        positionId: 'positionId' in signer ? signer.positionId : null,
-        label: signer.label,
-        sortOrder: index,
-      })),
-    });
+    for (const [index, signer] of request.signers.entries()) {
+      const { id } = await tx.stepSigner.create({
+        data: { tenantId, stepId, signerType: signer.signerType, userId: 'userId' in signer ? signer.userId : null, positionId: 'positionId' in signer ? signer.positionId : null, label: signer.label, sortOrder: index },
+        select: { id: true },
+      });
+      const extra = 'extraPositionIds' in signer ? signer.extraPositionIds : [];
+      if (extra.length > 0) await tx.stepSignerPosition.createMany({ data: extra.map((positionId) => ({ tenantId, stepId, signerId: id, positionId })) });
+    }
   }
 
   async replaceSlaOverrides(tx: TenantTransaction, tenantId: string, stepId: string, request: ReplaceSlaOverridesRequest): Promise<void> {

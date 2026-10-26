@@ -66,6 +66,13 @@ export const WORKFLOWS_READERS = {
       FROM step_signers WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
   },
+  step_signer_positions: {
+    start: [NIL_UUID, NIL_UUID],
+    page: (tenantId, [signerId, positionId], limit) => Prisma.sql`
+      SELECT tenant_id, step_id, signer_id, position_id
+      FROM step_signer_positions WHERE tenant_id = ${tenantId}::uuid AND (signer_id, position_id) > (${signerId}::uuid, ${positionId}::uuid)
+      ORDER BY signer_id, position_id LIMIT ${limit}`,
+  },
   step_files: {
     start: [NIL_UUID, NIL_UUID],
     page: (tenantId, [stepId, fileId], limit) => Prisma.sql`

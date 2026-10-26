@@ -8,8 +8,9 @@ export const SKIP_SIGNATURE = 'skip';
 export type SignerChoicesRequest = { readonly ok: true; readonly signerChoices?: SignerChoices } | { readonly ok: false };
 
 /**
- * Who signs for each signer of the next PARALLEL step that resolved to nobody (as the preview lists them): a member of
- * the company, or the signature left out. Every listed signer needs an answer before sending; answers for signers no
+ * Who signs for each signer of the next PARALLEL step the preview lists (one that resolved to nobody or to several
+ * holders, or any of them when the step lets every signature be chosen): a member of the company, or the signature
+ * left out. A signer the step resolved starts on that person. Every listed signer needs an answer before sending; answers for signers no
  * longer listed (the values typed sent the ticket elsewhere) are dropped.
  */
 export function useSignerChoices(offered: readonly SignerChoice[] | undefined) {
@@ -17,7 +18,8 @@ export function useSignerChoices(offered: readonly SignerChoice[] | undefined) {
   const [missing, setMissing] = useState(false);
   const signers = offered ?? [];
   const answerOf = (signer: SignerChoice) => {
-    const answer = answers[signer.signerId] ?? '';
+    // A step that lets every signature be chosen offers the person it resolved to.
+    const answer = answers[signer.signerId] ?? signer.suggestedId ?? '';
     return answer === SKIP_SIGNATURE || signer.candidates.some((candidate) => candidate.id === answer) ? answer : '';
   };
   return {
