@@ -31,6 +31,11 @@ export interface RequestFormProps {
   /** `undefined` keeps the subcategory's default priority. */
   readonly priorityId: string | undefined;
   readonly start: CreationFormStart;
+  /**
+   * The subcategory's description, written as a guide of what to tell ("Detalle del bien/servicio: … Valor: …"): as in the
+   * help desk, the description starts with it so the person fills it in.
+   */
+  readonly descriptionTemplate?: string | null | undefined;
 }
 
 interface CreateArgs {
@@ -47,12 +52,12 @@ interface CreateArgs {
  * ticket and opens it. Before that, the form says where the ticket goes and who gets its first step, and when that step
  * needs its assignee chosen, asks for that person among its candidates.
  */
-export function RequestForm({ subcategoryId, companyId, requesterId, priorityId, start }: RequestFormProps) {
+export function RequestForm({ subcategoryId, companyId, requesterId, priorityId, start, descriptionTemplate }: RequestFormProps) {
   const { t } = useTranslation('tickets');
   const navigate = useNavigate();
   const fields = typedFields(start.fields);
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(() => (descriptionTemplate === null || descriptionTemplate === undefined || isBlankRichText(descriptionTemplate) ? '' : descriptionTemplate));
   const [attachments, setAttachments] = useState<readonly string[]>([]);
   const [attaching, setAttaching] = useState(false);
   const [submitted, setSubmitted] = useState(false);

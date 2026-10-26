@@ -123,7 +123,9 @@ describe('NewTicketPage', () => {
 
     await chooseRequest();
     expect(screen.getByRole('radio', { name: 'Media' })).toBeChecked();
-    expect(screen.getByText('Para pagos hechos fuera de la plataforma.')).toBeInTheDocument();
+    expect(screen.getAllByText('Para pagos hechos fuera de la plataforma.')).toHaveLength(2);
+    // As in the help desk, the description starts with the subcategory's guide, for the person to fill in.
+    expect(screen.getByRole('textbox', { name: 'Descripción' })).toHaveTextContent('Para pagos hechos fuera de la plataforma.');
     expect(screen.queryByRole('textbox', { name: 'Total' })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Crear y enviar' }));
     expect(screen.getByRole('textbox', { name: /Asunto/ })).toHaveAccessibleDescription('Escribe el asunto de la solicitud.');
@@ -138,7 +140,7 @@ describe('NewTicketPage', () => {
     await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/tickets/${NEW_TICKET}`));
     expect(fake.callsTo('/tickets')[0]?.options).toMatchObject({
       method: 'POST',
-      body: { subcategoryId: PAGOS, startStepId: START, companyId: MAIN, title: 'Pago de cuota', description: '<p>En la sede norte</p>', values: { AMOUNT: '850000' }, attachments: [] },
+      body: { subcategoryId: PAGOS, startStepId: START, companyId: MAIN, title: 'Pago de cuota', description: '<p>En la sede nortePara pagos hechos fuera de la plataforma.</p>', values: { AMOUNT: '850000' }, attachments: [] },
     });
     expect(fake.callsTo('/tickets')[0]?.options.body).not.toHaveProperty('priorityId');
     expect(fake.callsTo(`/subcategories/${PAGOS}/creation-form`)[0]?.path).toBe(`/subcategories/${PAGOS}/creation-form?companyId=${MAIN}`);
