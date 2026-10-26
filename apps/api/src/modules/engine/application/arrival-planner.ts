@@ -1,3 +1,4 @@
+import { type SignatureRound, signatureRound } from '../domain/parallel-policy.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { type AssigneeCandidate, AssigneeSelectionRequiredError, type SignerChoice, type SignerChoices, cutoffDeadline, type CutoffTerm, type FormulaFailure, InvalidCalendarError, type NextAssignment, type RouteHop, routeThroughAutomaticBlocks, type StepDocument, type WorkflowVersionDocument } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -130,9 +131,12 @@ export class ArrivalPlanner {
     @Inject(TicketContextRepository) private readonly context: TicketContextRepository,
   ) {}
 
+  /** Who signs, and which signatures of a round a rejection ended still stand (see `signatureRound`). */
   private async signers(tx: TenantTransaction, request: ArrivalRequest, step: StepDocument) {
-    const userIds = await this.resolver.signersFor(tx, step, ticketOf(request), request.signerChoices);
-    return { type: 'PARALLEL' as const, userIds };
+    const assignments = await this.resolver.signersFor(tx, step, ticketOf(request), request.signerChoices);
+    const previous = request.ticketId === null ? [] : await this.tickets.lastRoundOf(tx, request.tenantId, request.ticketId, step.id);
+    const round = signatureRound(assignments, previous);
+    return { type: 'PARALLEL' as const, userIds: round.pending.map((assignment) => assignment.userId), round };
   }
 
   /**
@@ -154,7 +158,7 @@ export class ArrivalPlanner {
   /** A WAIT block holds the ticket without a person, an SLA or a loop limit: it is the clock of the workflow, not of anyone. */
   private park(request: ArrivalRequest, hops: readonly RouteHop[], step: StepDocument, resumeAt: Date, previousLoops: readonly number[], computed: ArrivalComputed): Arrival {
     const visit = { stepId: step.id, loop: nextReopenLoop(previousLoops), enteredAt: request.at, sla: { value: null, unit: null }, calendarId: null, dueAt: null, resumeAt };
-    return { kind: 'WAIT', hops, step, resumeAt, computed, plan: { visit, clocks: [], assignees: [], parallelTasks: [] } };
+    return { kind: 'WAIT', hops, step, resumeAt, computed, plan: { visit, clocks: [], assignees: [], parallelTasks: [], keptSignatures: [] } };
   }
 
   /** The automatic blocks from the entry step to where the ticket stops, with the cutoffs a deadline may need. */
@@ -193,7 +197,9 @@ export class ArrivalPlanner {
   /** The signers that resolved, and the ones to choose for (each offered the company's members). */
   private async previewSigners(tx: TenantTransaction, request: ArrivalRequest, hops: readonly RouteHop[], step: StepDocument): Promise<ArrivalPreview> {
     const ticket = ticketOf(request);
-    const { people, missing } = await this.resolver.resolveSigners(tx, step, ticket);
+    const resolution = await this.resolver.resolveSigners(tx, step, ticket);
+    const people = resolution.people.map((assignment) => assignment.userId);
+    const { missing } = resolution;
     const asOptions = (people: readonly AssigneeCandidate[]) => people.map((person) => ({ id: person.userId, name: person.name }));
     const members = missing.some(({ among }) => among === null) ? asOptions(await this.resolver.companyMembers(tx, ticket)) : [];
     const signerChoices: SignerChoice[] = [];
@@ -214,7 +220,7 @@ export class ArrivalPlanner {
     if (route.arrival.kind === 'WAIT') return this.park(request, route.hops, step, route.arrival.resumeAt, previousLoops, computed);
     const loop = request.ignoreMaxLoops === true ? nextReopenLoop(previousLoops) : nextLoop(previousLoops, step.maxLoops, step.id);
     const sla = step.deadlineType === 'CUTOFF' ? cutoffSla(step, route.values, cutoffs, request) : openSla(slaTermsOf(step, request.companyId), request.calendar?.calendar ?? null, request.at);
-    const decision: { type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; userIds: readonly string[] } =
+    const decision: { type: 'PRIMARY' | 'POOL' | 'PARALLEL' | 'DISPATCH'; userIds: readonly string[]; round?: SignatureRound } =
       request.holders !== undefined && request.holders.length > 0 && step.assignmentMode !== 'PARALLEL' ? { type: 'PRIMARY', userIds: request.holders } : step.assignmentMode === 'PARALLEL' ? await this.signers(tx, request, step) : await this.decide(tx, request, step);
 
     const clockBase = { startedAt: request.at, sla: { value: sla.value, unit: sla.unit }, calendarId: request.calendar?.id ?? null, dueAt: sla.dueAt };
@@ -229,7 +235,8 @@ export class ArrivalPlanner {
         visit: { stepId: step.id, loop, enteredAt: request.at, sla: { value: sla.value, unit: sla.unit }, calendarId: request.calendar?.id ?? null, dueAt: sla.dueAt },
         clocks,
         assignees: decision.type === 'DISPATCH' ? [] : decision.userIds.map((userId) => ({ userId, type: decision.type as AssigneeKind })),
-        parallelTasks: decision.type === 'PARALLEL' ? decision.userIds : [],
+        parallelTasks: decision.round?.pending ?? [],
+        keptSignatures: decision.round?.kept ?? [],
       },
     };
   }
@@ -246,8 +253,10 @@ export function arrivalEvents(arrival: Arrival, actorId: string | null, hopLoop:
   if (arrival.kind === 'WAIT') return [...events, { type: 'SYSTEM', stepId: arrival.step.id, loop: arrival.plan.visit.loop, actorId: null, data: { kind: 'WAITING', resumeAt: arrival.resumeAt.toISOString() } }];
   const { step, plan, assigneeType } = arrival;
   if (assigneeType === 'DISPATCH') return [...events, { type: 'SYSTEM', stepId: step.id, loop: plan.visit.loop, actorId: null, data: { kind: 'AWAITING_DISPATCH' } }];
+  const kept: EventPlan[] = plan.keptSignatures.length === 0 ? [] : [{ type: 'SYSTEM', stepId: step.id, loop: plan.visit.loop, actorId: null, data: { kind: 'SIGNATURES_KEPT', userIds: plan.keptSignatures.map((signature) => signature.userId) } }];
   return [
     ...events,
+    ...kept,
     ...plan.assignees.map(
       (assignee): EventPlan => ({
         type: 'ASSIGNED',

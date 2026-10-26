@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { SignerAssignment } from '../domain/parallel-policy.js';
 import {
   type AssigneeCandidate,
   ApproverNotFoundError,
@@ -40,7 +41,8 @@ export interface MissingSigner {
 
 /** The signers of a PARALLEL step: the people they resolved to, and the signers to choose for by hand. */
 export interface SignerResolution {
-  readonly people: readonly string[];
+  /** Each signer row that named exactly one person, with that person. */
+  readonly people: readonly SignerAssignment[];
   readonly missing: readonly MissingSigner[];
 }
 
@@ -72,36 +74,38 @@ export class AssignmentResolver {
    * resolves to nobody (no holder, no approver, a person no longer active: among the company's members).
    */
   async resolveSigners(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext): Promise<SignerResolution> {
-    const people: string[] = [];
+    const people: SignerAssignment[] = [];
     const missing: MissingSigner[] = [];
     for (const signer of [...step.signers].sort((a, b) => a.sortOrder - b.sortOrder)) {
       const outcome = await this.signerOutcome(tx, step, signer, ticket);
-      if ('userId' in outcome) people.push(outcome.userId);
+      if ('userId' in outcome) people.push({ userId: outcome.userId, signerId: signer.id });
       else missing.push({ signer, among: outcome.among });
     }
     return { people, missing };
   }
 
   /**
-   * The people who each sign a PARALLEL step; repeated people count once. As in the help desk, a signer to choose for
+   * The people who each sign a PARALLEL step, with the signer row each signs for; a person named by several rows signs
+   * once, for the first. As in the help desk, a signer to choose for
    * (see `resolveSigners`) takes the person chosen for it, who must be one of its candidates, or is left out when the
    * choice is `null`; without a choice for it the arrival asks for one. Leaving every signature out is refused.
    */
-  async signersFor(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext, choices: SignerChoices = []): Promise<string[]> {
+  async signersFor(tx: TenantTransaction, step: StepDocument, ticket: AssignmentContext, choices: SignerChoices = []): Promise<SignerAssignment[]> {
     const { people, missing } = await this.resolveSigners(tx, step, ticket);
     const unanswered = missing.filter(({ signer }) => !choices.some((choice) => choice.signerId === signer.id));
     if (unanswered.length > 0) throw new SignerSelectionRequiredError(step.id, unanswered.map(({ signer }) => signer.id));
     let members: ReadonlySet<string> | undefined;
-    const chosen: string[] = [];
+    const chosen: SignerAssignment[] = [];
     for (const { signer, among } of missing) {
       const userId = choices.find((choice) => choice.signerId === signer.id)!.userId;
       if (userId === null) continue;
       if (among === null) members ??= new Set((await this.candidates.byCompany(tx, ticket.tenantId, ticket.companyId)).map((member) => member.userId));
       const allowed = among === null ? members!.has(userId) : among.some((candidate) => candidate.userId === userId);
       if (!allowed) throw new InvalidAssigneeError();
-      chosen.push(userId);
+      chosen.push({ userId, signerId: signer.id });
     }
-    const everyone = [...new Set([...people, ...chosen])];
+    const everyone: SignerAssignment[] = [];
+    for (const assignment of [...people, ...chosen]) if (!everyone.some((other) => other.userId === assignment.userId)) everyone.push(assignment);
     if (everyone.length === 0) throw new NoAssigneeCandidatesError(step.id, 'PARALLEL');
     return everyone;
   }

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { type FieldDocument, PDF_IMAGE_MIME_TYPES } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
-import type { SignerRecord, TicketFacts } from '../domain/render-facts.js';
+import type { ConfiguredSigner, SignerRecord, TicketFacts } from '../domain/render-facts.js';
 
 export interface TicketBase {
   readonly ticket: TicketFacts;
@@ -15,6 +15,7 @@ export interface TicketBase {
 export interface PeopleStep {
   readonly id: string;
   readonly name: string;
+  readonly signers: readonly ConfiguredSigner[];
 }
 
 export interface RawSigner extends Omit<SignerRecord, 'imageKey'> {
@@ -88,7 +89,7 @@ export class RenderFactsRepository {
   }
 
   peopleSteps(tx: TenantTransaction, tenantId: string, versionId: string): Promise<PeopleStep[]> {
-    return tx.step.findMany({ where: { tenantId, versionId, type: { in: [...PEOPLE_STEP_TYPES] } }, select: { id: true, name: true } });
+    return tx.step.findMany({ where: { tenantId, versionId, type: { in: [...PEOPLE_STEP_TYPES] } }, select: { id: true, name: true, signers: { select: { id: true, signerType: true, label: true }, orderBy: { sortOrder: 'asc' } } } });
   }
 
   async userNames(tx: TenantTransaction, tenantId: string, userIds: readonly string[]): Promise<Map<string, string>> {
@@ -117,7 +118,7 @@ export class RenderFactsRepository {
     const result = new Map<string, RawSigner[]>();
     if (steps.length === 0) return result;
     const stepIds = steps.map((step) => step.id);
-    const tasks = await tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId: { in: stepIds }, status: 'SIGNED' }, orderBy: [{ completedAt: 'asc' }, { id: 'asc' }], select: { stepId: true, loop: true, userId: true, completedAt: true, createdAt: true } });
+    const tasks = await tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId: { in: stepIds }, status: 'SIGNED' }, orderBy: [{ completedAt: 'asc' }, { id: 'asc' }], select: { stepId: true, loop: true, userId: true, signerId: true, completedAt: true, createdAt: true } });
     const events = await tx.ticketEvent.findMany({ where: { tenantId, ticketId, stepId: { in: stepIds }, type: { in: ['TRANSITIONED', 'CLOSED'] }, actorId: { not: null } }, orderBy: { seq: 'asc' }, select: { stepId: true, loop: true, actorId: true, createdAt: true } });
     const signatures = await tx.ticketSignature.findMany({ where: { tenantId, ticketId, stepId: { in: stepIds } }, orderBy: { signedAt: 'asc' }, select: { stepId: true, userId: true, fileId: true } });
     const memberships = await tx.membership.findMany({ where: { tenantId, userId: { in: [...new Set([...tasks.map((task) => task.userId), ...events.flatMap((event) => (event.actorId === null ? [] : [event.actorId]))])] } }, select: { userId: true, signatureFileId: true, positionId: true, user: { select: { firstName: true, lastName: true } } } });
@@ -127,14 +128,14 @@ export class RenderFactsRepository {
       const stepTasks = tasks.filter((task) => task.stepId === step.id);
       const stepEvents = events.filter((event) => event.stepId === step.id);
       const loop = Math.max(0, ...stepTasks.map((task) => task.loop), ...stepEvents.map((event) => event.loop));
-      const raw: Array<{ userId: string; at: Date }> = stepTasks.some((task) => task.loop === loop)
-        ? stepTasks.filter((task) => task.loop === loop).map((task) => ({ userId: task.userId, at: task.completedAt ?? task.createdAt }))
+      const raw: Array<{ userId: string; at: Date; signerId?: string | null }> = stepTasks.some((task) => task.loop === loop)
+        ? stepTasks.filter((task) => task.loop === loop).map((task) => ({ userId: task.userId, at: task.completedAt ?? task.createdAt, signerId: task.signerId }))
         : stepEvents.filter((event) => event.loop === loop).slice(-1).map((event) => ({ userId: event.actorId!, at: event.createdAt }));
-      const records = raw.flatMap(({ userId, at }): RawSigner[] => {
+      const records = raw.flatMap(({ userId, at, signerId }): RawSigner[] => {
         const person = people.get(userId);
         if (person === undefined) return [];
         const stamped = signatures.filter((signature) => signature.stepId === step.id && signature.userId === userId).at(-1)?.fileId;
-        return [{ userId, name: fullName(person.user), signedAt: at, imageFileId: stamped ?? person.signatureFileId, positionId: person.positionId }];
+        return [{ userId, name: fullName(person.user), signedAt: at, imageFileId: stamped ?? person.signatureFileId, positionId: person.positionId, ...(signerId === undefined ? {} : { signerId }) }];
       });
       if (records.length > 0) result.set(step.name, records);
     }

@@ -1,3 +1,4 @@
+import type { PreviousSignature, SignerAssignment } from '../domain/parallel-policy.js';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
@@ -191,8 +192,20 @@ export class TicketWriteRepository {
     return created.id;
   }
 
-  async insertParallelTasks(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number, userIds: readonly string[]): Promise<void> {
-    await tx.ticketParallelTask.createMany({ data: userIds.map((userId) => ({ tenantId, ticketId, stepId, loop, userId })) });
+  async insertParallelTasks(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number, tasks: readonly SignerAssignment[]): Promise<void> {
+    await tx.ticketParallelTask.createMany({ data: tasks.map(({ userId, signerId }) => ({ tenantId, ticketId, stepId, loop, userId, signerId })) });
+  }
+
+  /** Signatures of the previous round that stand, copied into the new round as given (same person, date and comment). */
+  async insertKeptSignatures(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number, kept: readonly PreviousSignature[]): Promise<void> {
+    await tx.ticketParallelTask.createMany({ data: kept.map(({ userId, signerId, completedAt, comment }) => ({ tenantId, ticketId, stepId, loop, userId, signerId, status: 'SIGNED' as const, completedAt, comment })) });
+  }
+
+  /** The signatures of the latest round of a PARALLEL step in this ticket (none before its first visit). */
+  async lastRoundOf(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<PreviousSignature[]> {
+    const last = await tx.ticketParallelTask.findFirst({ where: { tenantId, ticketId, stepId }, orderBy: { loop: 'desc' }, select: { loop: true } });
+    if (last === null) return [];
+    return tx.ticketParallelTask.findMany({ where: { tenantId, ticketId, stepId, loop: last.loop }, select: { userId: true, signerId: true, status: true, completedAt: true, comment: true }, orderBy: { id: 'asc' } });
   }
 
   findParallelTasks(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string, loop: number): Promise<ParallelTaskRow[]> {
