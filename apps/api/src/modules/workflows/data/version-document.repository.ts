@@ -79,6 +79,7 @@ export class VersionDocumentRepository {
           condition: (row.condition as TransitionDocument['condition']) ?? null,
           sortOrder: row.sortOrder,
           uiPoints: (row.uiPoints as TransitionDocument['uiPoints']) ?? null,
+          requiresComment: row.requiresComment,
         }),
       ),
       fields: fields.map(
@@ -174,6 +175,7 @@ export class VersionDocumentRepository {
         condition: jsonOrNull(row.condition),
         sortOrder: row.sortOrder,
         uiPoints: jsonOrNull(row.uiPoints),
+        requiresComment: row.requiresComment,
       })),
     });
   }

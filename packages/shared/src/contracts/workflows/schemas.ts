@@ -136,6 +136,7 @@ export const transitionGraphInputSchema = z
     condition: transitionConditionSchema.nullable().default(null),
     sortOrder: z.number().int().min(0).max(100_000).default(0),
     uiPoints: z.array(z.object({ x: finite, y: finite }).strict()).max(50).nullable().default(null),
+    requiresComment: z.boolean().default(false),
   })
   .strict();
 export type TransitionGraphInput = z.infer<typeof transitionGraphInputSchema>;

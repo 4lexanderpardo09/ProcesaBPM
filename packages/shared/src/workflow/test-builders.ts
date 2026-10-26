@@ -38,7 +38,7 @@ export function step(id: string, type: StepType, overrides: Partial<StepDocument
 }
 
 export function transition(id: string, from: string, to: string, type: TransitionDocument['type'], overrides: Partial<TransitionDocument> = {}): TransitionDocument {
-  return { id, fromStepId: from, toStepId: to, type, label: id, condition: null, sortOrder: 0, uiPoints: null, ...overrides };
+  return { id, fromStepId: from, toStepId: to, type, label: id, condition: null, sortOrder: 0, uiPoints: null, requiresComment: false, ...overrides };
 }
 
 export const next = (from: string, to: string, type: 'DEFAULT' | 'DECISION' = 'DEFAULT'): TransitionDocument => transition(`${from}->${to}`, from, to, type);

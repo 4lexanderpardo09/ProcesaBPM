@@ -100,7 +100,7 @@ export const EXPORT_DATASETS = [
   table('step_sla_overrides', 'workflows', ['tenant_id', 'step_id', 'company_id', 'sla_value', 'sla_unit'], ['step_id', 'company_id']),
   table('step_signers', 'workflows', ['tenant_id', 'id', 'step_id', 'signer_type', 'user_id', 'position_id', 'label', 'sort_order'], ['id']),
   table('step_files', 'workflows', ['tenant_id', 'step_id', 'file_id', 'label', 'sort_order'], ['step_id', 'file_id']),
-  table('transitions', 'workflows', ['tenant_id', 'id', 'version_id', 'from_step_id', 'to_step_id', 'type', 'label', 'condition', 'sort_order', 'ui_points'], ['id']),
+  table('transitions', 'workflows', ['tenant_id', 'id', 'version_id', 'from_step_id', 'to_step_id', 'type', 'label', 'condition', 'sort_order', 'ui_points', 'requires_comment'], ['id']),
   table('fields', 'workflows', ['tenant_id', 'id', 'version_id', 'step_id', 'code', 'label', 'type', 'capture', 'is_required', 'is_read_only', 'sort_order', 'config', 'data_source'], ['id']),
   table('amount_rules', 'workflows', ['tenant_id', 'id', 'version_id', 'step_id', 'position_id', 'company_id', 'field_code', 'row_type_value', 'amount_column', 'type_column', 'max_amount', 'currency_code', 'action', 'approval_step_id', 'message', 'is_active'], ['id']),
   table('company_cutoffs', 'workflows', ['tenant_id', 'id', 'workflow_id', 'company_id', 'cutoff_day', 'grace_business_days', 'description', 'is_active'], ['id']),

@@ -160,6 +160,7 @@ export function connect(doc: WorkflowVersionDocument, fromId: string, toId: stri
     condition: null,
     sortOrder: exits.length,
     uiPoints: null,
+    requiresComment: false,
   };
   return { doc: { ...doc, transitions: [...doc.transitions, transition] }, id };
 }
@@ -182,6 +183,7 @@ export function connectSystem(doc: WorkflowVersionDocument, fromId: string, toId
     condition: null,
     sortOrder: exits.length,
     uiPoints: null,
+    requiresComment: false,
   };
   return { doc: { ...doc, transitions: [...doc.transitions, transition] }, id };
 }

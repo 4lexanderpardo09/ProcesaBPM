@@ -281,8 +281,8 @@ describe('PARALLEL assignment: everybody signs, the first rejection decides', ()
       expect(await taskStatus(ticket.id, a)).toBe('PENDING');
     });
 
-    it('an approval step asks for a comment when rejecting (one that sanitizes to nothing is none)', async () => {
-      const ticket = (await create(approvalFlow)).body;
+    it.each(['task', 'approval'] as const)('rejecting a signature of a %s step asks why (a comment that sanitizes to nothing is none)', async (kind) => {
+      const ticket = (await create(kind === 'task' ? flow : approvalFlow)).body;
       const refused = await reject(a, ticket);
       expect([refused.status, refused.body.error.code]).toEqual([422, 'COMMENT_REQUIRED']);
       expect((await reject(a, ticket, { comment: '<script>x</script>' })).body.error.code).toBe('COMMENT_REQUIRED');

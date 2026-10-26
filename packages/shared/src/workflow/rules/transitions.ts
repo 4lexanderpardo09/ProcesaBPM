@@ -22,6 +22,8 @@ export function checkTransitions({ doc, stepById, transitionsFrom, problems }: R
       (from.type === 'CONDITION' && transition.type === 'DECISION');
     if (wrongType) problems.error('TRANSITION_TYPE_NOT_ALLOWED', at);
     if ((transition.type === 'CONDITION') !== (transition.condition !== null)) problems.error('CONDITION_RULE_MISSING', at);
+    // Only a person takes a decision, so only a decision can ask them for a comment.
+    if (transition.requiresComment && transition.type !== 'DECISION') problems.error('COMMENT_ONLY_ON_DECISION', at);
     if (transition.type === 'DEFAULT') {
       if (defaultsSeen.has(from.id)) problems.error('TRANSITION_DUPLICATE_DEFAULT', at);
       defaultsSeen.add(from.id);

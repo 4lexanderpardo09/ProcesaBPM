@@ -410,6 +410,8 @@ export const tickets = {
     dismiss: 'Cerrar',
     sending: 'Enviando…',
     optionalComment: 'Comentario (opcional)',
+    requiredComment: 'Comentario (obligatorio)',
+    commentRequired: 'Esta decisión pide un comentario: explica por qué.',
     untouchedInstructions: 'Completa o cambia las instrucciones del paso antes de enviar, o bórralas con «Limpiar».',
     attachments: 'Adjuntos (opcional)',
     closingAttachments: 'Documentos de cierre (opcional)',

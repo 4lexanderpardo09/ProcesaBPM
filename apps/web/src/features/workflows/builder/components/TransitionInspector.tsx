@@ -1,7 +1,7 @@
 import { isAutomaticStep, type StepType, type TransitionDocument, type TransitionType, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Select, TextField } from '@/shared/ui';
+import { Button, Checkbox, Select, TextField } from '@/shared/ui';
 import type { ElementProblems } from '../lib/problems';
 import { ConditionEditor } from './ConditionEditor';
 import { ProblemList } from './ProblemList';
@@ -63,9 +63,17 @@ export function TransitionInspector({ transition, doc, readOnly, problems, onCha
           value={transition.type}
           onChange={(event) => {
             const type = event.target.value as TransitionType;
-            onChange({ type, condition: type === 'CONDITION' ? transition.condition : null });
+            onChange({ type, condition: type === 'CONDITION' ? transition.condition : null, requiresComment: type === 'DECISION' && transition.requiresComment });
           }}
         />
+        {transition.type === 'DECISION' && (
+          <Checkbox
+            label={t('builder.connection.requiresComment')}
+            disabled={readOnly}
+            checked={transition.requiresComment}
+            onChange={(event) => onChange({ requiresComment: event.target.checked })}
+          />
+        )}
       </Section>
       {transition.type === 'CONDITION' && (
         <Section title={t('builder.connection.types.CONDITION')}>

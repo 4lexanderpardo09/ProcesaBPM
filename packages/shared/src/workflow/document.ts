@@ -91,6 +91,8 @@ export interface TransitionDocument {
   readonly condition: TransitionCondition | null;
   readonly sortOrder: number;
   readonly uiPoints: ReadonlyArray<{ readonly x: number; readonly y: number }> | null;
+  /** A DECISION whose taker must leave a comment (a rejection, a return to correct). */
+  readonly requiresComment: boolean;
 }
 
 export interface FieldDocument {

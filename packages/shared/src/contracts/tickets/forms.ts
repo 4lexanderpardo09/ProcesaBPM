@@ -89,6 +89,8 @@ export const creationCheckResponseSchema = z.object({
 export interface FormDecisionResponse {
   readonly transitionId: string;
   readonly label: string;
+  /** Taking it needs a comment saying why (a rejection, a return to correct). */
+  readonly requiresComment: boolean;
 }
 
 /**
@@ -138,7 +140,7 @@ export const ticketFormResponseSchema = z.object({
   step: z.object({ id: uuidSchema, name: z.string(), type: z.enum(STEP_TYPES), description: z.string().nullable(), closeRule: z.enum(CLOSE_RULES) }).nullable(),
   fields: z.array(formFieldResponseSchema),
   editableFieldCodes: z.array(z.string()),
-  decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string() })),
+  decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string(), requiresComment: z.boolean().default(false) })),
 }) satisfies z.ZodType<TicketFormResponse>;
 
 /** `GET /fields/:fieldId/options`: the people, sites or preset entries a USER, SITE or preset list field accepts, by name. */
