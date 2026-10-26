@@ -538,7 +538,7 @@ export const workflows = {
     },
     maxLoops: 'Máximo de vueltas',
     maxLoopsHint: 'Cuántas veces puede volver un ticket a este paso. Vacío: sin límite.',
-    rejectRequiresComment: 'Rechazar exige un comentario',
+    rejectRequiresComment: 'Rechazar una firma exige un comentario',
     batch: {
       allows: 'Se puede atender en lote',
       max: 'Tickets por lote (máximo)',
@@ -624,6 +624,7 @@ export const workflows = {
         DEFAULT: 'El camino cuando no hay otro.',
         SYSTEM_ONLY: 'Solo la usa el sistema (rechazo en paralelo, aprobación extra por monto).',
       },
+      requiresComment: 'Exige comentario (quien la elige explica por qué)',
     },
     condition: {
       title: 'Regla (deben cumplirse todas)',

@@ -1048,6 +1048,23 @@ describe('TicketDetailPage', () => {
       expect(fake.callsTo(`${base}/transition`)[0]?.options.body).not.toHaveProperty('comment');
     });
 
+    it('a decision that demands a comment is not sent without one', async () => {
+      const decisions = [{ transitionId: RETURN, label: 'Devolver', requiresComment: true }];
+      const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: () => mutation }, { editableFieldCodes: [], decisions }) });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Devolver' }));
+      const dialog = screen.getByRole('dialog', { name: 'Devolver' });
+      const answer = within(dialog).getByRole('textbox', { name: 'Comentario (obligatorio)' });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+      expect(answer).toHaveAccessibleDescription(/Esta decisión pide un comentario/);
+      expect(fake.callsTo(`${base}/transition`)).toHaveLength(0);
+
+      typeInEditor(answer, 'Falta la cotización');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Devolver' }));
+      await vi.waitFor(() => expect(fake.callsTo(`${base}/transition`)).toHaveLength(1));
+      expect(fake.callsTo(`${base}/transition`)[0]?.options.body).toMatchObject({ comment: expect.stringContaining('Falta la cotización') });
+    });
+
     it('asks for the required data before sending, then sends the step values with the decision', async () => {
       const { fake } = renderRoute(base, { handlers: handlers({ [`${base}/transition`]: () => mutation }) });
 

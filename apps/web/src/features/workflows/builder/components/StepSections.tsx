@@ -201,7 +201,7 @@ export function PeopleSection({ step, fields, readOnly, onChange, workflowId }: 
           onChange={(event) => onChange({ closeRule: event.target.value as StepDocument['closeRule'] })}
         />
         <WholeNumberField label={t('builder.maxLoops')} hint={t('builder.maxLoopsHint')} min={1} max={1000} disabled={readOnly} value={step.maxLoops} onChange={(value) => onChange({ maxLoops: value })} />
-        {step.type === 'APPROVAL' && (
+        {step.type === 'APPROVAL' && step.assignmentMode === 'PARALLEL' && (
           <Checkbox label={t('builder.rejectRequiresComment')} disabled={readOnly} checked={config.rejectRequiresComment !== false} onChange={(event) => setConfig({ rejectRequiresComment: event.target.checked })} />
         )}
         {step.type === 'SIGNATURE' && (

@@ -1642,6 +1642,8 @@ model Transition {
   condition  Json?
   sortOrder  Int            @default(0) @map("sort_order")
   uiPoints   Json?          @map("ui_points")
+  /// A DECISION whose taker must leave a comment saying why (a rejection, a return to correct).
+  requiresComment Boolean   @default(false) @map("requires_comment")
 
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   version  WorkflowVersion @relation(fields: [tenantId, versionId], references: [tenantId, id], onDelete: Cascade)

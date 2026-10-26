@@ -37,7 +37,7 @@ export class TicketFormService {
       decisions:
         step === undefined
           ? []
-          : decisionExits(document, step.id).map((transition) => ({ transitionId: transition.id, label: transition.label })),
+          : decisionExits(document, step.id).map((transition) => ({ transitionId: transition.id, label: transition.label, requiresComment: transition.requiresComment })),
     };
   }
 }

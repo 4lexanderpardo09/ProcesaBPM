@@ -51,6 +51,7 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
   const instructions = textAsHtml(form.step?.description ?? '');
   const [comment, setComment] = useState(instructions);
   const [untouched, setUntouched] = useState(false);
+  const [commentMissing, setCommentMissing] = useState(false);
   const [attachments, setAttachments] = useState<readonly string[]>([]);
   const [attaching, setAttaching] = useState(false);
   const client = useApiClient();
@@ -84,7 +85,9 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
     // As in the help desk: the preloaded instructions are a guide to answer, not the answer.
     const unchanged = !isBlankRichText(instructions) && plainText(comment) === plainText(instructions);
     setUntouched(unchanged);
-    if (unchanged || (signs && signature.missing)) return;
+    const missing = decision.requiresComment && isBlankRichText(comment);
+    setCommentMissing(missing);
+    if (unchanged || missing || (signs && signature.missing)) return;
     const collected = stepFields.collect();
     const assignee = next.request();
     const signing = signers.request();
@@ -108,13 +111,14 @@ export function AdvanceDialog({ ticket, form, visitId, decision, onClose }: Adva
         <StepFieldInput key={field.id} field={field} knownLabels={knownLabels} knownFiles={knownFiles} {...stepFields.inputProps(field)} />
       ))}
       <ResponseEditor
-        label={t('actions.optionalComment')}
+        label={t(decision.requiresComment ? 'actions.requiredComment' : 'actions.optionalComment')}
         value={comment}
         minHeight={180}
-        error={untouched ? t('actions.untouchedInstructions') : undefined}
+        error={untouched ? t('actions.untouchedInstructions') : commentMissing ? t('actions.commentRequired') : undefined}
         onValueChange={(next) => {
           setComment(next);
           setUntouched(false);
+          setCommentMissing(false);
         }}
       />
       <FilePicker label={t('actions.attachments')} required={false} value={attachments} knownNames={knownFiles} error={undefined} onChange={setAttachments} onBusyChange={setAttaching} />

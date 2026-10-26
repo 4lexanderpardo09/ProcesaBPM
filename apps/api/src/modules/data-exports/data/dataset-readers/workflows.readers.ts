@@ -77,7 +77,7 @@ export const WORKFLOWS_READERS = {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`
       SELECT tenant_id, id, version_id, from_step_id, to_step_id, type, label, condition, sort_order,
-             ui_points
+             ui_points, requires_comment
       FROM transitions WHERE tenant_id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,
   },

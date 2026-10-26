@@ -29,7 +29,7 @@ export const ticketBatchGroupSchema = z.object({
   groupBy: z.enum(BATCH_GROUP_BY).nullable(),
   /** With `groupBy` `FIELD`, the field whose value splits it (its value is in each ticket's `values`); `null` otherwise. */
   groupField: trayFieldSchema.nullable(),
-  decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string() })),
+  decisions: z.array(z.object({ transitionId: uuidSchema, label: z.string(), requiresComment: z.boolean().default(false) })),
   tickets: z.array(
     z.object({
       id: uuidSchema,

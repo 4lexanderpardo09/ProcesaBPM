@@ -51,6 +51,7 @@ export const link = (transitionId: string, from: string, to: string, overrides: 
   condition: null,
   sortOrder: 0,
   uiPoints: null,
+  requiresComment: false,
   ...overrides,
 });
 

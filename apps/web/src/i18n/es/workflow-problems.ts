@@ -13,6 +13,7 @@ export const workflowProblems = {
   TRANSITION_TO_START: 'Ninguna conexión puede llegar al Inicio.',
   TRANSITION_TYPE_NOT_ALLOWED: 'Este tipo de salida no corresponde al bloque de origen.',
   CONDITION_RULE_MISSING: 'Esta rama necesita su regla (campo, operador y valor).',
+  COMMENT_ONLY_ON_DECISION: 'Solo una decisión puede exigir comentario.',
   TRANSITION_DUPLICATE_DEFAULT: 'El bloque tiene más de una salida por defecto: deja solo una.',
   TRANSITION_LABEL_DUPLICATE: 'Hay otra salida del mismo bloque llamada «{{label}}».',
   AUTOMATIC_BLOCK_WITHOUT_DEFAULT: 'Este bloque automático necesita su salida para continuar.',

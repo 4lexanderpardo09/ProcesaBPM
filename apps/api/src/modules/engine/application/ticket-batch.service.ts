@@ -52,7 +52,7 @@ export class TicketBatchService {
             workflowName: row.workflowName,
             maxTickets: batchLimitOf(step),
             ...batchTrayOf(step, document.fields),
-            decisions: decisionExits(document, step.id).map((transition) => ({ transitionId: transition.id, label: transition.label })),
+            decisions: decisionExits(document, step.id).map((transition) => ({ transitionId: transition.id, label: transition.label, requiresComment: transition.requiresComment })),
             tickets: [],
           };
           groups.set(key, group);

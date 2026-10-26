@@ -86,6 +86,12 @@ describe('validateWorkflowGraph: transitions and exits', () => {
     expect(codes(withRule)).toContain('CONDITION_RULE_MISSING');
   });
 
+  it('only a DECISION can demand a comment', () => {
+    const base = minimalFlow();
+    expect(codes({ ...base, transitions: [{ ...base.transitions[0]!, requiresComment: true }, base.transitions[1]!] })).toContain('COMMENT_ONLY_ON_DECISION');
+    expect(codes({ ...base, transitions: [base.transitions[0]!, { ...base.transitions[1]!, requiresComment: true }] })).not.toContain('COMMENT_ONLY_ON_DECISION');
+  });
+
   it('automatic blocks leave through a DEFAULT, people blocks through a DECISION', () => {
     const noDefault = withParts({ transitions: [transition('s', 'start', 'task', 'SYSTEM_ONLY'), minimalFlow().transitions[1]!] });
     expect(codes(noDefault)).toContain('AUTOMATIC_BLOCK_WITHOUT_DEFAULT');

@@ -47,6 +47,7 @@ export interface TransitionSpec {
   readonly type: 'DEFAULT' | 'DECISION' | 'CONDITION' | 'SYSTEM_ONLY';
   readonly label?: string;
   readonly condition?: TransitionCondition;
+  readonly requiresComment?: boolean;
   readonly sortOrder?: number;
 }
 export interface FieldSpec {
@@ -111,6 +112,7 @@ export async function publishVersion(admin: ApiClient, workflowId: string, versi
           label: transitionKey(entry),
           sortOrder: entry.sortOrder ?? index,
           ...(entry.condition === undefined ? {} : { condition: entry.condition }),
+          ...(entry.requiresComment === undefined ? {} : { requiresComment: entry.requiresComment }),
         })),
       })
       .expect(200)

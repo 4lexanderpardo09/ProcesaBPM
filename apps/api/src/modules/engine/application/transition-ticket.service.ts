@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ExportCutoffPendingError, InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionPreviewRequest, type TransitionPreviewResponse, type TransitionTicketRequest } from '@procesabpm/shared';
+import { CommentRequiredError, ExportCutoffPendingError, InvalidReferenceError, InvalidTransitionError, type TicketMutationResponse, type TransitionPreviewRequest, type TransitionPreviewResponse, type TransitionTicketRequest } from '@procesabpm/shared';
 import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
@@ -56,6 +56,7 @@ export class TransitionTicketService {
       const step = document.steps.find((candidate) => candidate.id === ticket.currentStepId);
       const chosen = step === undefined ? undefined : decisionExits(document, step.id).find((transition) => transition.id === request.transitionId);
       if (chosen === undefined || step === undefined) throw new InvalidTransitionError();
+      if (chosen.requiresComment && sanitizeOptionalRichText(request.comment) === null) throw new CommentRequiredError();
 
       assertMayLeaveByDecision(step);
       const requiredExportId = step.config.requiredExportId;

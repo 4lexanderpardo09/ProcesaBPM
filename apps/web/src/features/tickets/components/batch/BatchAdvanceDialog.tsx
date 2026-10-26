@@ -53,6 +53,7 @@ export function BatchAdvanceDialog({ group, ticketIds, decision, onClose }: Batc
 function BatchForm({ group, ticketIds, decision, fields, onClose }: BatchAdvanceDialogProps & { readonly fields: ReturnType<typeof typedFields> }) {
   const { t } = useTranslation('tickets');
   const [comment, setComment] = useState('');
+  const [commentMissing, setCommentMissing] = useState(false);
   const [results, setResults] = useState<readonly BatchTransitionResult[] | null>(null);
   const run = useTicketMutation((client, values: Record<string, unknown>) =>
     runTicketBatch(client, {
@@ -95,15 +96,26 @@ function BatchForm({ group, ticketIds, decision, fields, onClose }: BatchAdvance
       error={run.error}
       onClose={onClose}
       onSubmit={() => {
+        const missing = decision.requiresComment && isBlankRichText(comment);
+        setCommentMissing(missing);
         const collected = stepFields.collect();
-        if (collected.ok) run.mutate(collected.values, { onSuccess: (answer) => setResults(answer.results) });
+        if (collected.ok && !missing) run.mutate(collected.values, { onSuccess: (answer) => setResults(answer.results) });
       }}
     >
       <p className={styles.note}>{t('batch.dialogBody', { step: group.stepName })}</p>
       {fields.map((field) => (
         <StepFieldInput key={field.id} field={field} knownLabels={{}} knownFiles={{}} {...stepFields.inputProps(field)} />
       ))}
-      <RichTextEditor label={t('actions.optionalComment')} value={comment} maxLength={RICH_TEXT_MAX} onValueChange={setComment} />
+      <RichTextEditor
+        label={t(decision.requiresComment ? 'actions.requiredComment' : 'actions.optionalComment')}
+        value={comment}
+        maxLength={RICH_TEXT_MAX}
+        error={commentMissing ? t('actions.commentRequired') : undefined}
+        onValueChange={(next) => {
+          setComment(next);
+          setCommentMissing(false);
+        }}
+      />
     </ActionDialog>
   );
 }

@@ -61,7 +61,7 @@ export function startingDocument(ids: { start: string; end: string; transition: 
       { ...automatic, id: ids.start, type: 'START', name: 'Inicio', ui: { x: 0, y: 0 } },
       { ...automatic, id: ids.end, type: 'END', name: 'Fin', ui: { x: 0, y: 200 } },
     ],
-    transitions: [{ id: ids.transition, fromStepId: ids.start, toStepId: ids.end, type: 'DEFAULT', label: 'Continuar', condition: null, sortOrder: 0, uiPoints: null }],
+    transitions: [{ id: ids.transition, fromStepId: ids.start, toStepId: ids.end, type: 'DEFAULT', label: 'Continuar', condition: null, sortOrder: 0, uiPoints: null, requiresComment: false }],
     fields: [],
     amountRules: [],
   };

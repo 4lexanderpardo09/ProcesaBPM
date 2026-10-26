@@ -122,7 +122,9 @@ export class ParallelTaskService {
         if (exits.rejection === null) throw new RejectionNotAllowedError();
       }
       const comment = sanitizeOptionalRichText(request.comment);
-      if (action === 'REJECT' && step.type === 'APPROVAL' && step.config.rejectRequiresComment !== false && comment === null) throw new CommentRequiredError();
+      // Rejecting a signature always says why, unless an approval step was set not to ask (the area that rejects is
+      // sending the ticket back: whoever gets it must know what to fix).
+      if (action === 'REJECT' && step.config.rejectRequiresComment !== false && comment === null) throw new CommentRequiredError();
       const company = (await this.people.findCompany(tx, tenantId, ticket.companyId, false))!;
       const taskEvent = (taskId: string, userId: string, status: 'SIGNED' | 'REJECTED' | 'CANCELLED'): EventPlan => ({
         type: 'PARALLEL_TASK_COMPLETED',

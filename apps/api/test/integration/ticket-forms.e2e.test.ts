@@ -168,8 +168,8 @@ describe('ticket forms', () => {
       expect(form.editableFieldCodes).toEqual(['NOTES']);
       expect(form.fields.map((field: { code: string }) => field.code).sort()).toEqual(['AMOUNT', 'NOTES', 'REASON']);
       expect(form.decisions).toEqual([
-        { transitionId: flow.transition.Approve, label: 'Approve' },
-        { transitionId: flow.transition.Reject, label: 'Reject' },
+        { transitionId: flow.transition.Approve, label: 'Approve', requiresComment: false },
+        { transitionId: flow.transition.Reject, label: 'Reject', requiresComment: false },
       ]);
     });
 
