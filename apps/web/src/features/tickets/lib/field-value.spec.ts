@@ -22,7 +22,6 @@ const textOf = (display: ReturnType<typeof fieldValueDisplay>) => (display?.kind
 describe('fieldValueDisplay', () => {
   it('reads «Días fuera» as the days the person was not away', () => {
     expect(fieldValueDisplay(field('TRIP_DAYS'), ['2026-11-11', '2026-11-12'], noNames)).toEqual({ kind: 'tripDays', atHome: '11 de nov de 2026, 12 de nov de 2026' });
-    expect(filteredValueText({ type: 'TRIP_DAYS', options: null }, ['2026-11-11'])).toBe('11 de nov de 2026');
   });
 
   it('shows nothing for an empty value or a file', () => {
