@@ -73,6 +73,7 @@ const settingsSchema = z.object({
   AI_REQUEST_TIMEOUT_MS: positiveInteger(300_000, AI_MAX_REQUEST_TIMEOUT_MS),
   /** Calls per request: the first draft plus the corrections. */
   AI_MAX_ROUNDS: positiveInteger(3, 4),
+  AI_POLLING_ENABLED: boolean(true),
   AI_POLL_INTERVAL_MS: positiveInteger(3_000, 60_000),
 });
 
