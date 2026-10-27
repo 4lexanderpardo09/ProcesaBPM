@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { type AiAvailabilityQuery, aiAvailabilityQuerySchema, type AiAvailabilityResponse, type AiJobResponse, type RequestAiDraft, requestAiDraftSchema } from '@procesabpm/shared';
+import { type AiAvailabilityQuery, type AiDraftRequested, aiAvailabilityQuerySchema, type AiAvailabilityResponse, type AiJobResponse, type RequestAiDraft, requestAiDraftSchema } from '@procesabpm/shared';
 import { Audited } from '../../../common/audit/audited.decorator.js';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
@@ -26,7 +26,7 @@ export class AiDraftsController {
     @Param('workflowId', ParseUUIDPipe) workflowId: string,
     @Param('versionId', ParseUUIDPipe) versionId: string,
     @Body(new ZodValidationPipe(requestAiDraftSchema)) body: RequestAiDraft,
-  ): Promise<{ jobId: string }> {
+  ): Promise<AiDraftRequested> {
     return this.drafts.request(principal, workflowId, versionId, body);
   }
 

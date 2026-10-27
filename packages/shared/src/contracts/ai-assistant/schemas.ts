@@ -17,67 +17,65 @@ export const updateAiAssistantSettingsSchema = z
   .refine((value) => !value.enabled || value.acceptedNoticeVersion === AI_NOTICE_VERSION, { message: 'Turning the assistant on requires accepting the current notice', path: ['acceptedNoticeVersion'] });
 export type UpdateAiAssistantSettings = z.infer<typeof updateAiAssistantSettingsSchema>;
 
-export interface AiDailyLimits {
-  readonly jobsPerDay: number;
-  readonly tokensPerDay: number;
-}
+export const aiDailyLimitsSchema = z.object({ jobsPerDay: z.number().int(), tokensPerDay: z.number().int() });
+export type AiDailyLimits = z.infer<typeof aiDailyLimitsSchema>;
 
-export interface AiUsageToday {
-  readonly jobs: number;
-  readonly tokens: number;
-}
+export const aiUsageTodaySchema = z.object({ jobs: z.number().int(), tokens: z.number().int() });
+export type AiUsageToday = z.infer<typeof aiUsageTodaySchema>;
 
-export interface AiAssistantSettingsResponse {
+export const aiAssistantSettingsResponseSchema = z.object({
   /** Whether the platform offers the assistant at all (configured by the operator). */
-  readonly available: boolean;
-  readonly enabled: boolean;
-  readonly noticeVersion: number;
-  readonly limits: AiDailyLimits;
-  readonly today: AiUsageToday;
-}
+  available: z.boolean(),
+  enabled: z.boolean(),
+  noticeVersion: z.number().int(),
+  limits: aiDailyLimitsSchema,
+  today: aiUsageTodaySchema,
+});
+export type AiAssistantSettingsResponse = z.infer<typeof aiAssistantSettingsResponseSchema>;
 
 export const aiUsageQuerySchema = z.object({ days: z.coerce.number().int().min(1).max(90).default(30) }).strict();
 export type AiUsageQuery = z.infer<typeof aiUsageQuerySchema>;
 
-export interface AiUsageDay {
-  /** Day in the organization's time zone (YYYY-MM-DD). */
-  readonly date: string;
-  readonly model: string;
-  readonly calls: number;
-  readonly promptTokens: number;
-  readonly completionTokens: number;
-  readonly reasoningTokens: number;
-}
-
 export const AI_JOB_STATUSES = ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED'] as const;
 export type AiJobStatus = (typeof AI_JOB_STATUSES)[number];
 
-export interface AiJobSummary {
-  readonly id: string;
-  readonly status: AiJobStatus;
-  readonly errorCode: string | null;
-  readonly requesterName: string;
-  readonly model: string;
-  readonly tokens: number;
-  readonly createdAt: string;
-  readonly completedAt: string | null;
-}
+export const aiUsageDaySchema = z.object({
+  /** Day in the organization's time zone (YYYY-MM-DD). */
+  date: z.string(),
+  model: z.string(),
+  calls: z.number().int(),
+  promptTokens: z.number().int(),
+  completionTokens: z.number().int(),
+  reasoningTokens: z.number().int(),
+});
+export type AiUsageDay = z.infer<typeof aiUsageDaySchema>;
 
-export interface AiUsageResponse {
-  readonly days: readonly AiUsageDay[];
-  readonly recentJobs: readonly AiJobSummary[];
-}
+export const aiJobSummarySchema = z.object({
+  id: z.string(),
+  status: z.enum(AI_JOB_STATUSES),
+  errorCode: z.string().nullable(),
+  requesterName: z.string(),
+  model: z.string(),
+  tokens: z.number().int(),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+});
+export type AiJobSummary = z.infer<typeof aiJobSummarySchema>;
+
+export const aiUsageResponseSchema = z.object({ days: z.array(aiUsageDaySchema), recentJobs: z.array(aiJobSummarySchema) });
+export type AiUsageResponse = z.infer<typeof aiUsageResponseSchema>;
 
 export const aiAvailabilityQuerySchema = z.object({ versionId: z.uuid() }).strict();
 export type AiAvailabilityQuery = z.infer<typeof aiAvailabilityQuerySchema>;
 
-export interface AiAvailabilityResponse {
+export const aiAvailabilityResponseSchema = z.object({
   /** The platform offers it and the organization turned it on. */
-  readonly available: boolean;
-  readonly remainingJobsToday: number;
+  available: z.boolean(),
+  remainingJobsToday: z.number().int(),
   /** A request still running for this draft (the builder picks it up when it opens). */
-  readonly activeJobId: string | null;
-}
+  activeJobId: z.string().nullable(),
+});
+export type AiAvailabilityResponse = z.infer<typeof aiAvailabilityResponseSchema>;
 
 export const requestAiDraftSchema = z
   .object({
@@ -88,22 +86,27 @@ export const requestAiDraftSchema = z
   .strict();
 export type RequestAiDraft = z.infer<typeof requestAiDraftSchema>;
 
-export interface AiDraftResult {
-  readonly revision: number;
-  /** What the assistant decided on its own (Spanish sentences shown to the person). */
-  readonly assumptions: readonly string[];
-  readonly rounds: number;
-  /** Problems left in the draft for the person to fix (it is never published by the assistant). */
-  readonly errors: number;
-  readonly warnings: number;
-}
+export const aiDraftRequestedSchema = z.object({ jobId: z.string() });
+export type AiDraftRequested = z.infer<typeof aiDraftRequestedSchema>;
 
-export interface AiJobResponse {
-  readonly id: string;
-  readonly status: AiJobStatus;
-  readonly errorCode: string | null;
-  readonly result: AiDraftResult | null;
-  readonly createdAt: string;
-  readonly startedAt: string | null;
-  readonly completedAt: string | null;
-}
+export const aiDraftResultSchema = z.object({
+  revision: z.number().int(),
+  /** What the assistant decided on its own (Spanish sentences shown to the person). */
+  assumptions: z.array(z.string()),
+  rounds: z.number().int(),
+  /** Problems left in the draft for the person to fix (it is never published by the assistant). */
+  errors: z.number().int(),
+  warnings: z.number().int(),
+});
+export type AiDraftResult = z.infer<typeof aiDraftResultSchema>;
+
+export const aiJobResponseSchema = z.object({
+  id: z.string(),
+  status: z.enum(AI_JOB_STATUSES),
+  errorCode: z.string().nullable(),
+  result: aiDraftResultSchema.nullable(),
+  createdAt: z.string(),
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+});
+export type AiJobResponse = z.infer<typeof aiJobResponseSchema>;

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AiAssistantDisabledError,
+  type AiDraftRequested,
   type AiAvailabilityResponse,
   AiJobInProgressError,
   type AiJobResponse,
@@ -58,7 +59,7 @@ export class AiDraftRequestsService {
    * The draft must still be the one the person sees (same revision), the organization must have the assistant on and
    * be inside its daily limit. Two requests for one draft at once: the database keeps one and the other gets 409.
    */
-  async request(principal: Principal, workflowId: string, versionId: string, body: RequestAiDraft): Promise<{ jobId: string }> {
+  async request(principal: Principal, workflowId: string, versionId: string, body: RequestAiDraft): Promise<AiDraftRequested> {
     if (!this.config.AI_ASSISTANT_AVAILABLE) throw new AiAssistantDisabledError();
     await this.enforceRate(principal.userId);
     try {
