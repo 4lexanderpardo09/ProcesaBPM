@@ -85,6 +85,33 @@ enum AnnouncementAudience {
 }
 
 /// Lifecycle of an organization data export (docs/base-de-datos.md §8.31).
+enum AiTaskKind {
+  WORKFLOW_DRAFT
+
+  @@map("ai_task_kind")
+}
+
+enum AiJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+
+  @@map("ai_job_status")
+}
+
+enum AiCallOutcome {
+  OK
+  TOOL_NOT_CALLED
+  INVALID_OUTPUT
+  PROVIDER_ERROR
+  RATE_LIMITED
+  TIMEOUT
+  ABORTED
+
+  @@map("ai_call_outcome")
+}
+
 enum DataExportStatus {
   PENDING
   RUNNING
@@ -662,6 +689,8 @@ model Tenant {
   planId            String       @map("plan_id") @db.Uuid
   /// Members must use two-step verification (changed by an administrator).
   mfaRequired       Boolean      @default(false) @map("mfa_required")
+  /// An administrator turned on «Crear con IA», accepting that process descriptions go to the AI provider.
+  aiAssistantEnabled Boolean     @default(false) @map("ai_assistant_enabled")
   countryCode       String       @map("country_code") @db.Char(2)
   timeZone          String       @map("time_zone")
   extraStorageBytes BigInt       @default(0) @map("extra_storage_bytes")
@@ -772,6 +801,8 @@ model Tenant {
   textTemplateShares      TextTemplateShare[]
   announcementTargets     PlatformAnnouncementTenant[]
   dataExports             TenantDataExport[]
+  aiJobs                  AiJob[]
+  aiUsage                 AiUsage[]
 
   @@index([status])
   @@index([countryCode])
@@ -884,6 +915,8 @@ model Membership {
   textTemplates           TextTemplate[]
   textTemplateShares      TextTemplateShare[]
   dataExportsRequested    TenantDataExport[]
+  aiJobsRequested         AiJob[]
+  aiUsage                 AiUsage[]
 
   @@id([tenantId, userId])
   @@index([userId])
@@ -2914,4 +2947,73 @@ model SupportSession {
   @@index([tenantId, grantId])
   @@index([platformUserId])
   @@map("support_sessions")
+}
+
+// ============================================================================
+// AI assistant: requests and the token ledger
+// ============================================================================
+
+/// A request to the AI assistant (today: a workflow draft). The API inserts it PENDING; the worker moves it only through
+/// the claim functions. The description is cleared when it ends.
+model AiJob {
+  tenantId         String      @map("tenant_id") @db.Uuid
+  id               String      @default(dbgenerated("uuidv7()")) @db.Uuid
+  kind             AiTaskKind
+  status           AiJobStatus @default(PENDING)
+  requestedById    String      @map("requested_by_id") @db.Uuid
+  /// No foreign key: deleting the draft must not delete the request and its cost; the job then fails with DRAFT_GONE.
+  workflowId       String?     @map("workflow_id") @db.Uuid
+  versionId        String?     @map("version_id") @db.Uuid
+  expectedRevision Int?        @map("expected_revision")
+  input            Json?
+  inputChars       Int         @map("input_chars")
+  model            String
+  attempts         Int         @default(0)
+  claimToken       String?     @map("claim_token") @db.Uuid
+  leaseUntil       DateTime?   @map("lease_until") @db.Timestamptz(3)
+  errorCode        String?     @map("error_code")
+  result           Json?
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  startedAt        DateTime?   @map("started_at") @db.Timestamptz(3)
+  completedAt      DateTime?   @map("completed_at") @db.Timestamptz(3)
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestedBy Membership @relation(fields: [tenantId, requestedById], references: [tenantId, userId], onDelete: NoAction)
+  usage       AiUsage[]
+
+  @@id([tenantId, id])
+  @@index([tenantId, requestedById])
+  @@index([tenantId, createdAt])
+  @@map("ai_jobs")
+}
+
+/// One call to the AI provider and the tokens it cost. Insert-only.
+model AiUsage {
+  tenantId           String        @map("tenant_id") @db.Uuid
+  id                 String        @default(dbgenerated("uuidv7()")) @db.Uuid
+  jobId              String        @map("job_id") @db.Uuid
+  userId             String        @map("user_id") @db.Uuid
+  taskKind           AiTaskKind    @map("task_kind")
+  provider           String
+  model              String
+  jobAttempt         Int           @map("job_attempt")
+  round              Int
+  promptTokens       Int           @map("prompt_tokens")
+  cachedPromptTokens Int           @map("cached_prompt_tokens")
+  completionTokens   Int           @map("completion_tokens")
+  reasoningTokens    Int           @map("reasoning_tokens")
+  durationMs         Int           @map("duration_ms")
+  outcome            AiCallOutcome
+  errorCode          String?       @map("error_code")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  job        AiJob      @relation(fields: [tenantId, jobId], references: [tenantId, id], onDelete: Cascade)
+  membership Membership @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
+
+  @@id([tenantId, id])
+  @@index([tenantId, jobId])
+  @@index([tenantId, userId])
+  @@index([tenantId, createdAt])
+  @@map("ai_usage")
 }
