@@ -645,6 +645,7 @@ export const tickets = {
     title: 'Avance del flujo',
     loading: 'Cargando el flujo…',
     stepsLabel: 'Pasos del flujo y su estado',
+    onlyWay: 'Ver solo el recorrido',
     legend: {
       label: 'Convenciones del diagrama',
       done: 'Recorrido',

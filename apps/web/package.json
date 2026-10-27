@@ -16,6 +16,7 @@
     "test:e2e:stack": "playwright test -c playwright.stack.config.ts"
   },
   "dependencies": {
+    "@dagrejs/dagre": "1.1.8",
     "@hookform/resolvers": "5.9.1",
     "@procesabpm/shared": "workspace:*",
     "@tanstack/react-query": "5.104.1",

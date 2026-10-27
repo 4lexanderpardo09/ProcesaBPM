@@ -127,7 +127,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
     setView(next);
     saveView(next);
   };
-  /** Puts the blocks in columns by their distance from the start, then shows the whole flow. */
+  /** Lays the blocks out left to right with as few crossings as possible, then shows the whole flow. */
   const arrange = () => {
     const positions = layeredPositions(doc);
     edit((current) => [...positions].reduce((next, [id, position]) => moveStep(next, id, position), current));

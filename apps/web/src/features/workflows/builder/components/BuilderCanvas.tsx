@@ -20,6 +20,7 @@ import type { ElementProblems } from '../lib/problems';
 import { BlockNode, type BlockNodeType } from './BlockNode';
 import { TransitionEdge, type TransitionEdgeType } from './TransitionEdge';
 import styles from './Builder.module.css';
+import { parallelOffsets } from '@/shared/lib/flow-layout';
 
 export const BLOCK_DRAG_TYPE = 'application/x-procesabpm-block';
 
@@ -72,6 +73,7 @@ export function BuilderCanvas({ doc, selection, readOnly, problemsOf, onSelect, 
   useEffect(() => setNodes(toNodes(doc, selection, readOnly, problemsOf, nameOf)), [doc, selection, readOnly, problemsOf, nameOf]);
 
   const stepType = useMemo(() => new Map(doc.steps.map((step) => [step.id, step.type])), [doc.steps]);
+  const offsets = useMemo(() => parallelOffsets(doc.transitions.map((transition) => ({ id: transition.id, from: transition.fromStepId, to: transition.toStepId }))), [doc.transitions]);
   const edges = useMemo<TransitionEdgeType[]>(
     () =>
       doc.transitions.map((transition) => {
@@ -90,11 +92,12 @@ export function BuilderCanvas({ doc, selection, readOnly, problemsOf, onSelect, 
             transition,
             dashed: transition.type === 'SYSTEM_ONLY' || (from !== undefined && EFFECT_TYPES.has(from)),
             errors: problemsOf(transition.id).errors.length,
+            offset: offsets.get(transition.id) ?? 0,
             onSelect: (id: string) => onSelect({ kind: 'transition', id }),
           },
         };
       }),
-    [doc.transitions, stepType, selection, readOnly, problemsOf, onSelect],
+    [doc.transitions, stepType, offsets, selection, readOnly, problemsOf, onSelect],
   );
 
   const onNodesChange = useCallback(

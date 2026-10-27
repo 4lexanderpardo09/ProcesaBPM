@@ -1,4 +1,5 @@
 import type { FlowPoint, TicketFlowResponse } from '@procesabpm/shared';
+import { layeredLayout, parallelOffsets } from '@/shared/lib/flow-layout';
 
 /** Where the ticket stands on a block: it went through it, it is on it now, or it has not got there. */
 export type FlowStepState = 'done' | 'current' | 'pending';
@@ -20,10 +21,11 @@ export interface DiagramTransition {
   readonly source: string;
   readonly target: string;
   readonly label: string;
-  readonly points: readonly FlowPoint[] | null;
   readonly state: FlowTransitionState;
   /** It goes back to a block drawn further left: a retry, drawn dashed. */
   readonly retry: boolean;
+  /** How far it is pushed aside from the other connections joining the same two blocks. */
+  readonly offset: number;
 }
 
 export interface FlowDiagram {
@@ -31,19 +33,30 @@ export interface FlowDiagram {
   readonly transitions: readonly DiagramTransition[];
 }
 
-/** The ticket's progress as the diagram draws it (README "Flujos": done, current and pending; retries dashed). */
+/** The size a block is laid out at in the ticket's diagram (its card is 168px wide and about 60px high). */
+const BLOCK_WIDTH = 168;
+const BLOCK_HEIGHT = 72;
+
+/**
+ * The ticket's progress as the diagram draws it (README "Flujos": done, current and pending; retries dashed). The blocks
+ * are laid out here, left to right with as few crossings as possible, rather than where the builder left them: whoever
+ * follows a ticket sees a clean flow even when nobody arranged the version, as the help desk shows it.
+ */
 export function flowDiagram(flow: TicketFlowResponse): FlowDiagram {
   const current = flow.status === 'CLOSED' ? null : flow.currentStepId;
-  const steps = flow.steps.map((step) => ({ ...step, state: stepState(step.id, step.passCount, current) }));
-  const positions = new Map(flow.steps.map((step) => [step.id, step.position]));
+  const links = flow.transitions.map((transition) => ({ id: transition.id, from: transition.fromStepId, to: transition.toStepId }));
+  const positions = layeredLayout(flow.steps.map((step) => ({ id: step.id, width: BLOCK_WIDTH, height: BLOCK_HEIGHT })), links);
+  const offsets = parallelOffsets(links);
+  const at = (stepId: string): FlowPoint => positions.get(stepId) ?? { x: 0, y: 0 };
+  const steps = flow.steps.map((step) => ({ ...step, position: at(step.id), state: stepState(step.id, step.passCount, current) }));
   const transitions = flow.transitions.map((transition) => ({
     id: transition.id,
     source: transition.fromStepId,
     target: transition.toStepId,
     label: transition.label,
-    points: transition.points,
     state: transitionState(transition.fromStepId, transition.takenCount, current),
-    retry: (positions.get(transition.toStepId)?.x ?? 0) < (positions.get(transition.fromStepId)?.x ?? 0),
+    retry: at(transition.toStepId).x <= at(transition.fromStepId).x,
+    offset: offsets.get(transition.id) ?? 0,
   }));
   return { steps, transitions };
 }
@@ -56,23 +69,4 @@ function stepState(stepId: string, passCount: number, current: string | null): F
 function transitionState(fromStepId: string, takenCount: number, current: string | null): FlowTransitionState {
   if (fromStepId === current) return 'next';
   return takenCount > 0 ? 'taken' : 'pending';
-}
-
-/** How far below its lower end a retry loops, clear of the blocks it joins (a block is about 56px high). */
-const RETRY_DROP = 64;
-/** How far a retry leaves its block sideways before turning down, and comes in before reaching the target. */
-const RETRY_REACH = 48;
-
-/**
- * A retry with no bend points of its own, drawn as a loop under the blocks: a curve from the source's right side
- * straight to the target's left side would lie on top of the connection going the other way and hide its label.
- * Answers the SVG path and where its label goes (the bottom of the loop).
- */
-export function retryLoopPath(source: FlowPoint, target: FlowPoint): [string, number, number] {
-  const bottom = Math.max(source.y, target.y) + RETRY_DROP;
-  const middle = (source.x + target.x) / 2;
-  const out = source.x + RETRY_REACH;
-  const back = target.x - RETRY_REACH;
-  const path = `M${source.x},${source.y} C${out},${source.y} ${out},${bottom} ${middle},${bottom} C${back},${bottom} ${back},${target.y} ${target.x},${target.y}`;
-  return [path, middle, bottom];
 }

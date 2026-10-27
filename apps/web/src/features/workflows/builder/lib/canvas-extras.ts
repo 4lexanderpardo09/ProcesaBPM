@@ -1,4 +1,5 @@
 import type { StepDocument, WorkflowVersionDocument } from '@procesabpm/shared';
+import { layeredLayout } from '@/shared/lib/flow-layout';
 import type { RecordKind } from '../hooks/use-record-names';
 import { fromCandidates, fromInitiators } from './participants';
 
@@ -30,42 +31,19 @@ export function stepBadges(doc: WorkflowVersionDocument, step: StepDocument): St
   return badges;
 }
 
-const COLUMN = 240;
-const ROW = 120;
+/** The size a block is laid out at: the card's width, and its height with a row of badges (taller cards still fit the gap). */
+const BLOCK_WIDTH = 180;
+const BLOCK_HEIGHT = 96;
 
 /**
- * Places the blocks in columns by how far they are from the start (the longest way that does not loop back), in the
- * order they were reached; what cannot be reached goes in a last column. Returns the new position of every block.
+ * Where «Ordenar» puts the blocks: left to right in layers with as few crossings as possible (see `layeredLayout`),
+ * so a flow with several starts, closing branches and loops reads like the help desk's. Answers every block's position.
  */
 export function layeredPositions(doc: WorkflowVersionDocument): Map<string, { x: number; y: number }> {
-  const exits = new Map<string, string[]>();
-  for (const transition of doc.transitions) exits.set(transition.fromStepId, [...(exits.get(transition.fromStepId) ?? []), transition.toStepId]);
-  const depth = new Map<string, number>();
-  const order: string[] = [];
-  const starts = doc.steps.filter((step) => step.type === 'START').map((step) => step.id);
-  // Depth-first from each start: a block's column is one past the deepest block that reaches it without a cycle.
-  const visit = (id: string, level: number, path: Set<string>) => {
-    if (path.has(id)) return;
-    if (!depth.has(id)) order.push(id);
-    if ((depth.get(id) ?? -1) >= level) return;
-    depth.set(id, level);
-    path.add(id);
-    for (const next of exits.get(id) ?? []) visit(next, level + 1, path);
-    path.delete(id);
-  };
-  for (const start of starts) visit(start, 0, new Set());
-  const lastColumn = Math.max(-1, ...depth.values()) + 1;
-  for (const step of doc.steps) if (!depth.has(step.id)) (depth.set(step.id, lastColumn), order.push(step.id));
-
-  const rows = new Map<number, number>();
-  const positions = new Map<string, { x: number; y: number }>();
-  for (const id of order) {
-    const column = depth.get(id)!;
-    const row = rows.get(column) ?? 0;
-    rows.set(column, row + 1);
-    positions.set(id, { x: column * COLUMN, y: row * ROW });
-  }
-  return positions;
+  return layeredLayout(
+    doc.steps.map((step) => ({ id: step.id, width: BLOCK_WIDTH, height: BLOCK_HEIGHT })),
+    doc.transitions.map((transition) => ({ id: transition.id, from: transition.fromStepId, to: transition.toStepId })),
+  );
 }
 
 /** Who a block names, by kind, as the canvas shows them: the start's creators, a people step's candidates. */
