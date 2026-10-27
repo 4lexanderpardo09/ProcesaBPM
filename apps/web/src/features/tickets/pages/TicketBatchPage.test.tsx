@@ -78,6 +78,35 @@ describe('TicketBatchPage', () => {
     expect(within(result).getByText(/los datos del paso no sirven para este ticket/)).toHaveTextContent('T-1003 · los datos del paso no sirven para este ticket.');
   });
 
+  it('keeps showing the result when the answered tickets leave the tray (its card goes away)', async () => {
+    let answered = false;
+    renderRoute('/tickets/batch', {
+      handlers: {
+        // Once answered, the tickets are on another step: the tray comes back without them.
+        '/ticket-batches': () => (answered ? [] : [group]),
+        [`/tickets/${id(101)}/form`]: () => form,
+        '/ticket-batches/transition': () => {
+          answered = true;
+          return { results: [{ ticketId: id(101), ok: true, ticket: mutation(1) }, { ticketId: id(102), ok: true, ticket: mutation(2) }] };
+        },
+      },
+    });
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Elegir el ticket T-1001' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Elegir el ticket T-1002' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Pagado' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Pagado: 2 tickets' });
+    await userEvent.type(await within(dialog).findByRole('textbox', { name: /Medio de pago/ }), 'Transferencia');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Pagado' }));
+
+    const result = await screen.findByRole('dialog', { name: 'Resultado del lote' });
+    expect(within(result).getByText('2 tickets avanzaron.')).toBeInTheDocument();
+    expect(await screen.findByText('No tienes tickets en pasos que se atiendan en lote.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Resultado del lote' })).toBeInTheDocument();
+    await userEvent.click(within(result).getByRole('button', { name: 'Listo' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('reads the tray as the step asks: its title, the data beside each ticket and its parts, each chosen at once', async () => {
     const at = (index: number, site: { key: string; name: string }, amount: string) => ({ ...ticket(index, 'Ana Pérez'), values: { AMOUNT: amount }, subgroup: site });
     const north = { key: id(50), name: 'Barranquilla' };

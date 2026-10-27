@@ -1,4 +1,6 @@
+import type { TicketBatchGroup } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 import { paths } from '@/shared/lib/paths';
@@ -6,6 +8,7 @@ import { useApiClient, useCurrentUser } from '@/shared/session';
 import { Alert, ButtonLink, Card, PageHeader } from '@/shared/ui';
 import { ticketBatchGroupsQueryOptions } from '../api/batch-api';
 import { LoadError } from '../components/LoadError';
+import { BatchAdvanceDialog } from '../components/batch/BatchAdvanceDialog';
 import { BatchGroupCard } from '../components/batch/BatchGroupCard';
 import styles from '../components/batch/Batch.module.css';
 
@@ -18,6 +21,9 @@ export function TicketBatchPage() {
   const cutoffId = useSearchParams()[0].get('cutoff') ?? undefined;
   const groups = useQuery(ticketBatchGroupsQueryOptions(useApiClient(), cutoffId));
   const timeZone = useCurrentUser().data?.user.timeZone ?? undefined;
+  // What was chosen when the decision was opened: once sent, those tickets leave the tray (their card may even go away),
+  // and the dialog still has to show what moved and what stayed.
+  const [batch, setBatch] = useState<{ readonly group: TicketBatchGroup; readonly ticketIds: readonly string[]; readonly decision: TicketBatchGroup['decisions'][number] } | null>(null);
   return (
     <>
       <PageHeader title={t('batch.title')} subtitle={t('batch.subtitle')} actions={<ButtonLink to={paths.tickets}>{t('batch.back')}</ButtonLink>} />
@@ -39,10 +45,11 @@ export function TicketBatchPage() {
       ) : (
         <div className={styles.groups}>
           {groups.data.map((group) => (
-            <BatchGroupCard key={`${group.workflowVersionId}:${group.stepId}`} group={group} timeZone={timeZone} />
+            <BatchGroupCard key={`${group.workflowVersionId}:${group.stepId}`} group={group} timeZone={timeZone} onDecide={(decision, ticketIds) => setBatch({ group, ticketIds, decision })} />
           ))}
         </div>
       )}
+      {batch !== null && <BatchAdvanceDialog group={batch.group} ticketIds={batch.ticketIds} decision={batch.decision} onClose={() => setBatch(null)} />}
     </>
   );
 }
