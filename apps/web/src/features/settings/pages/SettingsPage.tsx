@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router';
 import { paths } from '@/shared/lib/paths';
 import { usePermissions } from '@/shared/session';
 import { PageHeader, Tabs } from '@/shared/ui';
+import { AiAssistantTab } from '../components/AiAssistantTab';
 import { AuditTab } from '../components/AuditTab';
 import { CalculatorsTab } from '../components/CalculatorsTab';
 import { OrganizationTab } from '../components/OrganizationTab';
@@ -15,6 +16,7 @@ const TABS = [
   { value: 'security', action: 'update', subject: 'Setting' },
   { value: 'organization', action: 'update', subject: 'Setting' },
   { value: 'calculators', action: 'update', subject: 'Setting' },
+  { value: 'ai', action: 'update', subject: 'Setting' },
   { value: 'support', action: 'manage', subject: 'SupportAccess' },
   { value: 'storage', action: 'read', subject: 'Storage' },
   { value: 'audit', action: 'read', subject: 'AuditLog' },
@@ -40,6 +42,7 @@ export function SettingsPage() {
       {current === 'organization' && <OrganizationTab />}
       {current === 'security' && <SecurityTab />}
       {current === 'calculators' && <CalculatorsTab />}
+      {current === 'ai' && <AiAssistantTab />}
       {current === 'support' && <SupportAccessTab />}
       {current === 'storage' && <StorageTab />}
       {current === 'audit' && <AuditTab />}
