@@ -100,4 +100,7 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.exportTooLate]: { status: 422, message: 'The organization is about to be deleted: it is too late to export its data' },
   [ERROR_CODES.exportNotReady]: { status: 409, message: 'The data export is not ready' },
   [ERROR_CODES.exportExpired]: { status: 410, message: 'The data export has expired' },
+  [ERROR_CODES.aiAssistantDisabled]: { status: 403, message: 'The AI assistant is not turned on for this organization' },
+  [ERROR_CODES.aiJobInProgress]: { status: 409, message: 'The AI assistant is already working on this draft' },
+  [ERROR_CODES.aiDailyLimitReached]: { status: 422, message: 'The organization reached the daily limit of the AI assistant' },
 };

@@ -92,6 +92,9 @@ export const ERROR_CODES = {
   exportTooLate: 'EXPORT_TOO_LATE',
   exportNotReady: 'EXPORT_NOT_READY',
   exportExpired: 'EXPORT_EXPIRED',
+  aiAssistantDisabled: 'AI_ASSISTANT_DISABLED',
+  aiJobInProgress: 'AI_JOB_IN_PROGRESS',
+  aiDailyLimitReached: 'AI_DAILY_LIMIT_REACHED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -776,5 +779,26 @@ export class ExportNotReadyError extends DomainError {
 export class ExportExpiredError extends DomainError {
   constructor() {
     super(ERROR_CODES.exportExpired, 'The data export has expired');
+  }
+}
+
+/** The platform does not offer the AI assistant, or the organization has not turned it on. */
+export class AiAssistantDisabledError extends DomainError {
+  constructor(options?: { cause?: unknown }) {
+    super(ERROR_CODES.aiAssistantDisabled, 'The AI assistant is not turned on for this organization', options);
+  }
+}
+
+/** The draft already has a request running (one at a time per draft). */
+export class AiJobInProgressError extends DomainError {
+  constructor(options?: { cause?: unknown }) {
+    super(ERROR_CODES.aiJobInProgress, 'The AI assistant is already working on this draft', options);
+  }
+}
+
+/** The organization used up today's requests or tokens; `resetsAt` is the next midnight in its time zone. */
+export class AiDailyLimitReachedError extends DomainError {
+  constructor(readonly resetsAt: string) {
+    super(ERROR_CODES.aiDailyLimitReached, 'The organization reached the daily limit of the AI assistant', { details: { resetsAt } });
   }
 }

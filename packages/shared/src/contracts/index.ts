@@ -1,3 +1,4 @@
+export * from './ai-assistant/index.js';
 export * from './audit/index.js';
 export * from './approvals/index.js';
 export * from './auth/index.js';

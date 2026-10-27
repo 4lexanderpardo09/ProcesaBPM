@@ -42,6 +42,10 @@ describe('loadApiConfig / loadWorkerConfig', () => {
       REALTIME_AUTH_GRACE_MS: 10_000,
       REALTIME_DB_CONCURRENCY: 4,
       REALTIME_SIGNAL_QUEUE_MAX: 10_000,
+      AI_ASSISTANT_AVAILABLE: false,
+      AI_REASONING_MODEL: 'deepseek-v4-pro',
+      AI_DAILY_JOBS_PER_TENANT: 10,
+      AI_DAILY_TOKENS_PER_TENANT: 1_000_000,
     });
   });
 

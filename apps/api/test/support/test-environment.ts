@@ -34,6 +34,13 @@ const VARIABLES = [
   'REALTIME_REVALIDATE_INTERVAL_MS',
   'REALTIME_MAX_CONNECTIONS_PER_USER',
   'REALTIME_MAX_TICKET_SUBSCRIPTIONS',
+  'AI_ASSISTANT_AVAILABLE',
+  'AI_DAILY_JOBS_PER_TENANT',
+  'AI_DAILY_TOKENS_PER_TENANT',
+  'AI_BASE_URL',
+  'AI_API_KEY',
+  'AI_MAX_ROUNDS',
+  'AI_REQUEST_TIMEOUT_MS',
 ] as const;
 
 /** Points the application configuration at the test database for the duration of a test file. */

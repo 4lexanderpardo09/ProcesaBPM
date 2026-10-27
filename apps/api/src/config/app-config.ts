@@ -133,6 +133,13 @@ const apiSchema = commonSchema.extend({
   REALTIME_AUTH_GRACE_MS: boundedInteger(10_000, 1_000, 60_000),
   REALTIME_DB_CONCURRENCY: boundedInteger(4, 1, 32),
   REALTIME_SIGNAL_QUEUE_MAX: boundedInteger(10_000, 100, 1_000_000),
+  /** Whether the platform offers «Crear con IA» (the worker holds the provider key). `false`: hidden everywhere. */
+  AI_ASSISTANT_AVAILABLE: booleanFlag(false),
+  /** Recorded on each request; the same variable the worker calls the provider with. */
+  AI_REASONING_MODEL: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/).default('deepseek-v4-pro'),
+  /** Per organization and day (in its time zone): requests, and tokens the provider counted. */
+  AI_DAILY_JOBS_PER_TENANT: boundedInteger(10, 1, 1_000),
+  AI_DAILY_TOKENS_PER_TENANT: boundedInteger(1_000_000, 1_000, 100_000_000),
 });
 
 const EXAMPLE_SECRET = /change-me/i;
@@ -217,6 +224,10 @@ export type ApiConfig = AppConfig &
     | 'REALTIME_AUTH_GRACE_MS'
     | 'REALTIME_DB_CONCURRENCY'
     | 'REALTIME_SIGNAL_QUEUE_MAX'
+    | 'AI_ASSISTANT_AVAILABLE'
+    | 'AI_REASONING_MODEL'
+    | 'AI_DAILY_JOBS_PER_TENANT'
+    | 'AI_DAILY_TOKENS_PER_TENANT'
   >;
 
 export type EntryPoint = 'api' | 'worker';
