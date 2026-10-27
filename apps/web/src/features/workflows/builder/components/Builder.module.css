@@ -1101,3 +1101,16 @@
     min-height: 60vh;
   }
 }
+
+.strong {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.aiForm,
+.aiProgress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}

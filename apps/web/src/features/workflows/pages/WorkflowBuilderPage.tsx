@@ -1,3 +1,4 @@
+import type { AiDraftResult } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
 import { useState } from 'react';
@@ -19,6 +20,11 @@ export function WorkflowBuilderPage() {
   const { t } = useTranslation('workflows');
   const detail = useQuery(versionDetailQueryOptions(useApiClient(), workflowId, versionId));
   const [published, setPublished] = useState<number | null>(null);
+  const [aiDraft, setAiDraft] = useState<{ readonly result: AiDraftResult; readonly generation: number } | null>(null);
+  /** The AI rewrote the draft on the server: read it again and start the builder over on it. */
+  const takeAiDraft = (result: AiDraftResult) => {
+    void detail.refetch().then(() => setAiDraft((current) => ({ result, generation: (current?.generation ?? 0) + 1 })));
+  };
 
   if (detail.isError) {
     return (
@@ -34,9 +40,31 @@ export function WorkflowBuilderPage() {
   return (
     <>
       {published !== null && <Alert tone="ok">{t('builder.published', { number: published })}</Alert>}
+      {aiDraft !== null && (
+        <Alert tone="ok">
+          {t('builder.ai.ready')}
+          {aiDraft.result.assumptions.length > 0 && (
+            <>
+              {' '}
+              {t('builder.ai.assumptions')}
+              <ul>
+                {aiDraft.result.assumptions.map((assumption) => (
+                  <li key={assumption}>{assumption}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Alert>
+      )}
       <ReactFlowProvider>
         {/* A publication turns the draft into the live version: the builder starts again on what the API now says. */}
-        <WorkflowBuilder key={`${detail.data.version.id}-${detail.data.version.status}`} detail={detail.data} onPublished={setPublished} />
+        <WorkflowBuilder
+          key={`${detail.data.version.id}-${detail.data.version.status}-${String(aiDraft?.generation ?? 0)}`}
+          detail={detail.data}
+          onPublished={setPublished}
+          onAiDraft={takeAiDraft}
+          arrangeOnOpen={aiDraft !== null}
+        />
       </ReactFlowProvider>
     </>
   );
