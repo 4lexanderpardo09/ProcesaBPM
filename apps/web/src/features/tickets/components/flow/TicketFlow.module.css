@@ -175,3 +175,18 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* «Ver solo el recorrido»: what the ticket has not touched fades, its way stays. */
+.onlyWay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dimmed {
+  opacity: 0.18;
+}

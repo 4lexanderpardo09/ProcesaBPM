@@ -1,6 +1,6 @@
 import type { TicketFlowResponse } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { flowDiagram, retryLoopPath } from './flow-diagram';
+import { flowDiagram } from './flow-diagram';
 
 const id = (index: number) => `018f0000-0000-7000-8000-${String(index).padStart(12, '0')}`;
 const [START, REVIEW, FIX, END] = [id(1), id(2), id(3), id(4)];
@@ -53,17 +53,22 @@ describe('flowDiagram', () => {
     expect(diagram.transitions.some((transition) => transition.state === 'next')).toBe(false);
   });
 
-  it('tells a retry (back to a block drawn further left) and keeps its bend points', () => {
-    const retry = flowDiagram(flow()).transitions.find((transition) => transition.label === 'Reintentar');
-    expect(retry).toMatchObject({ retry: true, points: [{ x: 300, y: 150 }] });
-    expect(flowDiagram(flow()).transitions.filter((transition) => transition.retry)).toHaveLength(1);
+  it('lays the blocks out left to right by the flow, whatever the builder stored, and tells the one retry', () => {
+    const diagram = flowDiagram(flow());
+    const x = (name: string) => diagram.steps.find((step) => step.name === name)?.position.x ?? Number.NaN;
+    expect(x('Inicio')).toBeLessThan(x('Revisión'));
+    expect(x('Revisión')).toBeLessThan(x('Corrección'));
+    const retries = diagram.transitions.filter((transition) => transition.retry).map((transition) => transition.label);
+    expect(retries).toEqual(['Reintentar']);
   });
-});
 
-describe('retryLoopPath', () => {
-  it('loops under both ends and puts the label at the bottom, halfway', () => {
-    const [path, labelX, labelY] = retryLoopPath({ x: 500, y: 120 }, { x: 260, y: 100 });
-    expect(path).toBe('M500,120 C548,120 548,184 380,184 C212,184 212,100 260,100');
-    expect([labelX, labelY]).toEqual([380, 184]);
+  it('fans out the connections joining the same two blocks', () => {
+    const offsets = flowDiagram(flow()).transitions.map((transition) => [transition.label, transition.offset]);
+    expect(offsets).toEqual([
+      ['', 0],
+      ['Corregir', -15],
+      ['Reintentar', 15],
+      ['Aprobar', 0],
+    ]);
   });
 });

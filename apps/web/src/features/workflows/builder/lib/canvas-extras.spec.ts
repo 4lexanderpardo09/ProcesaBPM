@@ -23,11 +23,14 @@ describe('stepBadges', () => {
 });
 
 describe('layeredPositions', () => {
-  it('puts each block one column past the deepest one reaching it, survives loops, and leaves the unreachable last', () => {
+  it('puts each block right of the ones leading to it, survives loops, and places every block', () => {
     const steps = [step('start', 'START'), step('a', 'TASK'), step('b', 'TASK'), step('end', 'END'), step('lost', 'TASK')];
     const positions = layeredPositions(doc(steps, [link('start', 'a'), link('a', 'b'), link('b', 'a'), link('a', 'end'), link('b', 'end'), link('start', 'end')]));
-    expect(Object.fromEntries([...positions].map(([id, at]) => [id, at.x / 240]))).toEqual({ start: 0, a: 1, b: 2, end: 3, lost: 4 });
-    expect(positions.get('start')).toEqual({ x: 0, y: 0 });
+    const x = (id: string) => positions.get(id)?.x ?? Number.NaN;
+    expect(x('start')).toBeLessThan(x('a'));
+    expect(x('a')).toBeLessThan(x('b'));
+    expect(x('b')).toBeLessThan(x('end'));
+    expect([...positions.keys()].sort()).toEqual(['a', 'b', 'end', 'lost', 'start']);
   });
 });
 

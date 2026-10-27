@@ -2,8 +2,9 @@ import '@xyflow/react/dist/style.css';
 import type { TicketFlowResponse } from '@procesabpm/shared';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Background, Controls, type Edge, MarkerType, type Node, ReactFlow } from '@xyflow/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cx } from '@/shared/lib/cx';
 import { Card } from '@/shared/ui';
 import { type FlowDiagram, type FlowTransitionState, flowDiagram } from '../../lib/flow-diagram';
 import { LoadError } from '../LoadError';
@@ -40,8 +41,9 @@ export function TicketFlow({ flow }: TicketFlowProps) {
 
 function FlowCanvas({ flow }: { readonly flow: TicketFlowResponse }) {
   const { t } = useTranslation('tickets');
+  const [onlyWay, setOnlyWay] = useState(false);
   const diagram = useMemo(() => flowDiagram(flow), [flow]);
-  const { nodes, edges } = useMemo(() => toReactFlow(diagram), [diagram]);
+  const { nodes, edges } = useMemo(() => toReactFlow(diagram, onlyWay), [diagram, onlyWay]);
   const ariaLabelConfig = useMemo(
     () => ({
       'controls.ariaLabel': t('flow.controls.label'),
@@ -53,6 +55,10 @@ function FlowCanvas({ flow }: { readonly flow: TicketFlowResponse }) {
   );
   return (
     <>
+      <label className={styles.onlyWay}>
+        <input type="checkbox" checked={onlyWay} onChange={(event) => setOnlyWay(event.target.checked)} />
+        {t('flow.onlyWay')}
+      </label>
       <div className={styles.canvas}>
         <ReactFlow
           nodes={nodes}
@@ -87,15 +93,22 @@ function FlowCanvas({ flow }: { readonly flow: TicketFlowResponse }) {
   );
 }
 
-function toReactFlow(diagram: FlowDiagram): { nodes: Node[]; edges: Edge[] } {
-  const nodes: FlowStepNodeType[] = diagram.steps.map((step) => ({ id: step.id, type: 'step', position: step.position, data: { step } }));
+/** The diagram as React Flow draws it; with `onlyWay`, what the ticket has not touched fades so its way stands out. */
+function toReactFlow(diagram: FlowDiagram, onlyWay: boolean): { nodes: Node[]; edges: Edge[] } {
+  const nodes: FlowStepNodeType[] = diagram.steps.map((step) => ({
+    id: step.id,
+    type: 'step',
+    position: step.position,
+    data: { step },
+    ...(onlyWay && step.state === 'pending' ? { className: cx(styles.dimmed) } : {}),
+  }));
   const edges: FlowTransitionEdgeType[] = diagram.transitions.map((transition) => ({
     id: transition.id,
     type: 'transition',
     source: transition.source,
     target: transition.target,
     markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLOR[transition.state], width: 16, height: 16 },
-    data: { transition },
+    data: { transition, dimmed: onlyWay && transition.state === 'pending' },
   }));
   return { nodes, edges };
 }

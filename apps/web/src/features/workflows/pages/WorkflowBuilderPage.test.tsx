@@ -143,7 +143,7 @@ describe('workflow builder', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Lienzo' }));
     await userEvent.click(screen.getByRole('button', { name: 'Ordenar' }));
     expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Los bloques quedaron en columnas, desde el inicio.');
+    expect(screen.getByRole('status')).toHaveTextContent('Los bloques quedaron ordenados de izquierda a derecha, con los menos cruces posibles.');
   }, 15_000);
 
   it('opens a draft valid and saved, and adds a step that the validation flags until it is wired', async () => {

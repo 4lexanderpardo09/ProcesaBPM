@@ -428,7 +428,7 @@ export const workflows = {
       list: 'Bloques del flujo en una tabla',
       listEmpty: 'El flujo no tiene bloques.',
       arrange: 'Ordenar',
-      arranged: 'Los bloques quedaron en columnas, desde el inicio.',
+      arranged: 'Los bloques quedaron ordenados de izquierda a derecha, con los menos cruces posibles.',
       miniMapToggle: 'Minimapa',
       miniMap: 'Minimapa del flujo',
       fullScreen: 'Pantalla completa',

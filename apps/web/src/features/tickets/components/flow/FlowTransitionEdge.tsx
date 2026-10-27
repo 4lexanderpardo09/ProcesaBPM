@@ -1,42 +1,29 @@
-import { BaseEdge, type Edge, EdgeLabelRenderer, type EdgeProps, getBezierPath } from '@xyflow/react';
-import type { FlowPoint } from '@procesabpm/shared';
+import { BaseEdge, type Edge, EdgeLabelRenderer, type EdgeProps } from '@xyflow/react';
 import { cx } from '@/shared/lib/cx';
-import { type DiagramTransition, retryLoopPath } from '../../lib/flow-diagram';
+import { connectionPath } from '@/shared/lib/flow-layout';
+import type { DiagramTransition } from '../../lib/flow-diagram';
 import styles from './TicketFlow.module.css';
 
-export type FlowTransitionEdgeType = Edge<{ readonly transition: DiagramTransition }, 'transition'>;
+export type FlowTransitionEdgeType = Edge<{ readonly transition: DiagramTransition; readonly dimmed: boolean }, 'transition'>;
 
-/** A connection: a curve, straight segments through the builder's bend points or a loop under the blocks for a retry; its branch name in a white pill. */
-export function FlowTransitionEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps<FlowTransitionEdgeType>) {
+/**
+ * A connection: a curve forward, fanned out from the others joining the same blocks, or a loop under the blocks for a
+ * retry; its branch name in a white pill. Faded when the person asked to see only the ticket's way.
+ */
+export function FlowTransitionEdge({ id, source, target, sourceX, sourceY, targetX, targetY, markerEnd, data }: EdgeProps<FlowTransitionEdgeType>) {
   const transition = data?.transition;
-  const points = transition?.points ?? null;
-  const [path, labelX, labelY] =
-    points !== null && points.length > 0
-      ? polylinePath([{ x: sourceX, y: sourceY }, ...points, { x: targetX, y: targetY }])
-      : transition?.retry === true
-        ? retryLoopPath({ x: sourceX, y: sourceY }, { x: targetX, y: targetY })
-        : getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
-  const className = cx(styles.edge, transition !== undefined && styles[`edge-${transition.state}`], transition?.retry === true && styles.retry);
+  const [path, labelX, labelY] = connectionPath({ x: sourceX, y: sourceY }, { x: targetX, y: targetY }, transition?.offset ?? 0, source === target);
+  const className = cx(styles.edge, transition !== undefined && styles[`edge-${transition.state}`], transition?.retry === true && styles.retry, data?.dimmed === true && styles.dimmed);
   return (
     <>
       <BaseEdge id={id} path={path} {...(markerEnd === undefined ? {} : { markerEnd })} className={className} />
       {transition !== undefined && transition.label !== '' && (
         <EdgeLabelRenderer>
-          <span className={styles.edgeLabel} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
+          <span className={cx(styles.edgeLabel, data?.dimmed === true && styles.dimmed)} style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
             {transition.label}
           </span>
         </EdgeLabelRenderer>
       )}
     </>
   );
-}
-
-/** Straight segments through every point, with the label on the middle point (or the middle of the only segment). */
-function polylinePath(points: readonly FlowPoint[]): [string, number, number] {
-  const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x},${point.y}`).join(' ');
-  const middle = points.length % 2 === 1 ? points[(points.length - 1) / 2] : undefined;
-  if (middle !== undefined) return [path, middle.x, middle.y];
-  const before = points[points.length / 2 - 1] ?? { x: 0, y: 0 };
-  const after = points[points.length / 2] ?? before;
-  return [path, (before.x + after.x) / 2, (before.y + after.y) / 2];
 }
