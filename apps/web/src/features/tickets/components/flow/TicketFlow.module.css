@@ -3,7 +3,7 @@
 }
 
 .canvas {
-  height: 320px;
+  height: 400px;
   margin: calc(-1 * var(--space-4));
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   overflow: hidden;
@@ -189,4 +189,9 @@
 
 .dimmed {
   opacity: 0.18;
+}
+
+/* The canvas bleeds into the card's padding; under the checkbox it starts below it instead of covering it. */
+.onlyWay + .canvas {
+  margin-top: 0;
 }
