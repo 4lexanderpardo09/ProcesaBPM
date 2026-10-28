@@ -107,6 +107,7 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     expect(await ledger(org.jobId)).toEqual([{ round: 1, outcome: 'OK', prompt_tokens: 3500, completion_tokens: 9000, reasoning_tokens: 6500, error_code: null, model: 'deepseek-v4-pro' }]);
     expect(await input(org.jobId)).toBeNull();
     expect((await org.admin.get('/settings/ai-assistant').expect(200)).body.today).toEqual({ jobs: 1, tokens: 12_500 });
+    expect((await org.admin.get('/settings/ai-assistant/usage').expect(200)).body.recentJobs).toEqual([expect.objectContaining({ id: org.jobId, tokens: 12_500 })]);
     expect(provider.requests[0]!.user).toContain('- Tesorero');
     await org.admin.post(`${org.base}/publish`, {}).expect(200);
   });

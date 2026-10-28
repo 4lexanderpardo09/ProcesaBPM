@@ -99,18 +99,25 @@ export class AiAssistantRepository {
         createdAt: true,
         completedAt: true,
         requestedBy: { select: { user: { select: { firstName: true, lastName: true } } } },
-        usage: { select: { promptTokens: true, completionTokens: true } },
       },
     });
+    const tokens = await this.tokensByJob(tx, tenantId, jobs.map((job) => job.id));
     return jobs.map((job) => ({
       id: job.id,
       status: job.status,
       errorCode: job.errorCode,
       requesterName: `${job.requestedBy.user.firstName} ${job.requestedBy.user.lastName}`.trim(),
       model: job.model,
-      tokens: job.usage.reduce((sum, call) => sum + call.promptTokens + call.completionTokens, 0),
+      tokens: tokens.get(job.id) ?? 0,
       createdAt: job.createdAt.toISOString(),
       completedAt: iso(job.completedAt),
     }));
+  }
+
+  /** Prompt plus completion tokens per request, joined by column: the ledger has no foreign key to its request (it outlives it). */
+  private async tokensByJob(tx: TenantTransaction, tenantId: string, jobIds: string[]): Promise<Map<string, number>> {
+    if (jobIds.length === 0) return new Map();
+    const sums = await tx.aiUsage.groupBy({ by: ['jobId'], where: { tenantId, jobId: { in: jobIds } }, _sum: { promptTokens: true, completionTokens: true } });
+    return new Map(sums.map((sum) => [sum.jobId, (sum._sum.promptTokens ?? 0) + (sum._sum.completionTokens ?? 0)]));
   }
 }

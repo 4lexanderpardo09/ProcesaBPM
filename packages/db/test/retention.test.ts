@@ -22,6 +22,8 @@ const PURGE_FUNCTIONS = [
   'retention_purge_notifications',
   'retention_purge_refresh_sessions',
   'retention_purge_user_tokens',
+  'retention_purge_ai_jobs',
+  'retention_purge_ai_usage',
   'retention_purge_audit_logs',
   'retention_purge_support_sessions',
   'retention_purge_support_access_grants',
@@ -108,6 +110,44 @@ describe('retention', () => {
       [tenant.tenantId, tenant.userId],
     );
 
+  type AiJobStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+  /**
+   * A request goes through its insert trigger (fresh, PENDING, asked by the member in context); the owner then moves it
+   * to `status`, dated `at` (completed_at when finished, created_at and started_at otherwise).
+   */
+  const insertAiJob = async (client: pg.PoolClient, tenant: SeededTenant, status: AiJobStatus, at: At) => {
+    await client.query('UPDATE tenants SET ai_assistant_enabled = true WHERE id = $1', [tenant.tenantId]);
+    await client.query(`SELECT set_config('app.tenant_id', $1, true), set_config('app.user_id', $2, true)`, [tenant.tenantId, tenant.userId]);
+    const id = await insertReturningId(
+      client,
+      `INSERT INTO ai_jobs (tenant_id, kind, requested_by_id, workflow_id, version_id, expected_revision, input, input_chars, model)
+       VALUES ($1, 'WORKFLOW_DRAFT', $2, gen_random_uuid(), gen_random_uuid(), 0, '{"description": "d"}', 1, 'deepseek-v4-pro') RETURNING id`,
+      [tenant.tenantId, tenant.userId],
+    );
+    await client.query(`SELECT set_config('app.tenant_id', '', true), set_config('app.user_id', '', true)`);
+    const moves: Record<AiJobStatus, string> = {
+      PENDING: `created_at = ${at}`,
+      RUNNING: `status = 'RUNNING', attempts = 1, claim_token = gen_random_uuid(), lease_until = ${at} + interval '10 minutes', created_at = ${at}, started_at = ${at}`,
+      SUCCEEDED: `status = 'SUCCEEDED', attempts = 1, input = NULL, result = '{}', created_at = ${at} - interval '1 minute', started_at = ${at} - interval '1 minute', completed_at = ${at}`,
+      FAILED: `status = 'FAILED', attempts = 1, input = NULL, error_code = 'AI_DRAFT_INVALID', created_at = ${at} - interval '1 minute', started_at = ${at} - interval '1 minute', completed_at = ${at}`,
+    };
+    await client.query(`UPDATE ai_jobs SET ${moves[status]} WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, id]);
+    return id;
+  };
+  /** A ledger row needs a running request at insert (its trigger dates it with now()); the owner backdates it afterwards. */
+  const insertAiUsage = async (client: pg.PoolClient, tenant: SeededTenant, jobId: string, createdAt: At) => {
+    const id = await insertReturningId(
+      client,
+      `INSERT INTO ai_usage (tenant_id, job_id, user_id, task_kind, provider, model, job_attempt, round, prompt_tokens, cached_prompt_tokens, completion_tokens, reasoning_tokens, duration_ms, outcome)
+       VALUES ($1, $2, $3, 'WORKFLOW_DRAFT', 'openai-compatible', 'deepseek-v4-pro', 1, 1, 3500, 0, 9000, 6000, 60000, 'OK') RETURNING id`,
+      [tenant.tenantId, jobId, tenant.userId],
+    );
+    await client.query(`UPDATE ai_usage SET created_at = ${createdAt} WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, id]);
+    return id;
+  };
+  const insertAiUsageOfRunningJob = async (client: pg.PoolClient, tenant: SeededTenant, createdAt: At) =>
+    insertAiUsage(client, tenant, await insertAiJob(client, tenant, 'RUNNING', 'now()'), createdAt);
+
   const CASES: RetentionCase[] = [
     {
       fn: 'retention_purge_outbox_events',
@@ -160,6 +200,9 @@ describe('retention', () => {
           hash(),
         ]),
     },
+    { fn: 'retention_purge_ai_jobs', table: 'ai_jobs', window: '90 days', insert: (client, at) => insertAiJob(client, tenantA, 'FAILED', at) },
+    { fn: 'retention_purge_ai_jobs', table: 'ai_jobs', window: '90 days', insert: (client, at) => insertAiJob(client, tenantA, 'SUCCEEDED', at) },
+    { fn: 'retention_purge_ai_usage', table: 'ai_usage', window: '13 months', insert: (client, at) => insertAiUsageOfRunningJob(client, tenantA, at) },
     { fn: 'retention_purge_audit_logs', table: 'audit_logs', window: '2 years', insert: (client, at) => insertAudit(client, tenantA, at) },
     {
       fn: 'retention_purge_support_sessions',
@@ -228,6 +271,46 @@ describe('retention', () => {
         await purge(client, 'retention_purge_platform_outbox_events');
         await asRole('owner');
         expect(await existing(client, 'platform_outbox_events', [id])).toEqual([id]);
+      });
+    });
+
+    it.each(['PENDING', 'RUNNING'] as const)('ai_jobs: a %s request is never deleted, whatever its age', async (status) => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const id = await insertAiJob(client, tenantA, status, `now() - interval '10 years'`);
+        await asRole('app_worker');
+        await purge(client, 'retention_purge_ai_jobs');
+        await asRole('owner');
+        expect(await existing(client, 'ai_jobs', [id])).toEqual([id]);
+      });
+    });
+
+    it('ai_jobs: a request that ended recently stays, however long ago it was asked', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const id = await insertAiJob(client, tenantA, 'FAILED', `now() - interval '89 days'`);
+        await client.query(`UPDATE ai_jobs SET created_at = now() - interval '2 years', started_at = now() - interval '2 years' WHERE id = $1`, [id]);
+        await asRole('app_worker');
+        await purge(client, 'retention_purge_ai_jobs');
+        await asRole('owner');
+        expect(await existing(client, 'ai_jobs', [id])).toEqual([id]);
+      });
+    });
+
+    it('ai_usage: deleting a request keeps its ledger rows until their own 13 months pass', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const jobId = await insertAiJob(client, tenantA, 'RUNNING', `now() - interval '100 days'`);
+        const usage = await insertAiUsage(client, tenantA, jobId, `now() - interval '100 days'`);
+        await client.query(
+          `UPDATE ai_jobs SET status = 'FAILED', claim_token = NULL, lease_until = NULL, input = NULL, error_code = 'AI_DRAFT_INVALID', completed_at = now() - interval '100 days' WHERE id = $1`,
+          [jobId],
+        );
+        await asRole('app_worker');
+        expect(await purge(client, 'retention_purge_ai_jobs')).toBeGreaterThanOrEqual(1);
+        await purge(client, 'retention_purge_ai_usage');
+        await asRole('owner');
+        expect(await existing(client, 'ai_jobs', [jobId])).toEqual([]);
+        expect(await existing(client, 'ai_usage', [usage])).toEqual([usage]);
+        const { rows } = await client.query('SELECT job_id FROM ai_usage WHERE id = $1', [usage]);
+        expect(rows).toEqual([{ job_id: jobId }]);
       });
     });
 
@@ -315,6 +398,30 @@ describe('retention', () => {
         expect(await existing(client, 'support_access_grants', [others.grantB])).toEqual([others.grantB]);
       });
     });
+
+    it('deletes old AI requests and ledger rows of every tenant and never a young one, whatever tenant the caller has set', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const jobs = {
+          oldA: await insertAiJob(client, tenantA, 'SUCCEEDED', `now() - interval '1 year'`),
+          youngA: await insertAiJob(client, tenantA, 'SUCCEEDED', `now() - interval '1 month'`),
+          oldB: await insertAiJob(client, tenantB, 'FAILED', `now() - interval '1 year'`),
+          youngB: await insertAiJob(client, tenantB, 'FAILED', `now() - interval '1 month'`),
+        };
+        const usage = {
+          oldA: await insertAiUsageOfRunningJob(client, tenantA, `now() - interval '2 years'`),
+          youngA: await insertAiUsageOfRunningJob(client, tenantA, `now() - interval '1 year'`),
+          oldB: await insertAiUsageOfRunningJob(client, tenantB, `now() - interval '2 years'`),
+          youngB: await insertAiUsageOfRunningJob(client, tenantB, `now() - interval '1 year'`),
+        };
+        await client.query(`SELECT set_config('app.tenant_id', $1, true)`, [tenantA.tenantId]);
+        await asRole('app_worker');
+        await purge(client, 'retention_purge_ai_jobs');
+        await purge(client, 'retention_purge_ai_usage');
+        await asRole('owner');
+        expect(await existing(client, 'ai_jobs', Object.values(jobs))).toEqual([jobs.youngA, jobs.youngB].sort());
+        expect(await existing(client, 'ai_usage', Object.values(usage))).toEqual([usage.youngA, usage.youngB].sort());
+      });
+    });
   });
 
   describe('app_retention_owner: its policies only show rows past the window', () => {
@@ -323,6 +430,8 @@ describe('retention', () => {
       ['platform_audit_logs', '5 years'],
       ['support_sessions', '2 years'],
       ['support_access_grants', '2 years 1 day'],
+      ['ai_jobs', '90 days'],
+      ['ai_usage', '13 months'],
     ])('%s: a DELETE by explicit id of a young row deletes nothing, even with the tenant set; an old one goes', async (table, window) => {
       const spec = CASES.find((candidate) => candidate.table === table)!;
       await inRolledBackTransaction(async (client, asRole) => {
@@ -347,6 +456,10 @@ describe('retention', () => {
         `DELETE FROM notifications`,
         `DELETE FROM ticket_events`,
         `TRUNCATE audit_logs`,
+        `SELECT input, result FROM ai_jobs`,
+        `SELECT prompt_tokens FROM ai_usage`,
+        `UPDATE ai_jobs SET status = 'FAILED'`,
+        `TRUNCATE ai_usage`,
       ];
       for (const statement of attempts) {
         const state = await sqlStateOf(() =>
@@ -486,6 +599,16 @@ describe('retention', () => {
         await finishRun(client, runId, { expire_tenant_exports: 2, audit_logs: 0 }, ['expire_tenant_exports']);
         await asRole('owner');
         expect((await runRows(client, runId))[0]).toMatchObject({ data: { deleted: { expire_tenant_exports: 2 }, failed: ['expire_tenant_exports'] } });
+      });
+    });
+
+    it('accepts the AI assistant steps in the run summary (migration 20261029000100)', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        await asRole('app_worker');
+        const runId = (await startRun(client)).out_run_id!;
+        await finishRun(client, runId, { ai_jobs: 4, ai_usage: 7 }, ['ai_usage']);
+        await asRole('owner');
+        expect((await runRows(client, runId))[0]).toMatchObject({ data: { deleted: { ai_jobs: 4, ai_usage: 7 }, failed: ['ai_usage'] } });
       });
     });
 
