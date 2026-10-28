@@ -104,7 +104,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 | `SMTP_HOST` | sí con `smtp` | | |
 | `SMTP_PORT` | no | `1025` | |
 | `SMTP_SECURE` | no | `false` | `true` para TLS implícito (465) |
-| `SMTP_USER` / `SMTP_PASSWORD` | no | | Van juntas; un valor vacío se rechaza (no las declares si no las usas) |
+| `SMTP_USER` / `SMTP_PASSWORD` | no | | El inicio de sesión del proveedor (en Amazon SES, las credenciales SMTP, no el usuario IAM). Van juntas; vacías = sin inicio de sesión (Mailpit). El compose de ejemplo las pasa siempre desde el `.env`. |
 | `MAIL_FROM` | no | `ProcesaBPM <no-reply@procesabpm.local>` | |
 | `MAIL_MESSAGE_ID_DOMAIN` | no | `procesabpm.local` | |
 | `SALES_INBOX_EMAIL` | no | — | Buzón al que el worker manda los pedidos de demo del sitio web (con la persona como `Reply-To`). Sin él, los pedidos solo quedan en la consola de plataforma. |
