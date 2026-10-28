@@ -19,7 +19,7 @@ import { useRecordNames } from '../hooks/use-record-names';
 import { problemsByElement, problemTarget } from '../lib/problems';
 import { serverOnlyProblems, withServerProblems } from '../lib/server-problems';
 import { useAiDraft } from '../hooks/use-ai-draft';
-import { AiDraftDialog } from './AiDraftDialog';
+import { AiAssistantPanel } from './AiAssistantPanel';
 import { TemplateImportButton } from './TemplateImportButton';
 import { AmountRulesDialog } from './AmountRulesDialog';
 import { BlockPalette } from './BlockPalette';
@@ -59,6 +59,24 @@ function readTabs(key: string): OpenTabs {
 function saveTabs(key: string, tabs: OpenTabs) {
   try {
     window.sessionStorage.setItem(key, JSON.stringify(tabs));
+  } catch {
+    // Only a convenience.
+  }
+}
+
+/** Whether the AI panel of a version was left open in this browser session (it survives a reload and a new draft). */
+function readAiPanelOpen(key: string): boolean {
+  try {
+    return window.sessionStorage.getItem(key) === 'open';
+  } catch {
+    return false;
+  }
+}
+
+function saveAiPanelOpen(key: string, open: boolean) {
+  try {
+    if (open) window.sessionStorage.setItem(key, 'open');
+    else window.sessionStorage.removeItem(key);
   } catch {
     // Only a convenience.
   }
@@ -108,7 +126,9 @@ export function WorkflowBuilder({
   const [panelOpen, setPanelOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [amountRulesOpen, setAmountRulesOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
+  const aiPanelKey = `procesabpm.builder.ai.${detail.version.id}`;
+  const [aiOpen, setAiOpen] = useState(() => readAiPanelOpen(aiPanelKey));
+  useEffect(() => saveAiPanelOpen(aiPanelKey, aiOpen), [aiPanelKey, aiOpen]);
   const ai = useAiDraft(detail.workflow.id, detail.version.id, !readOnly, onAiDraft);
   const [announcement, setAnnouncement] = useState('');
   const [view, setView] = useState<'canvas' | 'list'>(() => readView());
@@ -313,7 +333,7 @@ export function WorkflowBuilder({
               <ButtonLink to={workflowVersionPath(detail.workflow.id, draft.id)}>{t('builder.openDraft', { number: draft.number })}</ButtonLink>
             ))}
           {!readOnly && ai.available && (
-            <Button disabled={dirty} title={dirty ? t('builder.ai.saveFirst') : undefined} onClick={() => setAiOpen(true)}>
+            <Button aria-expanded={aiOpen} onClick={() => setAiOpen((open) => !open)}>
               {t('builder.ai.open')}
             </Button>
           )}
@@ -391,6 +411,7 @@ export function WorkflowBuilder({
             onDropBlock={addBlock}
           />
           )}
+          {aiOpen && !readOnly && ai.available && <AiAssistantPanel ai={ai} revision={builder.revision} hasContent={doc.steps.length > 2} dirty={dirty} onClose={() => setAiOpen(false)} />}
           {panelOpen && <ProblemsPanel validation={validation} nameOf={problemOwner} onGoTo={goTo} onOpenAmountRules={() => setAmountRulesOpen(true)} onClose={() => setPanelOpen(false)} />}
         </div>
         <SectionsContext.Provider value={sections}>
@@ -481,7 +502,6 @@ export function WorkflowBuilder({
           }}
         />
       )}
-      {aiOpen && <AiDraftDialog ai={ai} revision={builder.revision} hasContent={doc.steps.length > 2} onClose={() => setAiOpen(false)} />}
       {amountRulesOpen && (
         <AmountRulesDialog
           doc={doc}
