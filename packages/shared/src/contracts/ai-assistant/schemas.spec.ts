@@ -19,9 +19,9 @@ describe('AI assistant contracts', () => {
     expect(updateAiAssistantSettingsSchema.safeParse({ enabled: false }).success).toBe(true);
   });
 
-  it('reads a result stored before decisions, the outline and corrections existed', () => {
+  it('reads a result stored before decisions, the outline, corrections and kept settings existed', () => {
     const stored = { revision: 3, assumptions: ['Supuesto'], rounds: 2, errors: 0, warnings: 1 };
-    expect(aiDraftResultSchema.parse(stored)).toEqual({ ...stored, decisions: [], outline: null, corrections: 0 });
+    expect(aiDraftResultSchema.parse(stored)).toEqual({ ...stored, decisions: [], outline: null, corrections: 0, keptSettings: [], droppedSettings: [] });
   });
 
   it('a template written before decisions existed still imports, and an unknown topic is refused', () => {

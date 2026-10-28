@@ -685,8 +685,8 @@ describe('«Crear con IA» in the builder', () => {
     const state = { history: [job('SUCCEEDED', { id: OLD_JOB, completedAt: at, result: created })] };
     const realtime = fakeRealtime();
     // Browsers where scrolling returns a promise: the panel must not hand it to React as a cleanup (it crashed on the next turn).
-    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => Promise.resolve() as unknown as void);
-    onTestFinished(() => scroll.mockRestore());
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: () => Promise.resolve() });
+    onTestFinished(() => void Reflect.deleteProperty(Element.prototype, 'scrollIntoView'));
     const { fake } = renderRoute(url, { handlers: aiApi(state, undefined, aiDraftDoc()), realtime: realtime.client });
     const region = await openPanel();
     expect(within(region).queryByText(/se reemplazará por completo/)).not.toBeInTheDocument();
