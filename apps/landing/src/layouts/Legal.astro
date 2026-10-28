@@ -1,0 +1,21 @@
+---
+import Base from './Base.astro';
+
+/** A legal document written in Markdown (src/pages/legal/*.md): title, version and date come from its frontmatter. */
+interface Props {
+  readonly frontmatter: { readonly title: string; readonly description: string; readonly version: number; readonly updated: string };
+}
+
+const { frontmatter } = Astro.props;
+---
+
+<Base title={frontmatter.title} description={frontmatter.description}>
+  <main class="plain article">
+    <article class="wrap">
+      <h1>{frontmatter.title}</h1>
+      <p class="meta">Versión {frontmatter.version} · Actualizada el {frontmatter.updated}</p>
+      <p class="legal-draft">Borrador pendiente de revisión legal.</p>
+      <div class="prose"><slot /></div>
+    </article>
+  </main>
+</Base>

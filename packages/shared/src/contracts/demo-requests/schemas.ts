@@ -3,7 +3,7 @@ import { emailSchema } from '../common.js';
 import { uuidSchema } from '../ids.js';
 
 /** The privacy notice the website's form shows; bump it when its text changes, so each request records what was accepted. */
-export const DEMO_PRIVACY_NOTICE_VERSION = 2;
+export const DEMO_PRIVACY_NOTICE_VERSION = 3;
 
 export const DEMO_TEAM_SIZES = ['UNDER_20', 'FROM_20_TO_100', 'FROM_101_TO_500', 'OVER_500'] as const;
 export type DemoTeamSize = (typeof DEMO_TEAM_SIZES)[number];
