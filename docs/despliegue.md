@@ -107,6 +107,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 | `SMTP_USER` / `SMTP_PASSWORD` | no | | Van juntas; un valor vacío se rechaza (no las declares si no las usas) |
 | `MAIL_FROM` | no | `ProcesaBPM <no-reply@procesabpm.local>` | |
 | `MAIL_MESSAGE_ID_DOMAIN` | no | `procesabpm.local` | |
+| `SALES_INBOX_EMAIL` | no | — | Buzón al que el worker manda los pedidos de demo del sitio web (con la persona como `Reply-To`). Sin él, los pedidos solo quedan en la consola de plataforma. |
 | `OUTBOX_POLLING_ENABLED` | no | `true` | |
 | `OUTBOX_POLL_INTERVAL_MS` | no | `2000` | |
 | `OUTBOX_BATCH_SIZE` | no | `10` (máx. 500) | Eventos reclamados por ronda |

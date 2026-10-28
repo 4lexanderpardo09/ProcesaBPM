@@ -24,6 +24,7 @@ const PURGE_FUNCTIONS = [
   'retention_purge_user_tokens',
   'retention_purge_ai_jobs',
   'retention_purge_ai_usage',
+  'retention_purge_demo_requests',
   'retention_purge_audit_logs',
   'retention_purge_support_sessions',
   'retention_purge_support_access_grants',
@@ -203,6 +204,15 @@ describe('retention', () => {
     { fn: 'retention_purge_ai_jobs', table: 'ai_jobs', window: '90 days', insert: (client, at) => insertAiJob(client, tenantA, 'FAILED', at) },
     { fn: 'retention_purge_ai_jobs', table: 'ai_jobs', window: '90 days', insert: (client, at) => insertAiJob(client, tenantA, 'SUCCEEDED', at) },
     { fn: 'retention_purge_ai_usage', table: 'ai_usage', window: '13 months', insert: (client, at) => insertAiUsageOfRunningJob(client, tenantA, at) },
+    {
+      fn: 'retention_purge_demo_requests',
+      table: 'demo_requests',
+      window: '24 months',
+      insert: (client, at) =>
+        insertReturningId(client, `INSERT INTO demo_requests (full_name, company, email, team_size, privacy_notice_version, created_at) VALUES ('Lead', 'Lead Co', $1, 'UNDER_20', 1, ${at}) RETURNING id`, [
+          `lead-${randomUUID()}@example.com`,
+        ]),
+    },
     { fn: 'retention_purge_audit_logs', table: 'audit_logs', window: '2 years', insert: (client, at) => insertAudit(client, tenantA, at) },
     {
       fn: 'retention_purge_support_sessions',

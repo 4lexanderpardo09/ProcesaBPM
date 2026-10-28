@@ -2,6 +2,8 @@ import { inject } from 'vitest';
 import { afterAll, beforeAll } from 'vitest';
 
 export const TEST_WEB_BASE_URL = 'http://web.test';
+/** Where the worker under test mails the website's demo requests. */
+export const TEST_SALES_INBOX = 'ventas@procesabpm.test';
 export const TEST_OUTBOX_TOKEN_KEY = 'outbox-test-key-with-more-than-32-bytes!!';
 export const TEST_MFA_KEY = { id: 'test', key: Buffer.alloc(32, 7) };
 export const TEST_MFA_ENCRYPTION_KEYS = `${TEST_MFA_KEY.id}:${TEST_MFA_KEY.key.toString('base64')}`;
@@ -26,6 +28,7 @@ const VARIABLES = [
   'WEB_BASE_URL',
   'OUTBOX_TOKEN_KEY',
   'MAIL_TRANSPORT',
+  'SALES_INBOX_EMAIL',
   'OUTBOX_POLLING_ENABLED',
   'OUTBOX_BATCH_SIZE',
   'OUTBOX_CONCURRENCY',
@@ -67,6 +70,7 @@ export function useTestEnvironment(overrides: Partial<Record<(typeof VARIABLES)[
       WEB_BASE_URL: TEST_WEB_BASE_URL,
       OUTBOX_TOKEN_KEY: TEST_OUTBOX_TOKEN_KEY,
       MAIL_TRANSPORT: 'memory',
+      SALES_INBOX_EMAIL: TEST_SALES_INBOX,
       OUTBOX_POLLING_ENABLED: 'false',
       AI_POLLING_ENABLED: 'false',
       // Two waves of 16: the lease budget also counts the realtime signals published after each commit.

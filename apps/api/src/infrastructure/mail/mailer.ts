@@ -6,6 +6,8 @@ export interface MailMessage {
   readonly text: string;
   /** Deterministic per outbox event, so a duplicate delivery can be recognized by the receiver. */
   readonly messageId: string;
+  /** Where an answer goes, when it is not the sender (a demo request: the person who asked). */
+  readonly replyTo?: string;
 }
 
 /** Port of the e-mail provider. */

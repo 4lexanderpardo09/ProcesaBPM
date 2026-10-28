@@ -13,6 +13,7 @@ const GLOBAL_TABLES = new Set([
   'platform_audit_logs',
   'platform_outbox_events',
   'platform_announcements',
+  'demo_requests',
 ]);
 
 describe('tenant isolation (row-level security)', () => {
