@@ -64,7 +64,8 @@ const settingsSchema = z.object({
   /** The AI assistant's provider (an OpenAI-compatible chat API). Without a key, its requests fail AI_NOT_CONFIGURED. */
   AI_PROVIDER_NAME: z.string().regex(/^[a-z0-9-]{1,40}$/).default('deepseek'),
   AI_BASE_URL: httpUrl.default('https://api.deepseek.com/beta'),
-  AI_API_KEY: z.string().min(20).optional(),
+  /** Empty means not configured, so the compose file can pass it through unset. */
+  AI_API_KEY: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(20).optional()),
   /** The model that designs workflows (a reasoning model: slow, but it gets the structure right). */
   AI_REASONING_MODEL: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/).default('deepseek-v4-pro'),
   /** Strict tool calling (the provider enforces the JSON Schema of the answer). */

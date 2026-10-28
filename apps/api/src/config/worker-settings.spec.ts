@@ -58,6 +58,7 @@ describe('loadWorkerSettings', () => {
   it('configures the AI assistant with DeepSeek defaults, no key, and a call that ends inside the job lease', () => {
     expect(loadWorkerSettings(valid)).toMatchObject({ AI_PROVIDER_NAME: 'deepseek', AI_BASE_URL: 'https://api.deepseek.com/beta', AI_REASONING_MODEL: 'deepseek-v4-pro', AI_STRICT_TOOLS: true, AI_REQUEST_TIMEOUT_MS: 300_000, AI_MAX_ROUNDS: 3 });
     expect(loadWorkerSettings(valid).AI_API_KEY).toBeUndefined();
+    expect(loadWorkerSettings({ ...valid, AI_API_KEY: '' }).AI_API_KEY).toBeUndefined();
     expect(problemsOf({ ...valid, AI_REQUEST_TIMEOUT_MS: String(10 * 60_000) })).toEqual([expect.stringContaining('AI_REQUEST_TIMEOUT_MS')]);
     expect(problemsOf({ ...valid, AI_MAX_ROUNDS: '5' })).toEqual([expect.stringContaining('AI_MAX_ROUNDS')]);
     expect(problemsOf({ ...valid, AI_API_KEY: 'short' })).toEqual([expect.stringContaining('AI_API_KEY')]);
