@@ -1,4 +1,4 @@
-import { calculatorChoicesSchema, pageResponseSchema, type SaveGraphRequest, type WorkflowProblem, type WorkflowValidation, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { calculatorChoicesSchema, draftSpecImportedSchema, type ImportDraftSpecRequest, pageResponseSchema, type SaveGraphRequest, type WorkflowProblem, type WorkflowValidation, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
@@ -57,6 +57,11 @@ export function versionDetailQueryOptions(client: HttpClient, workflowId: string
 /** The whole canvas; refused (409 `STALE_REVISION`) when someone saved since `revision` was read. */
 export function saveGraph(client: HttpClient, workflowId: string, versionId: string, request: SaveGraphRequest) {
   return client.request(`${versionUrl(workflowId, versionId)}/graph`, { method: 'PUT', body: request, schema: saveGraphResponseSchema });
+}
+
+/** A template in the «Crear con IA» format replaces the whole draft; 400 `VALIDATION_FAILED` when it does not fit the organization. */
+export function importDraftSpec(client: HttpClient, workflowId: string, versionId: string, request: ImportDraftSpecRequest) {
+  return client.request(`${versionUrl(workflowId, versionId)}/import`, { method: 'POST', body: request, schema: draftSpecImportedSchema });
 }
 
 /** Refused (422 `WORKFLOW_NOT_PUBLISHABLE`, the problems in `details`) while the draft has errors. */
