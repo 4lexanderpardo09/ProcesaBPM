@@ -428,3 +428,83 @@ describe('workflow builder', () => {
     expect(await screen.findByText('No encontramos esta versión del flujo.')).toBeInTheDocument();
   });
 });
+
+describe('«Crear con IA» in the builder', () => {
+  const JOB = id(95);
+  const PAY = id(96);
+  const availability = `/ai-assistant/availability`;
+  const job = (status: string, overrides: Record<string, unknown> = {}) => ({ id: JOB, status, errorCode: null, result: null, createdAt: new Date().toISOString(), startedAt: null, completedAt: null, ...overrides });
+  const aiDraftDoc = (): WorkflowVersionDocument => ({
+    ...startingDoc(),
+    steps: [step(START, 'START', 'Inicio'), step(PAY, 'TASK', 'Pagar anticipo'), step(END, 'END', 'Fin')],
+    transitions: [link(id(97), START, PAY), link(id(98), PAY, END, { type: 'DECISION', label: 'Pagado' })],
+  });
+  /** The builder's API plus the assistant: the version is rewritten on the server once the request succeeds. */
+  function aiApi(jobs: Array<ReturnType<typeof job>>, request: FakeHandler = () => ({ jobId: JOB })) {
+    const base = api();
+    let written = false;
+    return {
+      ...base,
+      [url]: (options: Parameters<FakeHandler>[0], path: string) => {
+        const detail = base[url]!(options, path) as Record<string, unknown>;
+        return written ? { ...detail, version: versionOf('DRAFT', 1), document: aiDraftDoc() } : detail;
+      },
+      [availability]: () => ({ available: true, remainingJobsToday: 4, activeJobId: null }),
+      [`${url}/ai-draft`]: request,
+      [`/ai-jobs/${JOB}`]: () => {
+        const next = jobs.length > 1 ? jobs.shift()! : jobs[0]!;
+        if (next.status === 'SUCCEEDED') written = true;
+        return next;
+      },
+    };
+  }
+  const openDialog = async () => {
+    await userEvent.click(await screen.findByRole('button', { name: 'Crear con IA' }));
+    return screen.getByRole('dialog', { name: 'Crear el flujo con IA' });
+  };
+  const describeProcess = async (dialog: HTMLElement) => {
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /Descripción del proceso/ }), 'El asesor pide un anticipo y tesorería lo paga.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Armar el borrador' }));
+  };
+
+  it('is not offered while the organization has the assistant off', async () => {
+    renderRoute(url, { handlers: { ...api(), [availability]: () => ({ available: false, remainingJobsToday: 0, activeJobId: null }) } });
+    await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
+    expect(screen.queryByRole('button', { name: 'Crear con IA' })).not.toBeInTheDocument();
+  });
+
+  it('sends the description with the revision, shows the wait, and opens the new draft with what the AI assumed', async () => {
+    const result = { revision: 1, assumptions: ['Tesorería paga por transferencia.'], rounds: 1, errors: 0, warnings: 0 };
+    const { fake } = renderRoute(url, { handlers: aiApi([job('RUNNING', { startedAt: at }), job('SUCCEEDED', { result })]) });
+    const dialog = await openDialog();
+    expect(within(dialog).getByText('Quedan 4 solicitudes hoy para la organización.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Armar el borrador' })).toBeDisabled();
+    await describeProcess(dialog);
+
+    expect(fake.callsTo(`${url}/ai-draft`)[0]?.options.body).toEqual({ description: 'El asesor pide un anticipo y tesorería lo paga.', revision: 0 });
+    expect(await within(dialog).findByText('La IA está armando el flujo…')).toBeInTheDocument();
+
+    expect(await screen.findByText(/La IA armó el borrador\. Revísalo antes de publicar\./, {}, { timeout: 6_000 })).toBeInTheDocument();
+    expect(screen.getByText('Tesorería paga por transferencia.')).toBeInTheDocument();
+    expect(await within(outline()).findByRole('button', { name: /Pagar anticipo/ })).toBeInTheDocument();
+  }, 15_000);
+
+  it('says why a request ended without a draft, and goes back to the form to try again', async () => {
+    renderRoute(url, { handlers: aiApi([job('FAILED', { errorCode: 'DRAFT_CHANGED', completedAt: at })]) });
+    const dialog = await openDialog();
+    await describeProcess(dialog);
+    expect(await within(dialog).findByText('Alguien cambió el borrador mientras la IA trabajaba: no se reemplazó.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Intentar de nuevo' }));
+    expect(within(dialog).getByRole('textbox', { name: /Descripción del proceso/ })).toBeInTheDocument();
+  });
+
+  it('explains a refused request, like the daily limit', async () => {
+    const refuse: FakeHandler = () => {
+      throw new ApiError({ status: 422, code: 'AI_DAILY_LIMIT_REACHED', message: 'x', details: { resetsAt: '2026-10-22T05:00:00.000Z' } });
+    };
+    renderRoute(url, { handlers: aiApi([job('PENDING')], refuse) });
+    const dialog = await openDialog();
+    await describeProcess(dialog);
+    expect(await within(dialog).findByText(/La organización llegó al límite de hoy\. Se renueva el/)).toBeInTheDocument();
+  });
+});
