@@ -1,5 +1,6 @@
 import { type AiDraftResult, DRAFT_DECISION_TOPICS } from '@procesabpm/shared';
 import { useTranslation } from 'react-i18next';
+import { AiDraftLosses } from './AiDraftLosses';
 import styles from './Builder.module.css';
 
 type Decision = AiDraftResult['decisions'][number];
@@ -11,12 +12,13 @@ function byTopic(decisions: readonly Decision[]): Array<[Decision['topic'], Deci
 
 /**
  * What the assistant built and why, for the person to check before publishing: what the draft holds (counted by the
- * platform), the choices the model made by topic, what it assumed, and how much the review corrected.
+ * platform), the choices the model made by topic, what it assumed, and how much the review corrected. A change also
+ * says which settings made in the builder (that the AI does not see) it kept, and which it lost: those always show.
  * `expanded`: the latest draft opens its lists; older ones stay folded. A `revision` lists what it changed.
  */
 export function AiDraftSummary({ result, expanded, revision }: { readonly result: AiDraftResult; readonly expanded: boolean; readonly revision: boolean }) {
   const { t } = useTranslation('workflows');
-  const { outline, decisions, assumptions, corrections } = result;
+  const { outline, decisions, assumptions, corrections, keptSettings, droppedSettings } = result;
   return (
     <>
       {outline !== null && (
@@ -54,6 +56,18 @@ export function AiDraftSummary({ result, expanded, revision }: { readonly result
               <li key={assumption}>{assumption}</li>
             ))}
           </ul>
+        </details>
+      )}
+      {droppedSettings.length > 0 && (
+        <details className={styles.aiDetails} open>
+          <summary>{t('builder.ai.summary.droppedSettings', { count: droppedSettings.length })}</summary>
+          <AiDraftLosses losses={droppedSettings} />
+        </details>
+      )}
+      {keptSettings.length > 0 && (
+        <details className={styles.aiDetails} open={expanded}>
+          <summary>{t('builder.ai.summary.keptSettings', { count: keptSettings.length })}</summary>
+          <AiDraftLosses losses={keptSettings} />
         </details>
       )}
     </>

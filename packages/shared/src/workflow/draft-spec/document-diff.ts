@@ -4,6 +4,14 @@ import { parseFieldConfig } from '../field-config.js';
 import { plainTextOf } from './rich-text.js';
 import type { DraftSpecLoss } from './spec-from-document.js';
 
+/**
+ * A loss tied to the element it is about: `step:<ref>`, `field:<code>`, `transition:<n>` or `amountRule:<n>` (n: its
+ * place among the original's, by sort order), so a revision can tell whether the model left that element as it was.
+ */
+export interface ElementLoss extends DraftSpecLoss {
+  readonly element: string;
+}
+
 type View = Record<string, unknown>;
 
 /** The engine filters by site only the holders of a position (POSITION, and the positions of a POOL); elsewhere the scope does nothing. */
@@ -81,26 +89,26 @@ const bySortOrder = <T extends { sortOrder: number }>(rows: readonly T[]): T[] =
  * edge bends and the numbering of sort orders are ignored. Steps pair by ref, transitions and amount rules by their
  * order, fields by code. An edge the translator adds (the one an extra approval needs) is not a loss.
  */
-export function compareDocuments(original: WorkflowVersionDocument, translated: WorkflowVersionDocument, refs: ReadonlyMap<string, string>): DraftSpecLoss[] {
-  const losses: DraftSpecLoss[] = [];
+export function compareDocuments(original: WorkflowVersionDocument, translated: WorkflowVersionDocument, refs: ReadonlyMap<string, string>): ElementLoss[] {
+  const losses: ElementLoss[] = [];
   const originalRef: RefOf = (id) => (id === null ? null : (refs.get(id) ?? `\u0000${id}`));
   const translatedRef: RefOf = (id) => (id === null ? null : id.replace(/^new:/, ''));
   const stepNames = new Map(original.steps.map((step) => [step.id, step.name]));
-  const add = (subject: DraftSpecLoss['subject'], name: string, properties: string[]) => {
-    if (properties.length > 0) losses.push({ subject, name, properties });
+  const add = (element: string, subject: DraftSpecLoss['subject'], name: string, properties: string[]) => {
+    if (properties.length > 0) losses.push({ element, subject, name, properties });
   };
 
   const translatedSteps = new Map(translated.steps.map((step) => [translatedRef(step.id), step]));
   for (const step of original.steps) {
     const other = translatedSteps.get(refs.get(step.id) ?? '');
-    add('STEP', step.name, other === undefined ? ['removed'] : differingKeys(stepView(step, originalRef), stepView(other, translatedRef)));
+    add(`step:${refs.get(step.id) ?? ''}`, 'STEP', step.name, other === undefined ? ['removed'] : differingKeys(stepView(step, originalRef), stepView(other, translatedRef)));
   }
 
   const translatedTransitions = bySortOrder(translated.transitions);
   bySortOrder(original.transitions).forEach((transition, index) => {
     const other = translatedTransitions[index];
     const name = `${stepNames.get(transition.fromStepId) ?? ''}: ${transition.label}`;
-    add('TRANSITION', name, other === undefined ? ['removed'] : differingKeys(transitionView(transition, originalRef), transitionView(other, translatedRef)));
+    add(`transition:${index}`, 'TRANSITION', name, other === undefined ? ['removed'] : differingKeys(transitionView(transition, originalRef), transitionView(other, translatedRef)));
   });
 
   const originalRanks = ranks(original.fields);
@@ -108,7 +116,7 @@ export function compareDocuments(original: WorkflowVersionDocument, translated: 
   const translatedFields = new Map(translated.fields.map((field) => [field.code, field]));
   for (const field of original.fields) {
     const other = translatedFields.get(field.code);
-    add('FIELD', field.label, other === undefined ? ['removed'] : differingKeys(fieldView(field, originalRef, originalRanks.get(field.id)), fieldView(other, translatedRef, translatedRanks.get(other.id))));
+    add(`field:${field.code}`, 'FIELD', field.label, other === undefined ? ['removed'] : differingKeys(fieldView(field, originalRef, originalRanks.get(field.id)), fieldView(other, translatedRef, translatedRanks.get(other.id))));
   }
 
   original.amountRules.forEach((rule, index) => {
@@ -117,7 +125,7 @@ export function compareDocuments(original: WorkflowVersionDocument, translated: 
       const { id: _id, stepId, approvalStepId, maxAmount, ...rest } = row;
       return { ...rest, stepId: refOf(stepId), approvalStepId: refOf(approvalStepId), maxAmount: Number(maxAmount).toFixed(2) };
     };
-    add('AMOUNT_RULE', rule.fieldCode, other === undefined ? ['removed'] : differingKeys(view(rule, originalRef), view(other, translatedRef)));
+    add(`amountRule:${index}`, 'AMOUNT_RULE', rule.fieldCode, other === undefined ? ['removed'] : differingKeys(view(rule, originalRef), view(other, translatedRef)));
   });
   return losses;
 }

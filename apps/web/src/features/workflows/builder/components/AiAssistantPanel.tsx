@@ -48,7 +48,10 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
   const { t } = useTranslation('workflows');
   const end = useRef<HTMLLIElement>(null);
   const lastId = ai.jobs.at(-1)?.id;
-  useEffect(() => end.current?.scrollIntoView?.({ block: 'end' }), [lastId]);
+  // A block body: browsers that make scrolling return a promise would hand it to React as the effect's cleanup.
+  useEffect(() => {
+    end.current?.scrollIntoView?.({ block: 'end' });
+  }, [lastId]);
 
   return (
     <section className={styles.aiPanel} aria-label={t('builder.ai.title')}>

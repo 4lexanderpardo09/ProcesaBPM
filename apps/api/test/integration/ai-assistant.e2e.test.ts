@@ -180,13 +180,21 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       expect(audit.after).toEqual({ versionId: draft.versionId, jobId, kind: 'WORKFLOW_DRAFT_REVISION', model: 'deepseek-v4-pro', inputChars: 5 });
     });
 
-    it('are refused up front, with what would be lost, when the draft holds what the spec cannot carry', async () => {
+    it('are taken when the draft has settings the spec does not show (the worker keeps them where the AI changes nothing)', async () => {
       const { admin } = await organization();
       await enable(admin);
       const draft = await imported(admin);
       await db.owner.query(`UPDATE steps SET close_rule = 'ALLOWED' WHERE version_id = $1 AND name = 'Revisar la solicitud'`, [draft.versionId]);
+      await revise(admin, draft.base).expect(202);
+    });
+
+    it('are refused up front, with what would be lost, when the draft holds what the spec cannot hold at all', async () => {
+      const { admin } = await organization();
+      await enable(admin);
+      const draft = await imported(admin);
+      await db.owner.query(`UPDATE steps SET description = '<p>' || repeat('x', 1200) || '</p>' WHERE version_id = $1 AND name = 'Revisar la solicitud'`, [draft.versionId]);
       const refused = (await revise(admin, draft.base).expect(422)).body.error;
-      expect(refused).toMatchObject({ code: 'AI_DRAFT_NOT_REVISABLE', details: { losses: [{ subject: 'STEP', name: 'Revisar la solicitud', properties: ['closeRule'] }] } });
+      expect(refused).toMatchObject({ code: 'AI_DRAFT_NOT_REVISABLE', details: { losses: [{ subject: 'STEP', name: 'Revisar la solicitud', properties: ['instructions'] }] } });
       expect((await admin.get(`${draft.base}/ai-jobs`).expect(200)).body.jobs).toEqual([]);
       await ask(admin, draft.base, { revision: 1 }).expect(202);
     });

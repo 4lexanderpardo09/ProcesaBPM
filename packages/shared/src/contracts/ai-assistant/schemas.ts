@@ -129,6 +129,8 @@ export const aiDraftOutlineSchema = z.object({
 });
 export type AiDraftOutline = z.infer<typeof aiDraftOutlineSchema>;
 
+export const draftSpecLossSchema = z.object({ subject: z.enum(DRAFT_LOSS_SUBJECTS), name: z.string(), properties: z.array(z.string()) });
+
 export const aiDraftResultSchema = z.object({
   revision: z.number().int(),
   /** What the assistant decided on its own (Spanish sentences shown to the person). */
@@ -139,6 +141,10 @@ export const aiDraftResultSchema = z.object({
   outline: aiDraftOutlineSchema.nullable().default(null),
   /** Problems the review found in earlier answers and sent back to the model. */
   corrections: z.number().int().default(0),
+  /** A change: settings the AI does not see, kept on the elements it left as they were. */
+  keptSettings: z.array(draftSpecLossSchema).default([]),
+  /** A change: settings the AI does not see, lost because it changed or removed their element. */
+  droppedSettings: z.array(draftSpecLossSchema).default([]),
   rounds: z.number().int(),
   /** Problems left in the draft for the person to fix (it is never published by the assistant). */
   errors: z.number().int(),
@@ -184,7 +190,6 @@ export type AiJobHistoryItem = z.infer<typeof aiJobHistoryItemSchema>;
 export const aiJobHistoryResponseSchema = z.object({ jobs: z.array(aiJobHistoryItemSchema) });
 export type AiJobHistoryResponse = z.infer<typeof aiJobHistoryResponseSchema>;
 
-export const draftSpecLossSchema = z.object({ subject: z.enum(DRAFT_LOSS_SUBJECTS), name: z.string(), properties: z.array(z.string()) });
 
 /** `details` of a 422 AI_DRAFT_NOT_REVISABLE: what of the draft a revision would lose. */
 export const aiDraftNotRevisableDetailsSchema = z.object({ losses: z.array(draftSpecLossSchema) });

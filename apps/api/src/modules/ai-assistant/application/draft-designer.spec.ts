@@ -1,6 +1,6 @@
 import type { WorkflowDraftSpec } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
-import { advanceSpec, catalog } from '../../../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
+import { advanceSpec, basisOf, catalog, stored, translated } from '../../../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
 import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult } from '../../../infrastructure/llm/llm-provider.js';
 import type { DraftTask } from '../domain/prompt-builder.js';
 import { type CallRecord, DraftDesigner } from './draft-designer.js';
@@ -149,9 +149,10 @@ describe('DraftDesigner', () => {
   });
 
   it('revises the current draft: sends it with the change, and keeps only the changes the model reports', async () => {
-    const current = { ...advanceSpec(), assumptions: [], decisions: [] };
-    const revised = { ...advanceSpec(), decisions: [{ topic: 'STEPS' as const, text: 'Agregué la revisión jurídica después de gerencia.' }] };
-    const task: DraftTask = { kind: 'revise', message: 'agrega una revisión jurídica', current, history: [] };
+    const basis = basisOf(stored(translated(advanceSpec())));
+    const current = basis.spec;
+    const revised = { ...current, decisions: [{ topic: 'STEPS' as const, text: 'Agregué la revisión jurídica después de gerencia.' }] };
+    const task: DraftTask = { kind: 'revise', message: 'agrega una revisión jurídica', basis, history: [] };
     const { result, provider } = await run([tool(withoutPaymentExit()), tool(revised)], { task });
     expect(result).toMatchObject({ kind: 'draft', rounds: 2, summary: { decisions: revised.decisions } });
     for (const request of provider.requests) {
@@ -159,5 +160,22 @@ describe('DraftDesigner', () => {
       expect(request.user).toContain('<change_request>\nagrega una revisión jurídica\n</change_request>');
     }
     expect(provider.requests[1]!.user).toContain('PEOPLE_BLOCK_WITHOUT_DECISION at step "pago"');
+  });
+
+  it('puts back the settings the model cannot see on what it left alone, and says which were kept and which lost', async () => {
+    const doc = stored(translated(advanceSpec()));
+    const tuned = {
+      ...doc,
+      steps: doc.steps.map((step) => (step.name === 'Pago del anticipo' ? { ...step, closeRule: 'ALLOWED' as const } : step.name === 'Revisión contable' ? { ...step, allowsBatch: true } : step)),
+    };
+    const basis = basisOf(tuned);
+    const revised = { ...basis.spec, steps: basis.spec.steps.map((step) => (step.name === 'Revisión contable' ? { ...step, instructions: 'Revisa también el monto.' } : step)) };
+    const { result } = await run([tool(revised)], { task: { kind: 'revise', message: 'que revise el monto', basis, history: [] } });
+    if (result.kind !== 'draft') throw new Error(result.kind);
+    expect(result.rounds).toBe(1);
+    expect(result.document.steps.find((step) => step.name === 'Pago del anticipo')?.closeRule).toBe('ALLOWED');
+    expect(result.document.steps.find((step) => step.name === 'Revisión contable')?.allowsBatch).toBe(false);
+    expect(result.summary.keptSettings).toEqual([{ subject: 'STEP', name: 'Pago del anticipo', properties: ['closeRule'] }]);
+    expect(result.summary.droppedSettings).toEqual([{ subject: 'STEP', name: 'Revisión contable', properties: ['allowsBatch'] }]);
   });
 });

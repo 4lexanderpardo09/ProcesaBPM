@@ -22,3 +22,12 @@ export function plainTextOf(html: string | null): string | null | undefined {
     .join('\n\n');
   return text === '' ? null : text;
 }
+
+/**
+ * Rich text with any formatting as plain paragraphs (tags dropped, list items and table cells on lines of their own):
+ * what the model reads of formatted text. Only a revision's view of the draft; the formatting itself is kept apart.
+ */
+export function plainTextApproximation(html: string): string | null {
+  const lines = html.replace(/<\/(li|tr|h[1-6]|blockquote|div)>/gi, '<br>').replace(/<\/(td|th)>/gi, ' ').replace(/<(?!\/?p>|br\s*\/?>)[^>]*>/gi, '');
+  return plainTextOf(lines.replace(/&(?!(amp|lt|gt|quot|#39|#x27|nbsp);)[#a-z0-9]+;/gi, ' ')) ?? null;
+}

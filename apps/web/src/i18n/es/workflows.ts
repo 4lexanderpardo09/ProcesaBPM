@@ -418,6 +418,10 @@ export const workflows = {
         changes_other: 'Lo que cambió ({{count}})',
         revisionAssumptions_one: 'Lo que supuso porque no estaba en el pedido ({{count}})',
         revisionAssumptions_other: 'Lo que supuso porque no estaba en el pedido ({{count}})',
+        droppedSettings_one: 'Ajustes que se perdieron porque la IA cambió o quitó su elemento ({{count}})',
+        droppedSettings_other: 'Ajustes que se perdieron porque la IA cambió o quitó su elemento ({{count}})',
+        keptSettings_one: 'Ajustes hechos en el editor que la IA no ve y se conservaron ({{count}})',
+        keptSettings_other: 'Ajustes hechos en el editor que la IA no ve y se conservaron ({{count}})',
         topics: {
           STEPS: 'Pasos',
           ASSIGNMENT: 'Responsables',

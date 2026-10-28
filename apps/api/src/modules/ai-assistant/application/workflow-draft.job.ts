@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AiDraftResult, ImmutableDataError, NotFoundError, StaleRevisionError } from '@procesabpm/shared';
+import { type AiDraftResult, type DraftSpecLoss, ImmutableDataError, NotFoundError, StaleRevisionError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import { LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
@@ -90,6 +90,8 @@ export class WorkflowDraftJob {
           decisions: [...result.summary.decisions],
           outline: result.summary.outline,
           corrections: result.corrections,
+          keptSettings: result.summary.keptSettings.map(mutableLoss),
+          droppedSettings: result.summary.droppedSettings.map(mutableLoss),
           rounds: result.rounds,
           errors: written.validation.errors.length, warnings: written.validation.warnings.length };
         if (!(await this.claims.finish(tx, claim, summary))) throw new ClaimLostError();
@@ -147,6 +149,8 @@ export class WorkflowDraftJob {
     this.logger[level](event, { event, tenantId: claim.tenantId, jobId: claim.jobId, attempt: claim.attempt, ...extra });
   }
 }
+
+const mutableLoss = (loss: DraftSpecLoss) => ({ ...loss, properties: [...loss.properties] });
 
 /** Why writing the draft failed, as the code the person sees. */
 function importFailureCode(error: unknown): string {

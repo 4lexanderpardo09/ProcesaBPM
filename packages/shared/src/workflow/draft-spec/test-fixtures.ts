@@ -1,4 +1,8 @@
+import type { WorkflowVersionDocument } from '../document.js';
+import { remapVersionDocument } from '../remap.js';
+import { type DraftBasis, extractDraftSpec } from './spec-from-document.js';
 import type { DraftAssignment, DraftCatalog, DraftField, DraftStep, DraftTransition, WorkflowDraftSpec } from './spec.js';
+import { translateDraftSpec } from './translate-spec.js';
 
 /** Fixtures for tests: an advance-payment request like the one the model produced in the first probe. */
 export const catalog: DraftCatalog = {
@@ -113,4 +117,35 @@ export function travelAdvanceSpec(): WorkflowDraftSpec {
     initiators: [{ kind: 'POSITION', name: 'Contador' }],
     amountRules: [{ field: 'MONTO', amountColumn: null, step: 'inicio', maxAmount: 5_000_000, currency: null, action: 'EXTRA_APPROVAL', approvalStep: 'gerencia', position: null, message: 'Más de 5 millones requiere a gerencia.' }],
   };
+}
+
+export function translated(spec: WorkflowDraftSpec): WorkflowVersionDocument {
+  const result = translateDraftSpec(spec, catalog);
+  if (!result.ok) throw new Error(`untranslatable: ${JSON.stringify(result.problems)}`);
+  return result.document;
+}
+
+/** A translated draft as the database gives it back: real ids, sanitized rich text, gaps in sort orders, moved blocks. */
+export function stored(document: WorkflowVersionDocument): WorkflowVersionDocument {
+  let next = 0;
+  const remapped = remapVersionDocument(document, () => `00000000-0000-7000-8000-${String((next += 1)).padStart(12, '0')}`);
+  const sanitized = (html: string | null) => (html === null ? null : html.replace(/<br>/g, '<br />').replace(/'/g, '&#39;'));
+  return {
+    steps: [...remapped.steps].reverse().map((step) => ({
+      ...step,
+      description: sanitized(step.description),
+      config: step.type === 'NOTIFICATION' ? { ...step.config, body: sanitized(step.config.body as string) } : step.config,
+      ui: { x: step.ui.x + 13, y: step.ui.y * 2 },
+    })),
+    transitions: remapped.transitions.map((transition) => ({ ...transition, sortOrder: transition.sortOrder * 10, uiPoints: [{ x: 1, y: 2 }] })),
+    fields: remapped.fields.map((field) => ({ ...field, sortOrder: field.sortOrder * 5 + 1 })),
+    amountRules: remapped.amountRules,
+  };
+}
+
+/** The basis a revision starts from, for a draft the spec can carry. */
+export function basisOf(document: WorkflowVersionDocument): DraftBasis {
+  const extraction = extractDraftSpec(document, catalog);
+  if (extraction.kind !== 'spec') throw new Error(`not revisable: ${JSON.stringify(extraction)}`);
+  return extraction.basis;
 }

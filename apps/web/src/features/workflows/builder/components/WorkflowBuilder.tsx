@@ -1,4 +1,4 @@
-import type { AiDraftResult, StepType, WorkflowProblem } from '@procesabpm/shared';
+import type { AiDraftResult, StepType, WorkflowProblem, WorkflowVersionDocument } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useReactFlow } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -80,6 +80,14 @@ function saveAiPanelOpen(key: string, open: boolean) {
   } catch {
     // Only a convenience.
   }
+}
+
+/** Whether laying the blocks out would move any of them (`moveStep` rounds positions the same way). */
+function movesAnyStep(doc: WorkflowVersionDocument, positions: ReadonlyMap<string, { x: number; y: number }>): boolean {
+  return doc.steps.some((step) => {
+    const position = positions.get(step.id);
+    return position !== undefined && (step.ui.x !== Math.round(position.x) || step.ui.y !== Math.round(position.y));
+  });
 }
 
 function saveView(view: 'canvas' | 'list') {
@@ -176,15 +184,16 @@ export function WorkflowBuilder({
   const saveArrangement = useRef(false);
   useEffect(() => {
     if (!arrangeOnOpen || readOnly) return;
-    saveArrangement.current = true;
+    // Already in order: nothing changes, and a later edit of the person's must wait for their «Guardar».
+    saveArrangement.current = movesAnyStep(doc, layeredPositions(doc));
     arrange();
     // Only when the builder opens.
   }, []);
   useEffect(() => {
-    if (!saveArrangement.current || !dirty) return;
+    if (!saveArrangement.current || !dirty || save.isPending || content.pending) return;
     saveArrangement.current = false;
     save.mutate();
-  }, [dirty, save]);
+  }, [dirty, save, content.pending]);
   const navigate = useNavigate();
   // From a version that no longer changes, the way on is the draft: open it, or make one from this version.
   const offerDraft = status !== 'DRAFT' && can('update', 'Workflow');
