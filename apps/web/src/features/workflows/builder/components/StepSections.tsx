@@ -6,6 +6,7 @@ import {
   effectiveFieldType,
   type FieldDocument,
   listCalculators,
+  notificationBodyText,
   SITE_SCOPES,
   SLA_UNITS,
   findCalculator,
@@ -292,7 +293,7 @@ export function NotificationSection({ step, readOnly, onChange }: SectionProps) 
         maxLength={10_000}
         rows={5}
         disabled={readOnly}
-        value={text(config.body)}
+        value={notificationBodyText(text(config.body))}
         onChange={(event) => setConfig({ body: event.target.value })}
       />
     </Section>

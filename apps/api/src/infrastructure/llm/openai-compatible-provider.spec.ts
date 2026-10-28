@@ -44,6 +44,7 @@ describe('OpenAiCompatibleProvider (against a local fake server)', () => {
     handler = reply(200, toolAnswer('{"steps":[]}'));
     const result = await provider().complete(request, new AbortController().signal);
     expect(result.answer).toEqual({ kind: 'tool_call', arguments: { steps: [] } });
+    expect(result.delivery).toEqual({ contentType: 'application/json', streamed: false, reasoningChunks: 0, argumentChunks: 0, firstArgumentMs: null, lastArgumentMs: null });
     expect(result.usage).toEqual({ promptTokens: 3500, cachedPromptTokens: 1200, completionTokens: 9000, reasoningTokens: 6400 });
     const [call] = seen;
     expect(call!.url).toBe('/beta/chat/completions');
@@ -107,6 +108,7 @@ describe('OpenAiCompatibleProvider (against a local fake server)', () => {
     expect(result.usage).toEqual({ promptTokens: 3500, cachedPromptTokens: 1200, completionTokens: 9000, reasoningTokens: 6400 });
     expect(heard).toEqual(['{"steps": [{"ref": "ini', '{"steps": [{"ref": "inicio", "name": "Solicitud ñ"}', '{"steps": [{"ref": "inicio", "name": "Solicitud ñ"}]}']);
     expect(seen[0]!.body).toMatchObject({ stream: true, stream_options: { include_usage: true } });
+    expect(result.delivery).toEqual({ contentType: 'text/event-stream', streamed: true, reasoningChunks: 1, argumentChunks: 3, firstArgumentMs: expect.any(Number), lastArgumentMs: expect.any(Number) });
   });
 
   it('follows only the asked tool, and reads a streamed answer without it or cut short as one without the tool', async () => {

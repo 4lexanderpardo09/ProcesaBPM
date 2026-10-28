@@ -138,6 +138,18 @@ describe('NOTIFICATION blocks: who is told, with which text, through which chann
     expect(mail.mailer.to(await emailOf(picky)).some((candidate) => candidate.text.includes('Con preferencias'))).toBe(true);
   });
 
+  it('a body stored as HTML (drafts written by the AI before 2026-10-28) reads as plain text in the app and in the e-mail', async () => {
+    const flow = await flowWith({ ...base, body: '<p>El cambio de turno quedó confirmado: {{ticket.title}}.</p><p>Gracias &amp; buen día</p>', recipients: [{ kind: 'CREATOR' }] });
+    const ticket = await create(flow, 'Turno del domingo');
+    await mail.deliver();
+    const [notice] = await noticesOf(requester, ticket.id);
+    expect(notice!.body).toBe('El cambio de turno quedó confirmado: Turno del domingo.\n\nGracias & buen día');
+    const message = mail.mailer.to(await emailOf(requester)).find((candidate) => candidate.text.includes('Turno del domingo'));
+    expect(message!.html).toContain('<p style="margin:0 0 16px">El cambio de turno quedó confirmado: Turno del domingo.</p>');
+    expect(message!.html).not.toContain('&lt;p&gt;');
+    expect(message!.text).not.toContain('<p>');
+  });
+
   it('the HTML of the e-mail escapes what the ticket says, and the subject stays on one line', async () => {
     const flow = await flowWith({ ...base, channels: ['EMAIL'], recipients: [{ kind: 'CREATOR' }] });
     const ticket = await create(flow, 'Hola <img src=x onerror=alert(1)>\nlinea');

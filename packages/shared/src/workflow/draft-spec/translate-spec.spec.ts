@@ -110,7 +110,7 @@ describe('translateDraftSpec', () => {
   it('writes instructions and notification texts as escaped paragraphs', () => {
     const doc = translated(advanceSpec());
     expect(doc.steps.find((s) => s.id === 'new:contador')!.description).toBe('<p>Revisa los soportes.</p><p>Si falta algo, devuélvelo.</p>');
-    expect(doc.steps.find((s) => s.id === 'new:aviso')!.config).toMatchObject({ recipients: [{ kind: 'CREATOR' }], channels: ['IN_APP', 'EMAIL'], body: '<p>Ya puedes ver el comprobante.</p>' });
+    expect(doc.steps.find((s) => s.id === 'new:aviso')!.config).toMatchObject({ recipients: [{ kind: 'CREATOR' }], channels: ['IN_APP', 'EMAIL'], body: 'Ya puedes ver el comprobante.' });
     expect(paragraphs('<script>alert(1)</script>\nlínea')).toBe('<p>&lt;script&gt;alert(1)&lt;/script&gt;<br>línea</p>');
   });
 

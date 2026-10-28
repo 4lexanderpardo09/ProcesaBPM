@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { AI_NOTICE_VERSION, refsFromStepNames, type VersionDetailResponse, type WorkflowDraftSpec } from '@procesabpm/shared';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { advanceSpec } from '../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
 import { JsonLogger, LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult, type ToolArgumentsListener } from '../../src/infrastructure/llm/llm-provider.js';
@@ -132,7 +132,14 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
       seen.push((await job(org.admin, org.jobId)).preview);
       await other.admin.get(`/ai-jobs/${org.jobId}`).expect(404);
     };
+    const logged = vi.spyOn(worker.get(JsonLogger), 'info');
+    onTestFinished(() => logged.mockRestore());
     expect(await worker.get(WorkflowDraftJob).run(await claim(org.tenant.tenantId, org.jobId))).toBe('succeeded');
+    // The log says how the answer arrived and what became of the previews, so a missing diagram can be traced.
+    const event = (name: string) => logged.mock.calls.find(([message, fields]) => message === name && (fields as { jobId?: string }).jobId === org.jobId)?.[1];
+    expect(event('ai_job.call')).toMatchObject({ round: 1, previews: 1 });
+    expect(event('ai_job.previews')).toEqual(expect.objectContaining({ written: 1, refused: 0, failed: 0 }));
+    expect(JSON.stringify(logged.mock.calls)).not.toContain('Solicitud de anticipo');
     expect(seen).toEqual([
       {
         steps: advanceSpec().steps.map(({ ref, type, name }) => ({ ref, type, name })),

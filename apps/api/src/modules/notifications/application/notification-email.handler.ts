@@ -1,4 +1,5 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
+import { notificationBodyText } from '@procesabpm/shared';
 import { WORKER_SETTINGS, type WorkerSettings } from '../../../config/worker-settings.js';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { WebLinks } from '../../../infrastructure/mail/links.js';
@@ -74,7 +75,7 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
   private async writtenBy(tx: TenantTransaction, tenantId: string, ticketId: string, stepId: string): Promise<{ subject: string; body: string } | undefined> {
     const block = await this.facts.notificationBlock(tx, tenantId, ticketId, stepId);
     if (block === undefined) return undefined;
-    const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, block.body], { stepId });
+    const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, notificationBodyText(block.body)], { stepId });
     return rendered === null ? undefined : { subject: rendered[0]!, body: rendered[1]! };
   }
 
