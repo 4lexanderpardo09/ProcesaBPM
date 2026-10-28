@@ -109,6 +109,7 @@ Además de `LOG_LEVEL`, `NODE_ENV`, `DB_*` y `STORAGE_*` (iguales a los del API)
 | `MAIL_MESSAGE_ID_DOMAIN` | no | `procesabpm.local` | |
 | `PUBLIC_GA_ID` (build de `landing`) | no | — | ID de medición de Google Analytics 4 (`G-…`). Sin él, el sitio no mide ni muestra el aviso de cookies. |
 | `LANDING_SITE_URL` (build de `landing`) | no | `https://procesabpm.com` | Dirección canónica del sitio: enlaces canónicos, sitemap, datos estructurados. |
+| `MAIL_CATCHER_HOST` / `MAIL_CATCHER_PORT` | no | `mailpit` / `1025` en el compose de ejemplo | Los correos a direcciones reservadas para pruebas (`.test`, `.invalid`, `.example`, `example.com`) van a este buzón de pruebas y **nunca** al SMTP real: así la prueba de humo y las personas de prueba no generan rebotes en el proveedor. Vacío: esos correos se descartan con una línea en el log. |
 | `SALES_INBOX_EMAIL` | no | — | Buzón al que el worker manda los pedidos de demo del sitio web (con la persona como `Reply-To`). Sin él, los pedidos solo quedan en la consola de plataforma. |
 | `OUTBOX_POLLING_ENABLED` | no | `true` | |
 | `OUTBOX_POLL_INTERVAL_MS` | no | `2000` | |

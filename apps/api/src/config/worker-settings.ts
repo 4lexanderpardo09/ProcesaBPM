@@ -44,6 +44,9 @@ const settingsSchema = z.object({
   /** Where the website's demo requests are mailed; without it they are only listed in the platform console. */
   SALES_INBOX_EMAIL: z.preprocess((value) => (value === '' ? undefined : value), z.email().optional()),
   SMTP_HOST: z.string().min(1).optional(),
+  /** A mail catcher (Mailpit) for the addresses reserved for testing (.test, .invalid, .example): they never go to SMTP_HOST. Empty: they are dropped. */
+  MAIL_CATCHER_HOST: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(1).optional()),
+  MAIL_CATCHER_PORT: positiveInteger(1025, 65_535),
   SMTP_PORT: positiveInteger(1025, 65_535),
   SMTP_SECURE: boolean(false),
   /** Empty counts as unset, so the compose file can always pass them (`${SMTP_USER:-}`) for a server without SMTP login. */
