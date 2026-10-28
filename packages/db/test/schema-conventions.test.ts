@@ -120,10 +120,12 @@ describe('schema conventions', () => {
     ]);
   });
 
-  it('gives app_retention_owner only the trail purges, and on the trails only reading the columns it filters on and deleting', async () => {
+  it('gives app_retention_owner only the trail and AI purges, and on those tables only reading the columns it filters on and deleting', async () => {
     const { rows: functions } = await db.owner.query<{ fn: string }>(`
       SELECT p.proname AS fn FROM pg_proc p WHERE pg_get_userbyid(p.proowner) = 'app_retention_owner' ORDER BY 1`);
     expect(functions.map((row) => row.fn)).toEqual([
+      'retention_purge_ai_jobs',
+      'retention_purge_ai_usage',
       'retention_purge_audit_logs',
       'retention_purge_platform_audit_logs',
       'retention_purge_support_access_grants',
@@ -138,6 +140,8 @@ describe('schema conventions', () => {
         AND has_table_privilege('app_retention_owner', c.oid, p.privilege)
       ORDER BY 1`);
     expect(tables.map((row) => row.grant)).toEqual([
+      'ai_jobs DELETE',
+      'ai_usage DELETE',
       'audit_logs DELETE',
       'platform_audit_logs DELETE',
       'support_access_grants DELETE',
@@ -151,6 +155,13 @@ describe('schema conventions', () => {
         AND has_column_privilege('app_retention_owner', c.oid, a.attnum, 'SELECT')
       ORDER BY 1`);
     expect(columns.map((row) => row.grant)).toEqual([
+      'ai_jobs.completed_at',
+      'ai_jobs.id',
+      'ai_jobs.status',
+      'ai_jobs.tenant_id',
+      'ai_usage.created_at',
+      'ai_usage.id',
+      'ai_usage.tenant_id',
       'audit_logs.created_at',
       'audit_logs.id',
       'audit_logs.support_grant_id',
@@ -181,7 +192,7 @@ describe('schema conventions', () => {
              has_function_privilege('app_platform', p.oid, 'EXECUTE') AS platform
       FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND p.proname LIKE 'retention\\_%'
       ORDER BY 1`);
-    expect(rows).toHaveLength(13);
+    expect(rows).toHaveLength(15);
     expect(rows.filter((row) => !row.worker || row.runtime || row.platform)).toEqual([]);
   });
 

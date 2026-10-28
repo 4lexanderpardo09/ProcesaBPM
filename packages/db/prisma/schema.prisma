@@ -2979,18 +2979,20 @@ model AiJob {
 
   tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   requestedBy Membership @relation(fields: [tenantId, requestedById], references: [tenantId, userId], onDelete: NoAction)
-  usage       AiUsage[]
 
   @@id([tenantId, id])
   @@index([tenantId, requestedById])
   @@index([tenantId, createdAt])
+  /// Retention: finished requests go 90 days after completed_at (retention_purge_ai_jobs).
+  @@index([completedAt])
   @@map("ai_jobs")
 }
 
-/// One call to the AI provider and the tokens it cost. Insert-only.
+/// One call to the AI provider and the tokens it cost. Insert-only; kept 13 months, longer than its request (90 days).
 model AiUsage {
   tenantId           String        @map("tenant_id") @db.Uuid
   id                 String        @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// No foreign key: the ledger outlives its request. ai_usage_insert_is_valid checks the request at insert.
   jobId              String        @map("job_id") @db.Uuid
   userId             String        @map("user_id") @db.Uuid
   taskKind           AiTaskKind    @map("task_kind")
@@ -3008,12 +3010,13 @@ model AiUsage {
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  job        AiJob      @relation(fields: [tenantId, jobId], references: [tenantId, id], onDelete: Cascade)
   membership Membership @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
 
   @@id([tenantId, id])
   @@index([tenantId, jobId])
   @@index([tenantId, userId])
   @@index([tenantId, createdAt])
+  /// Retention: 13 months after created_at (retention_purge_ai_usage).
+  @@index([createdAt])
   @@map("ai_usage")
 }
