@@ -325,6 +325,20 @@ export const workflows = {
     mustChoose: 'Elige a quién agregar.',
   },
   builder: {
+    templateImport: {
+      open: 'Importar plantilla',
+      importing: 'Importando…',
+      file: 'Archivo de la plantilla (JSON)',
+      ready: 'Se importó la plantilla. Revisa el borrador antes de publicar.',
+      failedTitle: 'No se pudo importar la plantilla',
+      problems: {
+        notJson: 'El archivo no es un JSON válido.',
+        notTemplate: 'El archivo no tiene el formato de una plantilla de flujo.',
+        doesNotFit: 'La plantilla nombra cargos, grupos, tipos de aprobación o bloques que no existen en la organización. Créalos o corrige la plantilla.',
+        stale: 'El borrador cambió: recarga la página e inténtalo de nuevo.',
+        failed: 'No se pudo importar la plantilla. Inténtalo de nuevo.',
+      },
+    },
     ai: {
       open: 'Crear con IA',
       saveFirst: 'Guarda los cambios antes de pedirle un borrador a la IA.',

@@ -20,6 +20,7 @@ import { problemsByElement, problemTarget } from '../lib/problems';
 import { serverOnlyProblems, withServerProblems } from '../lib/server-problems';
 import { useAiDraft } from '../hooks/use-ai-draft';
 import { AiDraftDialog } from './AiDraftDialog';
+import { TemplateImportButton } from './TemplateImportButton';
 import { AmountRulesDialog } from './AmountRulesDialog';
 import { BlockPalette } from './BlockPalette';
 import { BuilderCanvas } from './BuilderCanvas';
@@ -75,7 +76,19 @@ function saveView(view: 'canvas' | 'list') {
  * The builder of one version: palette, canvas and inspector, with the draft's problems always in view. A published or
  * archived version, or a person who may only read, gets the same screen without the editing.
  */
-export function WorkflowBuilder({ detail, onPublished, onAiDraft, arrangeOnOpen = false }: { readonly detail: VersionDetail; readonly onPublished: (number: number) => void; readonly onAiDraft: (result: AiDraftResult) => void; readonly arrangeOnOpen?: boolean }) {
+export function WorkflowBuilder({
+  detail,
+  onPublished,
+  onAiDraft,
+  onTemplateImported,
+  arrangeOnOpen = false,
+}: {
+  readonly detail: VersionDetail;
+  readonly onPublished: (number: number) => void;
+  readonly onAiDraft: (result: AiDraftResult) => void;
+  readonly onTemplateImported: () => void;
+  readonly arrangeOnOpen?: boolean;
+}) {
   const { t } = useTranslation('workflows');
   const client = useApiClient();
   const queryClient = useQueryClient();
@@ -306,6 +319,7 @@ export function WorkflowBuilder({ detail, onPublished, onAiDraft, arrangeOnOpen 
           )}
           {!readOnly && (
             <>
+              <TemplateImportButton workflowId={detail.workflow.id} versionId={detail.version.id} revision={builder.revision} disabled={dirty} onImported={onTemplateImported} />
               <Button disabled={!dirty || save.isPending || content.pending} onClick={() => save.mutate()}>
                 {save.isPending ? t('builder.saving') : t('builder.save')}
               </Button>

@@ -515,3 +515,50 @@ describe('«Crear con IA» in the builder', () => {
     expect(await within(dialog).findByText(/La organización llegó al límite de hoy\. Se renueva el/)).toBeInTheDocument();
   });
 });
+
+describe('«Importar plantilla» in the builder', () => {
+  const template = { assumptions: [], steps: [], transitions: [], fields: [] };
+  const file = (text: string) => new File([text], 'plantilla.json', { type: 'application/json' });
+  const upload = async (text: string) => userEvent.upload(await screen.findByLabelText('Archivo de la plantilla (JSON)'), file(text));
+
+  it('sends the template with the revision and opens the replaced draft', async () => {
+    const base = api();
+    let imported = false;
+    const { fake } = renderRoute(url, {
+      handlers: {
+        ...base,
+        [url]: (options, path) => {
+          const detail = base[url]!(options, path) as Record<string, unknown>;
+          return imported ? { ...detail, version: versionOf('DRAFT', 1), document: { ...startingDoc(), steps: [step(START, 'START', 'Inicio'), step(id(96), 'TASK', 'Revisar plantilla'), step(END, 'END', 'Fin')] } } : detail;
+        },
+        [`${url}/import`]: () => {
+          imported = true;
+          return { revision: 1, errors: 0, warnings: 0 };
+        },
+      },
+    });
+    await upload(JSON.stringify(template));
+    expect(await screen.findByText('Se importó la plantilla. Revisa el borrador antes de publicar.')).toBeInTheDocument();
+    expect(fake.callsTo(`${url}/import`)[0]?.options.body).toEqual({ revision: 0, spec: template });
+    expect(await within(outline()).findByRole('button', { name: /Revisar plantilla/ })).toBeInTheDocument();
+  });
+
+  it('explains a file that is not JSON and a template that does not fit the organization', async () => {
+    const { fake } = renderRoute(url, {
+      handlers: {
+        ...api(),
+        [`${url}/import`]: () => {
+          throw new ApiError({ status: 400, code: 'VALIDATION_FAILED', message: 'x', details: { problems: [{ code: 'UNKNOWN_POSITION' }] } });
+        },
+      },
+    });
+    await upload('{ no es json');
+    const dialog = await screen.findByRole('dialog', { name: 'No se pudo importar la plantilla' });
+    expect(within(dialog).getByText('El archivo no es un JSON válido.')).toBeInTheDocument();
+    expect(fake.callsTo(`${url}/import`)).toHaveLength(0);
+    await userEvent.click(within(dialog).getAllByRole('button', { name: 'Cerrar' })[0]!);
+
+    await upload(JSON.stringify(template));
+    expect(await screen.findByText(/nombra cargos, grupos, tipos de aprobación o bloques que no existen/)).toBeInTheDocument();
+  });
+});
