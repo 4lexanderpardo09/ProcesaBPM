@@ -1,7 +1,7 @@
 import type { StepDocument, TransitionDocument, WorkflowVersionDocument } from '@procesabpm/shared';
 import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
 import type { RealtimeClient } from '@/shared/realtime';
 import type { FakeHandler } from '@/test/fake-transport';
@@ -607,6 +607,21 @@ describe('«Crear con IA» in the builder', () => {
     expect(within(second!).getByText('Lo que decidió (1)').closest('details')).toHaveAttribute('open');
   });
 
+  it('says which settings made in the editor a change kept, and which it lost', async () => {
+    const changed = {
+      revision: 2, assumptions: [], decisions: [], outline: null, corrections: 0, rounds: 1, errors: 0, warnings: 0,
+      keptSettings: [{ subject: 'STEP', name: 'Pagar anticipo', properties: ['closeRule', 'files'] }],
+      droppedSettings: [{ subject: 'FIELD', name: 'Monto', properties: ['isReadOnly'] }],
+    };
+    renderRoute(url, { handlers: aiApi({ history: [job('SUCCEEDED', { kind: 'WORKFLOW_DRAFT_REVISION', completedAt: at, result: changed })] }), realtime: fakeRealtime().client });
+    const region = await openPanel();
+    const dropped = (await within(region).findByText('Ajustes que se perdieron porque la IA cambió o quitó su elemento (1)')).closest('details')!;
+    expect(dropped).toHaveAttribute('open');
+    expect(within(dropped).getByText('Campo «Monto»: solo lectura')).toBeInTheDocument();
+    const kept = within(region).getByText('Ajustes hechos en el editor que la IA no ve y se conservaron (1)').closest('details')!;
+    expect(within(kept).getByText('Paso «Pagar anticipo»: permite cerrar el ticket, archivos adjuntos')).toBeInTheDocument();
+  });
+
   it('shows the history of the draft like a conversation: who asked what, how it ended and what it cost', async () => {
     const state = {
       history: [
@@ -669,6 +684,9 @@ describe('«Crear con IA» in the builder', () => {
     const created = { revision: 1, assumptions: [], decisions: [], outline: null, corrections: 0, rounds: 1, errors: 0, warnings: 0 };
     const state = { history: [job('SUCCEEDED', { id: OLD_JOB, completedAt: at, result: created })] };
     const realtime = fakeRealtime();
+    // Browsers where scrolling returns a promise: the panel must not hand it to React as a cleanup (it crashed on the next turn).
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => Promise.resolve() as unknown as void);
+    onTestFinished(() => scroll.mockRestore());
     const { fake } = renderRoute(url, { handlers: aiApi(state, undefined, aiDraftDoc()), realtime: realtime.client });
     const region = await openPanel();
     expect(within(region).queryByText(/se reemplazará por completo/)).not.toBeInTheDocument();

@@ -1,39 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { StepDocument, WorkflowVersionDocument } from '../document.js';
-import { remapVersionDocument } from '../remap.js';
 import { plainTextOf } from './rich-text.js';
 import type { WorkflowDraftSpec } from './spec.js';
-import { type DraftSpecExtraction, extractDraftSpec, refsFromStepNames } from './spec-from-document.js';
-import { advanceSpec, assignment, catalog, draftStep, link, travelAdvanceSpec } from './test-fixtures.js';
-import { translateDraftSpec } from './translate-spec.js';
-
-function translated(spec: WorkflowDraftSpec): WorkflowVersionDocument {
-  const result = translateDraftSpec(spec, catalog);
-  if (!result.ok) throw new Error(`untranslatable: ${JSON.stringify(result.problems)}`);
-  return result.document;
-}
-
-/** A translated draft as the database gives it back: real ids, sanitized rich text, gaps in sort orders, moved blocks. */
-function stored(document: WorkflowVersionDocument): WorkflowVersionDocument {
-  let next = 0;
-  const remapped = remapVersionDocument(document, () => `00000000-0000-7000-8000-${String((next += 1)).padStart(12, '0')}`);
-  const sanitized = (html: string | null) => (html === null ? null : html.replace(/<br>/g, '<br />').replace(/'/g, '&#39;'));
-  return {
-    steps: [...remapped.steps].reverse().map((step) => ({
-      ...step,
-      description: sanitized(step.description),
-      config: step.type === 'NOTIFICATION' ? { ...step.config, body: sanitized(step.config.body as string) } : step.config,
-      ui: { x: step.ui.x + 13, y: step.ui.y * 2 },
-    })),
-    transitions: remapped.transitions.map((transition) => ({ ...transition, sortOrder: transition.sortOrder * 10, uiPoints: [{ x: 1, y: 2 }] })),
-    fields: remapped.fields.map((field) => ({ ...field, sortOrder: field.sortOrder * 5 + 1 })),
-    amountRules: remapped.amountRules,
-  };
-}
+import { type DraftSpecExtraction, extractDraftSpec, INCOMPLETE_PROPERTY, refsFromStepNames } from './spec-from-document.js';
+import { advanceSpec, assignment, catalog, draftStep, link, stored, translated, travelAdvanceSpec } from './test-fixtures.js';
 
 function specOf(extraction: DraftSpecExtraction): WorkflowDraftSpec {
   if (extraction.kind !== 'spec') throw new Error(`not revisable: ${JSON.stringify(extraction)}`);
   return extraction.spec;
+}
+
+/** Settings the spec does not show, without the element each one belongs to. */
+function hiddenOf(document: WorkflowVersionDocument) {
+  const extraction = extractDraftSpec(document, catalog);
+  if (extraction.kind !== 'spec') throw new Error(`expected a spec, got ${JSON.stringify(extraction)}`);
+  return extraction.basis.hidden.map(({ subject, name, properties }) => ({ subject, name, properties }));
 }
 
 function lossesOf(document: WorkflowVersionDocument) {
@@ -113,15 +94,17 @@ describe('extractDraftSpec', () => {
     expect(extractDraftSpec({ steps: [], transitions: [], fields: [], amountRules: [] }, catalog)).toEqual({ kind: 'empty' });
   });
 
-  describe('reports what the spec cannot carry instead of dropping it', () => {
+  describe('keeps apart what the spec does not show, and refuses what it cannot hold at all', () => {
     const base = () => stored(translated(advanceSpec()));
     const editStep = (doc: WorkflowVersionDocument, name: string, change: Partial<StepDocument>): WorkflowVersionDocument => ({ ...doc, steps: doc.steps.map((step) => (step.name === name ? { ...step, ...change } : step)) });
 
-    it('step settings the builder has and the spec does not', () => {
+    it('step settings the builder has and the spec does not, tied to their step', () => {
       const doc = editStep(editStep(base(), 'Pago del anticipo', { siteScope: 'SAME_SITE', allowsBatch: true, config: { batch: { maxTickets: 20 } }, files: [{ fileId: 'file-1', label: 'Formato', sortOrder: 0 }] }), 'Revisión contable', {
         closeRule: 'ALLOWED',
       });
-      expect(lossesOf(doc)).toEqual(
+      const extraction = extractDraftSpec(doc, catalog);
+      expect(extraction.kind === 'spec' && extraction.basis.hidden.map((loss) => loss.element).sort()).toEqual(['step:pago_del_anticipo', 'step:revision_contable']);
+      expect(hiddenOf(doc)).toEqual(
         expect.arrayContaining([
           { subject: 'STEP', name: 'Pago del anticipo', properties: expect.arrayContaining(['siteScope', 'allowsBatch', 'config.batch', 'files']) },
           { subject: 'STEP', name: 'Revisión contable', properties: ['closeRule'] },
@@ -129,8 +112,10 @@ describe('extractDraftSpec', () => {
       );
     });
 
-    it('formatted instructions, but not plain paragraphs', () => {
-      expect(lossesOf(editStep(base(), 'Revisión contable', { description: '<p>Revisa <strong>todo</strong></p>' }))).toEqual([{ subject: 'STEP', name: 'Revisión contable', properties: ['description'] }]);
+    it('formatted instructions, read as plain text; plain paragraphs are no hidden setting', () => {
+      const formatted = editStep(base(), 'Revisión contable', { description: '<p>Revisa <strong>todo</strong>:</p><ul><li>Soportes</li><li>Montos &amp; fechas</li></ul>' });
+      expect(hiddenOf(formatted)).toEqual([{ subject: 'STEP', name: 'Revisión contable', properties: ['description'] }]);
+      expect(specOf(extractDraftSpec(formatted, catalog)).steps.find((step) => step.name === 'Revisión contable')?.instructions).toBe('Revisa todo:\n\nSoportes\nMontos & fechas');
       expect(extractDraftSpec(editStep(base(), 'Revisión contable', { description: '<p> Revisa  </p><p></p>' }), catalog).kind).toBe('spec');
     });
 
@@ -148,9 +133,19 @@ describe('extractDraftSpec', () => {
           { subject: 'FIELD', name: 'Responsable', properties: ['type'] },
         ]),
       );
-      expect(lossesOf(editStep(base(), 'Corregir la solicitud', { assignmentMode: 'POOL', candidates: [{ id: 'c', participantType: 'USER', userId: 'user-1', positionId: null, groupId: null }] }))).toEqual([
-        { subject: 'STEP', name: 'Corregir la solicitud', properties: expect.arrayContaining(['candidates']) },
+      // A pool of people only: the spec has no one to name there.
+      expect(lossesOf(editStep(base(), 'Corregir la solicitud', { assignmentMode: 'POOL', positionId: null, candidates: [{ id: 'c', participantType: 'USER', userId: 'user-1', positionId: null, groupId: null }] }))).toEqual([
+        { subject: 'STEP', name: 'Corregir la solicitud', properties: [INCOMPLETE_PROPERTY] },
       ]);
+      const mixedPool = editStep(base(), 'Corregir la solicitud', {
+        assignmentMode: 'POOL',
+        positionId: null,
+        candidates: [
+          { id: 'c1', participantType: 'GROUP', userId: null, positionId: null, groupId: 'grp-it' },
+          { id: 'c2', participantType: 'USER', userId: 'user-1', positionId: null, groupId: null },
+        ],
+      });
+      expect(hiddenOf(mixedPool)).toEqual([{ subject: 'STEP', name: 'Corregir la solicitud', properties: ['candidates'] }]);
     });
 
     it('records the organization no longer offers (an inactive position)', () => {
@@ -165,7 +160,7 @@ describe('extractDraftSpec', () => {
         transitions: doc.transitions.map((transition) => (transition.label === 'Firmar' ? { ...transition, type: 'SYSTEM_ONLY' as const } : transition)),
         amountRules: doc.amountRules.map((rule) => ({ ...rule, companyId: 'company-1' })),
       };
-      expect(lossesOf(changed)).toEqual(
+      expect(hiddenOf(changed)).toEqual(
         expect.arrayContaining([
           { subject: 'FIELD', name: 'MONTO', properties: ['isReadOnly'] },
           { subject: 'TRANSITION', name: 'Firma del anticipo: Firmar', properties: ['type'] },
@@ -177,7 +172,7 @@ describe('extractDraftSpec', () => {
     it('options whose stored value differs from the label', () => {
       const doc = base();
       const withValues = { ...doc, fields: doc.fields.map((field) => (field.code === 'MOTIVO' ? { ...field, config: { options: [{ value: 'V1', label: 'Visita a cliente' }] } } : field)) };
-      expect(lossesOf(withValues)).toEqual([{ subject: 'FIELD', name: 'MOTIVO', properties: ['config.options'] }]);
+      expect(hiddenOf(withValues)).toEqual([{ subject: 'FIELD', name: 'MOTIVO', properties: ['config.options'] }]);
     });
 
     it('an incomplete draft and values beyond what the spec allows', () => {

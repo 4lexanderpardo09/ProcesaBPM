@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
-import { AI_NOTICE_VERSION, type VersionDetailResponse, type WorkflowDraftSpec } from '@procesabpm/shared';
+import { AI_NOTICE_VERSION, refsFromStepNames, type VersionDetailResponse, type WorkflowDraftSpec } from '@procesabpm/shared';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { advanceSpec } from '../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
 import { JsonLogger, LOG_WRITER } from '../../src/common/logging/json-logger.js';
@@ -227,6 +227,19 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
         transitions: [...spec.transitions.filter((transition) => transition.from !== 'aviso'), { ...spec.transitions.find((transition) => transition.from === 'aviso')!, to: 'aviso_jefe' }, { ...spec.transitions.find((transition) => transition.from === 'aviso')!, from: 'aviso_jefe' }],
       };
     };
+    /** A spec with the refs the platform derives from step names, as the model gets (and keeps) them in a revision. */
+    const withRefsFromNames = (spec: WorkflowDraftSpec): WorkflowDraftSpec => {
+      const refs = refsFromStepNames(spec.steps.map((step) => ({ id: step.ref, name: step.name })));
+      const ref = (value: string) => refs.get(value) ?? value;
+      const refOrNull = (value: string | null) => (value === null ? null : ref(value));
+      return {
+        ...spec,
+        steps: spec.steps.map((step) => ({ ...step, ref: ref(step.ref), assignment: step.assignment === null ? null : { ...step.assignment, sameAsStep: refOrNull(step.assignment.sameAsStep) } })),
+        transitions: spec.transitions.map((transition) => ({ ...transition, from: ref(transition.from), to: ref(transition.to) })),
+        fields: spec.fields.map((field) => ({ ...field, step: ref(field.step) })),
+        amountRules: spec.amountRules.map((rule) => ({ ...rule, step: refOrNull(rule.step), approvalStep: refOrNull(rule.approvalStep) })),
+      };
+    };
     const kindsInLedger = async (jobId: string) => (await db.owner.query<{ task_kind: string }>('SELECT DISTINCT task_kind FROM ai_usage WHERE job_id = $1', [jobId])).rows.map((row) => row.task_kind);
 
     it('sends the current draft from the database with the change and the earlier requests, and writes the whole revised draft', async () => {
@@ -250,6 +263,25 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
       expect(await kindsInLedger(org.first)).toEqual(['WORKFLOW_DRAFT']);
     });
 
+    it('keeps the settings the AI does not see on the steps it left alone, and says which ones it kept and lost', async () => {
+      const org = await revised();
+      const versionId = org.base.split('/').at(-1);
+      await db.owner.query(`UPDATE steps SET close_rule = 'ALLOWED' WHERE version_id = $1 AND name = 'Revisión contable'`, [versionId]);
+      await db.owner.query(`UPDATE steps SET close_rule = 'ALLOWED' WHERE version_id = $1 AND name = 'Pago del anticipo'`, [versionId]);
+      const notice = withRefsFromNames(withExtraNotice());
+      const answer: WorkflowDraftSpec = { ...notice, steps: notice.steps.map((step) => (step.name === 'Pago del anticipo' ? { ...step, instructions: 'Paga y adjunta el comprobante.' } : step)) };
+      expect(await runJob(org, [answer])).toBe('succeeded');
+
+      expect(provider.requests[0]!.user).toMatch(/<hidden_settings>\n- step (revision_contable|pago_del_anticipo)\n- step (revision_contable|pago_del_anticipo)\n<\/hidden_settings>/);
+      const steps = ((await org.admin.get(org.base).expect(200)).body as VersionDetailResponse).document.steps;
+      expect(steps.find((step) => step.name === 'Revisión contable')?.closeRule).toBe('ALLOWED');
+      expect(steps.find((step) => step.name === 'Pago del anticipo')?.closeRule).toBe('NOT_ALLOWED');
+      expect(await job(org.admin, org.jobId)).toMatchObject({
+        status: 'SUCCEEDED',
+        result: { keptSettings: [{ subject: 'STEP', name: 'Revisión contable', properties: ['closeRule'] }], droppedSettings: [{ subject: 'STEP', name: 'Pago del anticipo', properties: ['closeRule'] }] },
+      });
+    });
+
     it('ends before any paid call when the draft changed, or holds what the spec cannot carry, since it was asked', async () => {
       const changed = await revised();
       await db.owner.query('UPDATE workflow_versions SET revision = revision + 1 WHERE id = $1', [changed.base.split('/').at(-1)]);
@@ -257,7 +289,7 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
       expect(await job(changed.admin, changed.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'DRAFT_CHANGED' });
 
       const lossy = await revised();
-      await db.owner.query(`UPDATE steps SET close_rule = 'ALLOWED' WHERE version_id = $1 AND name = 'Revisión contable'`, [lossy.base.split('/').at(-1)]);
+      await db.owner.query(`UPDATE positions SET is_active = false WHERE id IN (SELECT position_id FROM steps WHERE version_id = $1 AND name = 'Revisión contable')`, [lossy.base.split('/').at(-1)]);
       expect(await runJob(lossy, [withExtraNotice()])).toBe('failed');
       expect(await job(lossy.admin, lossy.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'AI_DRAFT_NOT_REVISABLE' });
 

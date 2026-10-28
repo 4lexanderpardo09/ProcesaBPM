@@ -1,4 +1,4 @@
-import { type AiDraftOutline, buildDraftToolSchema, checkDraftSpec, type DraftCatalog, type DraftDecision, describeSpecProblems, describeWorkflowProblems, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { type AiDraftOutline, buildDraftToolSchema, carryOverSettings, checkDraftSpec, type DraftCatalog, type DraftDecision, describeSpecProblems, describeWorkflowProblems, type DraftSpecLoss, findEngineSupportProblems, validateWorkflowGraph, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { LlmCallError, type LlmFailureKind, type LlmProvider, type LlmResult, type LlmUsage, NO_USAGE } from '../../../infrastructure/llm/llm-provider.js';
 import { blockingProblems } from '../../workflows/application/draft-document-importer.js';
 import { buildDraftPrompt, DRAFT_TOOL_DESCRIPTION, DRAFT_TOOL_NAME, type DraftCorrection, type DraftTask } from '../domain/prompt-builder.js';
@@ -34,6 +34,9 @@ export interface DraftSummary {
   readonly assumptions: readonly string[];
   readonly decisions: readonly DraftDecision[];
   readonly outline: AiDraftOutline;
+  /** A change: the draft's settings the model does not see, kept or lost (`carryOverSettings`). */
+  readonly keptSettings: readonly DraftSpecLoss[];
+  readonly droppedSettings: readonly DraftSpecLoss[];
 }
 
 interface Candidate {
@@ -41,6 +44,8 @@ interface Candidate {
   readonly summary: DraftSummary;
   readonly errors: number;
   readonly warnings: number;
+  /** The model's own draft has no errors: another round has nothing to fix (kept settings may bring the original's). */
+  readonly clean: boolean;
 }
 
 interface Evaluation {
@@ -83,21 +88,21 @@ export class DraftDesigner {
         continue;
       }
       answered = true;
-      const evaluation = this.evaluate(result, catalog);
+      const evaluation = this.evaluate(result, task, catalog);
       await hooks.afterCall({ round, outcome: evaluation.outcome, usage: result.usage, durationMs: result.durationMs, errorCode: null });
       if (evaluation.candidate !== undefined) {
         best = evaluation.candidate;
-        if (best.errors === 0) return { kind: 'draft', ...best, rounds: round, corrections };
+        if (best.clean) return { kind: 'draft', ...draftOf(best), rounds: round, corrections };
       }
       correction = evaluation.correction;
       corrections += correction.problems.length;
       if (round < this.maxRounds && !(await hooks.afterReview(round, correction.problems.length))) return { kind: 'interrupted' };
     }
-    if (best !== undefined) return { kind: 'draft', ...best, rounds: this.maxRounds, corrections };
+    if (best !== undefined) return { kind: 'draft', ...draftOf(best), rounds: this.maxRounds, corrections };
     return { kind: 'failed', errorCode: answered ? 'AI_DRAFT_INVALID' : 'AI_PROVIDER_FAILED' };
   }
 
-  private evaluate(result: LlmResult, catalog: DraftCatalog): Evaluation {
+  private evaluate(result: LlmResult, task: DraftTask, catalog: DraftCatalog): Evaluation {
     if (result.answer.kind === 'no_tool_call') return { outcome: 'TOOL_NOT_CALLED', correction: { previous: null, problems: [TOOL_NOT_CALLED_PROBLEM] } };
     const parsed = workflowDraftSpecSchema.safeParse(result.answer.arguments);
     if (!parsed.success) {
@@ -108,9 +113,30 @@ export class DraftDesigner {
     if (check.kind === 'untranslatable') return { outcome: 'OK', correction: { previous: spec, problems: describeSpecProblems(check.problems, spec) } };
     const correction = { previous: spec, problems: describeWorkflowProblems(check.errors, check.document) };
     if (blockingProblems(check.document).length > 0) return { outcome: 'OK', correction };
-    return { outcome: 'OK', correction, candidate: { document: check.document, summary: summarize(spec), errors: check.errors.length, warnings: check.warnings.length } };
+    const candidate: Candidate = { document: check.document, summary: summarize(spec), errors: check.errors.length, warnings: check.warnings.length, clean: check.errors.length === 0 };
+    return { outcome: 'OK', correction, candidate: task.kind === 'create' ? candidate : withHiddenSettings(task, spec, candidate) };
   }
 }
+
+/**
+ * A change with the draft's hidden settings put back where the model left the element alone. Its problems are
+ * counted again (kept settings may carry the original's own); the model is only ever told about its own draft's.
+ */
+function withHiddenSettings(task: Extract<DraftTask, { kind: 'revise' }>, spec: WorkflowDraftSpec, candidate: Candidate): Candidate {
+  const carried = carryOverSettings(task.basis, spec, candidate.document);
+  // The database would refuse it (an original stored draft never is): the model's draft, with every hidden setting lost.
+  if (blockingProblems(carried.document).length > 0) return { ...candidate, summary: { ...candidate.summary, droppedSettings: [...carried.kept, ...carried.dropped] } };
+  const validation = validateWorkflowGraph(carried.document);
+  return {
+    ...candidate,
+    document: carried.document,
+    summary: { ...candidate.summary, keptSettings: carried.kept, droppedSettings: carried.dropped },
+    errors: validation.errors.length + findEngineSupportProblems(carried.document).length,
+    warnings: validation.warnings.length,
+  };
+}
+
+const draftOf = ({ clean: _clean, ...candidate }: Candidate) => candidate;
 
 function summarize(spec: WorkflowDraftSpec): DraftSummary {
   const countSteps = (types: readonly string[]) => spec.steps.filter((step) => types.includes(step.type)).length;
@@ -124,5 +150,7 @@ function summarize(spec: WorkflowDraftSpec): DraftSummary {
       initiators: spec.initiators.length,
       amountRules: spec.amountRules.length,
     },
+    keptSettings: [],
+    droppedSettings: [],
   };
 }

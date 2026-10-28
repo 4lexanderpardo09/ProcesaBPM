@@ -1,7 +1,7 @@
 import type { AmountRuleDocument, FieldDocument, SignerDocument, StepDocument, TransitionDocument, WorkflowVersionDocument } from '../document.js';
 import { parseFieldConfig } from '../field-config.js';
-import { compareDocuments } from './document-diff.js';
-import { plainTextOf } from './rich-text.js';
+import { compareDocuments, type ElementLoss } from './document-diff.js';
+import { plainTextApproximation, plainTextOf } from './rich-text.js';
 import {
   DRAFT_COLUMN_TYPES,
   DRAFT_FIELD_TYPES,
@@ -34,21 +34,35 @@ export interface DraftSpecLoss {
   readonly properties: readonly string[];
 }
 
+/**
+ * The draft a revision starts from: the document as stored, the ref of each of its steps, its spec, and the settings
+ * the spec does not show (each tied to its element), which a revision keeps on the elements the model leaves as they are.
+ */
+export interface DraftBasis {
+  readonly document: WorkflowVersionDocument;
+  readonly refs: ReadonlyMap<string, string>;
+  readonly spec: WorkflowDraftSpec;
+  readonly hidden: readonly ElementLoss[];
+}
+
 export type DraftSpecExtraction =
-  | { readonly kind: 'spec'; readonly spec: WorkflowDraftSpec }
+  | { readonly kind: 'spec'; readonly spec: WorkflowDraftSpec; readonly basis: DraftBasis }
   /** No blocks at all: there is nothing to revise. */
   | { readonly kind: 'empty' }
+  /** Elements the spec cannot hold at all (a block type it has no words for, a record the organization no longer offers…). */
   | { readonly kind: 'lossy'; readonly losses: readonly DraftSpecLoss[] };
 
 export const INCOMPLETE_PROPERTY = 'incomplete';
+const REMOVED_PROPERTY = 'removed';
 const MAX_REF_LENGTH = 41;
 const PEOPLE_TYPES: ReadonlySet<string> = new Set(['TASK', 'APPROVAL', 'SIGNATURE']);
 
 /**
  * The spec of an existing draft (to revise it with «Crear con IA»): refs derived from the step names, catalog names
- * instead of ids. It is accepted only if translating it back gives the same draft, apart from ids, layout (block
- * positions and edge bends, which the builder arranges again) and how sort orders are numbered; anything else is
- * reported as a loss, so a revision never silently drops what the spec cannot express.
+ * instead of ids. Translating it back must give every element of the draft; what it gives differently (apart from ids,
+ * layout and how sort orders are numbered) is a setting the spec does not show, kept in the basis so `carryOverSettings`
+ * puts it back on the elements the model leaves as they are. An element the spec cannot hold at all is a loss, and
+ * the draft cannot be revised: a revision never silently drops what the spec cannot express.
  */
 export function extractDraftSpec(document: WorkflowVersionDocument, catalog: DraftCatalog): DraftSpecExtraction {
   if (document.steps.length === 0) return { kind: 'empty' };
@@ -66,8 +80,12 @@ export function extractDraftSpec(document: WorkflowVersionDocument, catalog: Dra
     for (const problem of translation.problems) extractor.lossOfProblem(parsed.data, problem);
     return { kind: 'lossy', losses: extractor.lossList() };
   }
-  for (const loss of compareDocuments(document, translation.document, extractor.refs)) extractor.loss(loss.subject, loss.name, loss.properties);
-  return extractor.losses.size > 0 ? { kind: 'lossy', losses: extractor.lossList() } : { kind: 'spec', spec: parsed.data };
+  const hidden = compareDocuments(document, translation.document, extractor.refs);
+  if (hidden.some((loss) => loss.properties.includes(REMOVED_PROPERTY))) {
+    for (const loss of hidden) extractor.loss(loss.subject, loss.name, loss.properties);
+    return { kind: 'lossy', losses: extractor.lossList() };
+  }
+  return { kind: 'spec', spec: parsed.data, basis: { document, refs: extractor.refs, spec: parsed.data, hidden } };
 }
 
 /** A ref per step from its name (`Aprobación del jefe` → `aprobacion_del_jefe`), unique in the draft. */
@@ -184,13 +202,12 @@ class Extractor {
 
   private step(step: StepDocument): DraftStep {
     const config = asRecord(step.config);
-    const instructions = plainTextOf(step.description);
-    if (instructions === undefined) this.loss('STEP', step.name, ['description']);
+    const instructions = readableText(step.description);
     return {
       ref: this.refs.get(step.id)!,
       type: step.type as DraftStep['type'],
       name: step.name,
-      instructions: instructions ?? null,
+      instructions,
       assignment: PEOPLE_TYPES.has(step.type) ? this.assignment(step) : null,
       sla: step.slaValue === null || step.slaUnit === null ? null : { value: step.slaValue, unit: step.slaUnit },
       maxLoops: step.maxLoops,
@@ -201,8 +218,7 @@ class Extractor {
   }
 
   private notification(step: StepDocument, config: Record<string, unknown>): DraftStep['notification'] {
-    const body = plainTextOf(typeof config.body === 'string' ? config.body : null);
-    if (body === undefined) this.loss('STEP', step.name, ['config.body']);
+    const body = readableText(typeof config.body === 'string' ? config.body : null);
     const recipients = asArray(config.recipients).map((raw) => {
       const recipient = asRecord(raw);
       const kind = String(recipient.kind);
@@ -242,7 +258,6 @@ class Extractor {
         return { ...base, mode: 'POSITION', position: this.nameOrLoss(this.positions, step.positionId, 'STEP', step.name, 'positionId') };
       case 'GROUP':
       case 'POOL':
-        if (step.candidates.some((candidate) => candidate.participantType === 'USER')) this.loss('STEP', step.name, ['candidates']);
         return step.assignmentMode === 'GROUP' ? this.group(step, base) : { ...base, mode: 'POOL', poolPositions: this.candidateNames(step, 'POSITION'), poolGroups: this.candidateNames(step, 'GROUP') };
       case 'APPROVER':
       case 'CREATOR':
@@ -366,6 +381,13 @@ class Extractor {
       },
     ];
   }
+}
+
+/** Rich text as the model reads it: its formatting, which the spec has no words for, is a hidden setting of the block. */
+function readableText(html: string | null): string | null {
+  if (html === null) return null;
+  const plain = plainTextOf(html);
+  return plain === undefined ? plainTextApproximation(html) : plain;
 }
 
 /** START first, then each block by its distance from it (as the flow reads), the unreachable ones last: a stable order. */

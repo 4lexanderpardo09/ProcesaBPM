@@ -38,6 +38,6 @@ export class DraftTaskReader {
     const { catalog, extraction } = await this.drafts.read(tx, tenantId, input.versionId);
     if (extraction.kind !== 'spec') return { kind: 'failed', errorCode: 'AI_DRAFT_NOT_REVISABLE' };
     const history = await this.work.pastRequests(tx, tenantId, input.versionId, { id: jobId, createdAt: input.createdAt }, PAST_TURN_LIMITS.turns);
-    return { kind: 'ready', input, catalog, task: { kind: 'revise', message: input.description, current: extraction.spec, history } };
+    return { kind: 'ready', input, catalog, task: { kind: 'revise', message: input.description, basis: extraction.basis, history } };
   }
 }
