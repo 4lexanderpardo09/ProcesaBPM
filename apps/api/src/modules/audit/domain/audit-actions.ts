@@ -35,6 +35,7 @@ export const AUDIT_ACTIONS = [
   'workflow.updated',
   'workflow.version_published',
   'workflow.ai_draft_requested',
+  'workflow.ai_draft_cancelled',
   'calculator.config_updated',
   'calculator.config_removed',
   'dataset.created',

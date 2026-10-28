@@ -17,6 +17,7 @@ import { useTestEnvironment } from '../support/test-environment.js';
 useTestEnvironment({ AI_ASSISTANT_AVAILABLE: 'true' });
 
 const USAGE = { promptTokens: 3500, cachedPromptTokens: 100, completionTokens: 9000, reasoningTokens: 6500 };
+const DESCRIPTION = 'El asesor pide un anticipo de viaje y el tesorero lo paga.';
 const unique = (label: string) => `${label}-${Math.random().toString(36).slice(2, 8)}`;
 
 /** Answers from a script, like the provider would; it never leaves the test. */
@@ -55,7 +56,7 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     const subcategoryId = (await admin.post('/subcategories', { categoryId: category, name: unique('Sub') }).expect(201)).body.id as string;
     const workflow = (await admin.post('/workflows', { subcategoryId, name: unique('Flow') }).expect(201)).body;
     const base = `/workflows/${workflow.id}/versions/${workflow.versions[0].id}`;
-    const jobId = (await admin.post(`${base}/ai-draft`, { description: 'El asesor pide un anticipo de viaje y el tesorero lo paga.', revision: 0 }).expect(202)).body.jobId as string;
+    const jobId = (await admin.post(`${base}/ai-draft`, { description: DESCRIPTION, revision: 0 }).expect(202)).body.jobId as string;
     return { tenant, admin, base, jobId };
   }
   /** Claims exactly this request (other files' requests are left alone), as claim_due_ai_jobs would. */
@@ -99,23 +100,32 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     expect(await runJob(org, [advanceSpec()])).toBe('succeeded');
 
     const done = await job(org.admin, org.jobId);
-    expect(done).toMatchObject({ status: 'SUCCEEDED', errorCode: null, result: { revision: 1, rounds: 1, errors: 0, assumptions: advanceSpec().assumptions } });
+    expect(done).toMatchObject({ status: 'SUCCEEDED', stage: 'WRITING', round: 1, problems: null, errorCode: null, result: { revision: 1, rounds: 1, errors: 0, assumptions: advanceSpec().assumptions } });
     const version = (await org.admin.get(org.base).expect(200)).body as VersionDetailResponse;
     expect(version.version.revision).toBe(1);
     expect(version.document.steps).toHaveLength(9);
     expect(version.validation).toEqual({ errors: [], warnings: [] });
     expect(await ledger(org.jobId)).toEqual([{ round: 1, outcome: 'OK', prompt_tokens: 3500, completion_tokens: 9000, reasoning_tokens: 6500, error_code: null, model: 'deepseek-v4-pro' }]);
-    expect(await input(org.jobId)).toBeNull();
+    expect(await input(org.jobId)).toEqual({ description: DESCRIPTION });
     expect((await org.admin.get('/settings/ai-assistant').expect(200)).body.today).toEqual({ jobs: 1, tokens: 12_500 });
     expect((await org.admin.get('/settings/ai-assistant/usage').expect(200)).body.recentJobs).toEqual([expect.objectContaining({ id: org.jobId, tokens: 12_500 })]);
     expect(provider.requests[0]!.user).toContain('- Tesorero');
     await org.admin.post(`${org.base}/publish`, {}).expect(200);
   });
 
-  it('corrects a draft with problems in a second round and records both calls', async () => {
+  it('corrects a draft with problems in a second round, showing each stage on the request, and records both calls', async () => {
     const org = await organization();
     const broken = advanceSpec();
-    expect(await runJob(org, [{ ...broken, transitions: broken.transitions.filter((transition) => transition.from !== 'pago') }, advanceSpec()])).toBe('succeeded');
+    const seen: unknown[] = [];
+    const look = async () => {
+      const { stage, round, problems } = await job(org.admin, org.jobId);
+      seen.push({ stage, round, problems: problems === null ? null : problems > 0 });
+    };
+    expect(await runJob(org, [{ ...broken, transitions: broken.transitions.filter((transition) => transition.from !== 'pago') }, advanceSpec()], look)).toBe('succeeded');
+    expect(seen).toEqual([
+      { stage: 'DESIGNING', round: 1, problems: null },
+      { stage: 'DESIGNING', round: 2, problems: null },
+    ]);
     expect((await job(org.admin, org.jobId)).result).toMatchObject({ rounds: 2, errors: 0 });
     expect((await ledger(org.jobId)).map((row) => row.round)).toEqual([1, 2]);
     expect(provider.requests[1]!.user).toContain('PEOPLE_BLOCK_WITHOUT_DECISION at step "pago"');
@@ -142,13 +152,37 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     expect(await job(turnedOff.admin, turnedOff.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'AI_DISABLED' });
     expect(await ledger(turnedOff.jobId)).toEqual([]);
     expect(provider.requests).toEqual([]);
-    expect(await input(turnedOff.jobId)).toBeNull();
+    expect(await input(turnedOff.jobId)).toEqual({ description: DESCRIPTION });
+  });
+
+  it('stops a request cancelled while its call was in flight: the call stays in the ledger, the draft and the result do not change', async () => {
+    const org = await organization();
+    const broken = advanceSpec();
+    const cancel = async () => {
+      await org.admin.post(`/ai-jobs/${org.jobId}/cancel`, {}).expect(200);
+    };
+    expect(await runJob(org, [{ ...broken, transitions: broken.transitions.filter((transition) => transition.from !== 'pago') }, advanceSpec()], cancel)).toBe('interrupted');
+    expect(await job(org.admin, org.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'CANCELLED', result: null, stage: 'DESIGNING', round: 1 });
+    expect(await ledger(org.jobId)).toHaveLength(1);
+    expect(provider.requests).toHaveLength(1);
+    expect(((await org.admin.get(org.base).expect(200)).body as VersionDetailResponse).version.revision).toBe(0);
+  });
+
+  it('does not write the draft of a request cancelled during its last call', async () => {
+    const org = await organization();
+    const cancel = async () => {
+      await org.admin.post(`/ai-jobs/${org.jobId}/cancel`, {}).expect(200);
+    };
+    expect(await runJob(org, [advanceSpec()], cancel)).toBe('interrupted');
+    expect(await job(org.admin, org.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'CANCELLED', result: null });
+    expect(await ledger(org.jobId)).toHaveLength(1);
+    expect(((await org.admin.get(org.base).expect(200)).body as VersionDetailResponse).version.revision).toBe(0);
   });
 
   it('records a paid call that was in flight when the request expired, and leaves the draft alone', async () => {
     const org = await organization();
     const expire = async () => {
-      await db.owner.query(`UPDATE ai_jobs SET status = 'FAILED', error_code = 'LEASE_EXPIRED', claim_token = NULL, lease_until = NULL, input = NULL, completed_at = now() WHERE id = $1`, [org.jobId]);
+      await db.owner.query(`UPDATE ai_jobs SET status = 'FAILED', error_code = 'LEASE_EXPIRED', claim_token = NULL, lease_until = NULL, completed_at = now() WHERE id = $1`, [org.jobId]);
     };
     expect(await runJob(org, [advanceSpec()], expire)).toBe('interrupted');
     expect(await job(org.admin, org.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'LEASE_EXPIRED' });

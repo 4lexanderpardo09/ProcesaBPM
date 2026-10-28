@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { AiJobStage } from '@procesabpm/shared';
 import type { CrossTenantTransaction, TenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 
 export interface AiJobClaim {
@@ -7,6 +8,12 @@ export interface AiJobClaim {
   /** Presented by every later call: a worker whose lease expired cannot touch what the next owner does. */
   readonly claimToken: string;
   readonly attempt: number;
+}
+
+export interface AiJobProgress {
+  readonly stage: AiJobStage;
+  readonly round?: number;
+  readonly problems?: number;
 }
 
 /** The worker side of ai_jobs: only through its functions (executable by app_worker only, docs/base-de-datos.md §8.32). */
@@ -22,6 +29,13 @@ export class AiJobClaimsRepository {
   async renew(tx: CrossTenantTransaction, claim: AiJobClaim, leaseMinutes: number): Promise<boolean> {
     const [row] = await tx.$queryRaw<Array<{ ok: boolean }>>`
       SELECT renew_ai_job_lease(${claim.tenantId}::uuid, ${claim.jobId}::uuid, ${claim.claimToken}::uuid, make_interval(mins => ${leaseMinutes}::int)) AS ok`;
+    return row?.ok === true;
+  }
+
+  /** What the claimed attempt is doing now (the builder's panel shows it). `false`: not ours any more, stop. */
+  async setStage(tx: CrossTenantTransaction, claim: AiJobClaim, progress: AiJobProgress): Promise<boolean> {
+    const [row] = await tx.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT set_ai_job_stage(${claim.tenantId}::uuid, ${claim.jobId}::uuid, ${claim.claimToken}::uuid, ${progress.stage}::ai_job_stage, ${progress.round ?? null}::int, ${progress.problems ?? null}::int) AS ok`;
     return row?.ok === true;
   }
 

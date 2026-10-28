@@ -1,5 +1,16 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
-import { type AiAvailabilityQuery, type AiDraftRequested, aiAvailabilityQuerySchema, type AiAvailabilityResponse, type AiJobResponse, type RequestAiDraft, requestAiDraftSchema } from '@procesabpm/shared';
+import {
+  type AiAvailabilityQuery,
+  type AiDraftRequested,
+  aiAvailabilityQuerySchema,
+  type AiAvailabilityResponse,
+  type AiJobHistoryQuery,
+  aiJobHistoryQuerySchema,
+  type AiJobHistoryResponse,
+  type AiJobResponse,
+  type RequestAiDraft,
+  requestAiDraftSchema,
+} from '@procesabpm/shared';
 import { Audited } from '../../../common/audit/audited.decorator.js';
 import { CurrentPrincipal, type Principal } from '../../../common/auth/principal.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
@@ -28,6 +39,25 @@ export class AiDraftsController {
     @Body(new ZodValidationPipe(requestAiDraftSchema)) body: RequestAiDraft,
   ): Promise<AiDraftRequested> {
     return this.drafts.request(principal, workflowId, versionId, body);
+  }
+
+  @Get('workflows/:workflowId/versions/:versionId/ai-jobs')
+  @RequirePermission('update', 'Workflow')
+  history(
+    @CurrentPrincipal() principal: Principal,
+    @Param('workflowId', ParseUUIDPipe) workflowId: string,
+    @Param('versionId', ParseUUIDPipe) versionId: string,
+    @Query(new ZodValidationPipe(aiJobHistoryQuerySchema)) query: AiJobHistoryQuery,
+  ): Promise<AiJobHistoryResponse> {
+    return this.drafts.history(principal, workflowId, versionId, query);
+  }
+
+  @Post('ai-jobs/:jobId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @Audited('workflow.ai_draft_cancelled')
+  @RequirePermission('update', 'Workflow')
+  cancel(@CurrentPrincipal() principal: Principal, @Param('jobId', ParseUUIDPipe) jobId: string): Promise<AiJobResponse> {
+    return this.drafts.cancel(principal, jobId);
   }
 
   @Get('ai-jobs/:jobId')
