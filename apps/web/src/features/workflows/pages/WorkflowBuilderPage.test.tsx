@@ -694,10 +694,10 @@ describe('«Crear con IA» in the builder', () => {
     const answer = panel();
     expect(await within(answer).findByText('Cambio aplicado en 1 ronda.')).toBeInTheDocument();
     expect(within(answer).getByText('Lo que cambió (1)')).toBeVisible();
-    // The builder arranged the revised draft: the next message waits until that is saved.
-    expect(within(answer).getByText(/Guarda los cambios antes de escribirle a la IA/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    // The builder arranged the revised draft and saved that on its own: the next message can go right away.
     await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
+    expect(within(answer).queryByText(/Guarda los cambios antes de escribirle a la IA/)).not.toBeInTheDocument();
+    expect(fake.callsTo(`${url}/graph`)).toHaveLength(1);
 
     await userEvent.click(within(answer).getByRole('button', { name: 'Empezar de cero' }));
     expect(within(answer).getByRole('textbox', { name: /Descripción del proceso/ })).toBeInTheDocument();
