@@ -39,6 +39,44 @@ describe('SettingsPage', () => {
     expect(await screen.findByText('3 personas activas todavía no la tienen configurada.')).toBeInTheDocument();
   });
 
+  it('turns the AI assistant on only after the transfer notice is accepted, and shows what it costs', async () => {
+    let enabled = false;
+    const settings = () => ({ available: true, enabled, noticeVersion: 1, limits: { jobsPerDay: 10, tokensPerDay: 1_000_000 }, today: { jobs: 2, tokens: 24_500 } });
+    const { fake } = renderRoute('/settings/ai', {
+      handlers: {
+        '/settings/ai-assistant': (options) => {
+          if (options.method === 'PUT') enabled = (options.body as { enabled: boolean }).enabled;
+          return settings();
+        },
+        '/settings/ai-assistant/usage': () => ({
+          days: [{ date: '2026-10-27', model: 'deepseek-v4-pro', calls: 3, promptTokens: 10_500, completionTokens: 14_000, reasoningTokens: 9_000 }],
+          recentJobs: [{ id: id(9), status: 'SUCCEEDED', errorCode: null, requesterName: 'Ana Torres', model: 'deepseek-v4-pro', tokens: 24_500, createdAt: at, completedAt: at }],
+        }),
+      },
+    });
+
+    expect(await screen.findByText(/servidores en China/)).toBeInTheDocument();
+    const turnOn = screen.getByRole('button', { name: 'Activar el asistente' });
+    expect(turnOn).toBeDisabled();
+    await userEvent.click(screen.getByRole('checkbox', { name: /Leí este aviso/ }));
+    await userEvent.click(turnOn);
+    await vi.waitFor(() => expect(fake.calls.find((call) => call.path === '/settings/ai-assistant' && call.options.method === 'PUT')?.options.body).toEqual({ enabled: true, acceptedNoticeVersion: 1 }));
+    expect(await screen.findByText('Hoy: 2 de 10 solicitudes · 24.500 de 1.000.000 tokens.')).toBeInTheDocument();
+    expect(screen.getByText('Activado')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Últimas solicitudes' })).toHaveTextContent('Ana Torres');
+    expect(screen.getByRole('table', { name: 'Consumo de los últimos 30 días' })).toHaveTextContent('deepseek-v4-pro');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Desactivar el asistente' }));
+    await vi.waitFor(() => expect(fake.calls.filter((call) => call.options.method === 'PUT').at(-1)?.options.body).toEqual({ enabled: false }));
+    expect(await screen.findByRole('button', { name: 'Activar el asistente' })).toBeDisabled();
+  });
+
+  it('says the AI assistant is not offered when the platform has it off', async () => {
+    renderRoute('/settings/ai', { handlers: { '/settings/ai-assistant': () => ({ available: false, enabled: false, noticeVersion: 1, limits: { jobsPerDay: 10, tokensPerDay: 1_000_000 }, today: { jobs: 0, tokens: 0 } }) } });
+    expect(await screen.findByText('El asistente de IA todavía no está disponible en la plataforma.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Activar el asistente' })).not.toBeInTheDocument();
+  });
+
   it('names its own rate tables and slots, checks them first, and turns the calculator off', async () => {
     let config: Record<string, unknown> | null = { tables: [{ code: 'COMIDAS', name: 'Comidas', slots: [{ name: 'Desayuno', from: '06:00', to: '09:00', amount: '15000' }] }] };
     const calculator = () => ({ code: 'TIME_SLOTS', parameters: [{ name: 'departure', type: 'DATETIME', required: true }, { name: 'return', type: 'DATETIME', required: true }], output: 'CURRENCY', configured: config !== null, config });
@@ -151,7 +189,7 @@ describe('SettingsPage', () => {
       },
     });
 
-    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad', 'Organización', 'Calculadoras']);
+    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad', 'Organización', 'Calculadoras', 'Asistente de IA']);
     await userEvent.click(await screen.findByRole('checkbox', { name: /Exigir verificación en dos pasos/ }));
     expect(await screen.findByText('Tu rol no puede hacer este cambio.')).toBeInTheDocument();
   });

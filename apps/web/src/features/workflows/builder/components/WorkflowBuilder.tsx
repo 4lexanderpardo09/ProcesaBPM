@@ -1,4 +1,4 @@
-import type { StepType, WorkflowProblem } from '@procesabpm/shared';
+import type { AiDraftResult, StepType, WorkflowProblem } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useReactFlow } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,6 +18,8 @@ import { layeredPositions, namedRecords } from '../lib/canvas-extras';
 import { useRecordNames } from '../hooks/use-record-names';
 import { problemsByElement, problemTarget } from '../lib/problems';
 import { serverOnlyProblems, withServerProblems } from '../lib/server-problems';
+import { useAiDraft } from '../hooks/use-ai-draft';
+import { AiDraftDialog } from './AiDraftDialog';
 import { AmountRulesDialog } from './AmountRulesDialog';
 import { BlockPalette } from './BlockPalette';
 import { BuilderCanvas } from './BuilderCanvas';
@@ -73,7 +75,7 @@ function saveView(view: 'canvas' | 'list') {
  * The builder of one version: palette, canvas and inspector, with the draft's problems always in view. A published or
  * archived version, or a person who may only read, gets the same screen without the editing.
  */
-export function WorkflowBuilder({ detail, onPublished }: { readonly detail: VersionDetail; readonly onPublished: (number: number) => void }) {
+export function WorkflowBuilder({ detail, onPublished, onAiDraft, arrangeOnOpen = false }: { readonly detail: VersionDetail; readonly onPublished: (number: number) => void; readonly onAiDraft: (result: AiDraftResult) => void; readonly arrangeOnOpen?: boolean }) {
   const { t } = useTranslation('workflows');
   const client = useApiClient();
   const queryClient = useQueryClient();
@@ -93,6 +95,8 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
   const [panelOpen, setPanelOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [amountRulesOpen, setAmountRulesOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const ai = useAiDraft(detail.workflow.id, detail.version.id, !readOnly, onAiDraft);
   const [announcement, setAnnouncement] = useState('');
   const [view, setView] = useState<'canvas' | 'list'>(() => readView());
   const tabsKey = `procesabpm.builder.tabs.${detail.version.id}`;
@@ -134,6 +138,11 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
     setAnnouncement(t('builder.canvas.arranged'));
     window.setTimeout(() => void flow.fitView({ maxZoom: 1, padding: 0.12, duration: 300 }), 0);
   };
+  // A draft the AI just wrote comes laid out in plain columns: «Ordenar» once, left as an unsaved change.
+  useEffect(() => {
+    if (arrangeOnOpen && !readOnly) arrange();
+    // Only when the builder opens.
+  }, []);
   const navigate = useNavigate();
   // From a version that no longer changes, the way on is the draft: open it, or make one from this version.
   const offerDraft = status !== 'DRAFT' && can('update', 'Workflow');
@@ -290,6 +299,11 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
             ) : (
               <ButtonLink to={workflowVersionPath(detail.workflow.id, draft.id)}>{t('builder.openDraft', { number: draft.number })}</ButtonLink>
             ))}
+          {!readOnly && ai.available && (
+            <Button disabled={dirty} title={dirty ? t('builder.ai.saveFirst') : undefined} onClick={() => setAiOpen(true)}>
+              {t('builder.ai.open')}
+            </Button>
+          )}
           {!readOnly && (
             <>
               <Button disabled={!dirty || save.isPending || content.pending} onClick={() => save.mutate()}>
@@ -453,6 +467,7 @@ export function WorkflowBuilder({ detail, onPublished }: { readonly detail: Vers
           }}
         />
       )}
+      {aiOpen && <AiDraftDialog ai={ai} revision={builder.revision} hasContent={doc.steps.length > 2} onClose={() => setAiOpen(false)} />}
       {amountRulesOpen && (
         <AmountRulesDialog
           doc={doc}

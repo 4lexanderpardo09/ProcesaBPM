@@ -27,6 +27,11 @@ export const MAX_POST_COMMIT_EFFECTS_PER_EVENT = 2;
 /** The effects run in the event's lane, after its commit: their time counts against the lease too. */
 const POST_COMMIT_BUDGET_MS = MAX_POST_COMMIT_EFFECTS_PER_EVENT * SIGNAL_PUBLISH_TIMEOUT_MS;
 
+/** How long a worker holds an AI request between heartbeats (renewed before every call to the provider). */
+export const AI_JOB_LEASE_MS = 10 * 60_000;
+/** A call must leave a minute of the lease to record its result. */
+const AI_MAX_REQUEST_TIMEOUT_MS = AI_JOB_LEASE_MS - 60_000;
+
 const settingsSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']),
   /** Where the web app lives: the links in e-mails are built on it. */
@@ -56,6 +61,21 @@ const settingsSchema = z.object({
   DATA_EXPORT_MAX_RUN_MS: positiveInteger(4 * HOUR_MS, 24 * HOUR_MS),
   /** Size cap of one export archive (decision B16: 100 GiB); past it the export fails (EXPORT_TOO_LARGE). */
   DATA_EXPORT_MAX_BYTES: positiveInteger(100 * GIB, MAX_MULTIPART_OBJECT_BYTES),
+  /** The AI assistant's provider (an OpenAI-compatible chat API). Without a key, its requests fail AI_NOT_CONFIGURED. */
+  AI_PROVIDER_NAME: z.string().regex(/^[a-z0-9-]{1,40}$/).default('deepseek'),
+  AI_BASE_URL: httpUrl.default('https://api.deepseek.com/beta'),
+  /** Empty means not configured, so the compose file can pass it through unset. */
+  AI_API_KEY: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(20).optional()),
+  /** The model that designs workflows (a reasoning model: slow, but it gets the structure right). */
+  AI_REASONING_MODEL: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/).default('deepseek-v4-pro'),
+  /** Strict tool calling (the provider enforces the JSON Schema of the answer). */
+  AI_STRICT_TOOLS: boolean(true),
+  /** One call to the provider; must end inside the job's lease. */
+  AI_REQUEST_TIMEOUT_MS: positiveInteger(300_000, AI_MAX_REQUEST_TIMEOUT_MS),
+  /** Calls per request: the first draft plus the corrections. */
+  AI_MAX_ROUNDS: positiveInteger(3, 4),
+  AI_POLLING_ENABLED: boolean(true),
+  AI_POLL_INTERVAL_MS: positiveInteger(3_000, 60_000),
 });
 
 export type WorkerSettings = Omit<z.infer<typeof settingsSchema>, 'NODE_ENV'>;
@@ -82,6 +102,8 @@ export function loadWorkerSettings(env: Readonly<Record<string, string | undefin
     if (waves * (data.OUTBOX_TX_TIMEOUT_MS + effects) > MAX_BATCH_PROCESSING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS (plus the realtime signals after commit) would outlive the claim lease');
     else if (waves * (data.OUTBOX_TX_TIMEOUT_MS + data.PDF_RENDER_TIMEOUT_MS + effects) > MAX_BATCH_WITH_RENDERING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS plus PDF_RENDER_TIMEOUT_MS (plus the realtime signals after commit) would outlive the claim lease');
     if ((data.SMTP_USER === undefined) !== (data.SMTP_PASSWORD === undefined)) problems.push('SMTP_USER and SMTP_PASSWORD go together');
+    if (data.NODE_ENV === 'production' && !data.AI_BASE_URL.startsWith('https://')) problems.push('AI_BASE_URL must be https in production');
+    if (data.AI_API_KEY !== undefined && /change-me/i.test(data.AI_API_KEY)) problems.push('AI_API_KEY still has the example value');
   }
   if (problems.length > 0 || !result.success) throw new ConfigError(problems);
   const { NODE_ENV: _env, ...settings } = result.data;

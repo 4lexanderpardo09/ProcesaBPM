@@ -7,7 +7,7 @@ export const ORGANIZATION_READERS = {
   tenants: {
     start: [NIL_UUID],
     page: (tenantId, [id], limit) => Prisma.sql`
-      SELECT id, slug, name, status, country_code, time_zone, primary_color, logo_file_id, mfa_required,
+      SELECT id, slug, name, status, country_code, time_zone, primary_color, logo_file_id, mfa_required, ai_assistant_enabled,
              cancelled_at, deletion_requested_at, purge_after, created_at, updated_at
       FROM tenants WHERE id = ${tenantId}::uuid AND id > ${id}::uuid
       ORDER BY id LIMIT ${limit}`,

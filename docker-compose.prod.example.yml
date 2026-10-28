@@ -115,6 +115,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?}
       MFA_ENCRYPTION_KEYS: ${MFA_ENCRYPTION_KEYS:?}   # only the API decrypts the MFA secrets; the worker never gets it
       REALTIME_ALLOWED_ORIGINS: ${REALTIME_ALLOWED_ORIGINS:-${WEB_BASE_URL:?}}   # origins allowed to open a WebSocket (exact, https in production)
+      AI_ASSISTANT_AVAILABLE: ${AI_ASSISTANT_AVAILABLE:-false}   # offers «Crear con IA»; each organization still turns it on
+      AI_REASONING_MODEL: ${AI_REASONING_MODEL:-deepseek-v4-pro}
+      AI_DAILY_JOBS_PER_TENANT: ${AI_DAILY_JOBS_PER_TENANT:-10}
+      AI_DAILY_TOKENS_PER_TENANT: ${AI_DAILY_TOKENS_PER_TENANT:-1000000}
       # STORAGE_PUBLIC_ENDPOINT: https://files.example.com   # only when browsers reach the storage at another address
     depends_on:
       seed: { condition: service_completed_successfully }
@@ -145,6 +149,9 @@ services:
       SMTP_SECURE: ${SMTP_SECURE:-false}
       # SMTP_USER: ...        # set both or none: an empty value is rejected
       # SMTP_PASSWORD: ...
+      AI_API_KEY: ${AI_API_KEY:-}   # only the worker calls the AI provider; empty: requests end AI_NOT_CONFIGURED
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com/beta}
+      AI_REASONING_MODEL: ${AI_REASONING_MODEL:-deepseek-v4-pro}
     depends_on:
       seed: { condition: service_completed_successfully }
     # A batch of events in flight finishes (or is released) on SIGTERM; give it longer than OUTBOX_TX_TIMEOUT_MS.

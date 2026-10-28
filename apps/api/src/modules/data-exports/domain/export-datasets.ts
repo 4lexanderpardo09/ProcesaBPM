@@ -41,8 +41,8 @@ export const EXPORT_DATASETS = [
   dataset({
     name: 'tenants',
     group: 'organization',
-    sources: { tenants: ['id', 'slug', 'name', 'status', 'country_code', 'time_zone', 'primary_color', 'logo_file_id', 'mfa_required', 'cancelled_at', 'deletion_requested_at', 'purge_after', 'created_at', 'updated_at'] },
-    columns: ['id', 'slug', 'name', 'status', 'country_code', 'time_zone', 'primary_color', 'logo_file_id', 'mfa_required', 'cancelled_at', 'deletion_requested_at', 'purge_after', 'created_at', 'updated_at'],
+    sources: { tenants: ['id', 'slug', 'name', 'status', 'country_code', 'time_zone', 'primary_color', 'logo_file_id', 'mfa_required', 'ai_assistant_enabled', 'cancelled_at', 'deletion_requested_at', 'purge_after', 'created_at', 'updated_at'] },
+    columns: ['id', 'slug', 'name', 'status', 'country_code', 'time_zone', 'primary_color', 'logo_file_id', 'mfa_required', 'ai_assistant_enabled', 'cancelled_at', 'deletion_requested_at', 'purge_after', 'created_at', 'updated_at'],
     key: ['id'],
     csv: false,
   }),
@@ -152,6 +152,8 @@ export const EXPORT_EXCLUDED_TABLES: Readonly<Record<string, string>> = {
   export_cutoffs: 'Scheduled flat-file exports: version 2.',
   export_lines: 'Scheduled flat-file exports: version 2.',
   tenant_data_exports: 'The export requests themselves (job state, storage keys).',
+  ai_jobs: 'Requests to the AI assistant (job state); what they produced is in the workflow versions.',
+  ai_usage: 'Token accounting of the AI assistant, like the storage accounting of the plan.',
   platform_announcement_tenants: 'Audience of platform announcements: platform data.',
 };
 

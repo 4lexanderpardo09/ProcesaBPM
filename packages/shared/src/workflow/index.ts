@@ -10,3 +10,4 @@ export * from './remap.js';
 export * from './transition-condition.js';
 export * from './validate-workflow-graph.js';
 export * from './engine-support.js';
+export * from './draft-spec/index.js';

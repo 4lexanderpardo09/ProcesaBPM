@@ -3,7 +3,6 @@ import {
   InvalidReferenceError,
   InvalidStateError,
   NotFoundError,
-  parseBlockConfig,
   StaleRevisionError,
   type SaveGraphRequest,
   type SaveGraphResponse,
@@ -12,12 +11,12 @@ import {
   type WorkflowValidation,
 } from '@procesabpm/shared';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
-import { sanitizeOptionalRichText } from '../../../infrastructure/text/rich-text.js';
 import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { VersionDocumentRepository } from '../data/version-document.repository.js';
 import { WorkflowRepository } from '../data/workflow.repository.js';
 import { countNewRefs, resolveReferences } from '../domain/graph-ids.js';
 import { DraftLock } from './draft-lock.js';
+import { normalizeStepContent } from './step-normalizer.js';
 import { ReferenceValidator, validateDocument, withProblems } from './reference-validator.js';
 
 type StepRow = Omit<StepDocument, 'candidates' | 'initiators' | 'slaOverrides' | 'signers' | 'files'>;
@@ -59,10 +58,8 @@ export class WorkflowGraphService {
       const steps: StepRow[] = request.steps.map((step) => ({
         ...step,
         id: stepIds.get(step.id)!,
-        // The instructions are shown on the ticket and copied into answers: only the formatting the API allows is kept.
-        description: sanitizeOptionalRichText(step.description ?? undefined),
+        ...normalizeStepContent(step),
         sameAssigneeStepId: step.sameAssigneeStepId === null ? null : (stepIds.get(step.sameAssigneeStepId) ?? null),
-        config: this.normalizedConfig(step),
       }));
       const transitions: TransitionDocument[] = request.transitions.map((transition) => ({
         ...transition,
@@ -107,12 +104,6 @@ export class WorkflowGraphService {
     const id = stepIds.get(ref);
     if (id === undefined) throw new InvalidReferenceError('A transition joins a block that is not in the request');
     return id;
-  }
-
-  /** The normalized config (defaults applied) when valid; as sent otherwise, for the validator to report. */
-  private normalizedConfig(step: SaveGraphRequest['steps'][number]): Record<string, unknown> {
-    const parsed = parseBlockConfig(step.type, step.config);
-    return parsed.valid ? parsed.config : step.config;
   }
 
   private get tenantId(): string {

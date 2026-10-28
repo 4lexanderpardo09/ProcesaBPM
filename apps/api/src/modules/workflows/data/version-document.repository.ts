@@ -254,6 +254,13 @@ export class VersionDocumentRepository {
     await this.insertAmountRules(tx, tenantId, versionId, doc.amountRules);
   }
 
+  /** Empties a draft: transitions and amount rules first (they point at steps), then the steps with everything that hangs off them. */
+  async deleteContent(tx: TenantTransaction, tenantId: string, versionId: string): Promise<void> {
+    await tx.transition.deleteMany({ where: { tenantId, versionId } });
+    await tx.amountRule.deleteMany({ where: { tenantId, versionId } });
+    await tx.step.deleteMany({ where: { tenantId, versionId } });
+  }
+
   stepIdsOf(tx: TenantTransaction, tenantId: string, versionId: string): Promise<Array<{ id: string }>> {
     return tx.step.findMany({ where: { tenantId, versionId }, select: { id: true } });
   }

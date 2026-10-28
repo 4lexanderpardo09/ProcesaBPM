@@ -1,10 +1,12 @@
-import { auditLogPageSchema, tenantSecuritySettingsResponseSchema, type TenantSecuritySettings } from '@procesabpm/shared';
+import { aiAssistantSettingsResponseSchema, aiUsageResponseSchema, auditLogPageSchema, tenantSecuritySettingsResponseSchema, type TenantSecuritySettings, type UpdateAiAssistantSettings } from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
 
 export const settingsQueryKeys = {
   security: ['settings', 'security'] as const,
+  aiAssistant: ['settings', 'ai-assistant'] as const,
+  aiUsage: ['settings', 'ai-assistant', 'usage'] as const,
   support: ['settings', 'support-access'] as const,
   storage: ['settings', 'storage'] as const,
   calculators: ['settings', 'calculators'] as const,
@@ -18,6 +20,18 @@ export function securityQueryOptions(client: HttpClient) {
 
 export function saveSecurity(client: HttpClient, body: TenantSecuritySettings) {
   return client.request('/settings/security', { method: 'PUT', body, schema: tenantSecuritySettingsResponseSchema });
+}
+
+export function aiAssistantQueryOptions(client: HttpClient) {
+  return queryOptions({ queryKey: settingsQueryKeys.aiAssistant, queryFn: ({ signal }) => client.request('/settings/ai-assistant', { schema: aiAssistantSettingsResponseSchema, signal }) });
+}
+
+export function saveAiAssistant(client: HttpClient, body: UpdateAiAssistantSettings) {
+  return client.request('/settings/ai-assistant', { method: 'PUT', body, schema: aiAssistantSettingsResponseSchema });
+}
+
+export function aiUsageQueryOptions(client: HttpClient) {
+  return queryOptions({ queryKey: settingsQueryKeys.aiUsage, queryFn: ({ signal }) => client.request('/settings/ai-assistant/usage', { schema: aiUsageResponseSchema, signal }) });
 }
 
 const person = z.object({ userId: z.string(), name: z.string() });
