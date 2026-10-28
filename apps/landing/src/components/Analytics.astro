@@ -1,0 +1,28 @@
+---
+/**
+ * Google Analytics 4, only with the visitor's consent: nothing from Google loads until they accept, and the choice is
+ * remembered in this browser. Without PUBLIC_GA_ID (set at build time) the site has no analytics and no banner.
+ */
+const measurementId = import.meta.env.PUBLIC_GA_ID ?? '';
+---
+
+{
+  measurementId !== '' && (
+    <>
+      <div class="consent" id="consent" data-ga={measurementId} role="dialog" aria-label="Cookies de medición" hidden>
+        <p>
+          Usamos Google Analytics para saber cuántas personas visitan el sitio y qué páginas leen. ¿Lo permites?{' '}
+          <a href="/privacidad#medicion">Más información</a>
+        </p>
+        <div class="consent-actions">
+          <button class="btn btn-line" type="button" data-choice="denied">Rechazar</button>
+          <button class="btn btn-primary" type="button" data-choice="granted">Aceptar</button>
+        </div>
+      </div>
+      <script>
+        import { startAnalytics } from '../scripts/analytics';
+        startAnalytics();
+      </script>
+    </>
+  )
+}

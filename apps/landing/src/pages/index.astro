@@ -4,13 +4,18 @@ import AiAssistant from '../sections/AiAssistant.astro';
 import Builder from '../sections/Builder.astro';
 import Companies from '../sections/Companies.astro';
 import Contact from '../sections/Contact.astro';
+import Faq from '../sections/Faq.astro';
 import Hero from '../sections/Hero.astro';
 import Journey from '../sections/Journey.astro';
 import Phones from '../sections/Phones.astro';
 import RuleDemo from '../sections/RuleDemo.astro';
+import { FAQ } from '../data/faq';
+import { faqLd, softwareLd, websiteLd } from '../data/structured-data';
+
+const site = Astro.site ?? new URL('https://procesabpm.com');
 ---
 
-<Base description="ProcesaBPM lleva cada solicitud de tu empresa por los pasos que tú dibujas: anticipos, compras, ingresos de personal. Con responsable, plazo y firma en cada paso.">
+<Base structuredData={[websiteLd(site), softwareLd(site), faqLd(FAQ)]} description="ProcesaBPM lleva cada solicitud de tu empresa por los pasos que tú dibujas: anticipos, compras, ingresos de personal. Con responsable, plazo y firma en cada paso.">
   <Hero />
   <main>
     <Journey />
@@ -19,6 +24,7 @@ import RuleDemo from '../sections/RuleDemo.astro';
     <AiAssistant />
     <Phones />
     <Companies />
+    <Faq />
   </main>
   <Contact />
 </Base>

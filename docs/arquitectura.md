@@ -1079,4 +1079,12 @@ La página pública de ProcesaBPM y su blog. Es un sitio estático hecho con Ast
   - host propio en `deploy/Caddyfile.example`;
   - `LANDING_SITE_URL` fija la URL canónica en el build. Mientras no haya dominio, se usa un nombre de sslip.io del servidor de pruebas.
 - **Pruebas:** `e2e/landing.spec.ts` con Playwright en escritorio y teléfono (sin scroll lateral, la regla por monto, menos movimiento, el formulario contra un API simulado, blog y aviso de privacidad).
+- **Buscadores y asistentes de IA (2026-10-28, `feat/landing-seo`):** dominio `procesabpm.com` (la app está en `app.procesabpm.com`).
+  - **Direcciones:** una URL canónica por página (`/` y `/blog`, nunca `/index.html` ni `.html`, `scripts/canonical.ts`). `@astrojs/sitemap` genera `sitemap-index.xml` sin la 404.
+  - **`robots.txt`** (`pages/robots.txt.ts`): deja leer todo menos `/api/`; nombra a Google, Bing y los rastreadores de IA (GPTBot, OAI-SearchBot, ClaudeBot, PerplexityBot, Google-Extended…) y apunta al sitemap.
+  - **`llms.txt`** (llmstxt.org): resumen del producto en Markdown, armado con las mismas preguntas frecuentes y el mismo blog que las páginas.
+  - **Datos estructurados** (schema.org, `data/structured-data.ts`): Organization en todas las páginas; WebSite, SoftwareApplication y FAQPage en el inicio; BlogPosting en cada artículo. Solo hechos verdaderos: sin precios, calificaciones ni clientes inventados.
+  - **Para compartir:** Open Graph y Twitter con `og.png` de 1200×630.
+  - **Preguntas frecuentes:** sección nueva en el inicio, con datos en `data/faq.ts`.
+- **Google Analytics 4:** con `PUBLIC_GA_ID` (argumento del build de la imagen `landing`, desde el `.env`). Nada de Google se carga hasta que la persona acepta en el aviso; la elección queda en `localStorage` (`procesabpm.analytics`). Sin el ID no hay medición ni aviso. El aviso de privacidad suma «Medición de visitas» y pasa a la versión 2 (`DEMO_PRIVACY_NOTICE_VERSION`).
 

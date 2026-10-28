@@ -139,6 +139,8 @@ services:
       target: landing
       args:
         LANDING_SITE_URL: ${LANDING_SITE_URL:-}
+        # Google Analytics 4 (G-…); empty: no analytics and no consent banner.
+        PUBLIC_GA_ID: ${PUBLIC_GA_ID:-}
     <<: *hardening
     ports: ['127.0.0.1:8081:8080']
 
