@@ -6,6 +6,7 @@ import {
   failedOutboxEventSchema,
   type ListPlatformAuditQuery,
   platformAuditEntrySchema,
+  platformAiUsageResponseSchema,
   platformMetricsSchema,
   regeneratedHolidaysSchema,
   type RequestTenantDeletion,
@@ -43,6 +44,7 @@ export const platformQueryKeys = {
   holidays: (code: string, year: number) => [...platformQueryKeys.all, 'holidays', code, year] as const,
   failedEvents: (scope: string, page: number) => [...platformQueryKeys.all, 'failed-events', scope, page] as const,
   metrics: () => [...platformQueryKeys.all, 'metrics'] as const,
+  aiUsage: (from: string, to: string) => [...platformQueryKeys.all, 'ai-usage', from, to] as const,
   audit: (filters: Partial<ListPlatformAuditQuery>) => [...platformQueryKeys.all, 'audit', filters] as const,
 };
 
@@ -168,6 +170,14 @@ export function retryEvent(client: HttpClient, event: { readonly scope: 'PLATFOR
 
 export function metricsQueryOptions(client: HttpClient) {
   return queryOptions({ queryKey: platformQueryKeys.metrics(), queryFn: ({ signal }) => client.request('/platform/operations/metrics', { schema: platformMetricsSchema, signal }) });
+}
+
+export function aiUsageQueryOptions(client: HttpClient, from: string, to: string) {
+  return queryOptions({
+    queryKey: platformQueryKeys.aiUsage(from, to),
+    queryFn: ({ signal }) => client.request(`/platform/ai-usage${query({ from, to })}`, { schema: platformAiUsageResponseSchema, signal }),
+    placeholderData: keepPreviousData,
+  });
 }
 
 export function auditQueryOptions(client: HttpClient, filters: Partial<ListPlatformAuditQuery>) {

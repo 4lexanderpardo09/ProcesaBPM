@@ -35,6 +35,7 @@ export const paths = {
   platformAccounts: '/platform/accounts',
   platformCountries: '/platform/countries',
   platformOperations: '/platform/operations',
+  platformAiUsage: '/platform/ai-usage',
   platformAudit: '/platform/audit',
 } as const;
 
