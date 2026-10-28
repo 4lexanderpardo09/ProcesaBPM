@@ -193,7 +193,7 @@ describe('schema conventions', () => {
              has_function_privilege('app_platform', p.oid, 'EXECUTE') AS platform
       FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.prosecdef AND p.proname LIKE 'retention\\_%'
       ORDER BY 1`);
-    expect(rows).toHaveLength(15);
+    expect(rows).toHaveLength(16);
     expect(rows.filter((row) => !row.worker || row.runtime || row.platform)).toEqual([]);
   });
 
