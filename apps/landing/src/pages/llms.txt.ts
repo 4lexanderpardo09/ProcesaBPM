@@ -32,6 +32,9 @@ ${FAQ.map((item) => `### ${item.question}\n${item.answer}`).join('\n\n')}
 - [Blog](${at('/blog')})
 ${articles.map((article) => `- [${article.data.title}](${at(`/blog/${article.id}`)}): ${article.data.description}`).join('\n')}
 - [Aviso de privacidad](${at('/privacidad')})
+- [Política de Tratamiento de la Información](${at('/legal/politica-de-tratamiento')})
+- [Términos y Condiciones del Servicio](${at('/legal/terminos')})
+- [Contrato de transmisión de datos y proveedores](${at('/legal/transmision-de-datos')})
 
 ## Contacto
 Demo: formulario en ${at('/#contacto')} · ${CONTACT_EMAIL}
