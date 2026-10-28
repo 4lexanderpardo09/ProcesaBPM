@@ -128,8 +128,8 @@ describe('retention', () => {
     const moves: Record<AiJobStatus, string> = {
       PENDING: `created_at = ${at}`,
       RUNNING: `status = 'RUNNING', attempts = 1, claim_token = gen_random_uuid(), lease_until = ${at} + interval '10 minutes', created_at = ${at}, started_at = ${at}`,
-      SUCCEEDED: `status = 'SUCCEEDED', attempts = 1, input = NULL, result = '{}', created_at = ${at} - interval '1 minute', started_at = ${at} - interval '1 minute', completed_at = ${at}`,
-      FAILED: `status = 'FAILED', attempts = 1, input = NULL, error_code = 'AI_DRAFT_INVALID', created_at = ${at} - interval '1 minute', started_at = ${at} - interval '1 minute', completed_at = ${at}`,
+      SUCCEEDED: `status = 'SUCCEEDED', attempts = 1, result = '{}', created_at = ${at} - interval '1 minute', started_at = ${at} - interval '1 minute', completed_at = ${at}`,
+      FAILED: `status = 'FAILED', attempts = 1, error_code = 'AI_DRAFT_INVALID', created_at = ${at} - interval '1 minute', started_at = ${at} - interval '1 minute', completed_at = ${at}`,
     };
     await client.query(`UPDATE ai_jobs SET ${moves[status]} WHERE tenant_id = $1 AND id = $2`, [tenant.tenantId, id]);
     return id;
@@ -295,12 +295,27 @@ describe('retention', () => {
       });
     });
 
+    it('ai_jobs: a cancelled request keeps its description for the history, and both go 90 days after it ended', async () => {
+      await inRolledBackTransaction(async (client, asRole) => {
+        const [old, recent] = [await insertAiJob(client, tenantA, 'PENDING', 'now()'), await insertAiJob(client, tenantA, 'PENDING', 'now()')];
+        const cancel = (id: string, completedAt: string) =>
+          client.query(`UPDATE ai_jobs SET status = 'FAILED', error_code = 'CANCELLED', cancelled_by_id = requested_by_id, completed_at = ${completedAt} WHERE id = $1`, [id]);
+        await cancel(old, `now() - interval '90 days 1 second'`);
+        await cancel(recent, `now() - interval '89 days'`);
+        expect((await client.query('SELECT input FROM ai_jobs WHERE id = $1', [recent])).rows[0].input).toEqual({ description: 'd' });
+        await asRole('app_worker');
+        await purge(client, 'retention_purge_ai_jobs');
+        await asRole('owner');
+        expect(await existing(client, 'ai_jobs', [old, recent])).toEqual([recent]);
+      });
+    });
+
     it('ai_usage: deleting a request keeps its ledger rows until their own 13 months pass', async () => {
       await inRolledBackTransaction(async (client, asRole) => {
         const jobId = await insertAiJob(client, tenantA, 'RUNNING', `now() - interval '100 days'`);
         const usage = await insertAiUsage(client, tenantA, jobId, `now() - interval '100 days'`);
         await client.query(
-          `UPDATE ai_jobs SET status = 'FAILED', claim_token = NULL, lease_until = NULL, input = NULL, error_code = 'AI_DRAFT_INVALID', completed_at = now() - interval '100 days' WHERE id = $1`,
+          `UPDATE ai_jobs SET status = 'FAILED', claim_token = NULL, lease_until = NULL, error_code = 'AI_DRAFT_INVALID', completed_at = now() - interval '100 days' WHERE id = $1`,
           [jobId],
         );
         await asRole('app_worker');

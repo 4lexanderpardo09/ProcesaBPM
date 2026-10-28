@@ -100,6 +100,16 @@ enum AiJobStatus {
   @@map("ai_job_status")
 }
 
+/// What a running AI request is doing (docs/base-de-datos.md §8.32): the builder's panel shows it live.
+enum AiJobStage {
+  READING
+  DESIGNING
+  REVIEWING
+  WRITING
+
+  @@map("ai_job_stage")
+}
+
 enum AiCallOutcome {
   OK
   TOOL_NOT_CALLED
@@ -915,7 +925,8 @@ model Membership {
   textTemplates           TextTemplate[]
   textTemplateShares      TextTemplateShare[]
   dataExportsRequested    TenantDataExport[]
-  aiJobsRequested         AiJob[]
+  aiJobsRequested         AiJob[] @relation("AiJobRequestedBy")
+  aiJobsCancelled         AiJob[] @relation("AiJobCancelledBy")
   aiUsage                 AiUsage[]
 
   @@id([tenantId, userId])
@@ -2954,7 +2965,8 @@ model SupportSession {
 // ============================================================================
 
 /// A request to the AI assistant (today: a workflow draft). The API inserts it PENDING; the worker moves it only through
-/// the claim functions. The description is cleared when it ends.
+/// the claim functions, and a member cancels it through cancel_ai_job. The description stays for the draft's history
+/// until retention deletes the request (90 days after it ended).
 model AiJob {
   tenantId         String      @map("tenant_id") @db.Uuid
   id               String      @default(dbgenerated("uuidv7()")) @db.Uuid
@@ -2973,16 +2985,26 @@ model AiJob {
   leaseUntil       DateTime?   @map("lease_until") @db.Timestamptz(3)
   errorCode        String?     @map("error_code")
   result           Json?
+  /// Progress of a running request (set_ai_job_stage); the last one stays when it ends.
+  stage            AiJobStage?
+  round            Int?
+  problems         Int?
+  /// Who cancelled it (error_code CANCELLED).
+  cancelledById    String?     @map("cancelled_by_id") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   startedAt        DateTime?   @map("started_at") @db.Timestamptz(3)
   completedAt      DateTime?   @map("completed_at") @db.Timestamptz(3)
 
   tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  requestedBy Membership @relation(fields: [tenantId, requestedById], references: [tenantId, userId], onDelete: NoAction)
+  requestedBy Membership  @relation("AiJobRequestedBy", fields: [tenantId, requestedById], references: [tenantId, userId], onDelete: NoAction)
+  cancelledBy Membership? @relation("AiJobCancelledBy", fields: [tenantId, cancelledById], references: [tenantId, userId], onDelete: NoAction)
 
   @@id([tenantId, id])
   @@index([tenantId, requestedById])
+  @@index([tenantId, cancelledById])
   @@index([tenantId, createdAt])
+  /// The history of a draft in the builder.
+  @@index([tenantId, versionId, createdAt])
   /// Retention: finished requests go 90 days after completed_at (retention_purge_ai_jobs).
   @@index([completedAt])
   @@map("ai_jobs")
