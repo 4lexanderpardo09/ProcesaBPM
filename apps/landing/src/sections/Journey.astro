@@ -1,0 +1,56 @@
+---
+import { Image } from 'astro:assets';
+import flowMap from '../assets/screenshots/flow-map.png';
+import { JOURNEY } from '../data/ticket-155';
+---
+
+<section class="journey" id="recorrido">
+  <div class="wrap journey-intro">
+    <h2>Así viajó el anticipo de Andrés, paso por paso.</h2>
+    <p>
+      Es el flujo «Gestión de solicitudes financiera» de nuestra organización de pruebas. En verde, el camino que tomó el ticket #155. Lo demás son
+      las otras rutas del mismo flujo: pagos a proveedores, arqueos, legalizaciones sin anticipo.
+    </p>
+  </div>
+  <div id="journey-box" class="static">
+    <div class="map-pin" id="map-pin">
+      <div class="map-layer" id="map-layer">
+        <Image quality={90} src={flowMap} widths={[1400, 2800, 4224]} sizes="(max-width: 700px) 1400px, 2800px" alt="Diagrama del flujo de gestión de solicitudes financiera con el recorrido del ticket 155 resaltado en verde" loading="eager" />
+        <span class="map-dot" id="map-dot"></span>
+      </div>
+      <div class="map-legend" aria-hidden="true"><span style="--c:var(--ok)">Recorrido</span><span style="--c:var(--faint)">Otras rutas</span></div>
+      <div class="log-card" aria-live="polite">
+        <div class="log-top"><span class="log-step" id="log-step"></span><span class="log-count" id="log-count"></span></div>
+        <div class="log-entry">
+          <span class="av" id="log-av"></span>
+          <div><div class="who" id="log-who"></div><blockquote id="log-text"></blockquote><div class="files" id="log-files"></div></div>
+        </div>
+        <div class="progress" id="log-progress">{JOURNEY.map(() => <i></i>)}</div>
+      </div>
+    </div>
+    <!-- Without the scroll animation (no script, or less motion) the map is shown whole and the activity reads as a list. -->
+    <ol class="log-list wrap">
+      {
+        JOURNEY.map((stop) => (
+          <li>
+            <span class="av">{stop.initials}</span>
+            <div>
+              <div class="who"><Fragment set:html={stop.who} /> · {stop.step}</div>
+              <blockquote class:list={{ described: stop.described }}>{stop.text}</blockquote>
+              <div class="files">{(stop.files ?? []).map((file) => <span class="file">{file}</span>)}</div>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+  <p class="wrap journey-after">
+    Los nombres y los comentarios son los del ticket de prueba, tal cual quedaron en su actividad. Los dos pasos sin comentario (la revisión de la
+    legalización y el cierre) se describen.
+  </p>
+</section>
+
+<script>
+  import { startJourney } from '../scripts/journey';
+  startJourney();
+</script>

@@ -1,0 +1,39 @@
+---
+import { JOURNEY, TICKET } from '../data/ticket-155';
+
+const [, current] = JOURNEY;
+---
+
+<section class="hero" id="inicio">
+  <div class="wrap">
+    <h1>Que nadie vuelva a preguntar <q>¿quién lo tiene?</q></h1>
+    <div class="hero-row">
+      <p>
+        ProcesaBPM lleva cada solicitud de tu empresa por los pasos que tú dibujas: anticipos, compras, ingresos de personal. En cada paso hay un
+        responsable, un plazo y una firma, y todos ven en qué va.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#contacto">Pedir una demo</a>
+        <a class="btn btn-line" href="#recorrido"><svg aria-hidden="true"><use href="#i-down"></use></svg>Seguir un anticipo real</a>
+      </div>
+    </div>
+    <div class="ticket-band" aria-label={`Datos del ticket ${TICKET.number} mientras avanza`}>
+      <div class="tb-head">
+        <span class="num">{TICKET.number}</span><strong>{TICKET.title}</strong><span class="badge b-acc" id="tb-state">Abierto</span><span class="badge b-ok">A tiempo</span>
+      </div>
+      <div class="tb-grid">
+        <div class="tb-cell"><span class="overline">Solicitante</span><span class="v">{TICKET.requester}</span></div>
+        <div class="tb-cell"><span class="overline">Empresa</span><span class="v">{TICKET.company}</span></div>
+        <div class="tb-cell"><span class="overline">Valor</span><span class="v mono">{TICKET.amount}</span></div>
+        <div class="tb-cell"><span class="overline">Paso actual</span><span class="v" id="tb-step">{current?.band[0]}</span></div>
+        <div class="tb-cell"><span class="overline">Responsable</span><span class="v" id="tb-who">{current?.band[1]}</span></div>
+        <div class="tb-cell"><span class="overline">Firmas</span><span class="v mono" id="tb-sign">2 de {JOURNEY.length} pasos</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { startTicketBand } from '../scripts/ticket-band';
+  startTicketBand();
+</script>

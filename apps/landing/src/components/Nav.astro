@@ -1,0 +1,21 @@
+---
+import Logo from './Logo.astro';
+
+const links = [
+  { href: '/#recorrido', label: 'Un ticket por dentro' },
+  { href: '/#reglas', label: 'Reglas' },
+  { href: '/#constructor', label: 'Constructor' },
+  { href: '/#asistente', label: 'Asistente IA' },
+  { href: '/blog', label: 'Blog' },
+];
+---
+
+<header class="nav">
+  <div class="wrap">
+    <Logo />
+    <nav class="nav-links" aria-label="Secciones">
+      {links.map((link) => <a href={link.href}>{link.label}</a>)}
+    </nav>
+    <a class="btn btn-primary" href="/#contacto">Pedir una demo</a>
+  </div>
+</header>

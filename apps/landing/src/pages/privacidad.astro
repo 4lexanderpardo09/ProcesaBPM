@@ -1,0 +1,31 @@
+---
+import { DEMO_PRIVACY_NOTICE_VERSION } from '@procesabpm/shared';
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Aviso de privacidad" description="Cómo trata ProcesaBPM los datos que envías en el formulario de demo.">
+  <main class="plain article">
+    <article class="wrap">
+      <h1>Aviso de privacidad del formulario de demo</h1>
+      <p class="meta">Versión {DEMO_PRIVACY_NOTICE_VERSION}</p>
+      <p class="legal-draft">Borrador pendiente de revisión legal. Faltan la razón social, el NIT y el correo de contacto del responsable.</p>
+      <div class="prose">
+        <h2>Quién trata tus datos</h2>
+        <p>El responsable es ProcesaBPM ([razón social y NIT por definir]). Puedes escribirnos a [correo de contacto por definir].</p>
+
+        <h2>Qué datos pedimos y para qué</h2>
+        <p>En el formulario «Pedir una demo» pedimos tu nombre, tu empresa, tu correo de trabajo, cuántas personas usarían ProcesaBPM y, si quieres, qué proceso te gustaría ver.</p>
+        <p>Los usamos solo para responder tu pedido: escribirte, acordar la demo y preparar el ejemplo de tu proceso. No los vendemos ni los compartimos para publicidad de terceros.</p>
+
+        <h2>Cuánto tiempo los guardamos</h2>
+        <p>Borramos cada pedido 24 meses después de recibirlo, lo hayamos atendido o no.</p>
+
+        <h2>Tus derechos</h2>
+        <p>Según la Ley 1581 de 2012, puedes conocer, actualizar, rectificar y pedir que borremos tus datos, y revocar esta autorización. Escríbenos al correo de contacto y te respondemos en los plazos de la ley: 10 días hábiles para consultas y 15 para reclamos.</p>
+
+        <h2>Cambios a este aviso</h2>
+        <p>Si cambiamos el aviso, sube su número de versión. Cada pedido guarda la versión que aceptaste.</p>
+      </div>
+    </article>
+  </main>
+</Base>

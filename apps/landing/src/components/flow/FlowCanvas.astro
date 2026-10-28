@@ -1,0 +1,28 @@
+---
+import { BLOCK_LABELS, type FlowSpec } from '../../data/flows';
+
+interface Props {
+  readonly id: string;
+  readonly flow: FlowSpec;
+  readonly label: string;
+}
+
+const { id, flow, label } = Astro.props;
+const blockColor = (type: string) => `var(--block-${type})`;
+---
+
+<!-- The connections are drawn in the browser from the nodes' real boxes (scripts/edges.ts), so they stay exact at any width. -->
+<div class="canvas" id={id} aria-label={label} data-edges={JSON.stringify(flow.edges)}>
+  <svg class="edges" aria-hidden="true"></svg>
+  {
+    flow.nodes.map((node) => (
+      <div class="node" data-id={node.id} style={`--c:${blockColor(node.type)};left:${node.left}%;top:${node.top}%`}>
+        <span class="t">{BLOCK_LABELS[node.type]}</span>
+        <span class="n">{node.name}</span>
+        <span class="s">{node.status}</span>
+      </div>
+    ))
+  }
+  {flow.edges.filter((edge) => edge.label !== undefined).map((edge) => <span class:list={['edge-label', { warn: edge.warn }]} data-for={`${edge.from}-${edge.to}`}>{edge.label}</span>)}
+  <slot />
+</div>

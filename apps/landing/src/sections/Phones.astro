@@ -1,0 +1,27 @@
+---
+import { Image } from 'astro:assets';
+import signatures from '../assets/screenshots/phone-signatures.webp';
+import ticket from '../assets/screenshots/phone-ticket.webp';
+
+const facts = [
+  { label: 'Firmas del paso', value: '2 de 3 firmaron', mono: true },
+  { label: 'Plazo', value: 'Cada paso tiene su reloj; el ticket avisa antes de vencer.' },
+  { label: 'Avance', value: 'El diagrama del ticket muestra el recorrido y el paso actual.' },
+];
+---
+
+<section class="phones" id="celular">
+  <div class="wrap">
+    <div>
+      <h2>Se aprueba y se firma desde el celular.</h2>
+      <p>El ingreso de Valentina necesitaba tres firmas: sistemas, dotación y contabilidad. Cada quien firmó desde su teléfono, con la firma guardada en su perfil.</p>
+      <ul class="facts">
+        {facts.map((fact) => <li><span>{fact.label}</span><span class:list={{ mono: fact.mono }}>{fact.value}</span></li>)}
+      </ul>
+    </div>
+    <div class="pair">
+      <div class="phone"><Image quality={90} src={signatures} widths={[300, 600]} sizes="(max-width: 860px) 45vw, 270px" alt="Ticket 145, ingreso de Valentina Ríos, con dos de tres firmas registradas" /></div>
+      <div class="phone"><Image quality={90} src={ticket} widths={[300, 600]} sizes="(max-width: 860px) 45vw, 270px" alt="Ticket 134 de compra de guantes de nitrilo en el celular, con paso actual, responsable y fecha de vencimiento" /></div>
+    </div>
+  </div>
+</section>

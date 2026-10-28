@@ -1,0 +1,12 @@
+---
+interface Props {
+  /** `navy` on dark bands (the symbol on its navy square); `color` everywhere else. */
+  readonly variant?: 'color' | 'navy';
+}
+const { variant = 'color' } = Astro.props;
+---
+
+<a class="logo" href="/" aria-label="ProcesaBPM, inicio">
+  <svg aria-hidden="true" class={variant === 'navy' ? 'logo-square' : undefined}><use href={variant === 'navy' ? '#logo-navy' : '#logo-color'}></use></svg>
+  <span>Procesa<b>BPM</b></span>
+</a>

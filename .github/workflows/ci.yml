@@ -69,6 +69,10 @@ jobs:
       - name: Build Storybook
         run: pnpm --filter @procesabpm/web build-storybook --quiet
 
+      # The website (apps/landing): its build and its pages in a desktop and a phone browser.
+      - name: Landing E2E tests
+        run: pnpm --filter @procesabpm/landing test:e2e
+
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
@@ -169,6 +173,17 @@ jobs:
           tags: procesabpm-web:ci
           cache-from: type=gha,scope=images-web
           cache-to: type=gha,scope=images-web,mode=max
+
+      - name: Build landing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: landing
+          load: true
+          push: false
+          tags: procesabpm-landing:ci
+          cache-from: type=gha,scope=images-landing
+          cache-to: type=gha,scope=images-landing,mode=max
 
       - name: Smoke test the web image
         run: scripts/smoke-web-image.sh

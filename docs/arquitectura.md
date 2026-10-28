@@ -1048,3 +1048,23 @@ El formulario «Pedir una demo» de la landing (`apps/landing`) llega al API sin
 - **Consola de plataforma:** `GET /platform/demo-requests?status&page&pageSize` (más nuevos primero, con quién lo marcó) y `PUT /platform/demo-requests/:id/status` `{status: CONTACTED|DISCARDED}` (nunca vuelve a `NEW`; 404 si no existe), con auditoría `demo_request.marked` `{id, status}` sin datos de la persona. La pantalla de la consola va en otro PR.
 - **Pruebas:** unitarias del servicio (bot), de la plantilla del correo (escape del HTML) y del manejador (sin buzón, pedido borrado); `demo-requests.e2e.test.ts` (202 sin sesión, correo con `Reply-To`, repetido y bot, validación, lista, marca, auditoría, 404 y 403 para un miembro) y la ruta en la lista de públicas de `route-protection.e2e.test.ts`.
 
+## 24. Sitio web y blog (`apps/landing`, 2026-10-28, `feat/landing`)
+La página pública de ProcesaBPM y su blog. Es un sitio estático hecho con Astro; las animaciones usan GSAP con ScrollTrigger.
+- **Diseño:** usa los tokens de `docs/diseno/tokens.css` por el alias `@design`, como `apps/web`. Solo agrega dos tintes para las franjas navy. Se cuenta con un ticket real de la organización de pruebas («procesa», ticket #155) y capturas reales, no maquetas. El prototipo aprobado por el usuario el 2026-10-28 está en la memoria de la sesión.
+- **Carpetas:**
+  - `src/pages`: inicio, `blog`, `blog/[slug]`, `privacidad` y 404;
+  - `src/sections`: una sección por bloque del inicio;
+  - `src/components`: nav, pie, logo y `flow/FlowCanvas` (nodos con los colores de bloque);
+  - `src/data`: el ticket #155, los diagramas y las empresas de ejemplo;
+  - `src/scripts`: lo que corre en el navegador, solo donde hace falta;
+  - `src/content/blog`: los artículos en Markdown, con colección `blog` (`title`, `description`, `publishedAt`, `author`, `draft`);
+  - `src/assets/screenshots`: las capturas originales; Astro genera AVIF/WebP y los tamaños.
+- **Menos movimiento:** con «reducir movimiento» o sin JavaScript, el mapa del recorrido se muestra completo y la actividad como lista; no hay animaciones por scroll.
+- **Formulario de demo:** valida con `demoRequestSchema` de `packages/shared` (el mismo contrato del API) y envía a `/api/public/demo-requests` en el mismo origen. El proxy manda solo `/api/public/*` del dominio del sitio al API (arquitectura §23).
+- **Despliegue:**
+  - imagen `landing` (Caddy estático en :8080, `deploy/landing.Caddyfile`; caché larga en `/_astro/*`);
+  - servicio `landing` en `127.0.0.1:8081`;
+  - host propio en `deploy/Caddyfile.example`;
+  - `LANDING_SITE_URL` fija la URL canónica en el build. Mientras no haya dominio, se usa un nombre de sslip.io del servidor de pruebas.
+- **Pruebas:** `e2e/landing.spec.ts` con Playwright en escritorio y teléfono (sin scroll lateral, la regla por monto, menos movimiento, el formulario contra un API simulado, blog y aviso de privacidad).
+

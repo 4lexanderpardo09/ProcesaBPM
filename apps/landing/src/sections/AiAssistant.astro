@@ -1,0 +1,34 @@
+---
+import FlowCanvas from '../components/flow/FlowCanvas.astro';
+import { AI_DRAFT_FLOW } from '../data/flows';
+
+const stages = ['Leyendo', 'Diseñando', 'Revisando', 'Escribiendo'];
+---
+
+<section class="ai" id="asistente">
+  <div class="wrap">
+    <div>
+      <h2>O se lo cuentas a la IA y revisas lo que arma.</h2>
+      <p class="ai-ask">
+        «Ventas arma la cotización. Si pasa de 20 millones la aprueba gerencia. Al final se genera el PDF y se le avisa al cliente.»<small>Lo que escribió alguien de ventas en el panel «Crear con IA»</small>
+      </p>
+      <div class="stages" id="ai-stages">{stages.map((stage) => <span class="stage-pill is-done">{stage}</span>)}</div>
+      <ul class="decisions" id="ai-answer">
+        <li>Agregó una <b>decisión por monto</b> con tope de $20.000.000.</li>
+        <li>Dejó la aprobación grande en el rol <b>Gerencia</b>.</li>
+        <li>El <b>PDF</b> sale al aprobar y una <b>notificación</b> le avisa al cliente.</li>
+      </ul>
+      <p class="ai-note">Luego le pides cambios en el mismo chat: «agrega una revisión de tesorería antes del fin». Nada se publica hasta que alguien con permiso lo revisa.</p>
+    </div>
+    <div class="ai-side">
+      <FlowCanvas id="ai-canvas" flow={AI_DRAFT_FLOW} label="Borrador del flujo de cotizaciones armado por la IA">
+        <button class="btn replay" type="button" id="ai-replay" hidden>Ver de nuevo</button>
+      </FlowCanvas>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { startAiDemo } from '../scripts/ai-demo';
+  startAiDemo();
+</script>
