@@ -44,6 +44,7 @@ export const settings = {
       transfer: 'El asistente usa DeepSeek, un servicio de inteligencia artificial con servidores en China: la información que se le envía sale del país (transferencia internacional de datos, Ley 1581 de 2012).',
       sent: 'Se le envía solo la descripción del proceso que alguien escriba y los nombres de los cargos, grupos y tipos de aprobación de la organización.',
       neverSent: 'Nunca se le envían tickets, archivos, ni datos de las personas. Pide a quienes lo usen que no escriban nombres, cédulas ni otros datos personales en la descripción.',
+      kept: 'Las descripciones quedan guardadas 90 días en el historial de cada borrador, visibles solo dentro de la organización para quienes pueden editar flujos; después se borran.',
       accept: 'Leí este aviso y autorizo enviar esa información al proveedor de IA',
     },
     usage: {
@@ -231,6 +232,7 @@ export const settings = {
       'workflow.updated': 'Editó un flujo',
       'workflow.version_published': 'Publicó una versión de un flujo',
       'workflow.ai_draft_requested': 'Pidió un borrador de flujo a la IA',
+      'workflow.ai_draft_cancelled': 'Canceló una solicitud de borrador a la IA',
     },
   },
   announcements: {
