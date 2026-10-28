@@ -46,8 +46,9 @@ const settingsSchema = z.object({
   SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: positiveInteger(1025, 65_535),
   SMTP_SECURE: boolean(false),
-  SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASSWORD: z.string().min(1).optional(),
+  /** Empty counts as unset, so the compose file can always pass them (`${SMTP_USER:-}`) for a server without SMTP login. */
+  SMTP_USER: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(1).optional()),
+  SMTP_PASSWORD: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(1).optional()),
   /** Tell the API instances (through `NOTIFY`) that something changed, so they can update open screens. */
   REALTIME_SIGNALS_ENABLED: boolean(true),
   OUTBOX_POLLING_ENABLED: boolean(true),

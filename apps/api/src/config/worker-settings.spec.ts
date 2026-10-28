@@ -54,6 +54,9 @@ describe('loadWorkerSettings', () => {
   });
   it('wants the SMTP credentials together', () => {
     expect(problemsOf({ ...valid, SMTP_USER: 'u' })).toEqual(['SMTP_USER and SMTP_PASSWORD go together']);
+    // The compose file passes both always: empty means no login.
+    expect(problemsOf({ ...valid, SMTP_USER: '', SMTP_PASSWORD: '' })).toEqual([]);
+    expect(problemsOf({ ...valid, SMTP_USER: 'u', SMTP_PASSWORD: '' })).toEqual(['SMTP_USER and SMTP_PASSWORD go together']);
   });
   it('configures the AI assistant with DeepSeek defaults, no key, and a call that ends inside the job lease', () => {
     expect(loadWorkerSettings(valid)).toMatchObject({ AI_PROVIDER_NAME: 'deepseek', AI_BASE_URL: 'https://api.deepseek.com/beta', AI_REASONING_MODEL: 'deepseek-v4-pro', AI_STRICT_TOOLS: true, AI_REQUEST_TIMEOUT_MS: 300_000, AI_MAX_ROUNDS: 3 });
