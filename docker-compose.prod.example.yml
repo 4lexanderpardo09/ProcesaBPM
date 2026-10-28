@@ -160,6 +160,9 @@ services:
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: ${SMTP_SECURE:-false}
+      # Test addresses (.test, .invalid, .example: the demo people, the smoke test) go to Mailpit, never to SMTP_HOST.
+      MAIL_CATCHER_HOST: ${MAIL_CATCHER_HOST:-mailpit}
+      MAIL_CATCHER_PORT: ${MAIL_CATCHER_PORT:-1025}
       # The SMTP login of the provider (Amazon SES: the SMTP credentials, not the IAM user). Both or none; empty: no login (Mailpit).
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
