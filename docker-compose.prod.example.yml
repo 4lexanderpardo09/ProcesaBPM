@@ -132,6 +132,16 @@ services:
     <<: *hardening
     ports: ['127.0.0.1:8080:8080']
 
+  landing:
+    image: procesabpm-landing:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      target: landing
+      args:
+        LANDING_SITE_URL: ${LANDING_SITE_URL:-}
+    <<: *hardening
+    ports: ['127.0.0.1:8081:8080']
+
   worker:
     image: procesabpm-worker:${IMAGE_TAG:-latest}
     build: { context: ., target: worker }

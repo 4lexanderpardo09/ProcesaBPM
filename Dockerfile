@@ -5,6 +5,7 @@
 #   docker build --target worker  -t procesabpm-worker .   the outbox worker and the schedulers
 #   docker build --target migrate -t procesabpm-migrate .  applies the migrations (and loads the global catalog)
 #   docker build --target web     -t procesabpm-web .      the web app: static files served by Caddy, behind the proxy that sends /api to the API
+#   docker build --target landing -t procesabpm-landing .  the public website and its blog: static files served by Caddy
 #   docker build -f Dockerfile.test-unit -t procesabpm-test-unit .  the unit tests (Dockerfile.test-unit, deploy/verify.sh); never deployed
 #
 # The Node image is pinned by version and digest: a tag can move, a digest cannot. Update both together.
@@ -66,6 +67,24 @@ COPY docs/diseno docs/diseno
 COPY apps/web apps/web
 RUN pnpm --filter @procesabpm/web build
 
+# --- Build of the landing: its own install (landing and shared only), like the web's -------------------------------
+FROM ${NODE_IMAGE} AS build-landing
+ENV CI=true PNPM_HOME=/pnpm PATH=/pnpm:$PATH NODE_EXTRA_CA_CERTS=/run/secrets/extra-ca
+RUN --mount=type=secret,id=extra-ca,required=false npm install --global --no-fund --no-audit pnpm@11.20.0
+WORKDIR /repo
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches patches
+COPY apps/landing/package.json apps/landing/
+COPY packages/shared/package.json packages/shared/
+RUN --mount=type=secret,id=extra-ca,required=false --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --filter '@procesabpm/landing...'
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+COPY docs/diseno docs/diseno
+COPY apps/landing apps/landing
+ARG LANDING_SITE_URL
+ENV LANDING_SITE_URL=${LANDING_SITE_URL}
+RUN pnpm --filter @procesabpm/landing build
+
 # --- Runtime base: no package manager, no shell tooling beyond the image's, a non-root user -------------------------
 FROM ${NODE_IMAGE} AS runtime
 ENV NODE_ENV=production \
@@ -126,6 +145,18 @@ ENV XDG_CONFIG_HOME=/tmp XDG_DATA_HOME=/tmp
 RUN cp /usr/bin/caddy /usr/bin/caddy.plain && mv /usr/bin/caddy.plain /usr/bin/caddy
 COPY --chown=root:root deploy/web.Caddyfile /etc/caddy/Caddyfile
 COPY --from=build-web --chown=root:root /repo/apps/web/dist /srv
+USER nobody
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+
+# --- landing -------------------------------------------------------------------------------------------------------
+# The public website and its blog, static like the web. The demo form posts to /api/public/*, which the outer proxy sends
+# to the API (deploy/Caddyfile.example).
+FROM caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d AS landing
+ENV XDG_CONFIG_HOME=/tmp XDG_DATA_HOME=/tmp
+RUN cp /usr/bin/caddy /usr/bin/caddy.plain && mv /usr/bin/caddy.plain /usr/bin/caddy
+COPY --chown=root:root deploy/landing.Caddyfile /etc/caddy/Caddyfile
+COPY --from=build-landing --chown=root:root /repo/apps/landing/dist /srv
 USER nobody
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]

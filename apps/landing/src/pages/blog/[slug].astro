@@ -1,0 +1,28 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { formatArticleDate, publishedArticles } from '../../scripts/blog';
+
+export async function getStaticPaths() {
+  const articles = publishedArticles(await getCollection('blog'), import.meta.env.DEV);
+  return articles.map((article) => ({ params: { slug: article.id }, props: { article } }));
+}
+
+const { article } = Astro.props;
+const { Content } = await render(article);
+---
+
+<Base title={article.data.title} description={article.data.description}>
+  <main class="plain article">
+    <article class="wrap">
+      <a class="back" href="/blog">← Blog</a>
+      <h1>{article.data.title}</h1>
+      <p class="meta"><time datetime={article.data.publishedAt.toISOString()}>{formatArticleDate(article.data.publishedAt)}</time> · {article.data.author}</p>
+      <div class="prose"><Content /></div>
+      <aside class="article-cta">
+        <p>¿Quieres ver tu propio proceso en ProcesaBPM?</p>
+        <a class="btn btn-primary" href="/#contacto">Pedir una demo</a>
+      </aside>
+    </article>
+  </main>
+</Base>

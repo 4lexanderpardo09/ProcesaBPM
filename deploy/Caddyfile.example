@@ -1,6 +1,29 @@
 # The reverse proxy in front of ProcesaBPM (docs/despliegue.md): HTTPS with automatic certificates, the API under /api
 # (its routes, health checks and the /api/realtime WebSocket) and the web for everything else, on one origin.
-# Copy it to /etc/caddy/Caddyfile, change the host name and reload: sudo systemctl reload caddy
+# Copy it to /etc/caddy/Caddyfile, change the host names and reload: sudo systemctl reload caddy
+#
+# The public website (apps/landing) lives on its own host. Its demo form posts to /api/public/*, the only part of the API
+# it reaches; the rest of the API stays on the app's host.
+www.example.com, example.com {
+	encode zstd gzip
+
+	handle /api/public/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8081
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
 app.example.com {
 	encode zstd gzip
 

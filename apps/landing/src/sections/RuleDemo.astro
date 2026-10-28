@@ -1,0 +1,26 @@
+---
+import FlowCanvas from '../components/flow/FlowCanvas.astro';
+import { AMOUNT_RULE_FLOW } from '../data/flows';
+---
+
+<section class="rule" id="reglas">
+  <div class="wrap">
+    <div>
+      <h2>Las reglas deciden la ruta. Nadie reenvía correos.</h2>
+      <p>En el flujo de compras de insumos médicos, una condición mira el valor cotizado. Mueve el monto y mira por dónde se va la orden.</p>
+      <div class="amount">
+        <label for="amount-in">Valor cotizado</label>
+        <output id="amount-out" for="amount-in">$2.480.000</output>
+        <input id="amount-in" type="range" min="500000" max="20000000" step="10000" value="2480000" />
+        <div class="scale"><span>$500.000</span><span>$10 M</span><span>$20 M</span></div>
+      </div>
+      <p class="verdict" id="verdict" aria-live="polite">Va directo a Compras. Gerencia no recibe nada que revisar.</p>
+    </div>
+    <FlowCanvas id="rule-canvas" flow={AMOUNT_RULE_FLOW} label="Flujo de compra de insumos médicos" />
+  </div>
+</section>
+
+<script>
+  import { startRuleDemo } from '../scripts/rule-demo';
+  startRuleDemo();
+</script>

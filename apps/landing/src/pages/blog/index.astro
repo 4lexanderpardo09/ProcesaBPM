@@ -1,0 +1,29 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { publishedArticles, formatArticleDate } from '../../scripts/blog';
+
+const articles = publishedArticles(await getCollection('blog'), import.meta.env.DEV);
+---
+
+<Base title="Blog" description="Procesos, aprobaciones y documentos en empresas colombianas: cómo pasarlos del correo a un flujo.">
+  <main class="plain blog">
+    <div class="wrap">
+      <h1>Blog</h1>
+      <p class="lead">Cómo ordenar los procesos que hoy viven en correos y hojas de cálculo.</p>
+      <ol class="articles">
+        {
+          articles.map((article) => (
+            <li>
+              <a href={`/blog/${article.id}`}>
+                <time datetime={article.data.publishedAt.toISOString()}>{formatArticleDate(article.data.publishedAt)}</time>
+                <h2>{article.data.title}</h2>
+                <p>{article.data.description}</p>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </main>
+</Base>

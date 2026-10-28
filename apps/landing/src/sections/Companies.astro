@@ -1,0 +1,45 @@
+---
+import { COMPANIES, INBOX_SAMPLE } from '../data/companies';
+
+const [first] = COMPANIES;
+---
+
+<section class="orgs" id="empresas">
+  <div class="wrap">
+    <div class="orgs-box">
+      <div class="orgs-text">
+        <h2>Un grupo, varias empresas, una sola cuenta.</h2>
+        <p>Cada empresa entra con su logo y su color, y la base de datos separa lo de cada una. Los flujos se pueden compartir o hacer por empresa.</p>
+        <div class="co-pick" role="group" aria-label="Ver la bandeja de una empresa de ejemplo">
+          {
+            COMPANIES.map((company, index) => (
+              <button class="co-btn" type="button" aria-pressed={index === 0 ? 'true' : 'false'} data-color={company.color} data-tint={company.tint} data-name={company.name} style={`--cc:${company.color}`}>
+                <span class="sq">{company.code}</span>
+                {company.name}
+              </button>
+            ))
+          }
+        </div>
+      </div>
+      <div class="mini" id="mini" aria-live="polite">
+        <div class="mini-top"><i></i><strong id="mini-name">{first.name}</strong><span class="mbtn">Nuevo ticket</span></div>
+        <div class="mini-tabs"><span class="on">Mis pendientes</span><span>Abiertos</span><span>Cerrados</span></div>
+        {INBOX_SAMPLE.map((row) => <div class="mini-row"><span class="mono">{row.number}</span><span>{row.title}</span><span class={`badge ${row.badge}`}>{row.state}</span></div>)}
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const mini = document.getElementById('mini');
+  const name = document.getElementById('mini-name');
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('.co-btn')];
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      buttons.forEach((other) => other.setAttribute('aria-pressed', String(other === button)));
+      mini?.style.setProperty('--brand', button.dataset['color'] ?? '');
+      mini?.style.setProperty('--brand-50', button.dataset['tint'] ?? '');
+      if (name !== null) name.textContent = button.dataset['name'] ?? '';
+    });
+  }
+</script>

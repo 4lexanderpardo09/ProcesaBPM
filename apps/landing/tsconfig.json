@@ -1,0 +1,10 @@
+{
+  "extends": "astro/tsconfigs/strictest",
+  "compilerOptions": {
+    "paths": {
+      "@design/*": ["../../docs/diseno/*"]
+    }
+  },
+  "include": [".astro/types.d.ts", "src", "e2e", "astro.config.mjs", "playwright.config.ts"],
+  "exclude": ["dist"]
+}

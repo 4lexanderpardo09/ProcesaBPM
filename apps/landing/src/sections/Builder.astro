@@ -1,0 +1,37 @@
+---
+import { Image } from 'astro:assets';
+import builder from '../assets/screenshots/builder.webp';
+
+const notes = [
+  { title: 'Bloques por tipo', text: 'Paso, aprobación, decisión, firma, condición, calculadora, espera. Cada uno con su color, igual en el lienzo y en el ticket.' },
+  { title: 'Conexiones con nombre', text: '«Aprobar», «Rechazar», «Continuar». Lo que dice la flecha es el botón que verá el responsable.' },
+  { title: 'Revisión antes de publicar', text: '«Este bloque no tiene salida». No se publica un flujo con errores, y los tickets abiertos siguen con la versión con la que empezaron.' },
+];
+/** Where each note's number sits on the screenshot, in % of the image. */
+const pins = [
+  { left: 13.5, top: 52 },
+  { left: 43, top: 44 },
+  { left: 86, top: 33 },
+];
+---
+
+<section class="builder" id="constructor">
+  <div class="wrap">
+    <div class="builder-head">
+      <h2>Lo dibuja quien conoce el proceso, sin programar.</h2>
+      <p>Arrastras bloques, los conectas y defines qué se pide en cada paso. Esta captura es el flujo «Préstamo de equipo audiovisual» a medio armar.</p>
+    </div>
+    <figure class="shot">
+      <div class="shot-frame">
+        <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>Flujos › Préstamo de equipo audiovisual › v1</span></div>
+        <div class="shot-inner">
+          <Image quality={90} src={builder} widths={[1280, 2560]} sizes="(max-width: 760px) 880px, 1200px" alt="Constructor de flujos de ProcesaBPM con la paleta de bloques, el lienzo y el panel del paso «Entrega del equipo» que avisa dos errores" />
+          {pins.map((pin, index) => <span class="pin" style={`left:${pin.left}%;top:${pin.top}%`} aria-hidden="true">{index + 1}</span>)}
+        </div>
+      </div>
+    </figure>
+    <ol class="notes">
+      {notes.map((note) => <li><div><strong>{note.title}</strong><span>{note.text}</span></div></li>)}
+    </ol>
+  </div>
+</section>

@@ -1,0 +1,45 @@
+---
+import { DEMO_TEAM_SIZES } from '@procesabpm/shared';
+
+const teamSizeLabels: Record<(typeof DEMO_TEAM_SIZES)[number], string> = {
+  UNDER_20: 'Menos de 20',
+  FROM_20_TO_100: '20 a 100',
+  FROM_101_TO_500: '101 a 500',
+  OVER_500: 'Más de 500',
+};
+---
+
+<section class="contact" id="contacto">
+  <div class="wrap">
+    <div>
+      <h2>Trae el proceso que más te cuesta.</h2>
+      <p>En la demo lo dibujamos contigo en ProcesaBPM y le pasamos una solicitud de prueba de punta a punta.</p>
+    </div>
+    <form class="form" id="demo-form" novalidate>
+      <label for="f-name">Nombre<input id="f-name" name="fullName" autocomplete="name" required minlength="2" maxlength="120" /></label>
+      <label for="f-company">Empresa<input id="f-company" name="company" autocomplete="organization" required minlength="2" maxlength="160" /></label>
+      <label for="f-email">Correo de trabajo<input id="f-email" name="email" type="email" autocomplete="email" required maxlength="254" /></label>
+      <label for="f-size">
+        Personas que lo usarían
+        <select id="f-size" name="teamSize">{DEMO_TEAM_SIZES.map((size) => <option value={size}>{teamSizeLabels[size]}</option>)}</select>
+      </label>
+      <label class="full" for="f-process">¿Qué proceso quieres ver? (opcional)<textarea id="f-process" name="process" maxlength="2000" placeholder="Por ejemplo: anticipos y legalizaciones de viáticos"></textarea></label>
+      <!-- People never see this field; a bot that fills every input fills it too, and the API stores nothing. -->
+      <div class="hp" aria-hidden="true"><label for="f-website">Sitio web<input id="f-website" name="website" tabindex="-1" autocomplete="off" /></label></div>
+      <label class="consent full" for="f-consent">
+        <input id="f-consent" name="privacyConsent" type="checkbox" required />
+        <span>Acepto que ProcesaBPM use estos datos para responder mi pedido, según el <a href="/privacidad">aviso de privacidad</a>.</span>
+      </label>
+      <div class="row">
+        <button class="btn btn-primary" type="submit" id="f-submit">Pedir la demo</button>
+        <span class="hint">Te escribimos en un día hábil.</span>
+      </div>
+      <p class="form-message" id="form-message" role="status" hidden></p>
+    </form>
+  </div>
+</section>
+
+<script>
+  import { startDemoForm } from '../scripts/demo-form';
+  startDemoForm();
+</script>
