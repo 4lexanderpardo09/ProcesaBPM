@@ -77,6 +77,24 @@ enum AnnouncementType {
   @@map("announcement_type")
 }
 
+/// How many people would use the product, as the demo request form asks it.
+enum DemoTeamSize {
+  UNDER_20
+  FROM_20_TO_100
+  FROM_101_TO_500
+  OVER_500
+
+  @@map("demo_team_size")
+}
+
+enum DemoRequestStatus {
+  NEW
+  CONTACTED
+  DISCARDED
+
+  @@map("demo_request_status")
+}
+
 enum AnnouncementAudience {
   ALL
   TENANTS
@@ -577,6 +595,7 @@ model User {
   platformAdmin   PlatformAdmin?
   supportSessions SupportSession[]
   supportAuditLogs AuditLog[] @relation("SupportActor")
+  handledDemoRequests DemoRequest[]
 
   @@map("users")
 }
@@ -674,6 +693,31 @@ model PlatformAnnouncement {
   targets PlatformAnnouncementTenant[]
 
   @@map("platform_announcements")
+}
+
+/// A demo requested from the public website. Platform-only: the API inserts it through submit_demo_request, the worker
+/// reads it through worker_demo_request and the platform console (app_platform) lists and marks it.
+model DemoRequest {
+  id                   String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  fullName             String            @map("full_name")
+  company              String
+  /// Stored trimmed and lowercased (CHECK): the one-a-day rule compares it as is.
+  email                String
+  teamSize             DemoTeamSize      @map("team_size")
+  process              String?
+  /// The privacy notice the person accepted with the form.
+  privacyNoticeVersion Int               @map("privacy_notice_version") @db.SmallInt
+  status               DemoRequestStatus @default(NEW)
+  handledById          String?           @map("handled_by_id") @db.Uuid
+  handledAt            DateTime?         @map("handled_at") @db.Timestamptz(3)
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  handledBy User? @relation(fields: [handledById], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([email, createdAt])
+  @@index([handledById])
+  @@map("demo_requests")
 }
 
 /// The tenants a TENANTS-audience announcement is meant for. Members see only their own tenant's rows (RLS); only the platform writes.
