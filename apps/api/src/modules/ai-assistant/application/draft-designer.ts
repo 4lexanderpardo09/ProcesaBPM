@@ -1,4 +1,4 @@
-import { buildDraftToolSchema, checkDraftSpec, type DraftCatalog, describeSpecProblems, describeWorkflowProblems, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { type AiDraftOutline, buildDraftToolSchema, checkDraftSpec, type DraftCatalog, type DraftDecision, describeSpecProblems, describeWorkflowProblems, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { LlmCallError, type LlmFailureKind, type LlmProvider, type LlmResult, type LlmUsage, NO_USAGE } from '../../../infrastructure/llm/llm-provider.js';
 import { blockingProblems } from '../../workflows/application/draft-document-importer.js';
 import { buildDraftPrompt, DRAFT_TOOL_DESCRIPTION, DRAFT_TOOL_NAME, type DraftCorrection } from '../domain/prompt-builder.js';
@@ -24,14 +24,21 @@ export interface DesignHooks {
 }
 
 export type DesignResult =
-  | { readonly kind: 'draft'; readonly document: WorkflowVersionDocument; readonly assumptions: readonly string[]; readonly rounds: number; readonly errors: number; readonly warnings: number }
+  | { readonly kind: 'draft'; readonly document: WorkflowVersionDocument; readonly summary: DraftSummary; readonly rounds: number; readonly corrections: number; readonly errors: number; readonly warnings: number }
   | { readonly kind: 'failed'; readonly errorCode: 'AI_DRAFT_INVALID' | 'AI_PROVIDER_FAILED' | 'AI_NOT_CONFIGURED' }
   /** The lease was lost or the worker is stopping: nothing is recorded as the job's outcome. */
   | { readonly kind: 'interrupted' };
 
+/** What the person reads about the draft: the model's own account of it, and what the platform counted in it. */
+export interface DraftSummary {
+  readonly assumptions: readonly string[];
+  readonly decisions: readonly DraftDecision[];
+  readonly outline: AiDraftOutline;
+}
+
 interface Candidate {
   readonly document: WorkflowVersionDocument;
-  readonly assumptions: readonly string[];
+  readonly summary: DraftSummary;
   readonly errors: number;
   readonly warnings: number;
 }
@@ -62,6 +69,7 @@ export class DraftDesigner {
     let correction: DraftCorrection | undefined;
     let best: Candidate | undefined;
     let answered = false;
+    let corrections = 0;
     for (let round = 1; round <= this.maxRounds; round += 1) {
       if (signal.aborted || !(await hooks.beforeRound(round))) return { kind: 'interrupted' };
       let result: LlmResult;
@@ -79,12 +87,13 @@ export class DraftDesigner {
       await hooks.afterCall({ round, outcome: evaluation.outcome, usage: result.usage, durationMs: result.durationMs, errorCode: null });
       if (evaluation.candidate !== undefined) {
         best = evaluation.candidate;
-        if (best.errors === 0) return { kind: 'draft', ...best, rounds: round };
+        if (best.errors === 0) return { kind: 'draft', ...best, rounds: round, corrections };
       }
       correction = evaluation.correction;
+      corrections += correction.problems.length;
       if (round < this.maxRounds && !(await hooks.afterReview(round, correction.problems.length))) return { kind: 'interrupted' };
     }
-    if (best !== undefined) return { kind: 'draft', ...best, rounds: this.maxRounds };
+    if (best !== undefined) return { kind: 'draft', ...best, rounds: this.maxRounds, corrections };
     return { kind: 'failed', errorCode: answered ? 'AI_DRAFT_INVALID' : 'AI_PROVIDER_FAILED' };
   }
 
@@ -99,6 +108,21 @@ export class DraftDesigner {
     if (check.kind === 'untranslatable') return { outcome: 'OK', correction: { previous: spec, problems: describeSpecProblems(check.problems, spec) } };
     const correction = { previous: spec, problems: describeWorkflowProblems(check.errors, check.document) };
     if (blockingProblems(check.document).length > 0) return { outcome: 'OK', correction };
-    return { outcome: 'OK', correction, candidate: { document: check.document, assumptions: spec.assumptions, errors: check.errors.length, warnings: check.warnings.length } };
+    return { outcome: 'OK', correction, candidate: { document: check.document, summary: summarize(spec), errors: check.errors.length, warnings: check.warnings.length } };
   }
+}
+
+function summarize(spec: WorkflowDraftSpec): DraftSummary {
+  const countSteps = (types: readonly string[]) => spec.steps.filter((step) => types.includes(step.type)).length;
+  return {
+    assumptions: spec.assumptions,
+    decisions: spec.decisions,
+    outline: {
+      steps: spec.steps.length - countSteps(['START', 'END']),
+      approvals: countSteps(['APPROVAL']),
+      fields: spec.fields.length,
+      initiators: spec.initiators.length,
+      amountRules: spec.amountRules.length,
+    },
+  };
 }

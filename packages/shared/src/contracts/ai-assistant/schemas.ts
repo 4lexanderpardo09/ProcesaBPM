@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DRAFT_DECISION_TOPICS } from '../../workflow/draft-spec/spec.js';
 
 /**
  * The version of the transfer notice an administrator accepts when turning the assistant on (descriptions go to the
@@ -100,10 +101,26 @@ export type RequestAiDraft = z.infer<typeof requestAiDraftSchema>;
 export const aiDraftRequestedSchema = z.object({ jobId: z.string() });
 export type AiDraftRequested = z.infer<typeof aiDraftRequestedSchema>;
 
+export const aiDraftOutlineSchema = z.object({
+  /** Blocks other than the start and the ends. */
+  steps: z.number().int(),
+  approvals: z.number().int(),
+  fields: z.number().int(),
+  initiators: z.number().int(),
+  amountRules: z.number().int(),
+});
+export type AiDraftOutline = z.infer<typeof aiDraftOutlineSchema>;
+
 export const aiDraftResultSchema = z.object({
   revision: z.number().int(),
   /** What the assistant decided on its own (Spanish sentences shown to the person). */
   assumptions: z.array(z.string()),
+  /** The main design choices, by topic. Empty on requests finished before they were asked for. */
+  decisions: z.array(z.object({ topic: z.enum(DRAFT_DECISION_TOPICS), text: z.string() })).default([]),
+  /** What the draft holds, counted by the platform (not by the model). Null on older requests. */
+  outline: aiDraftOutlineSchema.nullable().default(null),
+  /** Problems the review found in earlier answers and sent back to the model. */
+  corrections: z.number().int().default(0),
   rounds: z.number().int(),
   /** Problems left in the draft for the person to fix (it is never published by the assistant). */
   errors: z.number().int(),

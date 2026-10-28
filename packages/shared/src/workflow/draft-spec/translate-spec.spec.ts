@@ -61,6 +61,7 @@ describe('translateDraftSpec', () => {
   it('builds group candidates, pools, same-assignee steps and parallel signers', () => {
     const spec: WorkflowDraftSpec = {
       assumptions: [],
+      decisions: [],
       initiators: [],
       amountRules: [],
       steps: [
@@ -143,6 +144,7 @@ describe('translateDraftSpec', () => {
   it('asks for what a block type needs: an assignment, a notification, a wait, a formula, table columns', () => {
     const spec: WorkflowDraftSpec = {
       assumptions: [],
+      decisions: [],
       initiators: [],
       amountRules: [],
       steps: [draftStep('inicio', 'START'), draftStep('tarea', 'TASK', { assignment: null }), draftStep('aviso', 'NOTIFICATION'), draftStep('espera', 'WAIT'), draftStep('fin', 'END')],

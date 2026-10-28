@@ -85,7 +85,14 @@ export class WorkflowDraftJob {
     try {
       await this.runner.withTenant(claim.tenantId, async (tx) => {
         const written = await this.importer.replaceContent(tx, { tenantId: claim.tenantId, workflowId: input.workflowId, versionId: input.versionId, expectedRevision: input.expectedRevision, document: result.document });
-        const summary: AiDraftResult = { revision: written.revision, assumptions: [...result.assumptions], rounds: result.rounds, errors: written.validation.errors.length, warnings: written.validation.warnings.length };
+        const summary: AiDraftResult = {
+          revision: written.revision,
+          assumptions: [...result.summary.assumptions],
+          decisions: [...result.summary.decisions],
+          outline: result.summary.outline,
+          corrections: result.corrections,
+          rounds: result.rounds,
+          errors: written.validation.errors.length, warnings: written.validation.warnings.length };
         if (!(await this.claims.finish(tx, claim, summary))) throw new ClaimLostError();
       });
     } catch (error) {

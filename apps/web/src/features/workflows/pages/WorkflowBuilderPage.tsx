@@ -42,22 +42,7 @@ export function WorkflowBuilderPage() {
     <>
       {published !== null && <Alert tone="ok">{t('builder.published', { number: published })}</Alert>}
       {replaced !== null && replaced.aiResult === null && <Alert tone="ok">{t('builder.templateImport.ready')}</Alert>}
-      {replaced?.aiResult && (
-        <Alert tone="ok">
-          {t('builder.ai.ready')}
-          {replaced.aiResult.assumptions.length > 0 && (
-            <>
-              {' '}
-              {t('builder.ai.assumptions')}
-              <ul>
-                {replaced.aiResult.assumptions.map((assumption) => (
-                  <li key={assumption}>{assumption}</li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Alert>
-      )}
+      {replaced?.aiResult && <Alert tone="ok">{t('builder.ai.ready')}</Alert>}
       <ReactFlowProvider>
         {/* A publication turns the draft into the live version: the builder starts again on what the API now says. */}
         <WorkflowBuilder

@@ -70,14 +70,27 @@ async function run(script: Step[], options: RunOptions = {}) {
 describe('DraftDesigner', () => {
   it('returns the first draft that has no problems, recording the call', async () => {
     const { result, calls, provider } = await run([tool(advanceSpec())]);
-    expect(result).toMatchObject({ kind: 'draft', rounds: 1, errors: 0, assumptions: advanceSpec().assumptions });
+    expect(result).toMatchObject({ kind: 'draft', rounds: 1, corrections: 0, errors: 0, summary: { assumptions: advanceSpec().assumptions, decisions: advanceSpec().decisions } });
     expect(calls).toEqual([{ round: 1, outcome: 'OK', usage: USAGE, durationMs: 1000, errorCode: null }]);
     expect(provider.requests[0]!.tool.name).toBe('submit_workflow_draft');
   });
 
+  it('counts what the draft holds without trusting the model', async () => {
+    const spec = advanceSpec();
+    const { result } = await run([tool(spec)]);
+    expect((result as { summary: { outline: unknown } }).summary.outline).toEqual({
+      steps: spec.steps.filter((step) => step.type !== 'START' && step.type !== 'END').length,
+      approvals: spec.steps.filter((step) => step.type === 'APPROVAL').length,
+      fields: spec.fields.length,
+      initiators: spec.initiators.length,
+      amountRules: spec.amountRules.length,
+    });
+  });
+
   it('sends the problems back and keeps the corrected draft', async () => {
-    const { result, calls, provider } = await run([tool(withoutPaymentExit()), tool(advanceSpec())]);
+    const { result, calls, provider, stages } = await run([tool(withoutPaymentExit()), tool(advanceSpec())]);
     expect(result).toMatchObject({ kind: 'draft', rounds: 2, errors: 0 });
+    expect((result as { corrections: number }).corrections).toBe(Number(stages[1]!.split(' ')[2]));
     expect(calls.map((call) => call.outcome)).toEqual(['OK', 'OK']);
     expect(provider.requests[1]!.user).toContain('PEOPLE_BLOCK_WITHOUT_DECISION at step "pago"');
   });

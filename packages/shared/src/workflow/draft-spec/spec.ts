@@ -16,8 +16,10 @@ export const DRAFT_RECIPIENT_KINDS = ['CREATOR', 'ASSIGNEES', 'OBSERVERS', 'POSI
 export const DRAFT_FIELD_TYPES = ['TEXT', 'TEXTAREA', 'NUMBER', 'CURRENCY', 'SELECT', 'MULTI_SELECT', 'DATE', 'DATETIME', 'DAYS', 'FILE', 'TABLE', 'FORMULA'] as const;
 export const DRAFT_COLUMN_TYPES = ['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA'] as const;
 export const DRAFT_FORMULA_RESULT_TYPES = ['NUMBER', 'CURRENCY', 'DATE', 'TEXT'] as const;
+/** What a decision of the model is about, so the person reads them grouped. */
+export const DRAFT_DECISION_TOPICS = ['STEPS', 'ASSIGNMENT', 'APPROVALS', 'ROUTING', 'FIELDS', 'DEADLINES', 'NOTIFICATIONS', 'SIGNATURES', 'AMOUNTS', 'INITIATORS'] as const;
 
-export const DRAFT_LIMITS = { steps: 60, transitions: 150, fields: 150, columns: 30, options: 100, text: 1000, assumptions: 20, initiators: 20, amountRules: 30 } as const;
+export const DRAFT_LIMITS = { steps: 60, transitions: 150, fields: 150, columns: 30, options: 100, text: 1000, assumptions: 20, decisions: 15, initiators: 20, amountRules: 30 } as const;
 export const DRAFT_REF_PATTERN = /^[a-z][a-z0-9_]{0,40}$/;
 
 const text = z.string().trim().min(1).max(DRAFT_LIMITS.text);
@@ -116,9 +118,14 @@ export const draftAmountRuleSchema = z
   })
   .strict();
 
+/** One design choice, said in a short Spanish sentence: what was chosen and why (never the model's reasoning). */
+export const draftDecisionSchema = z.object({ topic: z.enum(DRAFT_DECISION_TOPICS), text: z.string().trim().min(1).max(300) }).strict();
+
 export const workflowDraftSpecSchema = z
   .object({
     assumptions: z.array(z.string().trim().min(1).max(500)).max(DRAFT_LIMITS.assumptions),
+    /** Optional in a template written before decisions existed. */
+    decisions: z.array(draftDecisionSchema).max(DRAFT_LIMITS.decisions).default([]),
     steps: z.array(draftStepSchema).min(1).max(DRAFT_LIMITS.steps),
     transitions: z.array(draftTransitionSchema).max(DRAFT_LIMITS.transitions),
     fields: z.array(draftFieldSchema).max(DRAFT_LIMITS.fields),
@@ -132,6 +139,7 @@ export type DraftStep = z.infer<typeof draftStepSchema>;
 export type DraftTransition = z.infer<typeof draftTransitionSchema>;
 export type DraftField = z.infer<typeof draftFieldSchema>;
 export type DraftAmountRule = z.infer<typeof draftAmountRuleSchema>;
+export type DraftDecision = z.infer<typeof draftDecisionSchema>;
 export type DraftInitiator = z.infer<typeof initiator>;
 export type DraftAssignment = z.infer<typeof assignment>;
 

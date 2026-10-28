@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDraftToolSchema, type JsonSchema, MAX_CATALOG_ENUM } from './tool-schema.js';
+import { DRAFT_DECISION_TOPICS } from './spec.js';
 import { catalog, travelAdvanceSpec } from './test-fixtures.js';
 
 const FORBIDDEN = ['minLength', 'maxLength', 'minItems', 'maxItems'];
@@ -63,6 +64,10 @@ describe('buildDraftToolSchema', () => {
     expect(propertyAt(rule as JsonSchema, ['action']).enum).toEqual(['BLOCK', 'WARN', 'EXTRA_APPROVAL']);
     expect(propertyAt(rule as JsonSchema, ['maxAmount'])).toEqual({ type: 'number' });
     expect(propertyAt(rule as JsonSchema, ['position', '?']).enum).toEqual(['Gerente general', 'Contador', 'Tesorero']);
+  });
+
+  it('asks for the decisions by topic', () => {
+    expect(propertyAt(buildDraftToolSchema(catalog), ['decisions', '[]', 'topic']).enum).toEqual([...DRAFT_DECISION_TOPICS]);
   });
 
   it('declares exactly the keys of the zod spec', () => {
