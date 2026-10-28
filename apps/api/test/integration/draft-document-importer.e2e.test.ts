@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import type { SeededTenant } from '@procesabpm/db/testing/fixtures';
 import { type DraftCatalog, ImmutableDataError, StaleRevisionError, translateDraftSpec, type VersionDetailResponse, type WorkflowVersionDocument } from '@procesabpm/shared';
-import { advanceSpec } from '../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
+import { advanceSpec, travelAdvanceSpec } from '../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TenantContext } from '../../src/infrastructure/database/tenant-context.js';
 import { TenantTransactionRunner } from '../../src/infrastructure/database/tenant-transaction-runner.js';
@@ -74,6 +74,24 @@ describe('DraftDocumentImporter (one-transaction replacement of a draft)', () =>
     expect(after.document.fields.find((field) => field.code === 'TOTAL')).toMatchObject({ type: 'FORMULA', capture: 'CREATION' });
     expect(after.document.steps.find((step) => step.name === 'Aprobación de gerencia')).toMatchObject({ assignmentMode: 'POSITION', positionId: catalog.positions[0]!.id });
     expect(after.validation).toEqual({ errors: [], warnings: [] });
+    await admin.post(`/workflows/${draft.workflowId}/versions/${draft.versionId}/publish`, {}).expect(200);
+  });
+
+  it('writes initiators, a SIGNATURE block and an EXTRA_APPROVAL amount rule, and the draft publishes', async () => {
+    const draft = await newDraft();
+    const result = translateDraftSpec(travelAdvanceSpec(), catalog);
+    if (!result.ok) throw new Error(JSON.stringify(result.problems));
+    const written = await importInto(draft, result.document, (await detail(draft)).version.revision);
+    expect(written.validation).toEqual({ errors: [], warnings: [] });
+
+    const after = await detail(draft);
+    const byName = (name: string) => after.document.steps.find((step) => step.name === name)!;
+    expect(byName('Solicitud de anticipo de viaje').initiators).toMatchObject([{ participantType: 'POSITION', positionId: catalog.positions[1]!.id }]);
+    const signature = byName('Firma del anticipo');
+    expect(signature).toMatchObject({ type: 'SIGNATURE', positionId: catalog.positions[2]!.id, config: { document: 'MAIN_DOCUMENT' } });
+    expect(signature.signers.map((signer) => signer.signerType)).toEqual(['POSITION', 'CREATOR']);
+    expect(after.document.amountRules).toMatchObject([{ fieldCode: 'MONTO', maxAmount: '5000000.00', currencyCode: 'COP', action: 'EXTRA_APPROVAL', stepId: byName('Solicitud de anticipo de viaje').id, approvalStepId: byName('Aprobación de gerencia').id }]);
+    expect(after.document.transitions.filter((transition) => transition.type === 'SYSTEM_ONLY')).toHaveLength(1);
     await admin.post(`/workflows/${draft.workflowId}/versions/${draft.versionId}/publish`, {}).expect(200);
   });
 

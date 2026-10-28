@@ -1,10 +1,13 @@
 import { CONDITION_OPERATORS } from '../../engine/conditions/types.js';
 import { SLA_UNITS } from '../constants.js';
+import { AMOUNT_RULE_ACTIONS } from '../constants.js';
 import {
   DRAFT_ASSIGNMENT_MODES,
   DRAFT_COLUMN_TYPES,
   DRAFT_FIELD_TYPES,
   DRAFT_FORMULA_RESULT_TYPES,
+  DRAFT_INITIATOR_KINDS,
+  DRAFT_SIGNATURE_DOCUMENTS,
   DRAFT_RECIPIENT_KINDS,
   DRAFT_SIGNER_KINDS,
   DRAFT_STEP_TYPES,
@@ -70,6 +73,7 @@ export function buildDraftToolSchema(catalog: DraftCatalog): JsonSchema {
     maxLoops: nullable(integer),
     notification: nullable(object({ recipients: array(object({ kind: enumOf(DRAFT_RECIPIENT_KINDS), name: nullable(string) })), subject: string, body: string })),
     wait: nullable(duration),
+    signatureDocument: nullable(enumOf(DRAFT_SIGNATURE_DOCUMENTS)),
   });
 
   const conditionValue: JsonSchema = { anyOf: [string, { type: 'number' }, boolean, array({ anyOf: [string, { type: 'number' }] })] };
@@ -94,5 +98,18 @@ export function buildDraftToolSchema(catalog: DraftCatalog): JsonSchema {
     columns: nullable(array(column)),
   });
 
-  return object({ assumptions: array(string), steps: array(step), transitions: array(transition), fields: array(field) });
+  const initiator = object({ kind: enumOf(DRAFT_INITIATOR_KINDS), name: catalogName([...catalog.positions, ...catalog.groups].map((entry) => entry.name)) });
+  const amountRule = object({
+    field: string,
+    amountColumn: nullable(string),
+    step: nullable(string),
+    maxAmount: { type: 'number' },
+    currency: nullable(string),
+    action: enumOf(AMOUNT_RULE_ACTIONS),
+    approvalStep: nullable(string),
+    position: nullable(position),
+    message: nullable(string),
+  });
+
+  return object({ assumptions: array(string), steps: array(step), transitions: array(transition), fields: array(field), initiators: array(initiator), amountRules: array(amountRule) });
 }

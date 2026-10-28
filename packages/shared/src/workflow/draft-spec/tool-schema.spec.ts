@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDraftToolSchema, type JsonSchema, MAX_CATALOG_ENUM } from './tool-schema.js';
-import { catalog } from './test-fixtures.js';
+import { catalog, travelAdvanceSpec } from './test-fixtures.js';
 
 const FORBIDDEN = ['minLength', 'maxLength', 'minItems', 'maxItems'];
 
@@ -50,5 +50,26 @@ describe('buildDraftToolSchema', () => {
     const assignment = propertyAt(schema, ['steps', '[]', 'assignment', '?']) as JsonSchema;
     expect(propertyAt(assignment, ['position', '?'])).toEqual({ type: 'string' });
     expect(propertyAt(assignment, ['group', '?'])).toEqual({ type: 'string' });
+  });
+
+  it('offers initiators, signature steps and amount rules, with catalog names for positions', () => {
+    const schema = buildDraftToolSchema(catalog);
+    expect(propertyAt(schema, ['steps', '[]', 'type']).enum).toContain('SIGNATURE');
+    expect(propertyAt(schema, ['steps', '[]', 'signatureDocument', '?']).enum).toEqual(['MAIN_DOCUMENT', 'STEP_DOCUMENT']);
+    expect(propertyAt(schema, ['initiators', '[]', 'kind']).enum).toEqual(['POSITION', 'GROUP']);
+    expect(propertyAt(schema, ['initiators', '[]', 'name']).enum).toEqual(['Gerente general', 'Contador', 'Tesorero', 'Mesa TI']);
+    const rule = propertyAt(schema, ['amountRules', '[]']);
+    expect(Object.keys(rule.properties as object).sort()).toEqual(['action', 'amountColumn', 'approvalStep', 'currency', 'field', 'maxAmount', 'message', 'position', 'step']);
+    expect(propertyAt(rule as JsonSchema, ['action']).enum).toEqual(['BLOCK', 'WARN', 'EXTRA_APPROVAL']);
+    expect(propertyAt(rule as JsonSchema, ['maxAmount'])).toEqual({ type: 'number' });
+    expect(propertyAt(rule as JsonSchema, ['position', '?']).enum).toEqual(['Gerente general', 'Contador', 'Tesorero']);
+  });
+
+  it('declares exactly the keys of the zod spec', () => {
+    const schema = buildDraftToolSchema(catalog);
+    const keys = (node: unknown): string[] => Object.keys((node as { properties: object }).properties).sort();
+    expect(keys(schema)).toEqual(Object.keys(travelAdvanceSpec()).sort());
+    expect(keys(propertyAt(schema, ['steps', '[]']))).toEqual(Object.keys(travelAdvanceSpec().steps[0]!).sort());
+    expect(keys(propertyAt(schema, ['amountRules', '[]']))).toEqual(Object.keys(travelAdvanceSpec().amountRules[0]!).sort());
   });
 });

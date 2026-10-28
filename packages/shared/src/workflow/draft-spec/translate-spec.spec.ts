@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkDraftSpec, describeSpecProblems, describeWorkflowProblems } from './feedback.js';
 import { workflowDraftSpecSchema, type WorkflowDraftSpec } from './spec.js';
-import { advanceSpec, assignment, catalog, draftField, draftStep, link } from './test-fixtures.js';
+import { advanceSpec, assignment, catalog, draftField, draftStep, link, travelAdvanceSpec } from './test-fixtures.js';
 import { normalizeName, paragraphs, translateDraftSpec } from './translate-spec.js';
 
 function translated(spec: WorkflowDraftSpec) {
@@ -61,6 +61,8 @@ describe('translateDraftSpec', () => {
   it('builds group candidates, pools, same-assignee steps and parallel signers', () => {
     const spec: WorkflowDraftSpec = {
       assumptions: [],
+      initiators: [],
+      amountRules: [],
       steps: [
         draftStep('inicio', 'START'),
         draftStep('soporte', 'TASK', { assignment: assignment({ mode: 'GROUP', group: 'Mesa TI' }) }),
@@ -141,6 +143,8 @@ describe('translateDraftSpec', () => {
   it('asks for what a block type needs: an assignment, a notification, a wait, a formula, table columns', () => {
     const spec: WorkflowDraftSpec = {
       assumptions: [],
+      initiators: [],
+      amountRules: [],
       steps: [draftStep('inicio', 'START'), draftStep('tarea', 'TASK', { assignment: null }), draftStep('aviso', 'NOTIFICATION'), draftStep('espera', 'WAIT'), draftStep('fin', 'END')],
       transitions: [],
       fields: [draftField('inicio', 'TOTAL', 'FORMULA'), draftField('inicio', 'ITEMS', 'TABLE'), draftField('inicio', 'ANEXOS', 'TABLE', { columns: [{ code: 'X', label: 'X', type: 'FORMULA', required: false, options: null, expression: null, showTotal: false }] })],
@@ -155,5 +159,104 @@ describe('translateDraftSpec', () => {
     const lines = describeWorkflowProblems(check.errors, check.document);
     expect(lines).toContain('PEOPLE_BLOCK_WITHOUT_DECISION at step "pago"');
     expect(lines.join('\n')).not.toMatch(/new:/);
+  });
+
+  describe('initiators, signature blocks and amount rules', () => {
+    const withRule = (patch: Partial<WorkflowDraftSpec['amountRules'][number]>): WorkflowDraftSpec => {
+      const spec = travelAdvanceSpec();
+      return { ...spec, amountRules: [{ ...spec.amountRules[0]!, ...patch }] };
+    };
+
+    it('validates with zero errors and no stray warnings', () => {
+      const check = checkDraftSpec(travelAdvanceSpec(), catalog);
+      if (check.kind !== 'translated') throw new Error('expected a translation');
+      expect(describeWorkflowProblems(check.errors, check.document)).toEqual([]);
+    });
+
+    it('puts the initiators on START and nowhere else', () => {
+      const doc = translated({ ...travelAdvanceSpec(), initiators: [{ kind: 'POSITION', name: 'contador' }, { kind: 'GROUP', name: 'Mesa TI' }] });
+      expect(doc.steps.find((s) => s.type === 'START')!.initiators).toMatchObject([
+        { participantType: 'POSITION', positionId: 'pos-accountant', groupId: null },
+        { participantType: 'GROUP', groupId: 'grp-it', positionId: null },
+      ]);
+      expect(doc.steps.filter((s) => s.type !== 'START').flatMap((s) => s.initiators)).toEqual([]);
+    });
+
+    it('leaves START open to everyone without initiators, and names unknown ones', () => {
+      expect(translated({ ...travelAdvanceSpec(), initiators: [] }).steps.find((s) => s.type === 'START')!.initiators).toEqual([]);
+      expect(problemCodes({ ...travelAdvanceSpec(), initiators: [{ kind: 'GROUP', name: 'Nadie' }, { kind: 'POSITION', name: 'Mesa TI' }] })).toEqual(['SPEC_UNKNOWN_GROUP', 'SPEC_UNKNOWN_POSITION']);
+    });
+
+    it('builds a SIGNATURE block with its assignee, signers and the main document by default', () => {
+      const step = translated(travelAdvanceSpec()).steps.find((s) => s.id === 'new:firma')!;
+      expect(step).toMatchObject({ type: 'SIGNATURE', assignmentMode: 'POSITION', positionId: 'pos-treasurer', config: { document: 'MAIN_DOCUMENT' } });
+      expect(step.signers.map((signer) => [signer.signerType, signer.positionId, signer.sortOrder])).toEqual([['POSITION', 'pos-treasurer', 0], ['CREATOR', null, 1]]);
+    });
+
+    it('takes the document the model chose and the approval type of an APPROVER signer', () => {
+      const spec = travelAdvanceSpec();
+      const firma = draftStep('firma', 'SIGNATURE', { signatureDocument: 'STEP_DOCUMENT', assignment: assignment({ mode: 'CREATOR', signers: [{ kind: 'APPROVER', position: null }] }) });
+      const step = translated({ ...spec, steps: spec.steps.map((s) => (s.ref === 'firma' ? firma : s)) }).steps.find((s) => s.id === 'new:firma')!;
+      expect(step).toMatchObject({ config: { document: 'STEP_DOCUMENT' }, approvalGroupTypeId: 'type-boss', approvalLevel: 1 });
+    });
+
+    it('refuses a SIGNATURE block without signers, or without assignment, or with an unknown signer position', () => {
+      const replaceFirma = (assignmentValue: ReturnType<typeof assignment> | null): WorkflowDraftSpec => {
+        const spec = travelAdvanceSpec();
+        return { ...spec, steps: spec.steps.map((s) => (s.ref === 'firma' ? { ...s, assignment: assignmentValue } : s)) };
+      };
+      expect(problemCodes(replaceFirma(assignment({ mode: 'POSITION', position: 'Tesorero' })))).toEqual(['SPEC_SIGNATURE_WITHOUT_SIGNERS']);
+      expect(problemCodes(replaceFirma(null))).toEqual(['SPEC_ASSIGNMENT_MISSING']);
+      expect(problemCodes(replaceFirma(assignment({ mode: 'CREATOR', signers: [{ kind: 'POSITION', position: 'Notario' }] })))).toEqual(['SPEC_UNKNOWN_POSITION']);
+    });
+
+    it('turns the amount rule into a decimal string and derives the SYSTEM_ONLY edge into the approval step', () => {
+      const doc = translated(travelAdvanceSpec());
+      expect(doc.amountRules).toEqual([
+        {
+          id: 'new:a0', stepId: 'new:inicio', positionId: null, companyId: null, fieldCode: 'MONTO', rowTypeValue: null, amountColumn: null, typeColumn: null,
+          maxAmount: '5000000.00', currencyCode: 'COP', action: 'EXTRA_APPROVAL', approvalStepId: 'new:gerencia', message: 'Más de 5 millones requiere a gerencia.', isActive: true,
+        },
+      ]);
+      expect(doc.transitions.filter((t) => t.type === 'SYSTEM_ONLY')).toMatchObject([{ fromStepId: 'new:inicio', toStepId: 'new:gerencia', requiresComment: false }]);
+    });
+
+    it('types a transition the model drew into the approval step as SYSTEM_ONLY instead of adding another', () => {
+      const spec = travelAdvanceSpec();
+      const doc = translated({ ...spec, transitions: [...spec.transitions, link('inicio', 'gerencia', 'Pedir aprobación')] });
+      expect(doc.transitions.filter((t) => t.toStepId === 'new:gerencia')).toMatchObject([{ type: 'SYSTEM_ONLY', label: 'Pedir aprobación' }]);
+    });
+
+    it('keeps BLOCK and WARN rules free of approval steps and wiring', () => {
+      const doc = translated(withRule({ action: 'WARN', approvalStep: 'gerencia', step: null, currency: 'usd', position: 'Contador', maxAmount: 1234.5 }));
+      expect(doc.amountRules[0]).toMatchObject({ action: 'WARN', approvalStepId: null, stepId: null, currencyCode: 'USD', positionId: 'pos-accountant', maxAmount: '1234.50' });
+      expect(doc.transitions.some((t) => t.type === 'SYSTEM_ONLY')).toBe(false);
+    });
+
+    it('reports amount rule problems by position in the list and by names', () => {
+      expect(problemCodes(withRule({ step: null }))).toEqual(['SPEC_AMOUNT_RULE_STEP_REQUIRED']);
+      expect(problemCodes(withRule({ approvalStep: null }))).toEqual(['SPEC_AMOUNT_RULE_APPROVAL_STEP_MISSING']);
+      expect(problemCodes(withRule({ approvalStep: 'nadie', step: 'tampoco' }))).toEqual(['SPEC_UNKNOWN_REF', 'SPEC_UNKNOWN_REF']);
+      expect(problemCodes(withRule({ currency: 'pesos', position: 'Notario' })).sort()).toEqual(['SPEC_AMOUNT_RULE_CURRENCY_INVALID', 'SPEC_UNKNOWN_POSITION']);
+      const spec = withRule({ step: null });
+      const result = translateDraftSpec(spec, catalog);
+      if (result.ok) throw new Error('expected problems');
+      expect(describeSpecProblems(result.problems, spec)).toEqual(['SPEC_AMOUNT_RULE_STEP_REQUIRED at amount rule #0, field MONTO']);
+    });
+
+    it('lets the validator catch a rule on a missing or non numeric field, described by field code', () => {
+      const unknown = checkDraftSpec(withRule({ field: 'NADA' }), catalog);
+      const withText = withRule({ field: 'DESTINO' });
+      const text = checkDraftSpec({ ...withText, fields: [...withText.fields, draftField('inicio', 'DESTINO', 'TEXT')] }, catalog);
+      if (unknown.kind !== 'translated' || text.kind !== 'translated') throw new Error('expected a translation');
+      expect(describeWorkflowProblems(unknown.errors, unknown.document)).toContain('AMOUNT_RULE_UNKNOWN_FIELD at amount rule #0 on NADA (code=NADA)');
+      expect(describeWorkflowProblems(text.errors, text.document)).toContain('AMOUNT_RULE_FIELD_NOT_NUMERIC at amount rule #0 on DESTINO (code=DESTINO)');
+    });
+
+    it('rejects spec values the schema bounds', () => {
+      expect(workflowDraftSpecSchema.safeParse(withRule({ maxAmount: -1 })).success).toBe(false);
+      expect(workflowDraftSpecSchema.safeParse({ ...travelAdvanceSpec(), initiators: [{ kind: 'USER', name: 'x' }] }).success).toBe(false);
+      expect(workflowDraftSpecSchema.safeParse(travelAdvanceSpec()).success).toBe(true);
+    });
   });
 });
