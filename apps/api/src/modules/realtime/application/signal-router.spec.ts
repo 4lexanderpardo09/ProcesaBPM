@@ -5,6 +5,7 @@ import type { RealtimeSignal } from '../../../infrastructure/realtime/realtime-s
 import type { RealtimeSignalSource } from '../../../infrastructure/realtime/realtime-signal-source.js';
 import type { NotificationsService } from '../../notifications/application/notifications.service.js';
 import { RoomNames } from '../domain/room-names.js';
+import type { AiDraftSubscriptionsService } from './ai-draft-subscriptions.service.js';
 import type { ConnectionRegistry } from './connection-registry.js';
 import { DbWorkLimiter } from './db-work-limiter.js';
 import type { RealtimeEmitter } from './realtime-emitter.js';
@@ -19,13 +20,15 @@ const OTHER_T = '0199a000-0000-7000-8000-00000000000b';
 const U = '0199a000-0000-7000-8000-00000000000c';
 const TICKET = '0199a000-0000-7000-8000-00000000000d';
 const FILE = '0199a000-0000-7000-8000-00000000000e';
+const JOB = '0199a000-0000-7000-8000-00000000000f';
+const DRAFT = '0199a000-0000-7000-8000-000000000010';
 
 const principalOf = (sessionId: string, tenantId = T, userId = U): Principal => ({ userId, tenantId, sessionId, roleId: 'r', roleActive: true, roleIsAdmin: false, isOwner: false, permissionsVersion: 1, membership: { departmentId: null, siteId: null, positionId: null }, tenantMode: 'ACTIVE' });
 const socketOf = (principal: Principal, accepted = true) =>
   ({ id: Math.random().toString(36), accepted, data: { session: new SocketSession(principal, new Date(), 0, '127.0.0.1') } }) as unknown as RealtimeSocket & { accepted: boolean };
 const summary = { ticketId: TICKET, status: 'OPEN', currentStepId: null, currentLoop: 1, assignees: [], lastEventSeq: '7' };
 
-function setUp(rooms: Record<string, RealtimeSocket[]>, options: { queueMax?: number; readable?: boolean; summaryFor?: () => Promise<unknown> } = {}) {
+function setUp(rooms: Record<string, RealtimeSocket[]>, options: { queueMax?: number; readable?: boolean; summaryFor?: () => Promise<unknown>; mayFollow?: boolean } = {}) {
   let onSignal!: (signal: RealtimeSignal) => void;
   let onGap!: () => void;
   const source = { onSignal: (listener: typeof onSignal) => (onSignal = listener), onGap: (listener: typeof onGap) => (onGap = listener) } as unknown as RealtimeSignalSource;
@@ -34,13 +37,14 @@ function setUp(rooms: Record<string, RealtimeSocket[]>, options: { queueMax?: nu
   const gate = { verify: vi.fn((socket: RealtimeSocket & { accepted: boolean }) => Promise.resolve(socket.accepted ? socket.data.session!.principal : undefined)) } as unknown as SessionGate;
   const revalidator = { handleAccess: vi.fn(), whenIdle: () => Promise.resolve() } as unknown as SocketRevalidator;
   const subscriptions = { summaryFor: vi.fn(options.summaryFor ?? (() => Promise.resolve(options.readable === false ? undefined : summary))), drop: vi.fn() } as unknown as TicketSubscriptionsService;
+  const aiDrafts = { mayFollow: vi.fn(() => Promise.resolve(options.mayFollow ?? true)), drop: vi.fn() } as unknown as AiDraftSubscriptionsService;
   const notifications = { unreadCountOf: vi.fn(() => Promise.resolve(3)) } as unknown as NotificationsService;
   const emitted: Array<[string[], string, unknown]> = [];
   const emitter = { emit: (sockets: RealtimeSocket[], event: string, payload: unknown) => emitted.push([sockets.map((socket) => socket.id), event, payload]) } as unknown as RealtimeEmitter;
   const logger = { warn: vi.fn() } as unknown as JsonLogger;
-  const router = new SignalRouter({ REALTIME_SIGNAL_QUEUE_MAX: options.queueMax ?? 100 }, source, registry, gate, revalidator, subscriptions, notifications, new DbWorkLimiter({ REALTIME_DB_CONCURRENCY: 2 }), emitter, logger);
+  const router = new SignalRouter({ REALTIME_SIGNAL_QUEUE_MAX: options.queueMax ?? 100 }, source, registry, gate, revalidator, subscriptions, aiDrafts, notifications, new DbWorkLimiter({ REALTIME_DB_CONCURRENCY: 2 }), emitter, logger);
   router.start();
-  return { router, signal: (signal: RealtimeSignal) => onSignal(signal), gap: () => onGap(), gate, subscriptions, notifications, revalidator, emitted };
+  return { router, signal: (signal: RealtimeSignal) => onSignal(signal), gap: () => onGap(), gate, subscriptions, aiDrafts, notifications, revalidator, emitted };
 }
 
 describe('workOf', () => {
@@ -78,6 +82,27 @@ describe('SignalRouter', () => {
     expect(emitted).toHaveLength(2);
     expect(emitted).toContainEqual([[tab1.id, tab2.id], 'ticket.changed', { ticketId: TICKET, kinds: ['ticket.assigned', 'ticket.transitioned'], summary }]);
     expect(emitted).toContainEqual([[otherSession.id], 'ticket.changed', expect.objectContaining({ ticketId: TICKET })]);
+  });
+
+  it('an AI request reaches the verified followers of its draft in that tenant who may edit workflows, with ids only', async () => {
+    const follower = socketOf(principalOf('s1'));
+    const waiting = socketOf(principalOf('s2', T, FILE), false);
+    const foreign = socketOf(principalOf('s3', OTHER_T));
+    const { router, signal, aiDrafts, emitted } = setUp({ [RoomNames.aiDraft(T, DRAFT)]: [follower, waiting, foreign] });
+    signal({ v: 1, k: 'ai_job', t: T, id: JOB, w: DRAFT });
+    signal({ v: 1, k: 'ai_job', t: T, id: JOB, w: DRAFT });
+    await router.whenIdle();
+    expect(aiDrafts.mayFollow).toHaveBeenCalledTimes(1);
+    expect(emitted).toEqual([[[follower.id], 'ai_job.changed', { jobId: JOB, versionId: DRAFT }]]);
+  });
+
+  it('a follower who may no longer edit workflows stops following the draft instead of being told', async () => {
+    const socket = socketOf(principalOf('s1'));
+    const { router, signal, aiDrafts, emitted } = setUp({ [RoomNames.aiDraft(T, DRAFT)]: [socket] }, { mayFollow: false });
+    signal({ v: 1, k: 'ai_job', t: T, id: JOB, w: DRAFT });
+    await router.whenIdle();
+    expect(aiDrafts.drop).toHaveBeenCalledWith(socket, DRAFT);
+    expect(emitted).toEqual([]);
   });
 
   it('a ticket the recipient can no longer read is dropped instead of sent', async () => {

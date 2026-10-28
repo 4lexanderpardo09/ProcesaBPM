@@ -3,6 +3,7 @@ import type {
   NotificationsChangedPayload,
   SessionEndedPayload,
   SyncRequiredPayload,
+  AiJobChangedPayload,
   TicketAccessLostPayload,
   TicketChangedPayload,
   TicketDocumentGeneratedPayload,
@@ -21,6 +22,7 @@ export interface ServerToClientEvents {
   'ticket.changed': (payload: TicketChangedPayload) => void;
   'ticket.document_generated': (payload: TicketDocumentGeneratedPayload) => void;
   'ticket.access_lost': (payload: TicketAccessLostPayload) => void;
+  'ai_job.changed': (payload: AiJobChangedPayload) => void;
   'sync.required': (payload: SyncRequiredPayload) => void;
   'auth.required': (payload: AuthRequiredPayload) => void;
   'session.ended': (payload: SessionEndedPayload) => void;
@@ -48,6 +50,8 @@ export class SocketSession {
   state: 'active' | 'reauth' = 'active';
   reauthReason: ReauthReason | undefined;
   readonly tickets = new Set<string>();
+  /** Workflow drafts whose AI requests this socket follows. */
+  readonly aiDrafts = new Set<string>();
   readonly messages: TokenBucket;
   readonly refreshes: TokenBucket;
   unknownEvents = 0;
