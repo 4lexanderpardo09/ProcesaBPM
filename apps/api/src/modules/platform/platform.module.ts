@@ -10,6 +10,7 @@ import { TenantOwnerInviter } from './application/tenant-owner-inviter.js';
 import { BASE_ROLE_TEMPLATES, TenantRoleProvisioner } from './application/tenant-role-provisioner.js';
 import { AnnouncementAdminService } from './application/announcement-admin.service.js';
 import { CountryCatalogService } from './application/country-catalog.service.js';
+import { AiUsageService } from './application/ai-usage.service.js';
 import { OperationsService } from './application/operations.service.js';
 import { PlatformAuditQueryRepository } from './data/platform-audit-query.repository.js';
 import { PlatformAuditQueryService } from './application/platform-audit-query.service.js';
@@ -23,6 +24,7 @@ import { TenantSignupService } from './application/tenant-signup.service.js';
 import { TenantStatusService } from './application/tenant-status.service.js';
 import { AnnouncementAdminRepository } from './data/announcement-admin.repository.js';
 import { CountryCatalogRepository } from './data/country-catalog.repository.js';
+import { AiUsageRepository } from './data/ai-usage.repository.js';
 import { OperationsRepository } from './data/operations.repository.js';
 import { SupportSessionRepository } from './data/support-session.repository.js';
 import { PlatformUserRepository } from './data/platform-user.repository.js';
@@ -38,6 +40,7 @@ import { TenantRoleRepository } from './data/tenant-role.repository.js';
 import { PlatformAdminsController } from './http/platform-admins.controller.js';
 import { PlatformAnnouncementsController } from './http/platform-announcements.controller.js';
 import { PlatformCatalogController } from './http/platform-catalog.controller.js';
+import { PlatformAiUsageController } from './http/platform-ai-usage.controller.js';
 import { PlatformOperationsController } from './http/platform-operations.controller.js';
 import { PlatformAuditController } from './http/platform-audit.controller.js';
 import { PlatformSupportController } from './http/platform-support.controller.js';
@@ -57,6 +60,7 @@ import { PlatformUsersController } from './http/platform-users.controller.js';
     PlatformAnnouncementsController,
     PlatformCatalogController,
     PlatformOperationsController,
+    PlatformAiUsageController,
     PlatformAuditController,
     PlatformSupportController,
     PlatformDeletionController,
@@ -87,6 +91,8 @@ import { PlatformUsersController } from './http/platform-users.controller.js';
     CountryCatalogService,
     OperationsRepository,
     OperationsService,
+    AiUsageRepository,
+    AiUsageService,
     PlatformAuditQueryRepository,
     PlatformAuditQueryService,
     SupportSessionRepository,
