@@ -82,6 +82,39 @@ test.describe('blog and legal pages', () => {
 
   test('the privacy notice shows its version', async ({ page }) => {
     await page.goto('/privacidad');
-    await expect(page.getByText('Versión 1')).toBeVisible();
+    await expect(page.getByText('Versión 2')).toBeVisible();
+  });
+});
+
+test.describe('search engines and AI assistants', () => {
+  test('one canonical address per page and the structured data of the home', async ({ page }) => {
+    await page.goto('/index.html');
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://procesabpm.com/');
+    const graph = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent()) ?? '{}') as { '@graph': Array<{ '@type': string }> };
+    expect(graph['@graph'].map((node) => node['@type'])).toEqual(['Organization', 'WebSite', 'SoftwareApplication', 'FAQPage']);
+    await page.goto('/blog.html');
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://procesabpm.com/blog');
+  });
+
+  test('robots.txt points to the sitemap and llms.txt describes the product', async ({ request }) => {
+    const robots = await (await request.get('/robots.txt')).text();
+    expect(robots).toContain('Sitemap: https://procesabpm.com/sitemap-index.xml');
+    expect(robots).toContain('User-agent: GPTBot');
+    expect((await request.get('/sitemap-index.xml')).status()).toBe(200);
+    const llms = await (await request.get('/llms.txt')).text();
+    expect(llms).toContain('# ProcesaBPM');
+    expect(llms).toContain('¿Necesito saber programar?');
+  });
+
+  test('the questions open and close', async ({ page }) => {
+    await page.goto('/#preguntas');
+    await page.getByText('¿Funciona en el celular?').click();
+    await expect(page.getByText('sin instalar nada')).toBeVisible();
+  });
+
+  test('without a measurement id there is no analytics and no banner', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#consent')).toHaveCount(0);
+    expect(await page.evaluate(() => document.querySelector('script[src*="googletagmanager"]'))).toBeNull();
   });
 });

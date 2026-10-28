@@ -82,7 +82,8 @@ COPY packages/shared packages/shared
 COPY docs/diseno docs/diseno
 COPY apps/landing apps/landing
 ARG LANDING_SITE_URL
-ENV LANDING_SITE_URL=${LANDING_SITE_URL}
+ARG PUBLIC_GA_ID
+ENV LANDING_SITE_URL=${LANDING_SITE_URL} PUBLIC_GA_ID=${PUBLIC_GA_ID}
 RUN pnpm --filter @procesabpm/landing build
 
 # --- Runtime base: no package manager, no shell tooling beyond the image's, a non-root user -------------------------

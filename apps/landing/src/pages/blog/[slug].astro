@@ -2,6 +2,8 @@
 import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import { formatArticleDate, publishedArticles } from '../../scripts/blog';
+import { canonicalPath } from '../../scripts/canonical';
+import { articleLd } from '../../data/structured-data';
 
 export async function getStaticPaths() {
   const articles = publishedArticles(await getCollection('blog'), import.meta.env.DEV);
@@ -10,9 +12,11 @@ export async function getStaticPaths() {
 
 const { article } = Astro.props;
 const { Content } = await render(article);
+const site = Astro.site ?? new URL('https://procesabpm.com');
+const url = new URL(canonicalPath(Astro.url.pathname), site).href;
 ---
 
-<Base title={article.data.title} description={article.data.description}>
+<Base title={article.data.title} description={article.data.description} type="article" structuredData={[articleLd(site, url, article.data)]}>
   <main class="plain article">
     <article class="wrap">
       <a class="back" href="/blog">← Blog</a>
