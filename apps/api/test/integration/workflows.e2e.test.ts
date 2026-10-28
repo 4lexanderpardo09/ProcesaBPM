@@ -418,7 +418,7 @@ describe('workflows API (builder backend)', () => {
       }).expect(200)).body;
       const taskId = saved.idMap['new:task'] as string;
       const approvalId = saved.idMap['new:approval'] as string;
-      await admin.post(`${version(c)}/fields`, { stepId: c.start, code: 'AMOUNT', label: 'Amount', type: 'CURRENCY' }).expect(201);
+      await admin.post(`${version(c)}/fields`, { stepId: c.start, code: 'AMOUNT', label: 'Amount', type: 'CURRENCY', isImmutable: true }).expect(201);
       await admin.post(`${version(c)}/fields`, { stepId: taskId, code: 'NOTE', label: 'Note', type: 'TEXT', config: { maxLength: 50 } }).expect(201);
       await admin.post(`${version(c)}/amount-rules`, { stepId: taskId, fieldCode: 'AMOUNT', maxAmount: '500.00', currencyCode: 'COP', action: 'EXTRA_APPROVAL', approvalStepId: approvalId }).expect(201);
       await admin.put(`${version(c)}/steps/${taskId}/candidates`, { candidates: [{ participantType: 'USER', userId: tenant.userId }] }).expect(200);
@@ -442,6 +442,7 @@ describe('workflows API (builder backend)', () => {
       expect(copiedTask.candidates).toHaveLength(1);
       expect(copiedTask.slaOverrides).toEqual([{ companyId: tenant.companyId, slaValue: 2, slaUnit: 'BUSINESS_DAYS' }]);
       expect(copy.document.steps.find((s) => s.type === 'START')!.initiators).toHaveLength(1);
+      expect(copy.document.fields.find((f) => f.code === 'AMOUNT')!.isImmutable).toBe(true);
       expect(copy.validation).toEqual(source.validation ?? copy.validation);
       // The source is untouched.
       expect(await detail(c)).toEqual(source);

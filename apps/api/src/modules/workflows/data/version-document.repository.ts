@@ -194,6 +194,7 @@ export class VersionDocumentRepository {
         capture: row.capture,
         isRequired: row.isRequired,
         isReadOnly: row.isReadOnly,
+        isImmutable: row.isImmutable,
         sortOrder: row.sortOrder,
         config: json(row.config),
         dataSource: jsonOrNull(row.dataSource),
