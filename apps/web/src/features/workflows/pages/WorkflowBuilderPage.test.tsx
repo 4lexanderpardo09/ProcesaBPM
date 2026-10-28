@@ -641,6 +641,28 @@ describe('«Crear con IA» in the builder', () => {
     expect(second).toHaveTextContent('9.000 tokens');
   });
 
+  it('draws the diagram the AI has written so far while it designs, and nothing before it has a block', async () => {
+    const preview = {
+      steps: [
+        { ref: 'inicio', type: 'START', name: 'Solicitud de anticipo' },
+        { ref: 'jefe', type: 'APPROVAL', name: 'Aprobación del jefe' },
+      ],
+      transitions: [{ from: 'inicio', to: 'jefe', label: 'Enviar' }],
+    };
+    const state = { history: [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1, preview: { steps: [], transitions: [] } })] };
+    const realtime = fakeRealtime();
+    renderRoute(url, { handlers: aiApi(state), realtime: realtime.client });
+    const region = await openPanel();
+    await within(region).findAllByText('La IA está diseñando el flujo (ronda 1)…');
+    expect(within(region).queryByText(/Así va quedando el flujo/)).not.toBeInTheDocument();
+
+    state.history = [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1, preview })];
+    realtime.fire();
+    expect(await within(region).findByText('Así va quedando el flujo: 2 bloques')).toBeInTheDocument();
+    const blocks = within(region).getByRole('list', { name: 'Bloques que la IA lleva escritos' });
+    expect(within(blocks).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Inicio: Solicitud de anticipo', 'Aprobación: Aprobación del jefe']);
+  });
+
   it('cancels the request in progress', async () => {
     const state = { history: [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1 })] };
     const { fake } = renderRoute(url, { handlers: aiApi(state), realtime: fakeRealtime().client });

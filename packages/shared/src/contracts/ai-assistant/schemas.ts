@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DRAFT_LOSS_SUBJECTS } from '../../workflow/draft-spec/spec-from-document.js';
-import { DRAFT_DECISION_TOPICS } from '../../workflow/draft-spec/spec.js';
+import { DRAFT_DECISION_TOPICS, DRAFT_STEP_TYPES } from '../../workflow/draft-spec/spec.js';
 
 /**
  * The version of the transfer notice an administrator accepts when turning the assistant on (descriptions go to the
@@ -131,6 +131,13 @@ export type AiDraftOutline = z.infer<typeof aiDraftOutlineSchema>;
 
 export const draftSpecLossSchema = z.object({ subject: z.enum(DRAFT_LOSS_SUBJECTS), name: z.string(), properties: z.array(z.string()) });
 
+/** The diagram so far of a request being designed. Anything that does not read as one is no preview. */
+export const aiDraftPreviewSchema = z.object({
+  steps: z.array(z.object({ ref: z.string(), type: z.enum(DRAFT_STEP_TYPES), name: z.string() })),
+  transitions: z.array(z.object({ from: z.string(), to: z.string(), label: z.string() })),
+});
+export type AiDraftPreview = z.infer<typeof aiDraftPreviewSchema>;
+
 export const aiDraftResultSchema = z.object({
   revision: z.number().int(),
   /** What the assistant decided on its own (Spanish sentences shown to the person). */
@@ -163,6 +170,8 @@ export const aiJobResponseSchema = z.object({
   problems: z.number().int().nullable(),
   errorCode: z.string().nullable(),
   result: aiDraftResultSchema.nullable(),
+  /** While the model writes a round: the blocks and connections it has finished so far (`draftPreviewOf`). */
+  preview: aiDraftPreviewSchema.nullable().default(null),
   createdAt: z.string(),
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),

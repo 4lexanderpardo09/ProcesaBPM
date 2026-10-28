@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AiJobStage } from '@procesabpm/shared';
+import type { AiJobStage, DraftPreview } from '@procesabpm/shared';
 import type { CrossTenantTransaction, TenantTransaction } from '../../../infrastructure/database/transaction-scope.js';
 
 export interface AiJobClaim {
@@ -36,6 +36,13 @@ export class AiJobClaimsRepository {
   async setStage(tx: CrossTenantTransaction, claim: AiJobClaim, progress: AiJobProgress): Promise<boolean> {
     const [row] = await tx.$queryRaw<Array<{ ok: boolean }>>`
       SELECT set_ai_job_stage(${claim.tenantId}::uuid, ${claim.jobId}::uuid, ${claim.claimToken}::uuid, ${progress.stage}::ai_job_stage, ${progress.round ?? null}::int, ${progress.problems ?? null}::int) AS ok`;
+    return row?.ok === true;
+  }
+
+  /** The diagram so far of the round being designed. `false`: that round is over or the request is not ours: ignore. */
+  async setPreview(tx: CrossTenantTransaction, claim: AiJobClaim, round: number, preview: DraftPreview): Promise<boolean> {
+    const [row] = await tx.$queryRaw<Array<{ ok: boolean }>>`
+      SELECT set_ai_job_preview(${claim.tenantId}::uuid, ${claim.jobId}::uuid, ${claim.claimToken}::uuid, ${round}::int, ${JSON.stringify(preview)}::jsonb) AS ok`;
     return row?.ok === true;
   }
 

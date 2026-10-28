@@ -43,9 +43,12 @@ export class LlmCallError extends Error {
   }
 }
 
+/** Told the tool's arguments written so far (the whole text each time) while the answer streams. Must not throw. */
+export type ToolArgumentsListener = (argumentsSoFar: string) => void;
+
 /** A language model behind an API. `name` and `model` go to the usage ledger. */
 export abstract class LlmProvider {
   abstract readonly name: string;
   abstract readonly model: string;
-  abstract complete(request: LlmRequest, signal: AbortSignal): Promise<LlmResult>;
+  abstract complete(request: LlmRequest, signal: AbortSignal, onArguments?: ToolArgumentsListener): Promise<LlmResult>;
 }
