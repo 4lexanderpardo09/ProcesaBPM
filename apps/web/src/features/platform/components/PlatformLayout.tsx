@@ -15,6 +15,7 @@ const SECTIONS = [
   [paths.platformAccounts, 'accounts'],
   [paths.platformCountries, 'countries'],
   [paths.platformOperations, 'operations'],
+  [paths.platformAiUsage, 'aiUsage'],
   [paths.platformAudit, 'audit'],
 ] as const;
 

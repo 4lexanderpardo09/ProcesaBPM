@@ -1,6 +1,7 @@
 export { PlatformLayout } from './components/PlatformLayout';
 export { AccountsPage } from './pages/AccountsPage';
 export { AdminsPage } from './pages/AdminsPage';
+export { AiUsagePage } from './pages/AiUsagePage';
 export { AnnouncementsPage } from './pages/AnnouncementsPage';
 export { AuditPage } from './pages/AuditPage';
 export { CountriesPage } from './pages/CountriesPage';
