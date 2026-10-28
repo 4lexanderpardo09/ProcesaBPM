@@ -461,3 +461,66 @@ export interface MfaResetResponse {
 
 /** Parses `MfaResetResponse` (for the web console). */
 export const mfaResetResponseSchema = z.object({ resetAt: z.string(), revokedSessions: z.number() }) satisfies z.ZodType<MfaResetResponse>;
+
+/** The longest window the AI usage report reads: the token ledger is kept 13 months. */
+export const PLATFORM_AI_USAGE_MAX_DAYS = 400;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS) + 1;
+
+/** Calendar days in UTC, both included. Without them the report covers the current month. */
+export const platformAiUsageQuerySchema = z
+  .object({ from: isoDateSchema.optional(), to: isoDateSchema.optional() })
+  .strict()
+  .refine((value) => (value.from === undefined) === (value.to === undefined), { path: ['to'], message: 'Give both dates or none' })
+  .refine((value) => value.from === undefined || value.to === undefined || value.to >= value.from, { path: ['to'], message: 'The end must not be before the start' })
+  .refine((value) => value.from === undefined || value.to === undefined || daysBetween(value.from, value.to) <= PLATFORM_AI_USAGE_MAX_DAYS, {
+    path: ['to'],
+    message: `At most ${PLATFORM_AI_USAGE_MAX_DAYS} days`,
+  });
+export type PlatformAiUsageQuery = z.infer<typeof platformAiUsageQuerySchema>;
+
+/** What the assistant cost in a period: requests, calls to the provider and tokens. `totalTokens` = prompt + completion. */
+export interface AiUsageFigures {
+  readonly jobs: { readonly total: number; readonly succeeded: number; readonly failed: number };
+  readonly calls: number;
+  readonly promptTokens: number;
+  readonly cachedPromptTokens: number;
+  readonly completionTokens: number;
+  readonly reasoningTokens: number;
+  readonly totalTokens: number;
+}
+
+/** One organization's figures; never a description nor a result. */
+export interface TenantAiUsage extends AiUsageFigures {
+  readonly tenantId: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly status: (typeof TENANT_STATUSES)[number];
+  readonly assistantEnabled: boolean;
+}
+
+export interface PlatformAiUsageResponse {
+  readonly from: string;
+  readonly to: string;
+  /** Organizations with the assistant on or with use in the period, the most tokens first. */
+  readonly tenants: readonly TenantAiUsage[];
+  readonly totals: AiUsageFigures;
+}
+
+const aiUsageFiguresShape = {
+  jobs: z.object({ total: z.number(), succeeded: z.number(), failed: z.number() }),
+  calls: z.number(),
+  promptTokens: z.number(),
+  cachedPromptTokens: z.number(),
+  completionTokens: z.number(),
+  reasoningTokens: z.number(),
+  totalTokens: z.number(),
+};
+
+/** Parses `PlatformAiUsageResponse` (for the web console). */
+export const platformAiUsageResponseSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  tenants: z.array(z.object({ tenantId: z.string(), slug: z.string(), name: z.string(), status: tenantStatusSchema, assistantEnabled: z.boolean(), ...aiUsageFiguresShape })),
+  totals: z.object(aiUsageFiguresShape),
+}) satisfies z.ZodType<PlatformAiUsageResponse>;

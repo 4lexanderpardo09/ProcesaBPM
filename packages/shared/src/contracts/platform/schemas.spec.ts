@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANNOUNCEMENT_MAX_TENANTS, announcementRequestSchema, createTenantRequestSchema, mfaResetRequestSchema, platformUserLookupQuerySchema, TENANT_SLUG_PATTERN } from './schemas.js';
+import { ANNOUNCEMENT_MAX_TENANTS, announcementRequestSchema, createTenantRequestSchema, mfaResetRequestSchema, PLATFORM_AI_USAGE_MAX_DAYS, platformAiUsageQuerySchema, platformUserLookupQuerySchema, TENANT_SLUG_PATTERN } from './schemas.js';
 
 const valid = {
   slug: 'acme-co',
@@ -134,5 +134,27 @@ describe('announcementRequestSchema', () => {
 
   it('still refuses an end that is not after the start', () => {
     expect(issuesOf({ ...base, endsAt: base.startsAt })).toEqual(['endsAt']);
+  });
+});
+
+describe('platformAiUsageQuerySchema', () => {
+  it('takes both dates or none', () => {
+    expect(platformAiUsageQuerySchema.parse({})).toEqual({});
+    expect(platformAiUsageQuerySchema.parse({ from: '2026-10-01', to: '2026-10-31' })).toEqual({ from: '2026-10-01', to: '2026-10-31' });
+    expect(platformAiUsageQuerySchema.safeParse({ from: '2026-10-01' }).success).toBe(false);
+    expect(platformAiUsageQuerySchema.safeParse({ to: '2026-10-31' }).success).toBe(false);
+  });
+
+  it('refuses an end before the start, invalid dates and unknown filters', () => {
+    expect(platformAiUsageQuerySchema.safeParse({ from: '2026-10-02', to: '2026-10-01' }).success).toBe(false);
+    expect(platformAiUsageQuerySchema.parse({ from: '2026-10-01', to: '2026-10-01' })).toEqual({ from: '2026-10-01', to: '2026-10-01' });
+    expect(platformAiUsageQuerySchema.safeParse({ from: '2026-02-30', to: '2026-03-01' }).success).toBe(false);
+    expect(platformAiUsageQuerySchema.safeParse({ tenantId: 'x' }).success).toBe(false);
+  });
+
+  it(`reads at most ${PLATFORM_AI_USAGE_MAX_DAYS} days`, () => {
+    const to = (days: number) => new Date(Date.UTC(2025, 0, 1) + (days - 1) * 86_400_000).toISOString().slice(0, 10);
+    expect(platformAiUsageQuerySchema.safeParse({ from: '2025-01-01', to: to(PLATFORM_AI_USAGE_MAX_DAYS) }).success).toBe(true);
+    expect(platformAiUsageQuerySchema.safeParse({ from: '2025-01-01', to: to(PLATFORM_AI_USAGE_MAX_DAYS + 1) }).success).toBe(false);
   });
 });
