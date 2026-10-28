@@ -23,10 +23,24 @@ export const NO_USAGE: LlmUsage = { promptTokens: 0, cachedPromptTokens: 0, comp
 /** What came back: the tool's arguments (parsed JSON, not yet validated), or anything else (plain text, broken JSON). */
 export type LlmAnswer = { readonly kind: 'tool_call'; readonly arguments: unknown } | { readonly kind: 'no_tool_call' };
 
+/** How an answer arrived, for the logs (counts and times only, never content). */
+export interface LlmDelivery {
+  /** The response's media type (`text/event-stream` when it streamed). */
+  readonly contentType: string;
+  readonly streamed: boolean;
+  /** Streamed pieces of reasoning, and of the asked tool's arguments. */
+  readonly reasoningChunks: number;
+  readonly argumentChunks: number;
+  /** Milliseconds from the request to the first and the last piece of the arguments; null when none streamed. */
+  readonly firstArgumentMs: number | null;
+  readonly lastArgumentMs: number | null;
+}
+
 export interface LlmResult {
   readonly answer: LlmAnswer;
   readonly usage: LlmUsage;
   readonly durationMs: number;
+  readonly delivery?: LlmDelivery;
 }
 
 export type LlmFailureKind = 'TIMEOUT' | 'RATE_LIMITED' | 'PROVIDER_ERROR' | 'ABORTED' | 'NOT_CONFIGURED';

@@ -1,4 +1,4 @@
-import { LlmCallError, type LlmAnswer, LlmProvider, type LlmRequest, type LlmResult, type LlmUsage, type ToolArgumentsListener } from './llm-provider.js';
+import { LlmCallError, type LlmAnswer, type LlmDelivery, LlmProvider, type LlmRequest, type LlmResult, type LlmUsage, type ToolArgumentsListener } from './llm-provider.js';
 
 export interface OpenAiCompatibleOptions {
   readonly providerName: string;
@@ -22,7 +22,7 @@ interface ChatCompletion {
 
 /** One server-sent event of a streamed answer: pieces of the tool calls, and the usage in the last one. */
 interface ChatChunk {
-  readonly choices?: ReadonlyArray<{ readonly delta?: { readonly tool_calls?: ReadonlyArray<ToolCallPart> } }>;
+  readonly choices?: ReadonlyArray<{ readonly delta?: { readonly reasoning_content?: string | null; readonly tool_calls?: ReadonlyArray<ToolCallPart> } }>;
   readonly usage?: ChatUsage;
 }
 
@@ -63,6 +63,7 @@ export class OpenAiCompatibleProvider extends LlmProvider {
     const timeout = AbortSignal.timeout(this.options.timeoutMs);
     let response: Response;
     let body: ChatCompletion;
+    let delivery: LlmDelivery;
     try {
       response = await this.fetchImpl(`${this.options.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
         method: 'POST',
@@ -84,15 +85,22 @@ export class OpenAiCompatibleProvider extends LlmProvider {
         await response.body?.cancel().catch(() => undefined);
         throw new LlmCallError(response.status === 429 ? 'RATE_LIMITED' : 'PROVIDER_ERROR', elapsed(), response.status);
       }
-      const streamed = response.headers.get('content-type')?.includes('text/event-stream') === true && response.body !== null;
-      body = streamed ? await readStream(response.body!, request.tool.name, onArguments) : ((await response.json()) as ChatCompletion);
+      const contentType = (response.headers.get('content-type') ?? '').split(';')[0]!.trim();
+      if (contentType === 'text/event-stream' && response.body !== null) {
+        const read = await readStream(response.body, request.tool.name, elapsed, onArguments);
+        body = read.body;
+        delivery = { contentType, streamed: true, ...read.facts };
+      } else {
+        body = (await response.json()) as ChatCompletion;
+        delivery = { contentType, streamed: false, reasoningChunks: 0, argumentChunks: 0, firstArgumentMs: null, lastArgumentMs: null };
+      }
     } catch (error) {
       if (error instanceof LlmCallError) throw error;
       if (signal.aborted) throw new LlmCallError('ABORTED', elapsed());
       if (timeout.aborted) throw new LlmCallError('TIMEOUT', elapsed());
       throw new LlmCallError('PROVIDER_ERROR', elapsed());
     }
-    return { answer: this.answerOf(body, request.tool.name), usage: usageOf(body), durationMs: elapsed() };
+    return { answer: this.answerOf(body, request.tool.name), usage: usageOf(body), durationMs: elapsed(), delivery };
   }
 
   private answerOf(body: ChatCompletion, toolName: string): LlmAnswer {
@@ -111,8 +119,14 @@ export class OpenAiCompatibleProvider extends LlmProvider {
  * Puts a streamed answer back together as the one-piece answer it stands for: each tool call's arguments are the
  * concatenation of their pieces (by index). `onArguments` hears the named tool's arguments after each piece.
  */
-async function readStream(stream: ReadableStream<Uint8Array>, toolName: string, onArguments?: ToolArgumentsListener): Promise<ChatCompletion> {
+async function readStream(
+  stream: ReadableStream<Uint8Array>,
+  toolName: string,
+  elapsed: () => number,
+  onArguments?: ToolArgumentsListener,
+): Promise<{ body: ChatCompletion; facts: Omit<LlmDelivery, 'contentType' | 'streamed'> }> {
   const calls: Array<{ name: string; arguments: string }> = [];
+  const facts = { reasoningChunks: 0, argumentChunks: 0, firstArgumentMs: null as number | null, lastArgumentMs: null as number | null };
   let usage: ChatUsage | undefined;
   let pending = '';
   const decoder = new TextDecoder();
@@ -120,11 +134,16 @@ async function readStream(stream: ReadableStream<Uint8Array>, toolName: string, 
     if (data === '[DONE]') return;
     const chunk = JSON.parse(data) as ChatChunk;
     usage = chunk.usage ?? usage;
+    if ((chunk.choices?.[0]?.delta?.reasoning_content ?? '') !== '') facts.reasoningChunks += 1;
     for (const part of chunk.choices?.[0]?.delta?.tool_calls ?? []) {
       const call = (calls[part.index ?? 0] ??= { name: '', arguments: '' });
       call.name += part.function?.name ?? '';
       call.arguments += part.function?.arguments ?? '';
-      if (call.name === toolName && (part.function?.arguments ?? '') !== '') onArguments?.(call.arguments);
+      if (call.name !== toolName || (part.function?.arguments ?? '') === '') continue;
+      facts.argumentChunks += 1;
+      facts.firstArgumentMs ??= elapsed();
+      facts.lastArgumentMs = elapsed();
+      onArguments?.(call.arguments);
     }
   };
   const lines = (text: string) => {
@@ -138,7 +157,7 @@ async function readStream(stream: ReadableStream<Uint8Array>, toolName: string, 
     pending = pending.slice(end + 1);
   }
   lines(pending + decoder.decode());
-  return { choices: [{ message: { tool_calls: calls.map((call) => ({ function: call })) } }], ...(usage === undefined ? {} : { usage }) };
+  return { body: { choices: [{ message: { tool_calls: calls.map((call) => ({ function: call })) } }], ...(usage === undefined ? {} : { usage }) }, facts };
 }
 
 function usageOf(body: ChatCompletion): LlmUsage {

@@ -1,5 +1,5 @@
 import { type AiDraftOutline, buildDraftToolSchema, carryOverSettings, checkDraftSpec, describeSpecProblems, describeWorkflowProblems, type DraftCatalog, type DraftDecision, type DraftPreview, draftPreviewOf, type DraftSpecLoss, findEngineSupportProblems, validateWorkflowGraph, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
-import { LlmCallError, type LlmFailureKind, type LlmProvider, type LlmResult, type LlmUsage, NO_USAGE } from '../../../infrastructure/llm/llm-provider.js';
+import { LlmCallError, type LlmDelivery, type LlmFailureKind, type LlmProvider, type LlmResult, type LlmUsage, NO_USAGE } from '../../../infrastructure/llm/llm-provider.js';
 import { blockingProblems } from '../../workflows/application/draft-document-importer.js';
 import { buildDraftPrompt, DRAFT_TOOL_DESCRIPTION, DRAFT_TOOL_NAME, type DraftCorrection, type DraftTask } from '../domain/prompt-builder.js';
 
@@ -12,6 +12,9 @@ export interface CallRecord {
   readonly usage: LlmUsage;
   readonly durationMs: number;
   readonly errorCode: string | null;
+  /** How the answer arrived (streamed or not, when its arguments came), and how many previews it gave. */
+  readonly delivery?: LlmDelivery;
+  readonly previews?: number;
 }
 
 export interface DesignHooks {
@@ -84,8 +87,9 @@ export class DraftDesigner {
     for (let round = 1; round <= this.maxRounds; round += 1) {
       if (signal.aborted || !(await hooks.beforeRound(round))) return { kind: 'interrupted' };
       let result: LlmResult;
+      const previewer = this.previewer(round, hooks);
       try {
-        result = await this.provider.complete({ ...buildDraftPrompt(task, catalog, correction), tool }, signal, this.previewer(round, hooks));
+        result = await this.provider.complete({ ...buildDraftPrompt(task, catalog, correction), tool }, signal, previewer?.listen);
       } catch (error) {
         if (!(error instanceof LlmCallError)) throw error;
         await hooks.afterCall({ round, outcome: FAILURE_OUTCOME[error.kind], usage: NO_USAGE, durationMs: error.durationMs, errorCode: error.status === undefined ? error.kind : `HTTP_${error.status}` });
@@ -95,7 +99,15 @@ export class DraftDesigner {
       }
       answered = true;
       const evaluation = this.evaluate(result, task, catalog);
-      await hooks.afterCall({ round, outcome: evaluation.outcome, usage: result.usage, durationMs: result.durationMs, errorCode: null });
+      await hooks.afterCall({
+        round,
+        outcome: evaluation.outcome,
+        usage: result.usage,
+        durationMs: result.durationMs,
+        errorCode: null,
+        ...(result.delivery === undefined ? {} : { delivery: result.delivery }),
+        previews: previewer?.shown() ?? 0,
+      });
       if (evaluation.candidate !== undefined) {
         best = evaluation.candidate;
         if (best.clean) return { kind: 'draft', ...draftOf(best), rounds: round, corrections };
@@ -109,20 +121,23 @@ export class DraftDesigner {
   }
 
   /** Turns the arguments streamed so far into previews: at most one per interval, and only when the diagram grew. */
-  private previewer(round: number, hooks: DesignHooks): ((argumentsSoFar: string) => void) | undefined {
+  private previewer(round: number, hooks: DesignHooks): { listen: (argumentsSoFar: string) => void; shown: () => number } | undefined {
     const show = hooks.onPreview;
     if (show === undefined) return undefined;
     let shownAt = Number.NEGATIVE_INFINITY;
     let shownSize = 0;
-    return (argumentsSoFar) => {
+    let shown = 0;
+    const listen = (argumentsSoFar: string) => {
       if (this.now() - shownAt < PREVIEW_INTERVAL_MS) return;
       const preview = draftPreviewOf(argumentsSoFar);
       const size = preview.steps.length + preview.transitions.length;
       if (size <= shownSize) return;
       shownAt = this.now();
       shownSize = size;
+      shown += 1;
       show(round, preview);
     };
+    return { listen, shown: () => shown };
   }
 
   private evaluate(result: LlmResult, task: DraftTask, catalog: DraftCatalog): Evaluation {

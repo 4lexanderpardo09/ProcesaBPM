@@ -86,7 +86,7 @@ describe('DraftDesigner', () => {
   it('returns the first draft that has no problems, recording the call', async () => {
     const { result, calls, provider } = await run([tool(advanceSpec())]);
     expect(result).toMatchObject({ kind: 'draft', rounds: 1, corrections: 0, errors: 0, summary: { assumptions: advanceSpec().assumptions, decisions: advanceSpec().decisions } });
-    expect(calls).toEqual([{ round: 1, outcome: 'OK', usage: USAGE, durationMs: 1000, errorCode: null }]);
+    expect(calls).toEqual([{ round: 1, outcome: 'OK', usage: USAGE, durationMs: 1000, errorCode: null, previews: expect.any(Number) }]);
     expect(provider.requests[0]!.tool.name).toBe('submit_workflow_draft');
   });
 

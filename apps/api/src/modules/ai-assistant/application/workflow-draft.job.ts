@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type AiDraftResult, type DraftPreview, type DraftSpecLoss, ImmutableDataError, NotFoundError, StaleRevisionError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
-import { LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
+import { type LlmDelivery, LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
 import { DraftDocumentImporter, DraftImportRejectedError } from '../../workflows/application/draft-document-importer.js';
 import { type AiJobClaim, AiJobClaimsRepository, type AiJobProgress } from '../data/ai-job-claims.repository.js';
 import { AiJobWorkRepository, type DraftJobInput } from '../data/ai-job-work.repository.js';
@@ -76,6 +76,7 @@ export class WorkflowDraftJob {
       stop,
     );
     await previews.settled();
+    if (previews.counts.written + previews.counts.refused + previews.counts.failed > 0) this.log('info', 'ai_job.previews', claim, { ...previews.counts });
     if (result.kind === 'interrupted') {
       this.log('info', 'ai_job.interrupted', claim);
       return 'interrupted';
@@ -127,7 +128,7 @@ export class WorkflowDraftJob {
    * cost can still be reconciled) and the designer goes on; the next lease renewal tells it whether to stop.
    */
   private async record(claim: AiJobClaim, input: DraftJobInput, call: CallRecord): Promise<void> {
-    const facts = { round: call.round, outcome: call.outcome, errorCode: call.errorCode, promptTokens: call.usage.promptTokens, cachedPromptTokens: call.usage.cachedPromptTokens, completionTokens: call.usage.completionTokens, reasoningTokens: call.usage.reasoningTokens, durationMs: call.durationMs };
+    const facts = { round: call.round, outcome: call.outcome, errorCode: call.errorCode, promptTokens: call.usage.promptTokens, cachedPromptTokens: call.usage.cachedPromptTokens, completionTokens: call.usage.completionTokens, reasoningTokens: call.usage.reasoningTokens, durationMs: call.durationMs, previews: call.previews ?? 0, ...deliveryFacts(call.delivery) };
     try {
       await this.runner.withTenant(claim.tenantId, (tx) =>
         this.work.recordUsage(tx, { taskKind: input.kind, tenantId: claim.tenantId, jobId: claim.jobId, userId: input.requestedById, provider: this.provider.name, model: this.provider.model, jobAttempt: claim.attempt, ...call }),
@@ -166,6 +167,8 @@ class PreviewWriter {
   private writing: Promise<void> = Promise.resolve();
   private waiting: { round: number; preview: DraftPreview } | undefined;
   private busy = false;
+  /** Written; refused by the database (the round was already over); failed. For the log. */
+  readonly counts = { written: 0, refused: 0, failed: 0 };
 
   constructor(
     private readonly write: (round: number, preview: DraftPreview) => Promise<boolean>,
@@ -187,10 +190,29 @@ class PreviewWriter {
     while (this.waiting !== undefined) {
       const { round, preview } = this.waiting;
       this.waiting = undefined;
-      await this.write(round, preview).catch(this.onError);
+      try {
+        if (await this.write(round, preview)) this.counts.written += 1;
+        else this.counts.refused += 1;
+      } catch (error) {
+        this.counts.failed += 1;
+        this.onError(error);
+      }
     }
     this.busy = false;
   }
+}
+
+/** How a call's answer arrived, flat for the log: it tells whether the arguments streamed or came all at once. */
+function deliveryFacts(delivery: LlmDelivery | undefined): Record<string, unknown> {
+  if (delivery === undefined) return {};
+  return {
+    contentType: delivery.contentType,
+    streamed: delivery.streamed,
+    reasoningChunks: delivery.reasoningChunks,
+    argumentChunks: delivery.argumentChunks,
+    firstArgumentMs: delivery.firstArgumentMs,
+    lastArgumentMs: delivery.lastArgumentMs,
+  };
 }
 
 /** Why writing the draft failed, as the code the person sees. */

@@ -1016,6 +1016,17 @@ La persona describe un proceso con sus palabras y la IA deja un borrador del flu
 
       El texto se lee con `parsePartialJson`, que guarda lo que está completo y nunca adivina. Hay como mucho una vista cada `PREVIEW_INTERVAL_MS` (1,5 s) y solo cuando el diagrama creció; hasta 60 bloques y 120 conexiones.
     - **Worker.** Las escribe una a la vez con `set_ai_job_preview`; si llega una más nueva, reemplaza a la que espera. Si una no se puede escribir, solo se registra en el log (`ai_job.preview_not_recorded`).
+    - **Diagnóstico (2026-10-28, `fix/ai-live-preview-diagnostics`):**
+      - `ai_job.call` (info) dice cómo llegó la respuesta, solo con cuentas y tiempos, sin contenido:
+        - `contentType` y `streamed`;
+        - `reasoningChunks` y `argumentChunks`;
+        - `firstArgumentMs` y `lastArgumentMs`, en ms desde la petición;
+        - `previews`: las vistas que dio.
+      - `ai_job.previews` dice cuántas se escribieron, cuántas rechazó la BD (la ronda ya había terminado) y cuántas fallaron.
+      - Cómo leerlo:
+        - si `argumentChunks` es 1, o `firstArgumentMs` ≈ `lastArgumentMs`, el modelo mandó los argumentos de una vez al final;
+        - si `streamed` es false, la respuesta no llegó en streaming;
+        - si se escribieron vistas y la web no las mostró, el problema está en la web.
     - **API.** `GET /ai-jobs/:id` y el historial devuelven `preview` mientras la ronda corre; `null` en otro caso.
     - **Web.** Mientras la solicitud está en `DESIGNING` con bloques escritos, el **lienzo principal** muestra lo que la IA lleva (`previewDocument`): los mismos bloques del constructor, ordenados como «Ordenar», en solo lectura, con el aviso «La IA está armando el flujo… n bloques». En un cambio al borrador se muestra en lugar del borrador actual. Al terminar llega el borrador como siempre; si falla o se cancela, el lienzo vuelve al borrador guardado. El turno del chat dice «Míralo armarse en el lienzo.» (2026-10-28, `fix/builder-ai-canvas`: el usuario lo esperaba en el lienzo, no en un diagrama pequeño dentro del chat).
     - **Cuándo se ve.** DeepSeek razona primero y escribe los argumentos al final, así que el diagrama aparece en los últimos segundos de cada ronda.
