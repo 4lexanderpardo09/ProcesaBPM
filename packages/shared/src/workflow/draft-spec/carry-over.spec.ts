@@ -82,4 +82,20 @@ describe('carryOverSettings', () => {
     expect(carried.dropped).toEqual([]);
     expect(carried.document.steps.find((step) => step.name === 'Pago del anticipo')).toMatchObject({ allowsBatch: true, config: { batch: { maxTickets: -5 } } });
   });
+
+  it('pairs amount rules by their order: the translation keeps the order of the spec', () => {
+    const spec = travelAdvanceSpec();
+    const [rule] = spec.amountRules;
+    const twoRules: WorkflowDraftSpec = { ...spec, amountRules: [{ ...rule!, maxAmount: 9_000_000, message: 'Segunda' }, rule!] };
+    expect(translated(twoRules).amountRules.map((candidate) => [Number(candidate.maxAmount), candidate.message])).toEqual(twoRules.amountRules.map((candidate) => [candidate.maxAmount, candidate.message]));
+
+    const original = stored(translated(twoRules));
+    const tuned = { ...original, amountRules: original.amountRules.map((candidate, at) => (at === 1 ? { ...candidate, companyId: 'company-1' } : candidate)) };
+    const basis = basisOf(tuned);
+    const carried = carryOverSettings(basis, basis.spec, translated(basis.spec));
+    expect(carried.document.amountRules.map((candidate) => [Number(candidate.maxAmount), candidate.companyId])).toEqual([
+      [9_000_000, null],
+      [5_000_000, 'company-1'],
+    ]);
+  });
 });

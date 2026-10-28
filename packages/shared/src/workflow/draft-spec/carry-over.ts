@@ -70,7 +70,11 @@ function problemKey(refOf: (stepId: string) => string) {
   };
 }
 
-/** Whether a problem points at the element (by the ids it has in the revised draft). */
+/**
+ * Whether a problem points at the element (by the ids it has in the revised draft). Deliberately coarse for transitions
+ * and amount rules: a problem on any of them blames every kept one of its kind, so more settings are lost than needed,
+ * never a broken draft written.
+ */
 function blames(problem: WorkflowProblem, element: string, document: WorkflowVersionDocument): boolean {
   const [kind, key] = splitElement(element);
   if (kind === 'step') return problem.stepId === newId(key);
@@ -145,6 +149,7 @@ class CarryPlanner {
     this.usedTransitions.add(match);
     const from = newId(before.from);
     const to = newId(before.to);
+    // Labels are unique among the exits of a block (TRANSITION_LABEL_DUPLICATE stops the import), so this finds one.
     const isIt = (transition: TransitionDocument) => transition.fromStepId === from && transition.toStepId === to && transition.label === before.label;
     return (document) => replaceIn(document, 'transitions', isIt, (transition) => ({ ...original, id: transition.id, fromStepId: from, toStepId: to, sortOrder: transition.sortOrder, uiPoints: transition.uiPoints }));
   }
