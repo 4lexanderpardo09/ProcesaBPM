@@ -2993,6 +2993,8 @@ model AiJob {
   problems         Int?
   /// Who cancelled it (error_code CANCELLED).
   cancelledById    String?     @map("cancelled_by_id") @db.Uuid
+  /// The blocks and connections the model has written so far in the round shown (set_ai_job_preview); only while RUNNING.
+  preview          Json?
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   startedAt        DateTime?   @map("started_at") @db.Timestamptz(3)
   completedAt      DateTime?   @map("completed_at") @db.Timestamptz(3)

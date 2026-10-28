@@ -7,6 +7,7 @@ import { Alert, Button, TextArea } from '@/shared/ui';
 import { isOpen } from '../api/ai-draft-api';
 import type { AiDraft } from '../hooks/use-ai-draft';
 import { AiDraftLosses } from './AiDraftLosses';
+import { AiDraftPreview } from './AiDraftPreview';
 import { AiDraftSummary } from './AiDraftSummary';
 import styles from './Builder.module.css';
 
@@ -127,6 +128,7 @@ function Progress({ job, cancelling, onCancel }: { readonly job: AiJobHistoryIte
         <ProgressText job={job} />
       </p>
       <p className={styles.aiMeta}>{t('builder.ai.elapsed', { seconds: elapsed })}</p>
+      {job.preview !== null && job.preview.steps.length > 0 && <AiDraftPreview preview={job.preview} />}
       <div>
         <Button variant="ghost" disabled={cancelling} onClick={onCancel}>
           {cancelling ? t('builder.ai.cancelling') : t('builder.ai.cancel')}

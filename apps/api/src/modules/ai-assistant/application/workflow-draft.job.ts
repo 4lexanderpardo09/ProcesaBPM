@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AiDraftResult, type DraftSpecLoss, ImmutableDataError, NotFoundError, StaleRevisionError } from '@procesabpm/shared';
+import { type AiDraftResult, type DraftPreview, type DraftSpecLoss, ImmutableDataError, NotFoundError, StaleRevisionError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import { LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
@@ -60,6 +60,9 @@ export class WorkflowDraftJob {
     const read = await this.runner.withTenant(claim.tenantId, (tx) => this.tasks.read(tx, claim.tenantId, claim.jobId));
     if (read.kind === 'failed') return this.fail(claim, read.errorCode);
     const { input, catalog, task } = read;
+    const previews = new PreviewWriter((round, preview) => this.runner.withoutTenant((tx) => this.claims.setPreview(tx, claim, round, preview)), (error) =>
+      this.log('warn', 'ai_job.preview_not_recorded', claim, { errorName: error instanceof Error ? error.name : typeof error }),
+    );
 
     const result = await this.designer.design(
       task,
@@ -68,9 +71,11 @@ export class WorkflowDraftJob {
         beforeRound: (round) => this.renewAndShow(claim, { stage: 'DESIGNING', round }),
         afterReview: (round, problems) => this.show(claim, { stage: 'REVIEWING', round, problems }),
         afterCall: (call) => this.record(claim, input, call),
+        onPreview: (round, preview) => previews.show(round, preview),
       },
       stop,
     );
+    await previews.settled();
     if (result.kind === 'interrupted') {
       this.log('info', 'ai_job.interrupted', claim);
       return 'interrupted';
@@ -151,6 +156,42 @@ export class WorkflowDraftJob {
 }
 
 const mutableLoss = (loss: DraftSpecLoss) => ({ ...loss, properties: [...loss.properties] });
+
+/**
+ * Writes the diagram so far one at a time, outside the call it comes from: while one is being written, a newer one
+ * waits and replaces any older one still waiting. A preview that cannot be written is only logged: it is never worth a
+ * request.
+ */
+class PreviewWriter {
+  private writing: Promise<void> = Promise.resolve();
+  private waiting: { round: number; preview: DraftPreview } | undefined;
+  private busy = false;
+
+  constructor(
+    private readonly write: (round: number, preview: DraftPreview) => Promise<boolean>,
+    private readonly onError: (error: unknown) => void,
+  ) {}
+
+  show(round: number, preview: DraftPreview): void {
+    this.waiting = { round, preview };
+    if (!this.busy) this.writing = this.drain();
+  }
+
+  /** Waits for the last write, so none lands after the request moves on. */
+  settled(): Promise<void> {
+    return this.writing;
+  }
+
+  private async drain(): Promise<void> {
+    this.busy = true;
+    while (this.waiting !== undefined) {
+      const { round, preview } = this.waiting;
+      this.waiting = undefined;
+      await this.write(round, preview).catch(this.onError);
+    }
+    this.busy = false;
+  }
+}
 
 /** Why writing the draft failed, as the code the person sees. */
 function importFailureCode(error: unknown): string {

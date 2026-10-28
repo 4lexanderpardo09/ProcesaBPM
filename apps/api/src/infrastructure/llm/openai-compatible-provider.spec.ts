@@ -82,6 +82,44 @@ describe('OpenAiCompatibleProvider (against a local fake server)', () => {
     await expect(pending).rejects.toMatchObject({ kind: 'ABORTED' });
   });
 
+  /** Answers as DeepSeek streams: one event per piece, cut at arbitrary byte boundaries, usage in the last event. */
+  const stream = (events: readonly unknown[]) => (_req: IncomingMessage, _body: string, res: ServerResponse) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8' });
+    const text = [...events.map((event) => `data: ${JSON.stringify(event)}\n\n`), 'data: [DONE]\n\n'].join('');
+    const bytes = Buffer.from(text);
+    for (let at = 0; at < bytes.length; at += 7) res.write(bytes.subarray(at, at + 7));
+    res.end();
+  };
+  const piece = (fragment: { name?: string; arguments?: string }, index = 0) => ({ choices: [{ delta: { tool_calls: [{ index, function: fragment }] } }] });
+
+  it('asks for a stream, follows the tool arguments as they are written and puts the answer together', async () => {
+    handler = stream([
+      { choices: [{ delta: { reasoning_content: 'pensando…' } }] },
+      piece({ name: 'submit_workflow_draft', arguments: '' }),
+      piece({ arguments: '{"steps": [{"ref": "ini' }),
+      piece({ arguments: 'cio", "name": "Solicitud ñ"}' }),
+      piece({ arguments: ']}' }),
+      { choices: [], usage: { prompt_tokens: 3500, completion_tokens: 9000, prompt_cache_hit_tokens: 1200, completion_tokens_details: { reasoning_tokens: 6400 } } },
+    ]);
+    const heard: string[] = [];
+    const result = await provider().complete(request, new AbortController().signal, (soFar) => heard.push(soFar));
+    expect(result.answer).toEqual({ kind: 'tool_call', arguments: { steps: [{ ref: 'inicio', name: 'Solicitud ñ' }] } });
+    expect(result.usage).toEqual({ promptTokens: 3500, cachedPromptTokens: 1200, completionTokens: 9000, reasoningTokens: 6400 });
+    expect(heard).toEqual(['{"steps": [{"ref": "ini', '{"steps": [{"ref": "inicio", "name": "Solicitud ñ"}', '{"steps": [{"ref": "inicio", "name": "Solicitud ñ"}]}']);
+    expect(seen[0]!.body).toMatchObject({ stream: true, stream_options: { include_usage: true } });
+  });
+
+  it('follows only the asked tool, and reads a streamed answer without it or cut short as one without the tool', async () => {
+    handler = stream([piece({ name: 'other_tool', arguments: '{"x": 1}' }), { choices: [{ delta: { content: 'Aquí está' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }]);
+    const heard: string[] = [];
+    const other = await provider().complete(request, new AbortController().signal, (soFar) => heard.push(soFar));
+    expect(other.answer).toEqual({ kind: 'no_tool_call' });
+    expect(other.usage.completionTokens).toBe(5);
+    expect(heard).toEqual([]);
+    handler = stream([piece({ name: 'submit_workflow_draft', arguments: '{"steps": [' })]);
+    expect((await provider().complete(request, new AbortController().signal)).answer).toEqual({ kind: 'no_tool_call' });
+  });
+
   it('fails every call NOT_CONFIGURED when there is no key', async () => {
     await expect(new UnconfiguredLlmProvider('deepseek', 'deepseek-v4-pro').complete()).rejects.toMatchObject({ kind: 'NOT_CONFIGURED' });
   });

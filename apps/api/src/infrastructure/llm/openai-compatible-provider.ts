@@ -1,4 +1,4 @@
-import { LlmCallError, type LlmAnswer, LlmProvider, type LlmRequest, type LlmResult, type LlmUsage } from './llm-provider.js';
+import { LlmCallError, type LlmAnswer, LlmProvider, type LlmRequest, type LlmResult, type LlmUsage, type ToolArgumentsListener } from './llm-provider.js';
 
 export interface OpenAiCompatibleOptions {
   readonly providerName: string;
@@ -10,15 +10,28 @@ export interface OpenAiCompatibleOptions {
   readonly timeoutMs: number;
 }
 
+interface ToolCallPart {
+  readonly index?: number;
+  readonly function?: { readonly name?: string; readonly arguments?: string };
+}
+
 interface ChatCompletion {
-  readonly choices?: ReadonlyArray<{ readonly message?: { readonly tool_calls?: ReadonlyArray<{ readonly function?: { readonly name?: string; readonly arguments?: string } }> } }>;
-  readonly usage?: {
+  readonly choices?: ReadonlyArray<{ readonly message?: { readonly tool_calls?: ReadonlyArray<ToolCallPart> } }>;
+  readonly usage?: ChatUsage;
+}
+
+/** One server-sent event of a streamed answer: pieces of the tool calls, and the usage in the last one. */
+interface ChatChunk {
+  readonly choices?: ReadonlyArray<{ readonly delta?: { readonly tool_calls?: ReadonlyArray<ToolCallPart> } }>;
+  readonly usage?: ChatUsage;
+}
+
+interface ChatUsage {
     readonly prompt_tokens?: number;
     readonly completion_tokens?: number;
     readonly prompt_cache_hit_tokens?: number;
     readonly prompt_tokens_details?: { readonly cached_tokens?: number };
     readonly completion_tokens_details?: { readonly reasoning_tokens?: number };
-  };
 }
 
 const count = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.round(value) : 0);
@@ -26,7 +39,9 @@ const count = (value: unknown): number => (typeof value === 'number' && Number.i
 /**
  * Chat completions with one tool, over the OpenAI-compatible API that DeepSeek (and others) expose. `tool_choice`
  * stays `auto`: reasoning models refuse a forced tool, so the prompt asks for it and the caller handles an answer
- * without it. The key travels only in the Authorization header; nothing of the request or the answer is logged here.
+ * without it. The answer streams (server-sent events), so the caller can follow the tool's arguments as they are
+ * written; a server that answers in one piece is read too. The key travels only in the Authorization header; nothing
+ * of the request or the answer is logged here.
  */
 export class OpenAiCompatibleProvider extends LlmProvider {
   readonly name: string;
@@ -42,7 +57,7 @@ export class OpenAiCompatibleProvider extends LlmProvider {
     this.model = options.model;
   }
 
-  async complete(request: LlmRequest, signal: AbortSignal): Promise<LlmResult> {
+  async complete(request: LlmRequest, signal: AbortSignal, onArguments?: ToolArgumentsListener): Promise<LlmResult> {
     const started = this.now();
     const elapsed = () => this.now() - started;
     const timeout = AbortSignal.timeout(this.options.timeoutMs);
@@ -60,6 +75,8 @@ export class OpenAiCompatibleProvider extends LlmProvider {
           ],
           tools: [{ type: 'function', function: { name: request.tool.name, description: request.tool.description, strict: this.options.strictTools, parameters: request.tool.schema } }],
           tool_choice: 'auto',
+          stream: true,
+          stream_options: { include_usage: true },
         }),
         signal: AbortSignal.any([signal, timeout]),
       });
@@ -67,7 +84,8 @@ export class OpenAiCompatibleProvider extends LlmProvider {
         await response.body?.cancel().catch(() => undefined);
         throw new LlmCallError(response.status === 429 ? 'RATE_LIMITED' : 'PROVIDER_ERROR', elapsed(), response.status);
       }
-      body = (await response.json()) as ChatCompletion;
+      const streamed = response.headers.get('content-type')?.includes('text/event-stream') === true && response.body !== null;
+      body = streamed ? await readStream(response.body!, request.tool.name, onArguments) : ((await response.json()) as ChatCompletion);
     } catch (error) {
       if (error instanceof LlmCallError) throw error;
       if (signal.aborted) throw new LlmCallError('ABORTED', elapsed());
@@ -87,6 +105,40 @@ export class OpenAiCompatibleProvider extends LlmProvider {
       return { kind: 'no_tool_call' };
     }
   }
+}
+
+/**
+ * Puts a streamed answer back together as the one-piece answer it stands for: each tool call's arguments are the
+ * concatenation of their pieces (by index). `onArguments` hears the named tool's arguments after each piece.
+ */
+async function readStream(stream: ReadableStream<Uint8Array>, toolName: string, onArguments?: ToolArgumentsListener): Promise<ChatCompletion> {
+  const calls: Array<{ name: string; arguments: string }> = [];
+  let usage: ChatUsage | undefined;
+  let pending = '';
+  const decoder = new TextDecoder();
+  const take = (data: string) => {
+    if (data === '[DONE]') return;
+    const chunk = JSON.parse(data) as ChatChunk;
+    usage = chunk.usage ?? usage;
+    for (const part of chunk.choices?.[0]?.delta?.tool_calls ?? []) {
+      const call = (calls[part.index ?? 0] ??= { name: '', arguments: '' });
+      call.name += part.function?.name ?? '';
+      call.arguments += part.function?.arguments ?? '';
+      if (call.name === toolName && (part.function?.arguments ?? '') !== '') onArguments?.(call.arguments);
+    }
+  };
+  const lines = (text: string) => {
+    for (const line of text.split('\n')) if (line.startsWith('data:')) take(line.slice('data:'.length).trim());
+  };
+  for await (const bytes of stream) {
+    pending += decoder.decode(bytes, { stream: true });
+    const end = pending.lastIndexOf('\n');
+    if (end < 0) continue;
+    lines(pending.slice(0, end));
+    pending = pending.slice(end + 1);
+  }
+  lines(pending + decoder.decode());
+  return { choices: [{ message: { tool_calls: calls.map((call) => ({ function: call })) } }], ...(usage === undefined ? {} : { usage }) };
 }
 
 function usageOf(body: ChatCompletion): LlmUsage {

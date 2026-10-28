@@ -6,3 +6,4 @@ export * from './document-diff.js';
 export * from './rich-text.js';
 export * from './spec-from-document.js';
 export * from './carry-over.js';
+export * from './draft-preview.js';

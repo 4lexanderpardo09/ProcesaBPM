@@ -1,11 +1,15 @@
-import type { WorkflowDraftSpec } from '@procesabpm/shared';
+import type { DraftPreview, WorkflowDraftSpec } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
 import { advanceSpec, basisOf, catalog, stored, translated } from '../../../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
-import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult } from '../../../infrastructure/llm/llm-provider.js';
+import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult, type ToolArgumentsListener } from '../../../infrastructure/llm/llm-provider.js';
 import type { DraftTask } from '../domain/prompt-builder.js';
-import { type CallRecord, DraftDesigner } from './draft-designer.js';
+import { type CallRecord, DraftDesigner, PREVIEW_INTERVAL_MS } from './draft-designer.js';
 
 const USAGE = { promptTokens: 3000, cachedPromptTokens: 0, completionTokens: 8000, reasoningTokens: 6000 };
+/** The fake clock: each streamed piece of a scripted answer takes STREAM_STEP_MS. */
+let clock = 0;
+const STREAM_STEP_MS = 400;
+const STREAM_PIECE = 60;
 type Step = LlmResult['answer'] | LlmCallError;
 
 class ScriptedProvider extends LlmProvider {
@@ -17,11 +21,18 @@ class ScriptedProvider extends LlmProvider {
     super();
   }
 
-  async complete(request: LlmRequest): Promise<LlmResult> {
+  async complete(request: LlmRequest, _signal: AbortSignal, onArguments?: ToolArgumentsListener): Promise<LlmResult> {
     this.requests.push(request);
     const step = this.script.shift();
     if (step === undefined) throw new Error('no more scripted answers');
     if (step instanceof LlmCallError) throw step;
+    if (step.kind === 'tool_call' && onArguments !== undefined) {
+      const text = JSON.stringify(step.arguments);
+      for (let end = STREAM_PIECE; end < text.length + STREAM_PIECE; end += STREAM_PIECE) {
+        clock += STREAM_STEP_MS;
+        onArguments(text.slice(0, end));
+      }
+    }
     return { answer: step, usage: USAGE, durationMs: 1000 };
   }
 }
@@ -50,7 +61,8 @@ async function run(script: Step[], options: RunOptions = {}) {
   const provider = new ScriptedProvider(script);
   const calls: CallRecord[] = [];
   const stages: string[] = [];
-  const result = await new DraftDesigner(provider, options.maxRounds ?? 3).design(
+  const previews: Array<{ round: number; preview: DraftPreview; at: number }> = [];
+  const result = await new DraftDesigner(provider, options.maxRounds ?? 3, () => clock).design(
     options.task ?? { kind: 'create', description: 'El asesor pide un anticipo.' },
     catalog,
     {
@@ -63,10 +75,11 @@ async function run(script: Step[], options: RunOptions = {}) {
         return options.review?.(round, problems) ?? Promise.resolve(true);
       },
       afterCall: (call) => Promise.resolve(void calls.push(call)),
+      onPreview: (round, preview) => previews.push({ round, preview, at: clock }),
     },
     options.signal ?? new AbortController().signal,
   );
-  return { result, calls, provider, stages };
+  return { result, calls, provider, stages, previews };
 }
 
 describe('DraftDesigner', () => {
@@ -177,5 +190,21 @@ describe('DraftDesigner', () => {
     expect(result.document.steps.find((step) => step.name === 'Revisión contable')?.allowsBatch).toBe(false);
     expect(result.summary.keptSettings).toEqual([{ subject: 'STEP', name: 'Pago del anticipo', properties: ['closeRule'] }]);
     expect(result.summary.droppedSettings).toEqual([{ subject: 'STEP', name: 'Revisión contable', properties: ['allowsBatch'] }]);
+  });
+
+  it('shows the diagram growing while each round streams: never more often than the interval, never smaller', async () => {
+    const { result, previews } = await run([tool(withoutPaymentExit()), tool(advanceSpec())]);
+    expect(result).toMatchObject({ kind: 'draft', rounds: 2 });
+    expect(previews.length).toBeGreaterThan(2);
+    for (const round of [1, 2]) {
+      const shown = previews.filter((entry) => entry.round === round);
+      expect(shown.length).toBeGreaterThan(0);
+      shown.slice(1).forEach((entry, index) => {
+        expect(entry.at - shown[index]!.at).toBeGreaterThanOrEqual(PREVIEW_INTERVAL_MS);
+        const size = (preview: DraftPreview) => preview.steps.length + preview.transitions.length;
+        expect(size(entry.preview)).toBeGreaterThan(size(shown[index]!.preview));
+      });
+    }
+    expect(previews.at(-1)!.preview.steps.map((step) => step.ref)).toEqual(expect.arrayContaining(['inicio', 'jefe']));
   });
 });

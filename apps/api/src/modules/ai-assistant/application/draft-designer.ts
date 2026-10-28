@@ -1,4 +1,4 @@
-import { type AiDraftOutline, buildDraftToolSchema, carryOverSettings, checkDraftSpec, type DraftCatalog, type DraftDecision, describeSpecProblems, describeWorkflowProblems, type DraftSpecLoss, findEngineSupportProblems, validateWorkflowGraph, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
+import { type AiDraftOutline, buildDraftToolSchema, carryOverSettings, checkDraftSpec, describeSpecProblems, describeWorkflowProblems, type DraftCatalog, type DraftDecision, type DraftPreview, draftPreviewOf, type DraftSpecLoss, findEngineSupportProblems, validateWorkflowGraph, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { LlmCallError, type LlmFailureKind, type LlmProvider, type LlmResult, type LlmUsage, NO_USAGE } from '../../../infrastructure/llm/llm-provider.js';
 import { blockingProblems } from '../../workflows/application/draft-document-importer.js';
 import { buildDraftPrompt, DRAFT_TOOL_DESCRIPTION, DRAFT_TOOL_NAME, type DraftCorrection, type DraftTask } from '../domain/prompt-builder.js';
@@ -21,7 +21,12 @@ export interface DesignHooks {
   readonly afterReview: (round: number, problems: number) => Promise<boolean>;
   /** After each call, answered or not: every call is paid and recorded. Must not throw: a lost record must not lose the round. */
   readonly afterCall: (call: CallRecord) => Promise<void>;
+  /** While round n streams: the blocks and connections written so far, when there are more (at most every PREVIEW_INTERVAL_MS). Must not throw. */
+  readonly onPreview?: (round: number, preview: DraftPreview) => void;
 }
+
+/** How often the diagram so far is shown at most: often enough to watch it grow, rarely enough not to load the database. */
+export const PREVIEW_INTERVAL_MS = 1_500;
 
 export type DesignResult =
   | { readonly kind: 'draft'; readonly document: WorkflowVersionDocument; readonly summary: DraftSummary; readonly rounds: number; readonly corrections: number; readonly errors: number; readonly warnings: number }
@@ -67,6 +72,7 @@ export class DraftDesigner {
   constructor(
     private readonly provider: LlmProvider,
     private readonly maxRounds: number,
+    private readonly now: () => number = Date.now,
   ) {}
 
   async design(task: DraftTask, catalog: DraftCatalog, hooks: DesignHooks, signal: AbortSignal): Promise<DesignResult> {
@@ -79,7 +85,7 @@ export class DraftDesigner {
       if (signal.aborted || !(await hooks.beforeRound(round))) return { kind: 'interrupted' };
       let result: LlmResult;
       try {
-        result = await this.provider.complete({ ...buildDraftPrompt(task, catalog, correction), tool }, signal);
+        result = await this.provider.complete({ ...buildDraftPrompt(task, catalog, correction), tool }, signal, this.previewer(round, hooks));
       } catch (error) {
         if (!(error instanceof LlmCallError)) throw error;
         await hooks.afterCall({ round, outcome: FAILURE_OUTCOME[error.kind], usage: NO_USAGE, durationMs: error.durationMs, errorCode: error.status === undefined ? error.kind : `HTTP_${error.status}` });
@@ -100,6 +106,23 @@ export class DraftDesigner {
     }
     if (best !== undefined) return { kind: 'draft', ...draftOf(best), rounds: this.maxRounds, corrections };
     return { kind: 'failed', errorCode: answered ? 'AI_DRAFT_INVALID' : 'AI_PROVIDER_FAILED' };
+  }
+
+  /** Turns the arguments streamed so far into previews: at most one per interval, and only when the diagram grew. */
+  private previewer(round: number, hooks: DesignHooks): ((argumentsSoFar: string) => void) | undefined {
+    const show = hooks.onPreview;
+    if (show === undefined) return undefined;
+    let shownAt = Number.NEGATIVE_INFINITY;
+    let shownSize = 0;
+    return (argumentsSoFar) => {
+      if (this.now() - shownAt < PREVIEW_INTERVAL_MS) return;
+      const preview = draftPreviewOf(argumentsSoFar);
+      const size = preview.steps.length + preview.transitions.length;
+      if (size <= shownSize) return;
+      shownAt = this.now();
+      shownSize = size;
+      show(round, preview);
+    };
   }
 
   private evaluate(result: LlmResult, task: DraftTask, catalog: DraftCatalog): Evaluation {

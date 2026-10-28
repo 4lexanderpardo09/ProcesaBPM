@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
-import { type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiTaskKind, type AiUsageDay, type AiUsageToday, aiDraftResultSchema } from '@procesabpm/shared';
+import { type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiTaskKind, type AiUsageDay, type AiUsageToday, aiDraftPreviewSchema, aiDraftResultSchema } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface NewDraftJob {
@@ -17,7 +17,7 @@ export interface NewDraftJob {
 
 const iso = (value: Date | null): string | null => (value === null ? null : value.toISOString());
 
-const JOB_COLUMNS = { id: true, kind: true, status: true, stage: true, round: true, problems: true, errorCode: true, result: true, createdAt: true, startedAt: true, completedAt: true } as const;
+const JOB_COLUMNS = { id: true, kind: true, status: true, stage: true, round: true, problems: true, preview: true, errorCode: true, result: true, createdAt: true, startedAt: true, completedAt: true } as const;
 type JobRow = Prisma.AiJobGetPayload<{ select: typeof JOB_COLUMNS }>;
 const PERSON = { select: { user: { select: { firstName: true, lastName: true } } } } as const;
 const fullName = (person: { user: { firstName: string; lastName: string } }): string => `${person.user.firstName} ${person.user.lastName}`.trim();
@@ -35,6 +35,7 @@ function jobResponse(job: JobRow): AiJobResponse {
     round: job.round,
     problems: job.problems,
     errorCode: job.errorCode,
+    preview: job.preview === null ? null : (aiDraftPreviewSchema.safeParse(job.preview).data ?? null),
     // Parsed so requests finished before a field existed read with its default.
     result: job.result === null ? null : aiDraftResultSchema.parse(job.result),
     createdAt: job.createdAt.toISOString(),

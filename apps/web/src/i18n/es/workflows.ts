@@ -397,6 +397,11 @@ export const workflows = {
       tokens_one: '{{formatted}} token',
       tokens_other: '{{formatted}} tokens',
       ready: 'La IA actualizó el borrador. Revísalo antes de publicar: en el panel de IA está lo que decidió y lo que supuso.',
+      preview: {
+        caption_one: 'Así va quedando el flujo: {{count}} bloque',
+        caption_other: 'Así va quedando el flujo: {{count}} bloques',
+        listLabel: 'Bloques que la IA lleva escritos',
+      },
       summary: {
         steps_one: '{{count}} paso',
         steps_other: '{{count}} pasos',

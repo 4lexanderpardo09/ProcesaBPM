@@ -5,7 +5,7 @@ import { AI_NOTICE_VERSION, refsFromStepNames, type VersionDetailResponse, type 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { advanceSpec } from '../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
 import { JsonLogger, LOG_WRITER } from '../../src/common/logging/json-logger.js';
-import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult } from '../../src/infrastructure/llm/llm-provider.js';
+import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult, type ToolArgumentsListener } from '../../src/infrastructure/llm/llm-provider.js';
 import { WorkflowDraftJob } from '../../src/modules/ai-assistant/application/workflow-draft.job.js';
 import type { AiJobClaim } from '../../src/modules/ai-assistant/data/ai-job-claims.repository.js';
 import { AiJobWorkRepository } from '../../src/modules/ai-assistant/data/ai-job-work.repository.js';
@@ -28,13 +28,19 @@ class ScriptedProvider extends LlmProvider {
   readonly requests: LlmRequest[] = [];
   /** Runs while a call is in flight (e.g. the request expires meanwhile). */
   duringCall: (() => Promise<void>) | undefined;
+  /** Runs after the answer's tool arguments were streamed, before the call ends. */
+  afterStreaming: (() => Promise<void>) | undefined;
 
-  async complete(request: LlmRequest): Promise<LlmResult> {
+  async complete(request: LlmRequest, _signal: AbortSignal, onArguments?: ToolArgumentsListener): Promise<LlmResult> {
     this.requests.push(request);
     await this.duringCall?.();
     const next = this.script.shift();
     if (next === undefined) throw new Error('no scripted answer left');
     if (next instanceof LlmCallError) throw next;
+    if (this.afterStreaming !== undefined) {
+      onArguments?.(JSON.stringify(next));
+      await this.afterStreaming();
+    }
     return { answer: { kind: 'tool_call', arguments: next }, usage: USAGE, durationMs: 2_000 };
   }
 }
@@ -72,6 +78,7 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     provider.script = [...script];
     provider.requests.length = 0;
     provider.duringCall = duringCall;
+    provider.afterStreaming = undefined;
     return worker.get(WorkflowDraftJob).run(await claim(org.tenant.tenantId, org.jobId));
   };
   const job = async (admin: ApiClient, jobId: string) => (await admin.get(`/ai-jobs/${jobId}`).expect(200)).body;
@@ -111,6 +118,28 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     expect((await org.admin.get('/settings/ai-assistant/usage').expect(200)).body.recentJobs).toEqual([expect.objectContaining({ id: org.jobId, tokens: 12_500 })]);
     expect(provider.requests[0]!.user).toContain('- Tesorero');
     await org.admin.post(`${org.base}/publish`, {}).expect(200);
+  });
+
+  it('shows the diagram so far while the model writes it, to the organization only, and clears it once the round ends', async () => {
+    const org = await organization();
+    const other = await organization();
+    const seen: unknown[] = [];
+    provider.script = [advanceSpec()];
+    provider.requests.length = 0;
+    provider.duringCall = undefined;
+    provider.afterStreaming = async () => {
+      await vi.waitFor(async () => expect((await job(org.admin, org.jobId)).preview).not.toBeNull(), { timeout: 5_000 });
+      seen.push((await job(org.admin, org.jobId)).preview);
+      await other.admin.get(`/ai-jobs/${org.jobId}`).expect(404);
+    };
+    expect(await worker.get(WorkflowDraftJob).run(await claim(org.tenant.tenantId, org.jobId))).toBe('succeeded');
+    expect(seen).toEqual([
+      {
+        steps: advanceSpec().steps.map(({ ref, type, name }) => ({ ref, type, name })),
+        transitions: advanceSpec().transitions.map(({ from, to, label }) => ({ from, to, label })),
+      },
+    ]);
+    expect(await job(org.admin, org.jobId)).toMatchObject({ status: 'SUCCEEDED', preview: null });
   });
 
   it('corrects a draft with problems in a second round, showing each stage on the request, and records both calls', async () => {
