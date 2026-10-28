@@ -16,6 +16,7 @@ import {
 } from '../../workflow/constants.js';
 import { NEW_REF_PATTERN, type AmountRuleDocument, type FieldDocument, type StepDocument, type TransitionDocument, type WorkflowVersionDocument } from '../../workflow/document.js';
 import type { WorkflowValidation } from '../../workflow/problems.js';
+import { workflowDraftSpecSchema } from '../../workflow/draft-spec/spec.js';
 import { transitionConditionSchema } from '../../workflow/transition-condition.js';
 import { nameSchema, pageQuerySchema, RICH_TEXT_MAX } from '../common.js';
 import { uuidSchema } from '../ids.js';
@@ -166,6 +167,23 @@ export interface SaveGraphResponse {
   readonly document: WorkflowVersionDocument;
   readonly validation: WorkflowValidation;
 }
+
+/** A template in the same format «Crear con IA» uses (`WorkflowDraftSpec`): it replaces the whole draft, no AI involved. */
+export const importDraftSpecRequestSchema = z
+  .object({
+    revision: z.number().int().min(0),
+    spec: workflowDraftSpecSchema,
+  })
+  .strict();
+export type ImportDraftSpecRequest = z.infer<typeof importDraftSpecRequestSchema>;
+
+export const draftSpecImportedSchema = z.object({
+  revision: z.number().int(),
+  /** Problems left for the person to fix before publishing. */
+  errors: z.number().int(),
+  warnings: z.number().int(),
+});
+export type DraftSpecImported = z.infer<typeof draftSpecImportedSchema>;
 
 // ---- Fields ----
 export const createFieldRequestSchema = z

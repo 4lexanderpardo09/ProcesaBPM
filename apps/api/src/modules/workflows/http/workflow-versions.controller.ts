@@ -2,6 +2,9 @@ import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Inject, Param, Par
 import {
   type CreateVersionRequest,
   createVersionRequestSchema,
+  type DraftSpecImported,
+  type ImportDraftSpecRequest,
+  importDraftSpecRequestSchema,
   type PublishVersionRequest,
   type PublishVersionResponse,
   publishVersionRequestSchema,
@@ -17,6 +20,7 @@ import { Audited } from '../../../common/audit/audited.decorator.js';
 import { NotAudited } from '../../../common/audit/audited.decorator.js';
 import { RequirePermission } from '../../../common/auth/route-access.js';
 import { ZodValidationPipe } from '../../../common/http/zod-validation.pipe.js';
+import { DraftSpecImportService } from '../application/draft-spec-import.service.js';
 import { WorkflowGraphService } from '../application/workflow-graph.service.js';
 import { WorkflowPublicationService } from '../application/workflow-publication.service.js';
 import { WorkflowVersionsService } from '../application/workflow-versions.service.js';
@@ -27,6 +31,7 @@ export class WorkflowVersionsController {
     @Inject(WorkflowVersionsService) private readonly versions: WorkflowVersionsService,
     @Inject(WorkflowGraphService) private readonly graph: WorkflowGraphService,
     @Inject(WorkflowPublicationService) private readonly publication: WorkflowPublicationService,
+    @Inject(DraftSpecImportService) private readonly specImport: DraftSpecImportService,
   ) {}
 
   /** A new draft: empty, or a copy of `fromVersionId`. */
@@ -61,6 +66,19 @@ export class WorkflowVersionsController {
     @Body(new ZodValidationPipe(saveGraphRequestSchema)) body: SaveGraphRequest,
   ): Promise<SaveGraphResponse> {
     return this.graph.save(workflowId, versionId, body);
+  }
+
+  /** A template (the format «Crear con IA» uses) replaces the whole draft in one transaction. */
+  @RequirePermission('update', 'Workflow')
+  @Post(':versionId/import')
+  @HttpCode(HttpStatus.OK)
+  @NotAudited('Draft edits are not audited: the published version is the immutable record')
+  importSpec(
+    @Param('workflowId', ParseUUIDPipe) workflowId: string,
+    @Param('versionId', ParseUUIDPipe) versionId: string,
+    @Body(new ZodValidationPipe(importDraftSpecRequestSchema)) body: ImportDraftSpecRequest,
+  ): Promise<DraftSpecImported> {
+    return this.specImport.import(workflowId, versionId, body);
   }
 
   /** Read-only: the same list publishing would act on. */

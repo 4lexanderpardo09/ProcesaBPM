@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import type { DraftCatalog } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { LlmUsage } from '../../../infrastructure/llm/llm-provider.js';
 
@@ -37,16 +36,6 @@ export class AiJobWorkRepository {
     const description = (job?.input as { description?: unknown } | null)?.description;
     if (job === null || job.kind !== 'WORKFLOW_DRAFT' || job.workflowId === null || job.versionId === null || job.expectedRevision === null || typeof description !== 'string') return undefined;
     return { requestedById: job.requestedById, workflowId: job.workflowId, versionId: job.versionId, expectedRevision: job.expectedRevision, description, enabled: job.tenant.aiAssistantEnabled };
-  }
-
-  /** The names the assistant may use: active positions and groups, and the approval group types. No people. */
-  async catalog(tx: TenantTransaction, tenantId: string): Promise<DraftCatalog> {
-    const [positions, groups, approvalTypes] = await Promise.all([
-      tx.position.findMany({ where: { tenantId, isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-      tx.group.findMany({ where: { tenantId, isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-      tx.approvalGroupType.findMany({ where: { tenantId }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    ]);
-    return { positions, groups, approvalTypes };
   }
 
   async recordUsage(tx: TenantTransaction, entry: UsageEntry): Promise<void> {

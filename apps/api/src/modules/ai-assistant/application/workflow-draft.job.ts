@@ -4,6 +4,7 @@ import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import { LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
 import { DraftDocumentImporter, DraftImportRejectedError } from '../../workflows/application/draft-document-importer.js';
+import { DraftCatalogRepository } from '../../workflows/data/draft-catalog.repository.js';
 import { type AiJobClaim, AiJobClaimsRepository } from '../data/ai-job-claims.repository.js';
 import { AiJobWorkRepository, type DraftJobInput } from '../data/ai-job-work.repository.js';
 import { type CallRecord, DraftDesigner } from './draft-designer.js';
@@ -35,6 +36,7 @@ export class WorkflowDraftJob {
     @Inject(WorkerTransactionRunner) private readonly runner: WorkerTransactionRunner,
     @Inject(AiJobClaimsRepository) private readonly claims: AiJobClaimsRepository,
     @Inject(AiJobWorkRepository) private readonly work: AiJobWorkRepository,
+    @Inject(DraftCatalogRepository) private readonly catalog: DraftCatalogRepository,
     @Inject(DraftDocumentImporter) private readonly importer: DraftDocumentImporter,
     @Inject(DraftDesigner) private readonly designer: DraftDesigner,
     @Inject(LlmProvider) private readonly provider: LlmProvider,
@@ -55,7 +57,7 @@ export class WorkflowDraftJob {
   }
 
   async run(claim: AiJobClaim, stop: AbortSignal = NOT_STOPPED): Promise<AiJobOutcome> {
-    const loaded = await this.runner.withTenant(claim.tenantId, async (tx) => ({ input: await this.work.draftInput(tx, claim.tenantId, claim.jobId), catalog: await this.work.catalog(tx, claim.tenantId) }));
+    const loaded = await this.runner.withTenant(claim.tenantId, async (tx) => ({ input: await this.work.draftInput(tx, claim.tenantId, claim.jobId), catalog: await this.catalog.load(tx, claim.tenantId) }));
     const { input, catalog } = loaded;
     if (input === undefined) return this.fail(claim, 'AI_JOB_INVALID');
     if (!input.enabled) return this.fail(claim, 'AI_DISABLED');

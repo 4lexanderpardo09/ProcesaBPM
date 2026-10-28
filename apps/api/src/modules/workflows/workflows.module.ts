@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DraftEditorService } from './application/draft-editor.service.js';
+import { DraftSpecImportService } from './application/draft-spec-import.service.js';
 import { PublishedVersionReader } from './application/published-version-reader.js';
 import { WorkflowGraphService } from './application/workflow-graph.service.js';
 import { WorkflowLinksService } from './application/workflow-links.service.js';
@@ -28,6 +29,7 @@ import { WorkflowDraftWriterModule } from './workflow-draft-writer.module.js';
     WorkflowGraphService,
     WorkflowPublicationService,
     DraftEditorService,
+    DraftSpecImportService,
     WorkflowLinksService,
     PublishedVersionReader,
     WorkflowVersionQuery,
