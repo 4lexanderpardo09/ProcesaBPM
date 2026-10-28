@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { AuthorizationModule } from '../authorization/authorization.module.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { TicketAccessModule } from '../tickets/ticket-access.module.js';
+import { AiDraftSubscriptionsService } from './application/ai-draft-subscriptions.service.js';
 import { ConnectionRegistry } from './application/connection-registry.js';
 import { DbWorkLimiter } from './application/db-work-limiter.js';
 import { RealtimeEmitter } from './application/realtime-emitter.js';
@@ -25,6 +26,7 @@ import { SocketHandshake } from './gateway/socket-handshake.js';
 @Module({
   imports: [AuthModule, AuthorizationModule, TicketAccessModule, NotificationsModule, RealtimeListenerModule],
   providers: [
+    AiDraftSubscriptionsService,
     RealtimeGateway,
     SocketHandshake,
     ClientMessageRouter,

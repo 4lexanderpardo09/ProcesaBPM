@@ -3,10 +3,13 @@ import {
   AiAssistantDisabledError,
   type AiDraftRequested,
   type AiAvailabilityResponse,
+  type AiJobHistoryQuery,
+  type AiJobHistoryResponse,
   AiJobInProgressError,
   type AiJobResponse,
   hasSqlState,
   ImmutableDataError,
+  InvalidStateError,
   NotFoundError,
   RateLimitedError,
   type RequestAiDraft,
@@ -91,7 +94,31 @@ export class AiDraftRequestsService {
   async job(principal: Principal, jobId: string): Promise<AiJobResponse> {
     const found = await this.runner.withTenantTransaction((tx) => this.assistant.findJob(tx, principal.tenantId, jobId));
     if (found === undefined) throw new NotFoundError();
-    return found;
+    return withoutTarget(found);
+  }
+
+  /** The requests made for a draft (the builder's panel), with their descriptions: kept 90 days inside the organization. */
+  history(principal: Principal, workflowId: string, versionId: string, query: AiJobHistoryQuery): Promise<AiJobHistoryResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      if ((await this.workflows.findVersion(tx, principal.tenantId, workflowId, versionId)) === null) throw new NotFoundError();
+      return { jobs: await this.assistant.historyOf(tx, principal.tenantId, versionId, query.limit) };
+    });
+  }
+
+  /**
+   * Ends a PENDING or RUNNING request as CANCELLED (anyone who may edit workflows, not only who asked). The worker
+   * notices at its next lease renewal or progress update and stops without writing the draft; calls already made stay
+   * paid in the ledger. A request that already ended answers 422 INVALID_STATE; one of another organization, 404.
+   */
+  cancel(principal: Principal, jobId: string): Promise<AiJobResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      const cancelled = await this.assistant.cancel(tx, jobId);
+      const job = await this.assistant.findJob(tx, principal.tenantId, jobId);
+      if (job === undefined) throw new NotFoundError();
+      if (!cancelled) throw new InvalidStateError('The AI request already ended');
+      await this.audit.record(tx, { action: 'workflow.ai_draft_cancelled', subjectType: 'Workflow', subjectId: job.workflowId ?? jobId, after: { versionId: job.versionId, jobId } });
+      return withoutTarget(job);
+    });
   }
 
   private async assertDraftAt(tx: TenantTransaction, tenantId: string, workflowId: string, versionId: string, revision: number): Promise<void> {
@@ -105,4 +132,8 @@ export class AiDraftRequestsService {
     const result = await this.limiter.hit(`ai-draft:user:${userId}`, AI_DRAFT_RATE_LIMIT);
     if (!result.allowed) throw new RateLimitedError(result.retryAfterSeconds);
   }
+}
+
+function withoutTarget({ workflowId: _workflowId, versionId: _versionId, ...job }: AiJobResponse & { workflowId: string | null; versionId: string | null }): AiJobResponse {
+  return job;
 }

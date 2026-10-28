@@ -15,6 +15,7 @@ import { RealtimeEmitter } from './realtime-emitter.js';
 import { SessionGate, VERIFICATION_TIMEOUT_MS } from './session-gate.js';
 import { SocketRevalidator } from './socket-revalidator.js';
 import { type RealtimeSocket, stillVerified } from './socket-session.js';
+import { AiDraftSubscriptionsService } from './ai-draft-subscriptions.service.js';
 import { TicketSubscriptionsService } from './ticket-subscriptions.service.js';
 
 export const COALESCING_MS = 250;
@@ -26,14 +27,25 @@ const SHUTDOWN_DRAIN_MS = 5_000;
 
 type DataSignal = Exclude<RealtimeSignal, { k: 'access' } | { k: 'ping' }>;
 
-/** One unit of work after coalescing: one person's counter, one ticket's changes, or one generated document. */
+/** One unit of work after coalescing: one person's counter, one ticket's changes, one generated document, or one AI request. */
 export type SignalWork =
   | { readonly kind: 'notifications'; readonly tenantId: string; readonly userId: string }
   | { readonly kind: 'ticket'; readonly tenantId: string; readonly ticketId: string; readonly kinds: ReadonlySet<TicketChangeKind> }
-  | { readonly kind: 'document'; readonly tenantId: string; readonly ticketId: string; readonly fileId: string };
+  | { readonly kind: 'document'; readonly tenantId: string; readonly ticketId: string; readonly fileId: string }
+  | { readonly kind: 'ai_job'; readonly tenantId: string; readonly jobId: string; readonly versionId: string };
 
-const keyOf = (work: SignalWork): string =>
-  work.kind === 'notifications' ? `n:${work.tenantId}:${work.userId}` : work.kind === 'ticket' ? `t:${work.tenantId}:${work.ticketId}` : `d:${work.tenantId}:${work.ticketId}:${work.fileId}`;
+function keyOf(work: SignalWork): string {
+  switch (work.kind) {
+    case 'notifications':
+      return `n:${work.tenantId}:${work.userId}`;
+    case 'ticket':
+      return `t:${work.tenantId}:${work.ticketId}`;
+    case 'document':
+      return `d:${work.tenantId}:${work.ticketId}:${work.fileId}`;
+    case 'ai_job':
+      return `a:${work.tenantId}:${work.jobId}`;
+  }
+}
 
 const mergeWork = (current: SignalWork, incoming: SignalWork): SignalWork =>
   current.kind === 'ticket' && incoming.kind === 'ticket' ? { ...current, kinds: new Set([...current.kinds, ...incoming.kinds]) } : current;
@@ -46,6 +58,7 @@ const stillVerifiedSockets = (recipients: ReadonlyArray<{ socket: RealtimeSocket
 export function workOf(signal: DataSignal): SignalWork[] {
   if (signal.k === 'notifications') return signal.u.map((userId) => ({ kind: 'notifications', tenantId: signal.t, userId }));
   if (signal.k === 'ticket') return [{ kind: 'ticket', tenantId: signal.t, ticketId: signal.id, kinds: new Set([signal.e]) }];
+  if (signal.k === 'ai_job') return [{ kind: 'ai_job', tenantId: signal.t, jobId: signal.id, versionId: signal.w }];
   return [{ kind: 'document', tenantId: signal.t, ticketId: signal.id, fileId: signal.d }];
 }
 
@@ -74,6 +87,7 @@ export class SignalRouter {
     @Inject(SessionGate) private readonly gate: SessionGate,
     @Inject(SocketRevalidator) private readonly revalidator: SocketRevalidator,
     @Inject(TicketSubscriptionsService) private readonly subscriptions: TicketSubscriptionsService,
+    @Inject(AiDraftSubscriptionsService) private readonly aiDrafts: AiDraftSubscriptionsService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(DbWorkLimiter) private readonly limiter: DbWorkLimiter,
     @Inject(RealtimeEmitter) private readonly emitter: RealtimeEmitter,
@@ -126,7 +140,9 @@ export class SignalRouter {
   }
 
   private roomOf(work: SignalWork): string {
-    return work.kind === 'notifications' ? RoomNames.member(work.tenantId, work.userId) : RoomNames.ticket(work.tenantId, work.ticketId);
+    if (work.kind === 'notifications') return RoomNames.member(work.tenantId, work.userId);
+    if (work.kind === 'ai_job') return RoomNames.aiDraft(work.tenantId, work.versionId);
+    return RoomNames.ticket(work.tenantId, work.ticketId);
   }
 
   private enqueue(work: SignalWork): void {
@@ -163,6 +179,7 @@ export class SignalRouter {
   private async dispatch(work: SignalWork): Promise<void> {
     try {
       if (work.kind === 'notifications') await this.dispatchNotifications(work);
+      else if (work.kind === 'ai_job') await this.dispatchAiJob(work);
       else await this.dispatchTicket(work);
     } catch (error) {
       this.logger.warn('realtime.dispatch_failed', { event: 'realtime.dispatch_failed', kind: work.kind, errorName: error instanceof Error ? error.name : typeof error });
@@ -196,6 +213,24 @@ export class SignalRouter {
     if (sockets.length === 0) return;
     if (work.kind === 'ticket') this.emitter.emit(sockets, 'ticket.changed', { ticketId: work.ticketId, kinds: [...work.kinds], summary });
     else this.emitter.emit(sockets, 'ticket.document_generated', { ticketId: work.ticketId, fileId: work.fileId });
+  }
+
+  private async dispatchAiJob(work: Extract<SignalWork, { kind: 'ai_job' }>): Promise<void> {
+    const groups = groupBySession(this.registry.socketsIn(this.roomOf(work)));
+    await Promise.all(groups.map((group) => this.dispatchAiJobTo(group, work)));
+  }
+
+  /** One session's sockets: one verification, one permission check with that member's ability; only ids are sent. */
+  private async dispatchAiJobTo(group: readonly RealtimeSocket[], work: Extract<SignalWork, { kind: 'ai_job' }>): Promise<void> {
+    const recipients = (await this.verified(group)).filter(({ principal }) => principal.tenantId === work.tenantId);
+    const principal = recipients[0]?.principal;
+    if (principal === undefined) return;
+    if (!(await this.aiDrafts.mayFollow(principal))) {
+      for (const { socket } of recipients) this.aiDrafts.drop(socket, work.versionId);
+      return;
+    }
+    const sockets = stillVerifiedSockets(recipients);
+    if (sockets.length > 0) this.emitter.emit(sockets, 'ai_job.changed', { jobId: work.jobId, versionId: work.versionId });
   }
 
   private async verified(sockets: readonly RealtimeSocket[]): Promise<Array<{ socket: RealtimeSocket; principal: Principal }>> {

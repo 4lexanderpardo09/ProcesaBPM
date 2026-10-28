@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
-import type { AiDraftResult, AiJobResponse, AiJobSummary, AiUsageDay, AiUsageToday } from '@procesabpm/shared';
+import type { AiDraftResult, AiJobHistoryItem, AiJobResponse, AiJobSummary, AiUsageDay, AiUsageToday } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface NewDraftJob {
@@ -14,6 +14,30 @@ export interface NewDraftJob {
 }
 
 const iso = (value: Date | null): string | null => (value === null ? null : value.toISOString());
+
+const JOB_COLUMNS = { id: true, status: true, stage: true, round: true, problems: true, errorCode: true, result: true, createdAt: true, startedAt: true, completedAt: true } as const;
+type JobRow = Prisma.AiJobGetPayload<{ select: typeof JOB_COLUMNS }>;
+const PERSON = { select: { user: { select: { firstName: true, lastName: true } } } } as const;
+const fullName = (person: { user: { firstName: string; lastName: string } }): string => `${person.user.firstName} ${person.user.lastName}`.trim();
+const descriptionOf = (input: Prisma.JsonValue): string | null => {
+  const description = (input as { description?: unknown } | null)?.description;
+  return typeof description === 'string' ? description : null;
+};
+
+function jobResponse(job: JobRow): AiJobResponse {
+  return {
+    id: job.id,
+    status: job.status,
+    stage: job.stage,
+    round: job.round,
+    problems: job.problems,
+    errorCode: job.errorCode,
+    result: job.result as AiDraftResult | null,
+    createdAt: job.createdAt.toISOString(),
+    startedAt: iso(job.startedAt),
+    completedAt: iso(job.completedAt),
+  };
+}
 
 /** The organization's AI assistant: its switch, its requests and what they cost. Always inside the tenant's transaction. */
 @Injectable()
@@ -63,18 +87,34 @@ export class AiAssistantRepository {
     return job?.id ?? null;
   }
 
-  async findJob(tx: TenantTransaction, tenantId: string, id: string): Promise<AiJobResponse | undefined> {
-    const job = await tx.aiJob.findUnique({ where: { tenantId_id: { tenantId, id } } });
-    if (job === null) return undefined;
-    return {
-      id: job.id,
-      status: job.status,
-      errorCode: job.errorCode,
-      result: job.result as AiDraftResult | null,
-      createdAt: job.createdAt.toISOString(),
-      startedAt: iso(job.startedAt),
-      completedAt: iso(job.completedAt),
-    };
+  async findJob(tx: TenantTransaction, tenantId: string, id: string): Promise<(AiJobResponse & { workflowId: string | null; versionId: string | null }) | undefined> {
+    const job = await tx.aiJob.findUnique({ where: { tenantId_id: { tenantId, id } }, select: { ...JOB_COLUMNS, workflowId: true, versionId: true } });
+    return job === null ? undefined : { ...jobResponse(job), workflowId: job.workflowId, versionId: job.versionId };
+  }
+
+  /** The newest requests of a draft with what was asked, by whom and what they cost, oldest first. */
+  async historyOf(tx: TenantTransaction, tenantId: string, versionId: string, limit: number): Promise<AiJobHistoryItem[]> {
+    const jobs = await tx.aiJob.findMany({
+      where: { tenantId, versionId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: { ...JOB_COLUMNS, input: true, requestedById: true, requestedBy: PERSON, cancelledBy: PERSON },
+    });
+    const tokens = await this.tokensByJob(tx, tenantId, jobs.map((job) => job.id));
+    return jobs.reverse().map((job) => ({
+      ...jobResponse(job),
+      description: descriptionOf(job.input),
+      requestedById: job.requestedById,
+      requesterName: fullName(job.requestedBy),
+      cancelledByName: job.cancelledBy === null ? null : fullName(job.cancelledBy),
+      tokens: tokens.get(job.id) ?? 0,
+    }));
+  }
+
+  /** Cancels an open request of the tenant in context for the member in context (cancel_ai_job). `false`: nothing open to cancel. */
+  async cancel(tx: TenantTransaction, jobId: string): Promise<boolean> {
+    const [row] = await tx.$queryRaw<Array<{ ok: boolean }>>`SELECT cancel_ai_job(${jobId}::uuid) AS ok`;
+    return row?.ok === true;
   }
 
   async usageByDay(tx: TenantTransaction, tenantId: string, since: Date, timeZone: string): Promise<AiUsageDay[]> {
@@ -98,7 +138,7 @@ export class AiAssistantRepository {
         model: true,
         createdAt: true,
         completedAt: true,
-        requestedBy: { select: { user: { select: { firstName: true, lastName: true } } } },
+        requestedBy: PERSON,
       },
     });
     const tokens = await this.tokensByJob(tx, tenantId, jobs.map((job) => job.id));
@@ -106,7 +146,7 @@ export class AiAssistantRepository {
       id: job.id,
       status: job.status,
       errorCode: job.errorCode,
-      requesterName: `${job.requestedBy.user.firstName} ${job.requestedBy.user.lastName}`.trim(),
+      requesterName: fullName(job.requestedBy),
       model: job.model,
       tokens: tokens.get(job.id) ?? 0,
       createdAt: job.createdAt.toISOString(),

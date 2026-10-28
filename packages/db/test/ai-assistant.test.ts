@@ -145,7 +145,7 @@ describe('AI assistant: requests and the token ledger', () => {
   });
 
   describe('the worker protocol', () => {
-    it('claims a request, renews it, and finishes it: SUCCEEDED with its result and without the description', async () => {
+    it('claims a request, renews it, and finishes it: SUCCEEDED with its result, keeping the description for the history', async () => {
       const tenant = await enabledTenant();
       const id = await request(tenant);
       const c = (await claimOf(id))!;
@@ -153,17 +153,17 @@ describe('AI assistant: requests and the token ledger', () => {
       expect(await row(tenant, id)).toMatchObject({ status: 'RUNNING', attempts: 1 });
       expect(await renew(c)).toBe(true);
       expect(await finish(c, { revision: 4, rounds: 2 })).toBe(true);
-      expect(await row(tenant, id)).toMatchObject({ status: 'SUCCEEDED', input: null, claim_token: null, result: { revision: 4, rounds: 2 } });
+      expect(await row(tenant, id)).toMatchObject({ status: 'SUCCEEDED', input: JSON.parse(INPUT), claim_token: null, result: { revision: 4, rounds: 2 } });
       expect(await finish(c)).toBe(false);
       expect(await renew(c)).toBe(false);
     });
 
-    it('fails a request for good with a code, dropping the description', async () => {
+    it('fails a request for good with a code, keeping the description', async () => {
       const tenant = await enabledTenant();
       const id = await request(tenant);
       const c = (await claimOf(id))!;
       expect(await fail(c)).toBe(true);
-      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'AI_DRAFT_INVALID', input: null, result: null });
+      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'AI_DRAFT_INVALID', input: JSON.parse(INPUT), result: null });
       expect(await claimOf(id)).toBeUndefined();
     });
 
@@ -177,17 +177,17 @@ describe('AI assistant: requests and the token ledger', () => {
       expect(await finish(first)).toBe(false);
       await expireLease(id);
       expect(await claimOf(id)).toBeUndefined();
-      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'LEASE_EXPIRED', input: null });
+      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'LEASE_EXPIRED', input: JSON.parse(INPUT) });
     });
 
-    it('ends a request no worker took within 30 minutes QUEUE_EXPIRED, without its description; a younger one waits', async () => {
+    it('ends a request no worker took within 30 minutes QUEUE_EXPIRED, keeping its description; a younger one waits', async () => {
       const tenant = await enabledTenant();
       const [stale, young] = [await request(tenant), await request(tenant)];
       await db.owner.query(`UPDATE ai_jobs SET created_at = now() - interval '31 minutes' WHERE id = $1`, [stale]);
       await db.owner.query(`UPDATE ai_jobs SET created_at = now() - interval '29 minutes' WHERE id = $1`, [young]);
       await db.owner.query(`UPDATE tenants SET status = 'SUSPENDED' WHERE id = $1`, [tenant.tenantId]);
       await claim();
-      expect(await row(tenant, stale)).toMatchObject({ status: 'FAILED', error_code: 'QUEUE_EXPIRED', input: null, attempts: 0 });
+      expect(await row(tenant, stale)).toMatchObject({ status: 'FAILED', error_code: 'QUEUE_EXPIRED', input: JSON.parse(INPUT), attempts: 0 });
       expect((await row(tenant, stale)).completed_at).not.toBeNull();
       expect(await row(tenant, young)).toMatchObject({ status: 'PENDING', error_code: null, input: JSON.parse(INPUT) });
     });
@@ -202,7 +202,7 @@ describe('AI assistant: requests and the token ledger', () => {
       expect(await row(tenant, id)).toMatchObject({ status: 'RUNNING' });
       await expireLease(id);
       await claim();
-      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'LEASE_EXPIRED', input: null, claim_token: null, attempts: 1 });
+      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'LEASE_EXPIRED', input: JSON.parse(INPUT), claim_token: null, attempts: 1 });
       expect((await row(tenant, id)).completed_at).not.toBeNull();
     });
 

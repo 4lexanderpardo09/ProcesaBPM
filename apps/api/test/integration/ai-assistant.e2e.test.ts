@@ -101,6 +101,31 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       expect(usage.recentJobs[0].requesterName.length).toBeGreaterThan(0);
     });
 
+    it('show the history of the draft with descriptions, oldest first, and are cancelled by any designer, audited', async () => {
+      const { tenant, admin } = await organization();
+      await enable(admin);
+      const draft = await newDraft(admin);
+      const first = (await ask(admin, draft.base).expect(202)).body.jobId as string;
+      const designer = await clientWith(db, app, tenant, [{ action: 'update', subject: 'Workflow' }]);
+      const cancelled = (await designer.post(`/ai-jobs/${first}/cancel`, {}).expect(200)).body;
+      expect(cancelled).toMatchObject({ id: first, status: 'FAILED', errorCode: 'CANCELLED', stage: null, round: null, problems: null, result: null });
+      expect((await designer.post(`/ai-jobs/${first}/cancel`, {}).expect(422)).body.error.code).toBe('INVALID_STATE');
+      const second = (await ask(admin, draft.base, { description: `${DESCRIPTION} Segunda versión.` }).expect(202)).body.jobId as string;
+
+      const history = (await designer.get(`${draft.base}/ai-jobs`).expect(200)).body;
+      expect(history.jobs.map((job: { id: string }) => job.id)).toEqual([first, second]);
+      expect(history.jobs[0]).toMatchObject({ description: DESCRIPTION, status: 'FAILED', errorCode: 'CANCELLED', requestedById: expect.any(String), tokens: 0 });
+      expect(history.jobs[0].cancelledByName.length).toBeGreaterThan(0);
+      expect(history.jobs[0].requesterName.length).toBeGreaterThan(0);
+      expect(history.jobs[1]).toMatchObject({ status: 'PENDING', description: `${DESCRIPTION} Segunda versión.`, cancelledByName: null });
+      expect((await designer.get(`${draft.base}/ai-jobs?limit=1`).expect(200)).body.jobs.map((job: { id: string }) => job.id)).toEqual([second]);
+      await designer.get(`${draft.base}/ai-jobs?limit=99`).expect(400);
+
+      const [audit] = await auditRows(tenant.tenantId, 'workflow.ai_draft_cancelled');
+      expect(audit).toEqual({ entity_id: draft.workflowId, after: { versionId: draft.versionId, jobId: first } });
+      expect(JSON.stringify(await auditRows(tenant.tenantId, 'workflow.ai_draft_cancelled'))).not.toContain('anticipo');
+    });
+
     it('need permission to edit workflows, and stay inside the organization', async () => {
       const a = await organization();
       const b = await organization();
@@ -110,7 +135,12 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       const reader = await clientWith(db, app, a.tenant, [{ action: 'read', subject: 'Workflow' }]);
       await ask(reader, draft.base).expect(403);
       await reader.get(`/ai-jobs/${jobId}`).expect(403);
+      await reader.get(`${draft.base}/ai-jobs`).expect(403);
+      await reader.post(`/ai-jobs/${jobId}/cancel`, {}).expect(403);
       await b.admin.get(`/ai-jobs/${jobId}`).expect(404);
+      await b.admin.post(`/ai-jobs/${jobId}/cancel`, {}).expect(404);
+      await b.admin.get(`${draft.base}/ai-jobs`).expect(404);
+      expect((await a.admin.get(`/ai-jobs/${jobId}`).expect(200)).body.status).toBe('PENDING');
       await enable(b.admin);
       await ask(b.admin, draft.base).expect(404);
       expect((await b.admin.get('/settings/ai-assistant/usage').expect(200)).body.recentJobs).toEqual([]);

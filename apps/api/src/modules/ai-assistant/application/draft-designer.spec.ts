@@ -37,16 +37,34 @@ function withBlockingProblem(): WorkflowDraftSpec {
   return { ...spec, steps: spec.steps.map((step) => (step.ref === 'jefe' ? { ...step, name: 'Revisión contable' } : step)) };
 }
 
-async function run(script: Step[], options: { maxRounds?: number; renew?: () => Promise<boolean>; signal?: AbortSignal } = {}) {
+interface RunOptions {
+  maxRounds?: number;
+  renew?: (round: number) => Promise<boolean>;
+  review?: (round: number, problems: number) => Promise<boolean>;
+  signal?: AbortSignal;
+}
+
+async function run(script: Step[], options: RunOptions = {}) {
   const provider = new ScriptedProvider(script);
   const calls: CallRecord[] = [];
+  const stages: string[] = [];
   const result = await new DraftDesigner(provider, options.maxRounds ?? 3).design(
     'El asesor pide un anticipo.',
     catalog,
-    { beforeRound: options.renew ?? (() => Promise.resolve(true)), afterCall: (call) => Promise.resolve(void calls.push(call)) },
+    {
+      beforeRound: (round) => {
+        stages.push(`DESIGNING ${round}`);
+        return options.renew?.(round) ?? Promise.resolve(true);
+      },
+      afterReview: (round, problems) => {
+        stages.push(`REVIEWING ${round} ${problems}`);
+        return options.review?.(round, problems) ?? Promise.resolve(true);
+      },
+      afterCall: (call) => Promise.resolve(void calls.push(call)),
+    },
     options.signal ?? new AbortController().signal,
   );
-  return { result, calls, provider };
+  return { result, calls, provider, stages };
 }
 
 describe('DraftDesigner', () => {
@@ -62,6 +80,18 @@ describe('DraftDesigner', () => {
     expect(result).toMatchObject({ kind: 'draft', rounds: 2, errors: 0 });
     expect(calls.map((call) => call.outcome)).toEqual(['OK', 'OK']);
     expect(provider.requests[1]!.user).toContain('PEOPLE_BLOCK_WITHOUT_DECISION at step "pago"');
+  });
+
+  it('reports each round and the problems found before the next one; none after the last round or a clean draft', async () => {
+    expect((await run([tool(withoutPaymentExit()), tool(advanceSpec())])).stages).toEqual(['DESIGNING 1', expect.stringMatching(/^REVIEWING 1 [1-9]\d*$/), 'DESIGNING 2']);
+    expect((await run([tool(withoutPaymentExit()), tool(withoutPaymentExit())], { maxRounds: 2 })).stages).toEqual(['DESIGNING 1', expect.stringMatching(/^REVIEWING 1 /), 'DESIGNING 2']);
+    expect((await run([tool(advanceSpec())])).stages).toEqual(['DESIGNING 1']);
+  });
+
+  it('stops when the request was cancelled while its answer was being checked', async () => {
+    const { result, calls } = await run([tool(withoutPaymentExit()), tool(advanceSpec())], { review: () => Promise.resolve(false) });
+    expect(result).toEqual({ kind: 'interrupted' });
+    expect(calls).toHaveLength(1);
   });
 
   it('asks again when the model answers without the tool or with an invalid shape', async () => {

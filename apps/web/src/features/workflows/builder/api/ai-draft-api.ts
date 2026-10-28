@@ -1,16 +1,20 @@
-import { aiAvailabilityResponseSchema, aiDraftRequestedSchema, aiJobResponseSchema, type AiJobResponse, type RequestAiDraft } from '@procesabpm/shared';
+import { aiAvailabilityResponseSchema, aiDraftRequestedSchema, aiJobHistoryResponseSchema, type AiJobHistoryResponse, aiJobResponseSchema, type RequestAiDraft } from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import type { HttpClient } from '@/shared/api';
 
-/** How often a running request is checked: the model takes between half a minute and a few minutes. */
-export const AI_JOB_POLL_MS = 3_000;
+/**
+ * How often an open request is read again: rarely while the socket brings its changes, often enough without one
+ * (no socket, or it is reconnecting) for the progress to move.
+ */
+export const AI_HISTORY_POLL_MS = { live: 30_000, offline: 5_000 } as const;
 
 export const aiDraftQueryKeys = {
   availability: (versionId: string) => ['ai-assistant', 'availability', versionId] as const,
-  job: (jobId: string) => ['ai-assistant', 'jobs', jobId] as const,
+  history: (versionId: string) => ['ai-assistant', 'history', versionId] as const,
 };
 
-export const isAiJobOpen = (job: AiJobResponse | undefined): boolean => job === undefined || job.status === 'PENDING' || job.status === 'RUNNING';
+export const isOpen = (status: string): boolean => status === 'PENDING' || status === 'RUNNING';
+export const hasOpenJob = (history: AiJobHistoryResponse | undefined): boolean => history?.jobs.some((job) => isOpen(job.status)) ?? false;
 
 export function aiAvailabilityQueryOptions(client: HttpClient, versionId: string) {
   return queryOptions({
@@ -19,14 +23,20 @@ export function aiAvailabilityQueryOptions(client: HttpClient, versionId: string
   });
 }
 
-export function aiJobQueryOptions(client: HttpClient, jobId: string) {
+export function aiHistoryQueryOptions(client: HttpClient, workflowId: string, versionId: string, live: boolean) {
   return queryOptions({
-    queryKey: aiDraftQueryKeys.job(jobId),
-    queryFn: ({ signal }) => client.request(`/ai-jobs/${encodeURIComponent(jobId)}`, { schema: aiJobResponseSchema, signal }),
-    refetchInterval: (query) => (isAiJobOpen(query.state.data) ? AI_JOB_POLL_MS : false),
+    queryKey: aiDraftQueryKeys.history(versionId),
+    queryFn: ({ signal }) => client.request(`${draftPath(workflowId, versionId)}/ai-jobs`, { schema: aiJobHistoryResponseSchema, signal }),
+    refetchInterval: (query) => (hasOpenJob(query.state.data) ? (live ? AI_HISTORY_POLL_MS.live : AI_HISTORY_POLL_MS.offline) : false),
   });
 }
 
 export function requestAiDraft(client: HttpClient, workflowId: string, versionId: string, body: RequestAiDraft) {
-  return client.request(`/workflows/${encodeURIComponent(workflowId)}/versions/${encodeURIComponent(versionId)}/ai-draft`, { method: 'POST', body, schema: aiDraftRequestedSchema });
+  return client.request(`${draftPath(workflowId, versionId)}/ai-draft`, { method: 'POST', body, schema: aiDraftRequestedSchema });
 }
+
+export function cancelAiJob(client: HttpClient, jobId: string) {
+  return client.request(`/ai-jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', body: {}, schema: aiJobResponseSchema });
+}
+
+const draftPath = (workflowId: string, versionId: string) => `/workflows/${encodeURIComponent(workflowId)}/versions/${encodeURIComponent(versionId)}`;

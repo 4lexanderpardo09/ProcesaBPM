@@ -7,7 +7,7 @@ import { monotonicNow, type RealtimeSocket, type ServerEventName, type ServerEve
 export const MAX_PENDING_PACKETS = 100;
 
 /** Events that carry data the session must be allowed to read: never sent to a socket that is not active. */
-const DATA_EVENTS: ReadonlySet<ServerEventName> = new Set<ServerEventName>(['notifications.changed', 'ticket.changed', 'ticket.document_generated']);
+const DATA_EVENTS: ReadonlySet<ServerEventName> = new Set<ServerEventName>(['notifications.changed', 'ticket.changed', 'ticket.document_generated', 'ai_job.changed']);
 
 /** engine.io keeps unsent packets in `writeBuffer` (internal; pinned version, see the emitter spec). */
 interface EngineConnection {

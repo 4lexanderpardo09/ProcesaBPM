@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authRefreshSchema, RealtimeClientEvent, RealtimeServerEvent, ticketSubscribeSchema } from './events.js';
+import { aiDraftSubscribeSchema, authRefreshSchema, RealtimeClientEvent, RealtimeServerEvent, ticketSubscribeSchema } from './events.js';
 
 const id = '0199a000-0000-7000-8000-000000000001';
 
@@ -9,6 +9,12 @@ describe('realtime contracts', () => {
     expect(ticketSubscribeSchema.safeParse({ ticketId: 'x' }).success).toBe(false);
     expect(ticketSubscribeSchema.safeParse({ ticketId: id, extra: 1 }).success).toBe(false);
     expect(ticketSubscribeSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('ai_draft.subscribe takes exactly one version id', () => {
+    expect(aiDraftSubscribeSchema.safeParse({ versionId: id }).success).toBe(true);
+    expect(aiDraftSubscribeSchema.safeParse({ versionId: 'x' }).success).toBe(false);
+    expect(aiDraftSubscribeSchema.safeParse({ versionId: id, ticketId: id }).success).toBe(false);
   });
 
   it('auth.refresh takes a bounded token and nothing else', () => {

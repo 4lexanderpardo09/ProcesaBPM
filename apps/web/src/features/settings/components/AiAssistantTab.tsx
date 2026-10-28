@@ -45,6 +45,7 @@ export function AiAssistantTab() {
           <p className={styles.note}>{t('ai.what')}</p>
           {data.enabled ? (
             <>
+              <p className={styles.note}>{t('ai.notice.kept')}</p>
               <p className={styles.strong}>{t('ai.today', { jobs: data.today.jobs, maxJobs: data.limits.jobsPerDay, tokens: number.format(data.today.tokens), maxTokens: number.format(data.limits.tokensPerDay) })}</p>
               <div>
                 <Button disabled={save.isPending} onClick={() => save.mutate(false)}>
@@ -59,6 +60,7 @@ export function AiAssistantTab() {
                   <span>{t('ai.notice.transfer')}</span>
                   <span>{t('ai.notice.sent')}</span>
                   <span>{t('ai.notice.neverSent')}</span>
+                  <span>{t('ai.notice.kept')}</span>
                 </span>
               </Alert>
               <Checkbox label={t('ai.notice.accept')} checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />

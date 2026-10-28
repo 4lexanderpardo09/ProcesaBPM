@@ -5,7 +5,7 @@ import { WorkerTransactionRunner } from '../../../infrastructure/database/worker
 import { LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
 import { DraftDocumentImporter, DraftImportRejectedError } from '../../workflows/application/draft-document-importer.js';
 import { DraftCatalogRepository } from '../../workflows/data/draft-catalog.repository.js';
-import { type AiJobClaim, AiJobClaimsRepository } from '../data/ai-job-claims.repository.js';
+import { type AiJobClaim, AiJobClaimsRepository, type AiJobProgress } from '../data/ai-job-claims.repository.js';
 import { AiJobWorkRepository, type DraftJobInput } from '../data/ai-job-work.repository.js';
 import { type CallRecord, DraftDesigner } from './draft-designer.js';
 
@@ -65,7 +65,11 @@ export class WorkflowDraftJob {
     const result = await this.designer.design(
       input.description,
       catalog,
-      { beforeRound: () => this.runner.withoutTenant((tx) => this.claims.renew(tx, claim, AI_JOB_LEASE_MINUTES)), afterCall: (call) => this.record(claim, input, call) },
+      {
+        beforeRound: (round) => this.renewAndShow(claim, { stage: 'DESIGNING', round }),
+        afterReview: (round, problems) => this.show(claim, { stage: 'REVIEWING', round, problems }),
+        afterCall: (call) => this.record(claim, input, call),
+      },
       stop,
     );
     if (result.kind === 'interrupted') {
@@ -73,6 +77,10 @@ export class WorkflowDraftJob {
       return 'interrupted';
     }
     if (result.kind === 'failed') return this.fail(claim, result.errorCode);
+    if (!(await this.show(claim, { stage: 'WRITING', round: result.rounds }))) {
+      this.log('info', 'ai_job.interrupted', claim);
+      return 'interrupted';
+    }
 
     try {
       await this.runner.withTenant(claim.tenantId, async (tx) => {
@@ -89,6 +97,16 @@ export class WorkflowDraftJob {
     }
     this.log('info', 'ai_job.succeeded', claim, { rounds: result.rounds, errors: result.errors });
     return 'succeeded';
+  }
+
+  /** Before each call: the lease (the heartbeat) and the round shown, in one short transaction. */
+  private renewAndShow(claim: AiJobClaim, progress: AiJobProgress): Promise<boolean> {
+    return this.runner.withoutTenant(async (tx) => (await this.claims.renew(tx, claim, AI_JOB_LEASE_MINUTES)) && this.claims.setStage(tx, claim, progress));
+  }
+
+  /** `false` when the request is not ours any more (cancelled, expired): the caller stops. */
+  private show(claim: AiJobClaim, progress: AiJobProgress): Promise<boolean> {
+    return this.runner.withoutTenant((tx) => this.claims.setStage(tx, claim, progress));
   }
 
   /**

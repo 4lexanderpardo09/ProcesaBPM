@@ -1,8 +1,9 @@
 import type { StepDocument, TransitionDocument, WorkflowVersionDocument } from '@procesabpm/shared';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/shared/api';
+import type { RealtimeClient } from '@/shared/realtime';
 import type { FakeHandler } from '@/test/fake-transport';
 import { renderRoute } from '@/test/render-route';
 import { at, DRAFT, END, FLOW, id, link, START, startingDoc, step, versionOf, versionUrl } from '../test/builder-fixtures';
@@ -431,41 +432,95 @@ describe('workflow builder', () => {
 
 describe('«Crear con IA» in the builder', () => {
   const JOB = id(95);
+  const OLD_JOB = id(94);
   const PAY = id(96);
   const availability = `/ai-assistant/availability`;
-  const job = (status: string, overrides: Record<string, unknown> = {}) => ({ id: JOB, status, errorCode: null, result: null, createdAt: new Date().toISOString(), startedAt: null, completedAt: null, ...overrides });
+  const historyUrl = `${url}/ai-jobs`;
+  const DESCRIPTION = 'El asesor pide un anticipo y tesorería lo paga.';
+  type Job = { readonly id: string; readonly status: string } & Record<string, unknown>;
+  const job = (status: string, overrides: Record<string, unknown> = {}): Job => ({
+    id: JOB,
+    status,
+    stage: null,
+    round: null,
+    problems: null,
+    errorCode: null,
+    result: null,
+    createdAt: new Date().toISOString(),
+    startedAt: null,
+    completedAt: null,
+    description: DESCRIPTION,
+    requestedById: id(1),
+    requesterName: 'Ana Torres',
+    cancelledByName: null,
+    tokens: 0,
+    ...overrides,
+  });
   const aiDraftDoc = (): WorkflowVersionDocument => ({
     ...startingDoc(),
     steps: [step(START, 'START', 'Inicio'), step(PAY, 'TASK', 'Pagar anticipo'), step(END, 'END', 'Fin')],
     transitions: [link(id(97), START, PAY), link(id(98), PAY, END, { type: 'DECISION', label: 'Pagado' })],
   });
-  /** The builder's API plus the assistant: the version is rewritten on the server once the request succeeds. */
-  function aiApi(jobs: Array<ReturnType<typeof job>>, request: FakeHandler = () => ({ jobId: JOB })) {
+
+  /** A socket that is always connected: the test fires its events (polling is then 30 s, so only events move the panel). */
+  function fakeRealtime() {
+    const listeners = new Map<string, Set<(payload: unknown) => void>>();
+    const followed: string[] = [];
+    const client: RealtimeClient = {
+      isConnected: () => true,
+      onConnectionChange: () => () => undefined,
+      on: (event, listener) => {
+        const set = listeners.get(event) ?? new Set();
+        set.add(listener as (payload: unknown) => void);
+        listeners.set(event, set);
+        return () => set.delete(listener as (payload: unknown) => void);
+      },
+      followAiDraft: (versionId) => {
+        followed.push(versionId);
+        return () => undefined;
+      },
+      dispose: () => undefined,
+    };
+    const fire = (jobId = JOB) => act(() => listeners.get('ai_job.changed')?.forEach((listener) => listener({ jobId, versionId: DRAFT })));
+    return { client, followed, fire };
+  }
+
+  /**
+   * The builder's API plus the assistant. `history` is what `GET …/ai-jobs` answers now (the test changes it); the
+   * version is rewritten on the server once a request succeeds.
+   */
+  function aiApi(state: { history: Job[] }, request: FakeHandler = () => ({ jobId: JOB })) {
     const base = api();
-    let written = false;
     return {
       ...base,
       [url]: (options: Parameters<FakeHandler>[0], path: string) => {
         const detail = base[url]!(options, path) as Record<string, unknown>;
-        return written ? { ...detail, version: versionOf('DRAFT', 1), document: aiDraftDoc() } : detail;
+        return state.history.some((entry) => entry.status === 'SUCCEEDED') ? { ...detail, version: versionOf('DRAFT', 1), document: aiDraftDoc() } : detail;
       },
       [availability]: () => ({ available: true, remainingJobsToday: 4, activeJobId: null }),
-      [`${url}/ai-draft`]: request,
-      [`/ai-jobs/${JOB}`]: () => {
-        const next = jobs.length > 1 ? jobs.shift()! : jobs[0]!;
-        if (next.status === 'SUCCEEDED') written = true;
-        return next;
+      [historyUrl]: () => ({ jobs: state.history }),
+      [`${url}/ai-draft`]: (options: Parameters<FakeHandler>[0], path: string) => {
+        const answer = request(options, path);
+        state.history = [...state.history, job('PENDING')];
+        return answer;
+      },
+      [`/ai-jobs/${JOB}/cancel`]: () => {
+        state.history = state.history.map((entry) => (entry.id === JOB ? { ...entry, status: 'FAILED', errorCode: 'CANCELLED', cancelledByName: 'Luis Gómez', completedAt: at } : entry));
+        return job('FAILED', { errorCode: 'CANCELLED' });
       },
     };
   }
-  const openDialog = async () => {
+  const panel = () => screen.getByRole('region', { name: 'Crear el flujo con IA' });
+  const openPanel = async () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Crear con IA' }));
-    return screen.getByRole('dialog', { name: 'Crear el flujo con IA' });
+    return panel();
   };
-  const describeProcess = async (dialog: HTMLElement) => {
-    await userEvent.type(within(dialog).getByRole('textbox', { name: /Descripción del proceso/ }), 'El asesor pide un anticipo y tesorería lo paga.');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Armar el borrador' }));
+  const describeProcess = async (region: HTMLElement) => {
+    await userEvent.type(within(region).getByRole('textbox', { name: /Descripción del proceso/ }), DESCRIPTION);
+    await userEvent.click(within(region).getByRole('button', { name: 'Armar el borrador' }));
   };
+
+  afterEach(() => window.sessionStorage.clear());
 
   it('is not offered while the organization has the assistant off', async () => {
     renderRoute(url, { handlers: { ...api(), [availability]: () => ({ available: false, remainingJobsToday: 0, activeJobId: null }) } });
@@ -473,46 +528,116 @@ describe('«Crear con IA» in the builder', () => {
     expect(screen.queryByRole('button', { name: 'Crear con IA' })).not.toBeInTheDocument();
   });
 
-  it('sends the description with the revision, shows the wait, and opens the new draft with what the AI assumed', async () => {
-    const result = { revision: 1, assumptions: ['Tesorería paga por transferencia.'], rounds: 1, errors: 0, warnings: 0 };
-    const { fake } = renderRoute(url, { handlers: aiApi([job('RUNNING', { startedAt: at }), job('SUCCEEDED', { result })]) });
-    const dialog = await openDialog();
-    expect(within(dialog).getByText('Quedan 4 solicitudes hoy para la organización.')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Armar el borrador' })).toBeDisabled();
-    await describeProcess(dialog);
+  it('sends the description, follows each stage live from the socket, and opens the new draft with what the AI assumed', async () => {
+    const state = { history: [] as Job[] };
+    const realtime = fakeRealtime();
+    const { fake } = renderRoute(url, { handlers: aiApi(state), realtime: realtime.client });
+    const region = await openPanel();
+    expect(realtime.followed).toEqual([DRAFT]);
+    expect(within(region).getByText('Quedan 4 solicitudes hoy para la organización.')).toBeInTheDocument();
+    expect(within(region).getByRole('button', { name: 'Armar el borrador' })).toBeDisabled();
+    await describeProcess(region);
 
-    expect(fake.callsTo(`${url}/ai-draft`)[0]?.options.body).toEqual({ description: 'El asesor pide un anticipo y tesorería lo paga.', revision: 0 });
-    expect(await within(dialog).findByText('La IA está armando el flujo…')).toBeInTheDocument();
+    expect(fake.callsTo(`${url}/ai-draft`)[0]?.options.body).toEqual({ description: DESCRIPTION, revision: 0 });
+    const history = await within(region).findByRole('list', { name: 'Solicitudes a la IA de este borrador' });
+    expect(await within(history).findByText('En cola…')).toBeInTheDocument();
+    expect(within(history).getByText(DESCRIPTION)).toBeInTheDocument();
+    expect(within(region).getByRole('textbox', { name: /Descripción del proceso/ })).toHaveValue('');
+    expect(within(region).getByRole('button', { name: 'Armar el borrador' })).toBeDisabled();
 
-    expect(await screen.findByText(/La IA armó el borrador\. Revísalo antes de publicar\./, {}, { timeout: 6_000 })).toBeInTheDocument();
+    state.history = [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1 })];
+    realtime.fire();
+    expect(await within(history).findByText('La IA está diseñando el flujo (ronda 1)…')).toBeInTheDocument();
+
+    state.history = [job('RUNNING', { startedAt: at, stage: 'REVIEWING', round: 1, problems: 3, tokens: 12_500 })];
+    realtime.fire();
+    expect(await within(history).findByText('Revisando la ronda 1: encontró 3 problemas y se los devuelve a la IA para corregirlos…')).toBeInTheDocument();
+    expect(within(history).getByText('12.500 tokens')).toBeInTheDocument();
+
+    const result = { revision: 1, assumptions: ['Tesorería paga por transferencia.'], rounds: 2, errors: 0, warnings: 0 };
+    state.history = [job('SUCCEEDED', { startedAt: at, completedAt: at, stage: 'WRITING', round: 2, result, tokens: 25_000 })];
+    realtime.fire();
+    expect(await screen.findByText(/La IA armó el borrador\. Revísalo antes de publicar\./)).toBeInTheDocument();
     expect(screen.getByText('Tesorería paga por transferencia.')).toBeInTheDocument();
     expect(await within(outline()).findByRole('button', { name: /Pagar anticipo/ })).toBeInTheDocument();
-  }, 15_000);
+    // The panel stays open on the new draft, with the request's outcome.
+    expect(await within(panel()).findByText('Borrador listo en 2 rondas.')).toBeInTheDocument();
+  }, 20_000);
 
-  it('says why a request ended without a draft, and goes back to the form to try again', async () => {
-    renderRoute(url, { handlers: aiApi([job('FAILED', { errorCode: 'DRAFT_CHANGED', completedAt: at })]) });
-    const dialog = await openDialog();
-    await describeProcess(dialog);
-    expect(await within(dialog).findByText('Alguien cambió el borrador mientras la IA trabajaba: no se reemplazó.')).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Intentar de nuevo' }));
-    expect(within(dialog).getByRole('textbox', { name: /Descripción del proceso/ })).toBeInTheDocument();
+  it('announces the progress to screen readers without the ticking time', async () => {
+    const state = { history: [job('RUNNING', { startedAt: at, stage: 'WRITING', round: 1 })] };
+    renderRoute(url, { handlers: aiApi(state), realtime: fakeRealtime().client });
+    const region = await openPanel();
+    await within(region).findAllByText('Escribiendo el borrador…');
+    const live = screen.getAllByRole('status').find((element) => element.textContent === 'Escribiendo el borrador…');
+    expect(live).toHaveAttribute('aria-live', 'polite');
   });
 
-  it('says a request nobody took in time expired', async () => {
-    renderRoute(url, { handlers: aiApi([job('FAILED', { errorCode: 'QUEUE_EXPIRED', completedAt: at })]) });
-    const dialog = await openDialog();
-    await describeProcess(dialog);
-    expect(await within(dialog).findByText('El asistente no alcanzó a atender la solicitud. Inténtalo de nuevo más tarde.')).toBeInTheDocument();
+  it('shows the history of the draft like a conversation: who asked what, how it ended and what it cost', async () => {
+    const state = {
+      history: [
+        job('FAILED', { id: OLD_JOB, errorCode: 'QUEUE_EXPIRED', completedAt: at, description: null, requesterName: 'Luis Gómez' }),
+        job('FAILED', { errorCode: 'CANCELLED', completedAt: at, cancelledByName: 'Luis Gómez', tokens: 9_000 }),
+      ],
+    };
+    renderRoute(url, { handlers: aiApi(state), realtime: fakeRealtime().client });
+    const history = await within(await openPanel()).findByRole('list', { name: 'Solicitudes a la IA de este borrador' });
+    const [first, second] = within(history).getAllByRole('listitem').filter((item) => item.textContent !== '');
+    expect(first).toHaveTextContent('Luis Gómez');
+    expect(first).toHaveTextContent('La descripción de esta solicitud ya no se guarda.');
+    expect(first).toHaveTextContent('El asistente no alcanzó a atender la solicitud. Inténtalo de nuevo más tarde.');
+    expect(second).toHaveTextContent('Ana Torres');
+    expect(second).toHaveTextContent(DESCRIPTION);
+    expect(second).toHaveTextContent('Cancelada por Luis Gómez.');
+    expect(second).toHaveTextContent('9.000 tokens');
+  });
+
+  it('cancels the request in progress', async () => {
+    const state = { history: [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1 })] };
+    const { fake } = renderRoute(url, { handlers: aiApi(state), realtime: fakeRealtime().client });
+    const region = await openPanel();
+    await userEvent.click(await within(region).findByRole('button', { name: 'Cancelar la solicitud' }));
+    expect(fake.callsTo(`/ai-jobs/${JOB}/cancel`)).toHaveLength(1);
+    expect(await within(region).findByText('Cancelada por Luis Gómez.')).toBeInTheDocument();
+    expect(within(region).queryByRole('button', { name: 'Cancelar la solicitud' })).not.toBeInTheDocument();
+  });
+
+  it('comes back open after a reload, still showing the request in progress', async () => {
+    window.sessionStorage.setItem(`procesabpm.builder.ai.${DRAFT}`, 'open');
+    renderRoute(url, { handlers: aiApi({ history: [job('RUNNING', { startedAt: at, stage: 'READING' })] }), realtime: fakeRealtime().client });
+    expect(await within(await screen.findByRole('region', { name: 'Crear el flujo con IA' })).findAllByText(/Leyendo los cargos, grupos y tipos de aprobación/)).not.toHaveLength(0);
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Cerrar el panel de IA' }));
+    expect(window.sessionStorage.getItem(`procesabpm.builder.ai.${DRAFT}`)).toBeNull();
+  });
+
+  it('polls a request in progress when there is no socket', async () => {
+    const state = { history: [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1 })] };
+    const { fake } = renderRoute(url, { handlers: aiApi(state) });
+    await openPanel();
+    await within(panel()).findAllByText('La IA está diseñando el flujo (ronda 1)…');
+    state.history = [job('FAILED', { errorCode: 'DRAFT_CHANGED', completedAt: at })];
+    expect(await within(panel()).findByText('Alguien cambió el borrador mientras la IA trabajaba: no se reemplazó.', {}, { timeout: 8_000 })).toBeInTheDocument();
+    expect(fake.callsTo(historyUrl).length).toBeGreaterThan(1);
+  }, 15_000);
+
+  it('holds the description while the draft has unsaved changes', async () => {
+    renderRoute(url, { handlers: aiApi({ history: [] }), realtime: fakeRealtime().client });
+    await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
+    await userEvent.click(screen.getByRole('button', { name: 'Agregar Paso' }));
+    const region = await openPanel();
+    expect(within(region).getByText(/Guarda los cambios antes de pedirle un borrador a la IA/)).toBeInTheDocument();
+    await userEvent.type(within(region).getByRole('textbox', { name: /Descripción del proceso/ }), DESCRIPTION);
+    expect(within(region).getByRole('button', { name: 'Armar el borrador' })).toBeDisabled();
   });
 
   it('explains a refused request, like the daily limit', async () => {
     const refuse: FakeHandler = () => {
       throw new ApiError({ status: 422, code: 'AI_DAILY_LIMIT_REACHED', message: 'x', details: { resetsAt: '2026-10-22T05:00:00.000Z' } });
     };
-    renderRoute(url, { handlers: aiApi([job('PENDING')], refuse) });
-    const dialog = await openDialog();
-    await describeProcess(dialog);
-    expect(await within(dialog).findByText(/La organización llegó al límite de hoy\. Se renueva el/)).toBeInTheDocument();
+    renderRoute(url, { handlers: aiApi({ history: [] }, refuse), realtime: fakeRealtime().client });
+    const region = await openPanel();
+    await describeProcess(region);
+    expect(await within(region).findByText(/La organización llegó al límite de hoy\. Se renueva el/)).toBeInTheDocument();
   });
 });
 

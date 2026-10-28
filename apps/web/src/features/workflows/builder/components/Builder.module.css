@@ -1108,9 +1108,104 @@
   font-weight: 600;
 }
 
-.aiForm,
-.aiProgress {
+/* «Crear con IA»: a panel docked on the right of the canvas, read like a conversation. */
+.aiPanel {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 6;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  width: min(380px, calc(100% - 2 * var(--space-3)));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.aiConversation {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+
+.aiHistory {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aiTurn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.aiAsked,
+.aiAnswerOpen,
+.aiAnswerOk,
+.aiAnswerFailed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 92%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.aiAsked {
+  align-self: flex-end;
+  border-color: var(--accent-line);
+  background: var(--accent-50);
+}
+
+.aiAnswerOpen {
+  align-self: flex-start;
+  background: var(--surface-2);
+}
+
+.aiAnswerOk {
+  align-self: flex-start;
+  border-color: var(--ok-line);
+  background: var(--ok-50);
+}
+
+.aiAnswerFailed {
+  align-self: flex-start;
+  border-color: var(--danger-line);
+  background: var(--danger-50);
+}
+
+.aiMeta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.aiText {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.aiComposer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.aiComposerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
 }

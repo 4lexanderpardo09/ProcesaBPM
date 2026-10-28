@@ -16,6 +16,8 @@ const signalSchema = z.discriminatedUnion('k', [
   z.object({ v: z.literal(1), k: z.literal('notifications'), t: uuidSchema, u: z.array(uuidSchema).min(1).max(MAX_USERS_PER_SIGNAL) }).strict(),
   z.object({ v: z.literal(1), k: z.literal('ticket'), t: uuidSchema, id: uuidSchema, e: z.enum(TICKET_CHANGE_KINDS) }).strict(),
   z.object({ v: z.literal(1), k: z.literal('document'), t: uuidSchema, id: uuidSchema, d: uuidSchema }).strict(),
+  /** An AI request (`id`) of a workflow draft (`w`) was made or moved: sent by the database trigger on ai_jobs. */
+  z.object({ v: z.literal(1), k: z.literal('ai_job'), t: uuidSchema, id: uuidSchema, w: uuidSchema }).strict(),
   z.object({ v: z.literal(1), k: z.literal('access'), t: uuidSchema.optional(), u: uuidSchema.optional(), r: uuidSchema.optional(), s: uuidSchema.optional() }).strict(),
   z.object({ v: z.literal(1), k: z.literal('ping'), n: nonce }).strict(),
 ]);

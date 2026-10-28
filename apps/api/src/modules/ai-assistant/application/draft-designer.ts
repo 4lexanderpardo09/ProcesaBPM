@@ -15,8 +15,10 @@ export interface CallRecord {
 }
 
 export interface DesignHooks {
-  /** Before each call (renews the job's lease). `false`: the job is not ours any more, stop. */
-  readonly beforeRound: () => Promise<boolean>;
+  /** Before the call of round n (renews the job's lease, shows DESIGNING). `false`: the job is not ours any more, stop. */
+  readonly beforeRound: (round: number) => Promise<boolean>;
+  /** An answer of round n had problems that go back to the model in the next round (shows REVIEWING). `false`: stop. */
+  readonly afterReview: (round: number, problems: number) => Promise<boolean>;
   /** After each call, answered or not: every call is paid and recorded. Must not throw: a lost record must not lose the round. */
   readonly afterCall: (call: CallRecord) => Promise<void>;
 }
@@ -61,7 +63,7 @@ export class DraftDesigner {
     let best: Candidate | undefined;
     let answered = false;
     for (let round = 1; round <= this.maxRounds; round += 1) {
-      if (signal.aborted || !(await hooks.beforeRound())) return { kind: 'interrupted' };
+      if (signal.aborted || !(await hooks.beforeRound(round))) return { kind: 'interrupted' };
       let result: LlmResult;
       try {
         result = await this.provider.complete({ ...buildDraftPrompt(description, catalog, correction), tool }, signal);
@@ -80,6 +82,7 @@ export class DraftDesigner {
         if (best.errors === 0) return { kind: 'draft', ...best, rounds: round };
       }
       correction = evaluation.correction;
+      if (round < this.maxRounds && !(await hooks.afterReview(round, correction.problems.length))) return { kind: 'interrupted' };
     }
     if (best !== undefined) return { kind: 'draft', ...best, rounds: this.maxRounds };
     return { kind: 'failed', errorCode: answered ? 'AI_DRAFT_INVALID' : 'AI_PROVIDER_FAILED' };

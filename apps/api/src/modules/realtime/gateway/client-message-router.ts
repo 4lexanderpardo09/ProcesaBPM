@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AckErrorCode, authRefreshSchema, RealtimeClientEvent, ticketSubscribeSchema } from '@procesabpm/shared';
+import { type AckErrorCode, aiDraftSubscribeSchema, authRefreshSchema, RealtimeClientEvent, ticketSubscribeSchema } from '@procesabpm/shared';
 import type { z } from 'zod';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
+import { AiDraftSubscriptionsService } from '../application/ai-draft-subscriptions.service.js';
 import type { MessageOutcome } from '../application/message-outcome.js';
 import { RealtimeEmitter } from '../application/realtime-emitter.js';
 import { SessionRefresher } from '../application/session-refresher.js';
@@ -38,12 +39,15 @@ export class ClientMessageRouter {
   constructor(
     @Inject(SessionRefresher) refresher: SessionRefresher,
     @Inject(TicketSubscriptionsService) subscriptions: TicketSubscriptionsService,
+    @Inject(AiDraftSubscriptionsService) aiDrafts: AiDraftSubscriptionsService,
     @Inject(RealtimeEmitter) private readonly emitter: RealtimeEmitter,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
   ) {
     const entries: Array<[string, ClientMessage<never>]> = [
       [RealtimeClientEvent.TicketSubscribe, message({ schema: ticketSubscribeSchema, duringReauth: false, handle: (socket, body) => subscriptions.subscribe(socket, body.ticketId) })],
       [RealtimeClientEvent.TicketUnsubscribe, message({ schema: ticketSubscribeSchema, duringReauth: false, handle: (socket, body) => subscriptions.unsubscribe(socket, body.ticketId) })],
+      [RealtimeClientEvent.AiDraftSubscribe, message({ schema: aiDraftSubscribeSchema, duringReauth: false, handle: (socket, body) => aiDrafts.subscribe(socket, body.versionId) })],
+      [RealtimeClientEvent.AiDraftUnsubscribe, message({ schema: aiDraftSubscribeSchema, duringReauth: false, handle: (socket, body) => aiDrafts.unsubscribe(socket, body.versionId) })],
       [
         RealtimeClientEvent.AuthRefresh,
         message({ schema: authRefreshSchema, duringReauth: true, budget: (session) => session.refreshes.take(monotonicNow()), handle: (socket, body) => refresher.refresh(socket, body.token) }),

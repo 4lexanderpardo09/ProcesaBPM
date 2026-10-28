@@ -7,6 +7,8 @@ export const RoomNames = {
   member: (tenantId: string, userId: string) => `t:${tenantId}:u:${userId}`,
   role: (tenantId: string, roleId: string) => `t:${tenantId}:r:${roleId}`,
   ticket: (tenantId: string, ticketId: string) => `t:${tenantId}:ticket:${ticketId}`,
+  /** The builders following the AI requests of a workflow draft. */
+  aiDraft: (tenantId: string, versionId: string) => `t:${tenantId}:ai:${versionId}`,
   /** Every socket of a person, in any tenant (a change of the account itself). */
   user: (userId: string) => `u:${userId}`,
   session: (sessionId: string) => `s:${sessionId}`,
