@@ -47,6 +47,15 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Plain text from the model, its paragraphs separated by one blank line: how a NOTIFICATION body is kept. */
+export function plainParagraphs(text: string): string {
+  return text
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0)
+    .join('\n\n');
+}
+
 /** Plain text from the model as paragraphs of rich text (the API sanitizes it again). */
 export function paragraphs(text: string): string {
   return text
@@ -223,7 +232,7 @@ class Translator {
         recipients: step.notification.recipients.map((recipient) => this.recipient(step.ref, recipient)).filter((recipient) => recipient !== null),
         channels: ['IN_APP', 'EMAIL'],
         subject: step.notification.subject,
-        body: paragraphs(step.notification.body),
+        body: plainParagraphs(step.notification.body),
       };
     } else if (step.type === 'WAIT') {
       if (step.wait === null) {

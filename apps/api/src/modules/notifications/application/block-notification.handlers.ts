@@ -1,5 +1,5 @@
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
-import { uuidSchema } from '@procesabpm/shared';
+import { notificationBodyText, uuidSchema } from '@procesabpm/shared';
 import { z } from 'zod';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { ClaimedEvent } from '../../../infrastructure/outbox/outbox-handler.js';
@@ -63,7 +63,7 @@ export class BlockNotificationHandlers implements OnModuleInit {
 
     const inApp = readerIds.filter((userId) => wantsInApp && channelsFor(stored, userId, BLOCK_NOTICE).inApp);
     if (inApp.length > 0) {
-      const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, block.body], { stepId });
+      const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, notificationBodyText(block.body)], { stepId });
       // The ticket was deleted (tenant purge) after the event was queued: nothing to notify, by e-mail either.
       if (rendered === null) return;
       const [title, body] = rendered as [string, string];
