@@ -6,6 +6,7 @@ import { formatDateTime, formatShortDateTime } from '@/shared/lib/format-date-ti
 import { Alert, Button, TextArea } from '@/shared/ui';
 import { isOpen } from '../api/ai-draft-api';
 import type { AiDraft } from '../hooks/use-ai-draft';
+import { AiDraftSummary } from './AiDraftSummary';
 import styles from './Builder.module.css';
 
 /** Request errors the panel explains; anything else gets the generic message. */
@@ -63,7 +64,7 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
         ) : (
           <ol className={styles.aiHistory} aria-label={t('builder.ai.history')}>
             {ai.jobs.map((job) => (
-              <AiRequest key={job.id} job={job} ai={ai} />
+              <AiRequest key={job.id} job={job} ai={ai} latest={job.id === lastId} />
             ))}
             <li ref={end} aria-hidden="true" />
           </ol>
@@ -78,7 +79,7 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
 }
 
 /** One request: the person's description, then the assistant's progress or outcome. */
-function AiRequest({ job, ai }: { readonly job: AiJobHistoryItem; readonly ai: AiDraft }) {
+function AiRequest({ job, ai, latest }: { readonly job: AiJobHistoryItem; readonly ai: AiDraft; readonly latest: boolean }) {
   const { t } = useTranslation('workflows');
   const open = isOpen(job.status);
   return (
@@ -88,7 +89,7 @@ function AiRequest({ job, ai }: { readonly job: AiJobHistoryItem; readonly ai: A
         <p className={styles.aiText}>{job.description ?? t('builder.ai.descriptionGone')}</p>
       </div>
       <div className={open ? styles.aiAnswerOpen : job.status === 'SUCCEEDED' ? styles.aiAnswerOk : styles.aiAnswerFailed}>
-        {open ? <Progress job={job} cancelling={ai.cancel.isPending} onCancel={() => ai.cancel.mutate(job.id)} /> : <Outcome job={job} />}
+        {open ? <Progress job={job} cancelling={ai.cancel.isPending} onCancel={() => ai.cancel.mutate(job.id)} /> : <Outcome job={job} latest={latest} />}
         {job.tokens > 0 && <p className={styles.aiMeta}>{t('builder.ai.tokens', { count: job.tokens, formatted: job.tokens.toLocaleString('es-CO') })}</p>}
       </div>
     </li>
@@ -128,13 +129,14 @@ function Progress({ job, cancelling, onCancel }: { readonly job: AiJobHistoryIte
   );
 }
 
-function Outcome({ job }: { readonly job: AiJobHistoryItem }) {
+function Outcome({ job, latest }: { readonly job: AiJobHistoryItem; readonly latest: boolean }) {
   const { t } = useTranslation('workflows');
   if (job.status === 'SUCCEEDED' && job.result !== null) {
     const { rounds, errors, warnings } = job.result;
     return (
       <>
         <p className={styles.strong}>{t('builder.ai.succeeded', { count: rounds })}</p>
+        <AiDraftSummary result={job.result} expanded={latest} />
         {errors > 0 && <p className={styles.aiText}>{t('builder.ai.leftErrors', { count: errors })}</p>}
         {errors === 0 && warnings > 0 && <p className={styles.aiText}>{t('builder.ai.leftWarnings', { count: warnings })}</p>}
       </>

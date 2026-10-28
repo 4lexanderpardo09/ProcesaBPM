@@ -554,14 +554,32 @@ describe('«Crear con IA» in the builder', () => {
     expect(await within(history).findByText('Revisando la ronda 1: encontró 3 problemas y se los devuelve a la IA para corregirlos…')).toBeInTheDocument();
     expect(within(history).getByText('12.500 tokens')).toBeInTheDocument();
 
-    const result = { revision: 1, assumptions: ['Tesorería paga por transferencia.'], rounds: 2, errors: 0, warnings: 0 };
+    const result = {
+      revision: 1,
+      assumptions: ['Tesorería paga por transferencia.'],
+      decisions: [
+        { topic: 'APPROVALS', text: 'El jefe aprueba primero, como pide la descripción.' },
+        { topic: 'ROUTING', text: 'Los anticipos de más de 5 millones pasan por gerencia.' },
+      ],
+      outline: { steps: 7, approvals: 2, fields: 4, initiators: 0, amountRules: 1 },
+      corrections: 3,
+      rounds: 2,
+      errors: 0,
+      warnings: 0,
+    };
     state.history = [job('SUCCEEDED', { startedAt: at, completedAt: at, stage: 'WRITING', round: 2, result, tokens: 25_000 })];
     realtime.fire();
-    expect(await screen.findByText(/La IA armó el borrador\. Revísalo antes de publicar\./)).toBeInTheDocument();
-    expect(screen.getByText('Tesorería paga por transferencia.')).toBeInTheDocument();
+    expect(await screen.findByText(/La IA armó el borrador\. Revísalo antes de publicar: en el panel de IA está lo que decidió/)).toBeInTheDocument();
     expect(await within(outline()).findByRole('button', { name: /Pagar anticipo/ })).toBeInTheDocument();
-    // The panel stays open on the new draft, with the request's outcome.
-    expect(await within(panel()).findByText('Borrador listo en 2 rondas.')).toBeInTheDocument();
+    // The panel stays open on the new draft, with the request's outcome and what the AI decided.
+    const answer = panel();
+    expect(await within(answer).findByText('Borrador listo en 2 rondas.')).toBeInTheDocument();
+    expect(within(answer).getByText('7 pasos · 2 aprobaciones · 4 campos · 1 regla de monto')).toBeInTheDocument();
+    expect(within(answer).getByText('La revisión le devolvió 3 problemas a la IA para corregirlos.')).toBeInTheDocument();
+    expect(within(answer).getByText('Lo que decidió (2)')).toBeVisible();
+    expect(within(answer).getByText('Aprobaciones')).toBeInTheDocument();
+    expect(within(answer).getByText('Los anticipos de más de 5 millones pasan por gerencia.')).toBeVisible();
+    expect(within(answer).getByText('Tesorería paga por transferencia.')).toBeVisible();
   }, 20_000);
 
   it('announces the progress to screen readers without the ticking time', async () => {
@@ -571,6 +589,18 @@ describe('«Crear con IA» in the builder', () => {
     await within(region).findAllByText('Escribiendo el borrador…');
     const live = screen.getAllByRole('status').find((element) => element.textContent === 'Escribiendo el borrador…');
     expect(live).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('folds the summary of older drafts and reads results stored before it existed', async () => {
+    const older = { revision: 1, assumptions: ['Supuesto viejo.'], rounds: 1, errors: 0, warnings: 0 };
+    const newer = { ...older, revision: 2, assumptions: [], decisions: [{ topic: 'FIELDS', text: 'Pide el valor del anticipo.' }], outline: null, corrections: 0 };
+    const state = { history: [job('SUCCEEDED', { id: OLD_JOB, completedAt: at, result: older }), job('SUCCEEDED', { completedAt: at, result: newer })] };
+    renderRoute(url, { handlers: aiApi(state), realtime: fakeRealtime().client });
+    const history = await within(await openPanel()).findByRole('list', { name: 'Solicitudes a la IA de este borrador' });
+    const [first, second] = [...history.children].filter((item) => item.textContent !== '') as HTMLElement[];
+    expect(within(first!).getByText('Lo que supuso porque no estaba en la descripción (1)').closest('details')).not.toHaveAttribute('open');
+    expect(within(first!).queryByText(/pasos/)).not.toBeInTheDocument();
+    expect(within(second!).getByText('Lo que decidió (1)').closest('details')).toHaveAttribute('open');
   });
 
   it('shows the history of the draft like a conversation: who asked what, how it ended and what it cost', async () => {
