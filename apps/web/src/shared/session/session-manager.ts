@@ -28,7 +28,14 @@ export interface SessionManager {
   readonly client: HttpClient;
   /** Plain transport for the anonymous sign-in calls, which carry a challenge or selection token instead. */
   readonly publicClient: HttpClient;
+  /** The access token as it changes (the real-time socket authenticates and re-authenticates with it). */
+  readonly accessTokens: AccessTokens;
   dispose(): void;
+}
+
+export interface AccessTokens {
+  current(): AccessToken | undefined;
+  subscribe(listener: (token: AccessToken | undefined) => void): () => void;
 }
 
 export interface SessionManagerDeps {
@@ -221,6 +228,7 @@ export function createSessionManager({ transport, store, coordinator, channel, q
     signOut: () => endSession('userSignedOut', true),
     client,
     publicClient: transport,
+    accessTokens: { current: () => store.get(), subscribe: (listener) => store.subscribe(listener) },
     /** The manager owns the coordinator and the channel it was given. */
     dispose() {
       clearTimeout(retryTimer);

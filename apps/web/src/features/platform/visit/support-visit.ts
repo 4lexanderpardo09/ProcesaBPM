@@ -148,6 +148,8 @@ export async function openSupportVisit({ platform, transport, tenant, labels, cr
     signOut: () => close(),
     client,
     publicClient: transport,
+    // A support token is refused by the real-time socket: the visit polls like a page without one.
+    accessTokens: { current: () => undefined, subscribe: () => () => undefined },
     dispose: () => undefined,
   };
 
