@@ -20,6 +20,8 @@ docs
 docs/diseno/mockups
 **/*.md
 !apps/api/assets/**/*.md
+# …except the website's pages and articles, which are written in Markdown.
+!apps/landing/src/**/*.md
 docker-compose*.yml
 Dockerfile*
 .dockerignore
