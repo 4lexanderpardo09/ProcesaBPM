@@ -1,9 +1,10 @@
 import { parseBlockConfig } from '../block-config.js';
 import { FIELD_CODE_PATTERN, isAutomaticStep, type StepType, type TransitionType } from '../constants.js';
-import type { CandidateDocument, FieldDocument, SignerDocument, StepDocument, TransitionDocument, WorkflowVersionDocument } from '../document.js';
+import type { AmountRuleDocument, CandidateDocument, FieldDocument, InitiatorDocument, SignerDocument, StepDocument, TransitionDocument, WorkflowVersionDocument } from '../document.js';
 import { parseFieldConfig } from '../field-config.js';
 import {
   DRAFT_REF_PATTERN,
+  type DraftAmountRule,
   type DraftAssignment,
   type DraftCatalog,
   type DraftCatalogEntry,
@@ -19,6 +20,7 @@ export interface SpecProblem {
   readonly ref?: string;
   readonly field?: string;
   readonly transition?: number;
+  readonly amountRule?: number;
   readonly params?: Readonly<Record<string, string | number | readonly string[]>>;
 }
 
@@ -26,13 +28,15 @@ export type DraftTranslation = { readonly ok: true; readonly document: WorkflowV
 
 const COLUMN_GAP = 260;
 const ROW_GAP = 140;
-const PEOPLE_DRAFT_TYPES: ReadonlySet<StepType> = new Set(['TASK', 'APPROVAL']);
+const PEOPLE_DRAFT_TYPES: ReadonlySet<StepType> = new Set(['TASK', 'APPROVAL', 'SIGNATURE']);
+const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 const FIELD_STEP_TYPES: ReadonlySet<StepType> = new Set(['START', 'TASK', 'APPROVAL']);
 const NUMERIC_COLUMNS: ReadonlySet<string> = new Set(['NUMBER', 'CURRENCY', 'FORMULA']);
 
 export const stepIdOf = (ref: string): string => `new:${ref}`;
 export const transitionIdOf = (index: number): string => `new:t${index}`;
 export const fieldIdOf = (index: number): string => `new:f${index}`;
+export const amountRuleIdOf = (index: number): string => `new:a${index}`;
 
 /** Names compare without accents, case or extra spaces: «Jefe de Bodega» finds «jefe de bodega». */
 export function normalizeName(name: string): string {
@@ -97,14 +101,22 @@ class Translator {
       else if (this.stepsByRef.has(step.ref)) this.problem('SPEC_DUPLICATE_REF', { ref: step.ref });
       else this.stepsByRef.set(step.ref, step);
     }
-    const transitions = this.spec.transitions.map((transition, index) => this.transition(transition, index));
+    const diversions = this.diversionPairs();
+    const transitions = [...this.spec.transitions.map((transition, index) => this.transition(transition, index, diversions)), ...this.diversionTransitions(diversions)];
     const positions = layeredPositions(this.spec);
     const steps = [...this.stepsByRef.values()].map((step) => this.step(step, positions.get(step.ref) ?? { x: 0, y: 0 }));
     const fields = this.fields();
+    const amountRules = this.amountRules();
+    const stepsWithInitiators = this.withInitiators(steps.filter((step): step is StepDocument => step !== null));
     if (this.problems.length > 0) return { ok: false, problems: this.problems };
     return {
       ok: true,
-      document: { steps: steps.filter((step): step is StepDocument => step !== null), transitions: transitions.filter((t): t is TransitionDocument => t !== null), fields, amountRules: [] },
+      document: {
+        steps: stepsWithInitiators,
+        transitions: transitions.filter((t): t is TransitionDocument => t !== null),
+        fields,
+        amountRules,
+      },
     };
   }
 
@@ -155,7 +167,49 @@ class Translator {
       this.problem('SPEC_ASSIGNMENT_MISSING', { ref: step.ref });
       return null;
     }
-    return { ...withConfig, ...this.assignment(step.ref, step.assignment) };
+    const assigned = { ...withConfig, ...this.assignment(step.ref, step.assignment) };
+    return step.type === 'SIGNATURE' ? this.withSignatureSigners(step, assigned) : assigned;
+  }
+
+  /** A signature block lists who signs; a parallel one already got its signers from the assignment. */
+  private withSignatureSigners(step: DraftStep, assigned: StepDocument): StepDocument {
+    const assignment = step.assignment!;
+    if (assignment.signers.length === 0) {
+      this.problem('SPEC_SIGNATURE_WITHOUT_SIGNERS', { ref: step.ref });
+      return assigned;
+    }
+    if (assigned.assignmentMode === 'PARALLEL') return assigned;
+    const needsApprover = assignment.signers.some((signer) => signer.kind === 'APPROVER');
+    const typeId = needsApprover && assigned.approvalGroupTypeId === null ? this.approvalType(step.ref, assignment.approvalType) : assigned.approvalGroupTypeId;
+    return {
+      ...assigned,
+      signers: this.signerDocuments(step.ref, assignment.signers),
+      approvalGroupTypeId: typeId,
+      approvalLevel: needsApprover ? (assigned.approvalLevel ?? assignment.approvalLevel ?? 1) : assigned.approvalLevel,
+    };
+  }
+
+  private withInitiators(steps: StepDocument[]): StepDocument[] {
+    if (this.spec.initiators.length === 0) return steps;
+    const initiators = this.spec.initiators.map((initiator): InitiatorDocument | null => {
+      const id = initiator.kind === 'POSITION' ? this.positions.find(initiator.name) : this.groups.find(initiator.name);
+      if (id === undefined) {
+        this.problem(initiator.kind === 'POSITION' ? 'SPEC_UNKNOWN_POSITION' : 'SPEC_UNKNOWN_GROUP', { params: { name: initiator.name, in: 'initiators' } });
+        return null;
+      }
+      return {
+        id: this.childId('i'),
+        participantType: initiator.kind,
+        userId: null,
+        positionId: initiator.kind === 'POSITION' ? id : null,
+        groupId: initiator.kind === 'GROUP' ? id : null,
+        departmentId: null,
+        companyId: null,
+        siteId: null,
+      };
+    });
+    const resolved = initiators.filter((initiator): initiator is InitiatorDocument => initiator !== null);
+    return steps.map((step) => (step.type === 'START' ? { ...step, initiators: resolved } : step));
   }
 
   private blockConfig(step: DraftStep): Record<string, unknown> {
@@ -177,6 +231,8 @@ class Translator {
         return {};
       }
       raw = { mode: 'DURATION', value: step.wait.value, unit: step.wait.unit };
+    } else if (step.type === 'SIGNATURE') {
+      raw = { document: step.signatureDocument ?? 'MAIN_DOCUMENT' };
     }
     const parsed = parseBlockConfig(step.type, raw);
     if (!parsed.valid) {
@@ -249,10 +305,8 @@ class Translator {
     }
   }
 
-  private parallel(ref: string, assignment: DraftAssignment): Partial<StepDocument> {
-    if (assignment.signers.length === 0) this.problem('SPEC_PARALLEL_WITHOUT_SIGNERS', { ref });
-    const needsApprover = assignment.signers.some((signer) => signer.kind === 'APPROVER');
-    const signers: SignerDocument[] = assignment.signers.map((signer, index) => ({
+  private signerDocuments(ref: string, signers: DraftAssignment['signers']): SignerDocument[] {
+    return signers.map((signer, index) => ({
       id: this.childId('s'),
       signerType: signer.kind,
       userId: null,
@@ -261,21 +315,26 @@ class Translator {
       label: null,
       sortOrder: index,
     }));
+  }
+
+  private parallel(ref: string, assignment: DraftAssignment): Partial<StepDocument> {
+    if (assignment.signers.length === 0) this.problem('SPEC_PARALLEL_WITHOUT_SIGNERS', { ref });
+    const needsApprover = assignment.signers.some((signer) => signer.kind === 'APPROVER');
     return {
       assignmentMode: 'PARALLEL',
-      signers,
+      signers: this.signerDocuments(ref, assignment.signers),
       approvalGroupTypeId: needsApprover ? this.approvalType(ref, assignment.approvalType) : null,
       approvalLevel: needsApprover ? (assignment.approvalLevel ?? 1) : null,
     };
   }
 
-  private transition(transition: DraftTransition, index: number): TransitionDocument | null {
+  private transition(transition: DraftTransition, index: number, diversions: ReadonlyMap<string, DraftAmountRule>): TransitionDocument | null {
     const from = this.stepsByRef.get(transition.from);
     if (from === undefined || !this.stepsByRef.has(transition.to)) {
       this.problem('SPEC_UNKNOWN_REF', { transition: index, params: { target: from === undefined ? transition.from : transition.to } });
       return null;
     }
-    const type = transitionType(from, transition);
+    const type = diversions.has(diversionKey(transition.from, transition.to)) ? 'SYSTEM_ONLY' : transitionType(from, transition);
     return {
       id: transitionIdOf(index),
       fromStepId: stepIdOf(transition.from),
@@ -286,6 +345,78 @@ class Translator {
       sortOrder: index,
       uiPoints: null,
       requiresComment: type === 'DECISION' && transition.requiresComment,
+    };
+  }
+
+  /** The edges an EXTRA_APPROVAL rule sends tickets through: from the step it checks to its approval step. */
+  private diversionPairs(): Map<string, DraftAmountRule> {
+    const pairs = new Map<string, DraftAmountRule>();
+    for (const rule of this.spec.amountRules) {
+      if (rule.action === 'EXTRA_APPROVAL' && rule.step !== null && rule.approvalStep !== null && this.stepsByRef.has(rule.step) && this.stepsByRef.has(rule.approvalStep)) {
+        pairs.set(diversionKey(rule.step, rule.approvalStep), rule);
+      }
+    }
+    return pairs;
+  }
+
+  /** The model only names the approval step: the SYSTEM_ONLY edge into it is added unless the spec already drew it. */
+  private diversionTransitions(diversions: ReadonlyMap<string, DraftAmountRule>): TransitionDocument[] {
+    const drawn = new Set(this.spec.transitions.map((transition) => diversionKey(transition.from, transition.to)));
+    const missing = [...diversions.entries()].filter(([key]) => !drawn.has(key));
+    return missing.map(([, rule], offset) => {
+      const index = this.spec.transitions.length + offset;
+      return {
+        id: transitionIdOf(index),
+        fromStepId: stepIdOf(rule.step!),
+        toStepId: stepIdOf(rule.approvalStep!),
+        type: 'SYSTEM_ONLY',
+        label: `Aprobación adicional: ${this.stepsByRef.get(rule.approvalStep!)!.name}`.slice(0, 120),
+        condition: null,
+        sortOrder: index,
+        uiPoints: null,
+        requiresComment: false,
+      };
+    });
+  }
+
+  private amountRules(): AmountRuleDocument[] {
+    const rules = this.spec.amountRules.map((rule, index) => this.amountRule(rule, index));
+    return rules.filter((rule): rule is AmountRuleDocument => rule !== null);
+  }
+
+  private amountRule(rule: DraftAmountRule, index: number): AmountRuleDocument | null {
+    const at = { amountRule: index };
+    const currency = (rule.currency ?? 'COP').trim().toUpperCase();
+    const stepRef = (ref: string | null): ref is string => ref !== null && this.stepsByRef.has(ref);
+    let valid = true;
+    const fail = (code: string, params?: SpecProblem['params']): void => {
+      valid = false;
+      this.problem(code, { ...at, field: rule.field, ...(params === undefined ? {} : { params }) });
+    };
+    if (!CURRENCY_PATTERN.test(currency)) fail('SPEC_AMOUNT_RULE_CURRENCY_INVALID', { currency });
+    if (rule.step !== null && !stepRef(rule.step)) fail('SPEC_UNKNOWN_REF', { target: rule.step });
+    if (rule.action === 'EXTRA_APPROVAL') {
+      if (rule.step === null) fail('SPEC_AMOUNT_RULE_STEP_REQUIRED');
+      if (!stepRef(rule.approvalStep)) fail(rule.approvalStep === null ? 'SPEC_AMOUNT_RULE_APPROVAL_STEP_MISSING' : 'SPEC_UNKNOWN_REF', { target: rule.approvalStep ?? '' });
+    }
+    const positionId = rule.position === null ? null : this.positions.find(rule.position);
+    if (rule.position !== null && positionId === undefined) fail('SPEC_UNKNOWN_POSITION', { name: rule.position });
+    if (!valid) return null;
+    return {
+      id: amountRuleIdOf(index),
+      stepId: rule.step === null ? null : stepIdOf(rule.step),
+      positionId: positionId ?? null,
+      companyId: null,
+      fieldCode: rule.field.trim().toUpperCase(),
+      rowTypeValue: null,
+      amountColumn: rule.amountColumn === null ? null : rule.amountColumn.trim().toUpperCase(),
+      typeColumn: null,
+      maxAmount: rule.maxAmount.toFixed(2),
+      currencyCode: currency,
+      action: rule.action,
+      approvalStepId: rule.action === 'EXTRA_APPROVAL' ? stepIdOf(rule.approvalStep!) : null,
+      message: rule.message === null || rule.message === '' ? null : rule.message,
+      isActive: true,
     };
   }
 
@@ -367,6 +498,8 @@ class Translator {
     return parsed.config;
   }
 }
+
+const diversionKey = (from: string, to: string): string => `${from}\u0000${to}`;
 
 function optionList(labels: readonly string[]): Array<{ value: string; label: string }> {
   return [...new Set(labels)].map((label) => ({ value: label, label }));

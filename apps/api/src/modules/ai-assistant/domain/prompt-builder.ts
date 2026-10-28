@@ -27,6 +27,7 @@ BLOCKS (steps[].type)
 - TASK: a person does something and chooses how to continue.
 - APPROVAL: a person approves or rejects.
 - CONDITION: automatic branch on field values.
+- SIGNATURE: a person handles it (assignment as in a TASK) and signs the generated document. Always list its signers in assignment.signers (kind POSITION with position, APPROVER, or CREATOR); signatureDocument is null (the main document) unless the description says otherwise. Use it only when the description asks for a signature or signed document.
 - NOTIFICATION: automatic message (notification: recipients, subject, body).
 - WAIT: automatic pause for a duration (wait: value, unit).
 - END: at least one. A ticket that reaches it is closed.
@@ -41,7 +42,7 @@ WHO HANDLES A TASK OR APPROVAL (assignment.mode)
 - SAME_AS_STEP: the same person who handled an earlier step (sameAsStep = that step's ref).
 - PARALLEL_APPROVALS: several people sign at the same time (signers: POSITION with position, APPROVER, or CREATOR).
 Use only the positions, groups and approval types listed in the catalog, with their exact names. If none fits, use CREATOR and explain it in assumptions. Never write names of people.
-Give every TASK and APPROVAL a realistic sla in BUSINESS_HOURS or BUSINESS_DAYS.
+Give every TASK, APPROVAL and SIGNATURE a realistic sla in BUSINESS_HOURS or BUSINESS_DAYS.
 
 TRANSITIONS
 - from/to are step refs; label is the button or branch name ("Aprobar", "Rechazar", "Devolver para corregir").
@@ -58,6 +59,14 @@ FIELDS
 - Types: TEXT, TEXTAREA, NUMBER, CURRENCY, SELECT and MULTI_SELECT (options required), DATE, DATETIME, DAYS, FILE, TABLE (columns required), FORMULA (formula required).
 - Use a TABLE for repeated rows (items, expenses); a FORMULA column computes from the same row (CANTIDAD * VALOR_UNITARIO). A FORMULA field can total a table column: SUM(TABLA.COLUMNA).
 - Ask only for what the process needs; do not ask for the requester's name, e-mail or ID number (the platform already knows who they are).
+
+WHO MAY CREATE TICKETS (initiators)
+- Only when the description restricts it: a list of {kind: POSITION or GROUP, name} from the catalog. The list is empty when anyone may create tickets.
+
+AMOUNT RULES (amountRules)
+- Only when the description limits an amount. field = code of a NUMBER or CURRENCY field (or of a TABLE with amountColumn = the column code; otherwise amountColumn = null). step = the ref where it is checked (normally START, where the amount is captured), or null for everywhere. maxAmount is a number; currency is null for COP.
+- action BLOCK: refuse amounts above the limit. WARN: allow but warn. EXTRA_APPROVAL: send the ticket first to approvalStep (an APPROVAL or TASK ref, and step is then required); that step's own "Aprobar" exit must lead to the step the ticket would have reached without the rule, and its "Rechazar" exit to an END. Do not draw a transition into approvalStep from the checked step: the platform wires it.
+- position = a catalog position when the limit applies only to requesters with it, else null. message = short Spanish text shown to the user, or null.
 
 Put in assumptions every decision the description did not state (short Spanish sentences).`;
 

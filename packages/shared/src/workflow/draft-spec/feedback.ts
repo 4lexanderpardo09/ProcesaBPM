@@ -30,6 +30,7 @@ export function describeSpecProblems(problems: readonly SpecProblem[], spec: Wor
   return problems.map((problem) => {
     const where = [
       problem.ref === undefined ? null : `step "${problem.ref}"`,
+      problem.amountRule === undefined ? null : `amount rule #${problem.amountRule}`,
       problem.field === undefined ? null : `field ${problem.field}`,
       problem.transition === undefined ? null : describeSpecTransition(spec, problem.transition),
     ].filter((part) => part !== null);
@@ -46,12 +47,17 @@ function describeSpecTransition(spec: WorkflowDraftSpec, index: number): string 
 export function describeWorkflowProblems(problems: readonly WorkflowProblem[], document: WorkflowVersionDocument): string[] {
   const transitions = new Map(document.transitions.map((transition) => [transition.id, transition]));
   const fields = new Map(document.fields.map((field) => [field.id, field]));
+  const amountRules = new Map(document.amountRules.map((rule, index) => [rule.id, { rule, index }]));
   return problems.map((problem) => {
     const where: string[] = [];
     if (problem.stepId !== undefined) where.push(`step "${refOf(problem.stepId)}"`);
     if (problem.transitionId !== undefined) {
       const transition = transitions.get(problem.transitionId);
       where.push(transition === undefined ? 'a transition' : `transition "${transition.label}" (${refOf(transition.fromStepId)} -> ${refOf(transition.toStepId)})`);
+    }
+    if (problem.amountRuleId !== undefined) {
+      const found = amountRules.get(problem.amountRuleId);
+      where.push(found === undefined ? 'an amount rule' : `amount rule #${found.index} on ${found.rule.fieldCode}`);
     }
     if (problem.fieldId !== undefined) where.push(`field ${fields.get(problem.fieldId)?.code ?? '?'}`);
     return `${problem.code}${where.length > 0 ? ` at ${where.join(', ')}` : ''}${paramsText(problem.params)}`;

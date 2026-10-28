@@ -1,21 +1,23 @@
 import { z } from 'zod';
 import { CONDITION_OPERATORS } from '../../engine/conditions/types.js';
-import { SLA_UNITS } from '../constants.js';
+import { AMOUNT_RULE_ACTIONS, SLA_UNITS } from '../constants.js';
 
 /**
  * The compact workflow a language model fills in («Crear con IA»). It never holds ids: blocks are named by a
  * `ref` the model invents, and positions, groups and approval types by their name in the organization's
  * catalog. `translateDraftSpec` turns it into a `WorkflowVersionDocument`.
  */
-export const DRAFT_STEP_TYPES = ['START', 'TASK', 'APPROVAL', 'CONDITION', 'NOTIFICATION', 'WAIT', 'END'] as const;
+export const DRAFT_STEP_TYPES = ['START', 'TASK', 'APPROVAL', 'SIGNATURE', 'CONDITION', 'NOTIFICATION', 'WAIT', 'END'] as const;
 export const DRAFT_ASSIGNMENT_MODES = ['POSITION', 'GROUP', 'APPROVER', 'CREATOR', 'POOL', 'SAME_AS_STEP', 'PARALLEL_APPROVALS'] as const;
 export const DRAFT_SIGNER_KINDS = ['POSITION', 'APPROVER', 'CREATOR'] as const;
+export const DRAFT_INITIATOR_KINDS = ['POSITION', 'GROUP'] as const;
+export const DRAFT_SIGNATURE_DOCUMENTS = ['MAIN_DOCUMENT', 'STEP_DOCUMENT'] as const;
 export const DRAFT_RECIPIENT_KINDS = ['CREATOR', 'ASSIGNEES', 'OBSERVERS', 'POSITION', 'GROUP'] as const;
 export const DRAFT_FIELD_TYPES = ['TEXT', 'TEXTAREA', 'NUMBER', 'CURRENCY', 'SELECT', 'MULTI_SELECT', 'DATE', 'DATETIME', 'DAYS', 'FILE', 'TABLE', 'FORMULA'] as const;
 export const DRAFT_COLUMN_TYPES = ['TEXT', 'NUMBER', 'CURRENCY', 'DATE', 'SELECT', 'FORMULA'] as const;
 export const DRAFT_FORMULA_RESULT_TYPES = ['NUMBER', 'CURRENCY', 'DATE', 'TEXT'] as const;
 
-export const DRAFT_LIMITS = { steps: 60, transitions: 150, fields: 150, columns: 30, options: 100, text: 1000, assumptions: 20 } as const;
+export const DRAFT_LIMITS = { steps: 60, transitions: 150, fields: 150, columns: 30, options: 100, text: 1000, assumptions: 20, initiators: 20, amountRules: 30 } as const;
 export const DRAFT_REF_PATTERN = /^[a-z][a-z0-9_]{0,40}$/;
 
 const text = z.string().trim().min(1).max(DRAFT_LIMITS.text);
@@ -56,6 +58,7 @@ export const draftStepSchema = z
     maxLoops: z.number().int().min(1).max(50).nullable(),
     notification: notification.nullable(),
     wait: duration.nullable(),
+    signatureDocument: z.enum(DRAFT_SIGNATURE_DOCUMENTS).nullable(),
   })
   .strict();
 
@@ -97,12 +100,30 @@ export const draftFieldSchema = z
   })
   .strict();
 
+const initiator = z.object({ kind: z.enum(DRAFT_INITIATOR_KINDS), name }).strict();
+
+export const draftAmountRuleSchema = z
+  .object({
+    field: z.string(),
+    amountColumn: z.string().nullable(),
+    step: ref.nullable(),
+    maxAmount: z.number().finite().positive().max(1e15),
+    currency: z.string().max(3).nullable(),
+    action: z.enum(AMOUNT_RULE_ACTIONS),
+    approvalStep: ref.nullable(),
+    position: name.nullable(),
+    message: z.string().trim().max(500).nullable(),
+  })
+  .strict();
+
 export const workflowDraftSpecSchema = z
   .object({
     assumptions: z.array(z.string().trim().min(1).max(500)).max(DRAFT_LIMITS.assumptions),
     steps: z.array(draftStepSchema).min(1).max(DRAFT_LIMITS.steps),
     transitions: z.array(draftTransitionSchema).max(DRAFT_LIMITS.transitions),
     fields: z.array(draftFieldSchema).max(DRAFT_LIMITS.fields),
+    initiators: z.array(initiator).max(DRAFT_LIMITS.initiators),
+    amountRules: z.array(draftAmountRuleSchema).max(DRAFT_LIMITS.amountRules),
   })
   .strict();
 
@@ -110,6 +131,8 @@ export type WorkflowDraftSpec = z.infer<typeof workflowDraftSpecSchema>;
 export type DraftStep = z.infer<typeof draftStepSchema>;
 export type DraftTransition = z.infer<typeof draftTransitionSchema>;
 export type DraftField = z.infer<typeof draftFieldSchema>;
+export type DraftAmountRule = z.infer<typeof draftAmountRuleSchema>;
+export type DraftInitiator = z.infer<typeof initiator>;
 export type DraftAssignment = z.infer<typeof assignment>;
 
 /** The organization's records the model may name: only names and the ids they resolve to, nothing about people. */

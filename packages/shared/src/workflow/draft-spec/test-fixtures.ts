@@ -27,6 +27,7 @@ export function draftStep(ref: string, type: DraftStep['type'], overrides: Parti
     maxLoops: null,
     notification: null,
     wait: null,
+    signatureDocument: null,
     ...overrides,
   };
 }
@@ -42,6 +43,8 @@ export function draftField(step: string, code: string, type: DraftField['type'],
 export function advanceSpec(): WorkflowDraftSpec {
   return {
     assumptions: ['El tope de 5 millones se compara con el total de los gastos.'],
+    initiators: [],
+    amountRules: [],
     steps: [
       draftStep('inicio', 'START', { name: 'Solicitud de anticipo' }),
       draftStep('jefe', 'APPROVAL', { name: 'Aprobación del jefe', assignment: assignment({ mode: 'APPROVER', approvalType: 'Jefatura', approvalLevel: 1 }) }),
@@ -79,5 +82,30 @@ export function advanceSpec(): WorkflowDraftSpec {
       draftField('inicio', 'TOTAL', 'FORMULA', { formula: { expression: 'SUM(GASTOS.VALOR)', resultType: 'CURRENCY' } }),
       draftField('pago', 'COMPROBANTE', 'FILE'),
     ],
+  };
+}
+
+/** An advance request using the three richer parts: initiators, a SIGNATURE block and an EXTRA_APPROVAL amount rule. */
+export function travelAdvanceSpec(): WorkflowDraftSpec {
+  return {
+    assumptions: [],
+    steps: [
+      draftStep('inicio', 'START', { name: 'Solicitud de anticipo de viaje' }),
+      draftStep('gerencia', 'APPROVAL', { name: 'Aprobación de gerencia', assignment: assignment({ mode: 'POSITION', position: 'Gerente general' }) }),
+      draftStep('firma', 'SIGNATURE', {
+        name: 'Firma del anticipo',
+        assignment: assignment({ mode: 'POSITION', position: 'Tesorero', signers: [{ kind: 'POSITION', position: 'Tesorero' }, { kind: 'CREATOR', position: null }] }),
+      }),
+      draftStep('fin', 'END', { name: 'Fin' }),
+    ],
+    transitions: [
+      link('inicio', 'firma', 'Enviar'),
+      link('gerencia', 'firma', 'Aprobar'),
+      link('gerencia', 'fin', 'Rechazar', { requiresComment: true }),
+      link('firma', 'fin', 'Firmar'),
+    ],
+    fields: [draftField('inicio', 'MONTO', 'CURRENCY')],
+    initiators: [{ kind: 'POSITION', name: 'Contador' }],
+    amountRules: [{ field: 'MONTO', amountColumn: null, step: 'inicio', maxAmount: 5_000_000, currency: null, action: 'EXTRA_APPROVAL', approvalStep: 'gerencia', position: null, message: 'Más de 5 millones requiere a gerencia.' }],
   };
 }
