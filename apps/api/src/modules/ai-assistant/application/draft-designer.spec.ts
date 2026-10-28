@@ -2,6 +2,7 @@ import type { WorkflowDraftSpec } from '@procesabpm/shared';
 import { describe, expect, it } from 'vitest';
 import { advanceSpec, catalog } from '../../../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
 import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult } from '../../../infrastructure/llm/llm-provider.js';
+import type { DraftTask } from '../domain/prompt-builder.js';
 import { type CallRecord, DraftDesigner } from './draft-designer.js';
 
 const USAGE = { promptTokens: 3000, cachedPromptTokens: 0, completionTokens: 8000, reasoningTokens: 6000 };
@@ -42,6 +43,7 @@ interface RunOptions {
   renew?: (round: number) => Promise<boolean>;
   review?: (round: number, problems: number) => Promise<boolean>;
   signal?: AbortSignal;
+  task?: DraftTask;
 }
 
 async function run(script: Step[], options: RunOptions = {}) {
@@ -49,7 +51,7 @@ async function run(script: Step[], options: RunOptions = {}) {
   const calls: CallRecord[] = [];
   const stages: string[] = [];
   const result = await new DraftDesigner(provider, options.maxRounds ?? 3).design(
-    'El asesor pide un anticipo.',
+    options.task ?? { kind: 'create', description: 'El asesor pide un anticipo.' },
     catalog,
     {
       beforeRound: (round) => {
@@ -144,5 +146,18 @@ describe('DraftDesigner', () => {
     const stopped = new AbortController();
     stopped.abort();
     expect((await run([tool(advanceSpec())], { signal: stopped.signal })).result).toEqual({ kind: 'interrupted' });
+  });
+
+  it('revises the current draft: sends it with the change, and keeps only the changes the model reports', async () => {
+    const current = { ...advanceSpec(), assumptions: [], decisions: [] };
+    const revised = { ...advanceSpec(), decisions: [{ topic: 'STEPS' as const, text: 'Agregué la revisión jurídica después de gerencia.' }] };
+    const task: DraftTask = { kind: 'revise', message: 'agrega una revisión jurídica', current, history: [] };
+    const { result, provider } = await run([tool(withoutPaymentExit()), tool(revised)], { task });
+    expect(result).toMatchObject({ kind: 'draft', rounds: 2, summary: { decisions: revised.decisions } });
+    for (const request of provider.requests) {
+      expect(request.user).toContain(`<current_draft>\n${JSON.stringify(current)}\n</current_draft>`);
+      expect(request.user).toContain('<change_request>\nagrega una revisión jurídica\n</change_request>');
+    }
+    expect(provider.requests[1]!.user).toContain('PEOPLE_BLOCK_WITHOUT_DECISION at step "pago"');
   });
 });

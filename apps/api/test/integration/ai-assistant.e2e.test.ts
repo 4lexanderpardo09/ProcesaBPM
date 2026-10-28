@@ -1,8 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import type { SeededTenant } from '@procesabpm/db/testing/fixtures';
-import { AI_NOTICE_VERSION } from '@procesabpm/shared';
+import { AI_NOTICE_VERSION, type WorkflowDraftSpec } from '@procesabpm/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { draftStep, link } from '../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
 import { adminOf, type ApiClient, clientWith, connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
 import { useTestEnvironment } from '../support/test-environment.js';
@@ -10,6 +11,17 @@ import { useTestEnvironment } from '../support/test-environment.js';
 useTestEnvironment({ AI_ASSISTANT_AVAILABLE: 'true', AI_DAILY_JOBS_PER_TENANT: '3' });
 
 const DESCRIPTION = 'El asesor pide un anticipo de viaje, lo aprueba su jefe y el tesorero lo paga.';
+const CHANGE = 'agrega una revisión jurídica';
+/** A small draft a revision can carry whole: START, a task of the requester, END. */
+const TEMPLATE: WorkflowDraftSpec = {
+  assumptions: [],
+  decisions: [],
+  initiators: [],
+  amountRules: [],
+  fields: [],
+  steps: [draftStep('inicio', 'START', { name: 'Inicio' }), draftStep('revisar', 'TASK', { name: 'Revisar la solicitud' }), draftStep('fin', 'END', { name: 'Fin' })],
+  transitions: [link('inicio', 'revisar', 'Enviar'), link('revisar', 'fin', 'Listo')],
+};
 const unique = (label: string) => `${label}-${Math.random().toString(36).slice(2, 8)}`;
 
 describe('AI assistant API: the switch, the requests and the daily limit', () => {
@@ -72,7 +84,7 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       expect((await admin.get(`/ai-assistant/availability?versionId=${draft.versionId}`).expect(200)).body).toEqual({ available: true, remainingJobsToday: 2, activeJobId: jobId });
       expect((await ask(admin, draft.base).expect(409)).body.error.code).toBe('AI_JOB_IN_PROGRESS');
       const [audit] = await auditRows(tenant.tenantId, 'workflow.ai_draft_requested');
-      expect(audit).toEqual({ entity_id: draft.workflowId, after: { versionId: draft.versionId, jobId, model: 'deepseek-v4-pro', inputChars: DESCRIPTION.length } });
+      expect(audit).toEqual({ entity_id: draft.workflowId, after: { versionId: draft.versionId, jobId, kind: 'WORKFLOW_DRAFT', model: 'deepseek-v4-pro', inputChars: DESCRIPTION.length } });
       expect(JSON.stringify(audit)).not.toContain('anticipo');
     });
 
@@ -144,6 +156,52 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       await enable(b.admin);
       await ask(b.admin, draft.base).expect(404);
       expect((await b.admin.get('/settings/ai-assistant/usage').expect(200)).body.recentJobs).toEqual([]);
+    });
+  });
+
+  describe('revisions of the current draft', () => {
+    const imported = async (client: ApiClient) => {
+      const draft = await newDraft(client);
+      await client.post(`${draft.base}/import`, { revision: 0, spec: TEMPLATE }).expect(200);
+      return draft;
+    };
+    const revise = (client: ApiClient, base: string, body: object = {}) => ask(client, base, { mode: 'REVISE', description: CHANGE, revision: 1, ...body });
+
+    it('are recorded with their kind, take a short message, and are audited without it', async () => {
+      const { tenant, admin } = await organization();
+      await enable(admin);
+      const draft = await imported(admin);
+      await ask(admin, draft.base, { description: 'quita', revision: 1 }).expect(400);
+      const { jobId } = (await revise(admin, draft.base, { description: 'quita' }).expect(202)).body;
+      expect((await admin.get(`/ai-jobs/${jobId}`).expect(200)).body).toMatchObject({ id: jobId, kind: 'WORKFLOW_DRAFT_REVISION', status: 'PENDING' });
+      expect((await admin.get(`${draft.base}/ai-jobs`).expect(200)).body.jobs).toEqual([expect.objectContaining({ id: jobId, kind: 'WORKFLOW_DRAFT_REVISION', description: 'quita' })]);
+      expect((await revise(admin, draft.base).expect(409)).body.error.code).toBe('AI_JOB_IN_PROGRESS');
+      const [audit] = await auditRows(tenant.tenantId, 'workflow.ai_draft_requested');
+      expect(audit.after).toEqual({ versionId: draft.versionId, jobId, kind: 'WORKFLOW_DRAFT_REVISION', model: 'deepseek-v4-pro', inputChars: 5 });
+    });
+
+    it('are refused up front, with what would be lost, when the draft holds what the spec cannot carry', async () => {
+      const { admin } = await organization();
+      await enable(admin);
+      const draft = await imported(admin);
+      await db.owner.query(`UPDATE steps SET close_rule = 'ALLOWED' WHERE version_id = $1 AND name = 'Revisar la solicitud'`, [draft.versionId]);
+      const refused = (await revise(admin, draft.base).expect(422)).body.error;
+      expect(refused).toMatchObject({ code: 'AI_DRAFT_NOT_REVISABLE', details: { losses: [{ subject: 'STEP', name: 'Revisar la solicitud', properties: ['closeRule'] }] } });
+      expect((await admin.get(`${draft.base}/ai-jobs`).expect(200)).body.jobs).toEqual([]);
+      await ask(admin, draft.base, { revision: 1 }).expect(202);
+    });
+
+    it('need the draft as the person sees it, and stay inside the organization', async () => {
+      const a = await organization();
+      const b = await organization();
+      await enable(a.admin);
+      await enable(b.admin);
+      const draft = await imported(a.admin);
+      expect((await revise(a.admin, draft.base, { revision: 0 }).expect(409)).body.error.code).toBe('STALE_REVISION');
+      await revise(b.admin, draft.base).expect(404);
+      const reader = await clientWith(db, app, a.tenant, [{ action: 'read', subject: 'Workflow' }]);
+      await revise(reader, draft.base).expect(403);
+      expect((await a.admin.get(`${draft.base}/ai-jobs`).expect(200)).body.jobs).toEqual([]);
     });
   });
 });

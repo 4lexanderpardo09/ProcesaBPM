@@ -1,4 +1,4 @@
-import { AI_DESCRIPTION_LIMITS, AI_JOB_CANCELLED, type AiJobHistoryItem } from '@procesabpm/shared';
+import { AI_DESCRIPTION_LIMITS, AI_JOB_CANCELLED, AI_REVISION_LIMITS, type AiDraftMode, aiDraftNotRevisableDetailsSchema, type AiJobHistoryItem } from '@procesabpm/shared';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, genericErrorMessage } from '@/shared/api';
@@ -6,15 +6,16 @@ import { formatDateTime, formatShortDateTime } from '@/shared/lib/format-date-ti
 import { Alert, Button, TextArea } from '@/shared/ui';
 import { isOpen } from '../api/ai-draft-api';
 import type { AiDraft } from '../hooks/use-ai-draft';
+import { AiDraftLosses } from './AiDraftLosses';
 import { AiDraftSummary } from './AiDraftSummary';
 import styles from './Builder.module.css';
 
 /** Request errors the panel explains; anything else gets the generic message. */
-const REQUEST_ERRORS = ['AI_DAILY_LIMIT_REACHED', 'AI_JOB_IN_PROGRESS', 'STALE_REVISION', 'AI_ASSISTANT_DISABLED', 'RATE_LIMITED'] as const;
+const REQUEST_ERRORS = ['AI_DAILY_LIMIT_REACHED', 'AI_JOB_IN_PROGRESS', 'STALE_REVISION', 'AI_ASSISTANT_DISABLED', 'RATE_LIMITED', 'AI_DRAFT_NOT_REVISABLE'] as const;
 type RequestErrorCode = (typeof REQUEST_ERRORS)[number];
 const isRequestError = (code: string): code is RequestErrorCode => (REQUEST_ERRORS as readonly string[]).includes(code);
 /** Why a request ended without a draft (`ai_jobs.error_code`). */
-const JOB_ERRORS = ['AI_DRAFT_INVALID', 'AI_PROVIDER_FAILED', 'AI_NOT_CONFIGURED', 'DRAFT_CHANGED', 'DRAFT_GONE', 'AI_DISABLED', 'DRAFT_WRITE_FAILED', 'LEASE_EXPIRED', 'QUEUE_EXPIRED'] as const;
+const JOB_ERRORS = ['AI_DRAFT_INVALID', 'AI_PROVIDER_FAILED', 'AI_NOT_CONFIGURED', 'DRAFT_CHANGED', 'DRAFT_GONE', 'AI_DISABLED', 'DRAFT_WRITE_FAILED', 'LEASE_EXPIRED', 'QUEUE_EXPIRED', 'AI_DRAFT_NOT_REVISABLE'] as const;
 type JobErrorCode = (typeof JOB_ERRORS)[number] | 'UNKNOWN';
 const jobErrorOf = (code: string | null): JobErrorCode => ((JOB_ERRORS as readonly string[]).includes(code ?? '') ? (code as JobErrorCode) : 'UNKNOWN');
 
@@ -39,7 +40,8 @@ export interface AiAssistantPanelProps {
 
 /**
  * «Crear con IA» as a panel docked beside the canvas: the requests of this draft read like a conversation (what was
- * asked, by whom, and how it went), the one in progress moves live, and the description is written at the bottom.
+ * asked, by whom, and how it went), the one in progress moves live, and the next message is written at the bottom: a
+ * change to the draft when it has content, or the description of a new one.
  * Closing it hides nothing: the request goes on, and the panel shows it again when reopened or after a reload.
  */
 export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: AiAssistantPanelProps) {
@@ -85,7 +87,9 @@ function AiRequest({ job, ai, latest }: { readonly job: AiJobHistoryItem; readon
   return (
     <li className={styles.aiTurn}>
       <div className={styles.aiAsked}>
-        <p className={styles.aiMeta}>{t('builder.ai.askedBy', { name: job.requesterName, at: formatShortDateTime(job.createdAt) })}</p>
+        <p className={styles.aiMeta}>
+          <span className={styles.aiKind}>{t(`builder.ai.kinds.${job.kind}`)}</span> · {t('builder.ai.askedBy', { name: job.requesterName, at: formatShortDateTime(job.createdAt) })}
+        </p>
         <p className={styles.aiText}>{job.description ?? t('builder.ai.descriptionGone')}</p>
       </div>
       <div className={open ? styles.aiAnswerOpen : job.status === 'SUCCEEDED' ? styles.aiAnswerOk : styles.aiAnswerFailed}>
@@ -133,10 +137,11 @@ function Outcome({ job, latest }: { readonly job: AiJobHistoryItem; readonly lat
   const { t } = useTranslation('workflows');
   if (job.status === 'SUCCEEDED' && job.result !== null) {
     const { rounds, errors, warnings } = job.result;
+    const revision = job.kind === 'WORKFLOW_DRAFT_REVISION';
     return (
       <>
-        <p className={styles.strong}>{t('builder.ai.succeeded', { count: rounds })}</p>
-        <AiDraftSummary result={job.result} expanded={latest} />
+        <p className={styles.strong}>{revision ? t('builder.ai.revised', { count: rounds }) : t('builder.ai.succeeded', { count: rounds })}</p>
+        <AiDraftSummary result={job.result} expanded={latest} revision={revision} />
         {errors > 0 && <p className={styles.aiText}>{t('builder.ai.leftErrors', { count: errors })}</p>}
         {errors === 0 && warnings > 0 && <p className={styles.aiText}>{t('builder.ai.leftWarnings', { count: warnings })}</p>}
       </>
@@ -148,55 +153,77 @@ function Outcome({ job, latest }: { readonly job: AiJobHistoryItem; readonly lat
   return <p className={styles.strong}>{t(`builder.ai.jobErrors.${jobErrorOf(job.errorCode)}`)}</p>;
 }
 
-/** The description at the bottom, like a chat; sending is held while the draft has unsaved changes or a request runs. */
+/**
+ * The message at the bottom, like a chat: a draft with content is changed by default (the AI keeps the rest), and
+ * «Empezar de cero» asks for a new one instead, which replaces it. Sending is held while the draft has unsaved changes
+ * or a request runs.
+ */
 function AiComposer({ ai, revision, hasContent, dirty }: { readonly ai: AiDraft; readonly revision: number; readonly hasContent: boolean; readonly dirty: boolean }) {
   const { t } = useTranslation('workflows');
-  const { t: tCommon } = useTranslation();
-  const [description, setDescription] = useState('');
-  const length = description.trim().length;
+  const [message, setMessage] = useState('');
+  const [startOver, setStartOver] = useState(false);
+  const mode: AiDraftMode = hasContent && !startOver ? 'REVISE' : 'CREATE';
+  const limits = mode === 'REVISE' ? AI_REVISION_LIMITS : AI_DESCRIPTION_LIMITS;
+  const length = message.trim().length;
   const blocked = dirty || ai.active !== undefined || ai.remainingToday === 0;
-  const canSend = !blocked && !ai.request.isPending && length >= AI_DESCRIPTION_LIMITS.min && length <= AI_DESCRIPTION_LIMITS.max;
-
-  const requestError = (() => {
-    const error = ai.request.error;
-    if (error === null) return undefined;
-    if (error instanceof ApiError && isRequestError(error.code)) {
-      const resetsAt = (error.details as { resetsAt?: string } | undefined)?.resetsAt;
-      return t(`builder.ai.requestErrors.${error.code}`, { resetsAt: resetsAt === undefined ? '' : formatDateTime(resetsAt) });
-    }
-    const generic = genericErrorMessage(error);
-    return 'values' in generic ? tCommon(generic.key, generic.values) : tCommon(generic.key);
-  })();
+  const canSend = !blocked && !ai.request.isPending && length >= limits.min && length <= limits.max;
   const cancelError = ai.cancel.error === null ? undefined : t('builder.ai.cancelFailed');
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!canSend) return;
-    ai.request.mutate({ description: description.trim(), revision }, { onSuccess: () => setDescription('') });
+    ai.request.mutate({ mode, description: message.trim(), revision }, { onSuccess: () => setMessage('') });
   };
 
   return (
     <form className={styles.aiComposer} onSubmit={submit}>
-      {requestError !== undefined && <Alert tone="danger">{requestError}</Alert>}
+      <RequestError error={ai.request.error} />
       {cancelError !== undefined && <Alert tone="danger">{cancelError}</Alert>}
       {dirty && <Alert tone="warn">{t('builder.ai.saveFirst')}</Alert>}
-      {!dirty && hasContent && ai.active === undefined && <Alert tone="warn">{t('builder.ai.replaces')}</Alert>}
+      {!dirty && mode === 'CREATE' && hasContent && ai.active === undefined && <Alert tone="warn">{t('builder.ai.replaces')}</Alert>}
       <TextArea
-        label={t('builder.ai.description')}
-        hint={t('builder.ai.descriptionHint', { count: length, max: AI_DESCRIPTION_LIMITS.max })}
-        rows={4}
-        maxLength={AI_DESCRIPTION_LIMITS.max}
-        value={description}
-        onChange={(event) => setDescription(event.target.value)}
-        placeholder={t('builder.ai.placeholder')}
+        label={mode === 'REVISE' ? t('builder.ai.revise.label') : t('builder.ai.description')}
+        hint={mode === 'REVISE' ? t('builder.ai.revise.hint', { count: length, max: limits.max }) : t('builder.ai.descriptionHint', { count: length, max: limits.max })}
+        rows={mode === 'REVISE' ? 3 : 4}
+        maxLength={limits.max}
+        value={message}
+        onChange={(event) => setMessage(event.target.value)}
+        placeholder={mode === 'REVISE' ? t('builder.ai.revise.placeholder') : t('builder.ai.placeholder')}
       />
+      {mode === 'REVISE' && <p className={styles.aiMeta}>{t('builder.ai.revise.keeps')}</p>}
       <p className={styles.aiMeta}>{t('builder.ai.privacy')}</p>
       <div className={styles.aiComposerActions}>
         <span className={styles.aiMeta}>{ai.remainingToday === 0 ? t('builder.ai.noneLeft') : t('builder.ai.remaining', { count: ai.remainingToday })}</span>
-        <Button variant="primary" type="submit" disabled={!canSend}>
-          {ai.request.isPending ? t('builder.ai.sending') : t('builder.ai.submit')}
-        </Button>
+        <div className={styles.aiComposerButtons}>
+          {hasContent && (
+            <Button variant="ghost" aria-pressed={startOver} onClick={() => setStartOver((current) => !current)}>
+              {startOver ? t('builder.ai.revise.backToChanges') : t('builder.ai.revise.startOver')}
+            </Button>
+          )}
+          <Button variant="primary" type="submit" disabled={!canSend}>
+            {ai.request.isPending ? t('builder.ai.sending') : mode === 'REVISE' ? t('builder.ai.revise.submit') : t('builder.ai.submit')}
+          </Button>
+        </div>
       </div>
     </form>
+  );
+}
+
+/** Why the last request was refused: the known codes explained (a revision that would lose something, with what), others generic. */
+function RequestError({ error }: { readonly error: Error | null }) {
+  const { t } = useTranslation('workflows');
+  const { t: tCommon } = useTranslation();
+  if (error === null) return null;
+  if (!(error instanceof ApiError) || !isRequestError(error.code)) {
+    const generic = genericErrorMessage(error);
+    return <Alert tone="danger">{'values' in generic ? tCommon(generic.key, generic.values) : tCommon(generic.key)}</Alert>;
+  }
+  const losses = error.code === 'AI_DRAFT_NOT_REVISABLE' ? aiDraftNotRevisableDetailsSchema.safeParse(error.details) : undefined;
+  const resetsAt = (error.details as { resetsAt?: string } | undefined)?.resetsAt;
+  return (
+    <Alert tone="danger">
+      {t(`builder.ai.requestErrors.${error.code}`, { resetsAt: resetsAt === undefined ? '' : formatDateTime(resetsAt) })}
+      {losses?.success === true && losses.data.losses.length > 0 && <AiDraftLosses losses={losses.data.losses} />}
+    </Alert>
   );
 }

@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  AI_TASK_KIND_OF_MODE,
   AiAssistantDisabledError,
+  AiDraftNotRevisableError,
   type AiDraftRequested,
   type AiAvailabilityResponse,
   type AiJobHistoryQuery,
@@ -22,6 +24,7 @@ import { Clock } from '../../../infrastructure/clock.js';
 import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import { RATE_LIMITER, type RateLimiter } from '../../../infrastructure/security/rate-limiter.js';
 import { AuditTrail } from '../../audit/application/audit-trail.js';
+import { DraftSpecReader } from '../../workflows/application/draft-spec-reader.js';
 import { WorkflowRepository } from '../../workflows/data/workflow.repository.js';
 import { AiAssistantRepository } from '../data/ai-assistant.repository.js';
 import { assertWithinDailyLimit, quotaDay, remainingJobs } from '../domain/daily-quota.js';
@@ -43,6 +46,7 @@ export class AiDraftRequestsService {
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(AiAssistantRepository) private readonly assistant: AiAssistantRepository,
     @Inject(WorkflowRepository) private readonly workflows: WorkflowRepository,
+    @Inject(DraftSpecReader) private readonly drafts: DraftSpecReader,
     @Inject(AuditTrail) private readonly audit: AuditTrail,
     @Inject(RATE_LIMITER) private readonly limiter: RateLimiter,
     @Inject(Clock) private readonly clock: Clock,
@@ -60,7 +64,9 @@ export class AiDraftRequestsService {
 
   /**
    * The draft must still be the one the person sees (same revision), the organization must have the assistant on and
-   * be inside its daily limit. Two requests for one draft at once: the database keeps one and the other gets 409.
+   * be inside its daily limit. Two requests for one draft at once: the database keeps one and the other gets 409. A
+   * revision (REVISE) is refused up front when the draft is empty or holds what the spec cannot carry (422
+   * AI_DRAFT_NOT_REVISABLE): rewriting it would drop that silently. The worker checks it again when it starts.
    */
   async request(principal: Principal, workflowId: string, versionId: string, body: RequestAiDraft): Promise<AiDraftRequested> {
     if (!this.config.AI_ASSISTANT_AVAILABLE) throw new AiAssistantDisabledError();
@@ -68,12 +74,15 @@ export class AiDraftRequestsService {
     try {
       return await this.runner.withTenantTransaction(async (tx) => {
         await this.assertDraftAt(tx, principal.tenantId, workflowId, versionId, body.revision);
+        if (body.mode === 'REVISE') await this.assertRevisable(tx, principal.tenantId, versionId);
         await this.assistant.lockQuota(tx, principal.tenantId);
         const settings = await this.assistant.settingsOf(tx, principal.tenantId);
         if (!settings.enabled) throw new AiAssistantDisabledError();
         const day = quotaDay(this.clock.now(), settings.timeZone);
         assertWithinDailyLimit(dailyLimits(this.config), await this.assistant.usageSince(tx, principal.tenantId, day.since), day);
+        const kind = AI_TASK_KIND_OF_MODE[body.mode];
         const jobId = await this.assistant.createDraftJob(tx, {
+          kind,
           tenantId: principal.tenantId,
           requestedById: principal.userId,
           workflowId,
@@ -82,7 +91,7 @@ export class AiDraftRequestsService {
           description: body.description,
           model: this.config.AI_REASONING_MODEL,
         });
-        await this.audit.record(tx, { action: 'workflow.ai_draft_requested', subjectType: 'Workflow', subjectId: workflowId, after: { versionId, jobId, model: this.config.AI_REASONING_MODEL, inputChars: body.description.length } });
+        await this.audit.record(tx, { action: 'workflow.ai_draft_requested', subjectType: 'Workflow', subjectId: workflowId, after: { versionId, jobId, kind, model: this.config.AI_REASONING_MODEL, inputChars: body.description.length } });
         return { jobId };
       });
     } catch (error) {
@@ -126,6 +135,12 @@ export class AiDraftRequestsService {
     if (version === null) throw new NotFoundError();
     if (version.status !== 'DRAFT') throw new ImmutableDataError(`The version is ${version.status.toLowerCase()} and cannot be edited`);
     if (version.revision !== revision) throw new StaleRevisionError(version.revision);
+  }
+
+  private async assertRevisable(tx: TenantTransaction, tenantId: string, versionId: string): Promise<void> {
+    const { extraction } = await this.drafts.read(tx, tenantId, versionId);
+    if (extraction.kind === 'empty') throw new InvalidStateError('The draft is empty: ask for a new one instead');
+    if (extraction.kind === 'lossy') throw new AiDraftNotRevisableError(extraction.losses);
   }
 
   private async enforceRate(userId: string): Promise<void> {

@@ -12,9 +12,9 @@ function byTopic(decisions: readonly Decision[]): Array<[Decision['topic'], Deci
 /**
  * What the assistant built and why, for the person to check before publishing: what the draft holds (counted by the
  * platform), the choices the model made by topic, what it assumed, and how much the review corrected.
- * `expanded`: the latest draft opens its lists; older ones stay folded.
+ * `expanded`: the latest draft opens its lists; older ones stay folded. A `revision` lists what it changed.
  */
-export function AiDraftSummary({ result, expanded }: { readonly result: AiDraftResult; readonly expanded: boolean }) {
+export function AiDraftSummary({ result, expanded, revision }: { readonly result: AiDraftResult; readonly expanded: boolean; readonly revision: boolean }) {
   const { t } = useTranslation('workflows');
   const { outline, decisions, assumptions, corrections } = result;
   return (
@@ -33,7 +33,7 @@ export function AiDraftSummary({ result, expanded }: { readonly result: AiDraftR
       {corrections > 0 && <p className={styles.aiMeta}>{t('builder.ai.summary.corrections', { count: corrections })}</p>}
       {decisions.length > 0 && (
         <details className={styles.aiDetails} open={expanded}>
-          <summary>{t('builder.ai.summary.decisions', { count: decisions.length })}</summary>
+          <summary>{revision ? t('builder.ai.summary.changes', { count: decisions.length }) : t('builder.ai.summary.decisions', { count: decisions.length })}</summary>
           <dl className={styles.aiDecisions}>
             {byTopic(decisions).map(([topic, group]) => (
               <div key={topic}>
@@ -48,7 +48,7 @@ export function AiDraftSummary({ result, expanded }: { readonly result: AiDraftR
       )}
       {assumptions.length > 0 && (
         <details className={styles.aiDetails} open={expanded}>
-          <summary>{t('builder.ai.summary.assumptions', { count: assumptions.length })}</summary>
+          <summary>{revision ? t('builder.ai.summary.revisionAssumptions', { count: assumptions.length }) : t('builder.ai.summary.assumptions', { count: assumptions.length })}</summary>
           <ul className={styles.aiList}>
             {assumptions.map((assumption) => (
               <li key={assumption}>{assumption}</li>

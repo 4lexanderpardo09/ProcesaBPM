@@ -4,10 +4,10 @@ import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import { LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
 import { DraftDocumentImporter, DraftImportRejectedError } from '../../workflows/application/draft-document-importer.js';
-import { DraftCatalogRepository } from '../../workflows/data/draft-catalog.repository.js';
 import { type AiJobClaim, AiJobClaimsRepository, type AiJobProgress } from '../data/ai-job-claims.repository.js';
 import { AiJobWorkRepository, type DraftJobInput } from '../data/ai-job-work.repository.js';
 import { type CallRecord, DraftDesigner } from './draft-designer.js';
+import { DraftTaskReader } from './draft-task.reader.js';
 
 /** The lease of a running request; renewed before every call, so a call (at most 9 minutes) always ends inside it. */
 export const AI_JOB_LEASE_MINUTES = 10;
@@ -25,7 +25,7 @@ class ClaimLostError extends Error {
 }
 
 /**
- * Turns due «Crear con IA» requests into drafts (docs/arquitectura.md §22): claims one, lets the designer talk to the
+ * Turns due «Crear con IA» requests into drafts (new ones, or the current one with a change) (docs/arquitectura.md §22): claims one, lets the designer talk to the
  * model round by round (lease renewed before each call, every call written to the ledger right away), then writes the
  * draft and finishes the request in one tenant transaction, so the draft never changes without the request saying so.
  * Logs carry ids, codes and token counts, never the description or the model's answer.
@@ -36,7 +36,7 @@ export class WorkflowDraftJob {
     @Inject(WorkerTransactionRunner) private readonly runner: WorkerTransactionRunner,
     @Inject(AiJobClaimsRepository) private readonly claims: AiJobClaimsRepository,
     @Inject(AiJobWorkRepository) private readonly work: AiJobWorkRepository,
-    @Inject(DraftCatalogRepository) private readonly catalog: DraftCatalogRepository,
+    @Inject(DraftTaskReader) private readonly tasks: DraftTaskReader,
     @Inject(DraftDocumentImporter) private readonly importer: DraftDocumentImporter,
     @Inject(DraftDesigner) private readonly designer: DraftDesigner,
     @Inject(LlmProvider) private readonly provider: LlmProvider,
@@ -57,13 +57,12 @@ export class WorkflowDraftJob {
   }
 
   async run(claim: AiJobClaim, stop: AbortSignal = NOT_STOPPED): Promise<AiJobOutcome> {
-    const loaded = await this.runner.withTenant(claim.tenantId, async (tx) => ({ input: await this.work.draftInput(tx, claim.tenantId, claim.jobId), catalog: await this.catalog.load(tx, claim.tenantId) }));
-    const { input, catalog } = loaded;
-    if (input === undefined) return this.fail(claim, 'AI_JOB_INVALID');
-    if (!input.enabled) return this.fail(claim, 'AI_DISABLED');
+    const read = await this.runner.withTenant(claim.tenantId, (tx) => this.tasks.read(tx, claim.tenantId, claim.jobId));
+    if (read.kind === 'failed') return this.fail(claim, read.errorCode);
+    const { input, catalog, task } = read;
 
     const result = await this.designer.design(
-      input.description,
+      task,
       catalog,
       {
         beforeRound: (round) => this.renewAndShow(claim, { stage: 'DESIGNING', round }),
@@ -124,7 +123,7 @@ export class WorkflowDraftJob {
     const facts = { round: call.round, outcome: call.outcome, errorCode: call.errorCode, promptTokens: call.usage.promptTokens, cachedPromptTokens: call.usage.cachedPromptTokens, completionTokens: call.usage.completionTokens, reasoningTokens: call.usage.reasoningTokens, durationMs: call.durationMs };
     try {
       await this.runner.withTenant(claim.tenantId, (tx) =>
-        this.work.recordUsage(tx, { tenantId: claim.tenantId, jobId: claim.jobId, userId: input.requestedById, provider: this.provider.name, model: this.provider.model, jobAttempt: claim.attempt, ...call }),
+        this.work.recordUsage(tx, { taskKind: input.kind, tenantId: claim.tenantId, jobId: claim.jobId, userId: input.requestedById, provider: this.provider.name, model: this.provider.model, jobAttempt: claim.attempt, ...call }),
       );
     } catch (error) {
       this.log('warn', 'ai_job.usage_not_recorded', claim, { ...facts, provider: this.provider.name, model: this.provider.model, errorName: error instanceof Error ? error.name : typeof error });

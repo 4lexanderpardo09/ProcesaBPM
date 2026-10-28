@@ -440,6 +440,7 @@ describe('«Crear con IA» in the builder', () => {
   type Job = { readonly id: string; readonly status: string } & Record<string, unknown>;
   const job = (status: string, overrides: Record<string, unknown> = {}): Job => ({
     id: JOB,
+    kind: 'WORKFLOW_DRAFT',
     status,
     stage: null,
     round: null,
@@ -489,8 +490,8 @@ describe('«Crear con IA» in the builder', () => {
    * The builder's API plus the assistant. `history` is what `GET …/ai-jobs` answers now (the test changes it); the
    * version is rewritten on the server once a request succeeds.
    */
-  function aiApi(state: { history: Job[] }, request: FakeHandler = () => ({ jobId: JOB })) {
-    const base = api();
+  function aiApi(state: { history: Job[] }, request: FakeHandler = () => ({ jobId: JOB }), initial: WorkflowVersionDocument = startingDoc()) {
+    const base = api(initial);
     return {
       ...base,
       [url]: (options: Parameters<FakeHandler>[0], path: string) => {
@@ -501,7 +502,8 @@ describe('«Crear con IA» in the builder', () => {
       [historyUrl]: () => ({ jobs: state.history }),
       [`${url}/ai-draft`]: (options: Parameters<FakeHandler>[0], path: string) => {
         const answer = request(options, path);
-        state.history = [...state.history, job('PENDING')];
+        const body = options.body as { mode: string; description: string };
+        state.history = [...state.history, job('PENDING', { kind: body.mode === 'REVISE' ? 'WORKFLOW_DRAFT_REVISION' : 'WORKFLOW_DRAFT', description: body.description })];
         return answer;
       },
       [`/ai-jobs/${JOB}/cancel`]: () => {
@@ -538,7 +540,7 @@ describe('«Crear con IA» in the builder', () => {
     expect(within(region).getByRole('button', { name: 'Armar el borrador' })).toBeDisabled();
     await describeProcess(region);
 
-    expect(fake.callsTo(`${url}/ai-draft`)[0]?.options.body).toEqual({ description: DESCRIPTION, revision: 0 });
+    expect(fake.callsTo(`${url}/ai-draft`)[0]?.options.body).toEqual({ mode: 'CREATE', description: DESCRIPTION, revision: 0 });
     const history = await within(region).findByRole('list', { name: 'Solicitudes a la IA de este borrador' });
     expect(await within(history).findByText('En cola…')).toBeInTheDocument();
     expect(within(history).getByText(DESCRIPTION)).toBeInTheDocument();
@@ -569,7 +571,7 @@ describe('«Crear con IA» in the builder', () => {
     };
     state.history = [job('SUCCEEDED', { startedAt: at, completedAt: at, stage: 'WRITING', round: 2, result, tokens: 25_000 })];
     realtime.fire();
-    expect(await screen.findByText(/La IA armó el borrador\. Revísalo antes de publicar: en el panel de IA está lo que decidió/)).toBeInTheDocument();
+    expect(await screen.findByText(/La IA actualizó el borrador\. Revísalo antes de publicar: en el panel de IA está lo que decidió/)).toBeInTheDocument();
     expect(await within(outline()).findByRole('button', { name: /Pagar anticipo/ })).toBeInTheDocument();
     // The panel stays open on the new draft, with the request's outcome and what the AI decided.
     const answer = panel();
@@ -580,6 +582,8 @@ describe('«Crear con IA» in the builder', () => {
     expect(within(answer).getByText('Aprobaciones')).toBeInTheDocument();
     expect(within(answer).getByText('Los anticipos de más de 5 millones pasan por gerencia.')).toBeVisible();
     expect(within(answer).getByText('Tesorería paga por transferencia.')).toBeVisible();
+    // The draft has content now: the next message asks for a change to it.
+    expect(within(answer).getByRole('textbox', { name: /Cambio al borrador/ })).toBeInTheDocument();
   }, 20_000);
 
   it('announces the progress to screen readers without the ticking time', async () => {
@@ -650,14 +654,75 @@ describe('«Crear con IA» in the builder', () => {
     expect(fake.callsTo(historyUrl).length).toBeGreaterThan(1);
   }, 15_000);
 
-  it('holds the description while the draft has unsaved changes', async () => {
+  it('holds the message while the draft has unsaved changes', async () => {
     renderRoute(url, { handlers: aiApi({ history: [] }), realtime: fakeRealtime().client });
     await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
     await userEvent.click(screen.getByRole('button', { name: 'Agregar Paso' }));
     const region = await openPanel();
-    expect(within(region).getByText(/Guarda los cambios antes de pedirle un borrador a la IA/)).toBeInTheDocument();
-    await userEvent.type(within(region).getByRole('textbox', { name: /Descripción del proceso/ }), DESCRIPTION);
-    expect(within(region).getByRole('button', { name: 'Armar el borrador' })).toBeDisabled();
+    expect(within(region).getByText(/Guarda los cambios antes de escribirle a la IA/)).toBeInTheDocument();
+    await userEvent.type(within(region).getByRole('textbox', { name: /Cambio al borrador/ }), 'agrega una revisión jurídica');
+    expect(within(region).getByRole('button', { name: 'Pedir el cambio' })).toBeDisabled();
+  });
+
+  it('asks for a change to a draft with content by default, shows the kind of each turn, and can start over instead', async () => {
+    const CHANGE = 'agrega una revisión jurídica después de gerencia';
+    const created = { revision: 1, assumptions: [], decisions: [], outline: null, corrections: 0, rounds: 1, errors: 0, warnings: 0 };
+    const state = { history: [job('SUCCEEDED', { id: OLD_JOB, completedAt: at, result: created })] };
+    const realtime = fakeRealtime();
+    const { fake } = renderRoute(url, { handlers: aiApi(state, undefined, aiDraftDoc()), realtime: realtime.client });
+    const region = await openPanel();
+    expect(within(region).queryByText(/se reemplazará por completo/)).not.toBeInTheDocument();
+    expect(within(region).getByText(/conserva el resto del borrador/)).toBeInTheDocument();
+    await userEvent.type(within(region).getByRole('textbox', { name: /Cambio al borrador/ }), CHANGE);
+    await userEvent.click(within(region).getByRole('button', { name: 'Pedir el cambio' }));
+    expect(fake.callsTo(`${url}/ai-draft`)[0]?.options.body).toEqual({ mode: 'REVISE', description: CHANGE, revision: 1 });
+
+    const history = await within(region).findByRole('list', { name: 'Solicitudes a la IA de este borrador' });
+    const [first, second] = await vi.waitFor(() => {
+      const items = within(history).getAllByRole('listitem').filter((item) => item.textContent !== '');
+      expect(items).toHaveLength(2);
+      return items;
+    });
+    expect(first).toHaveTextContent('Borrador nuevo');
+    expect(second).toHaveTextContent('Cambio al borrador');
+    expect(second).toHaveTextContent(CHANGE);
+
+    const changed = { ...created, revision: 2, decisions: [{ topic: 'STEPS', text: 'Agregué la revisión jurídica después de gerencia.' }] };
+    state.history = [state.history[0]!, job('SUCCEEDED', { kind: 'WORKFLOW_DRAFT_REVISION', description: CHANGE, completedAt: at, result: changed })];
+    realtime.fire();
+    expect(await screen.findByText(/La IA actualizó el borrador/)).toBeInTheDocument();
+    const answer = panel();
+    expect(await within(answer).findByText('Cambio aplicado en 1 ronda.')).toBeInTheDocument();
+    expect(within(answer).getByText('Lo que cambió (1)')).toBeVisible();
+    // The builder arranged the revised draft: the next message waits until that is saved.
+    expect(within(answer).getByText(/Guarda los cambios antes de escribirle a la IA/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await vi.waitFor(() => expect(screen.getByText('Todo guardado')).toBeInTheDocument());
+
+    await userEvent.click(within(answer).getByRole('button', { name: 'Empezar de cero' }));
+    expect(within(answer).getByRole('textbox', { name: /Descripción del proceso/ })).toBeInTheDocument();
+    expect(within(answer).getByText(/se reemplazará por completo/)).toBeInTheDocument();
+    expect(within(answer).getByRole('button', { name: 'Armar el borrador' })).toBeInTheDocument();
+    await userEvent.click(within(answer).getByRole('button', { name: 'Volver a pedir cambios' }));
+    expect(within(answer).getByRole('textbox', { name: /Cambio al borrador/ })).toBeInTheDocument();
+  }, 20_000);
+
+  it('explains a change refused because the AI cannot keep everything the draft has, and what', async () => {
+    const refuse: FakeHandler = () => {
+      throw new ApiError({
+        status: 422,
+        code: 'AI_DRAFT_NOT_REVISABLE',
+        message: 'x',
+        details: { losses: [{ subject: 'STEP', name: 'Pagar anticipo', properties: ['closeRule', 'files'] }, { subject: 'FIELD', name: 'Monto', properties: ['config.unheardOf'] }] },
+      });
+    };
+    renderRoute(url, { handlers: aiApi({ history: [] }, refuse, aiDraftDoc()), realtime: fakeRealtime().client });
+    const region = await openPanel();
+    await userEvent.type(within(region).getByRole('textbox', { name: /Cambio al borrador/ }), 'quita el pago');
+    await userEvent.click(within(region).getByRole('button', { name: 'Pedir el cambio' }));
+    expect(await within(region).findByText(/La IA no puede cambiar este borrador sin perder parte de lo que tiene/)).toBeInTheDocument();
+    expect(within(region).getByText('Paso «Pagar anticipo»: permite cerrar el ticket, archivos adjuntos')).toBeInTheDocument();
+    expect(within(region).getByText('Campo «Monto»: otra configuración')).toBeInTheDocument();
   });
 
   it('explains a refused request, like the daily limit', async () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DRAFT_LOSS_SUBJECTS } from '../../workflow/draft-spec/spec-from-document.js';
 import { DRAFT_DECISION_TOPICS } from '../../workflow/draft-spec/spec.js';
 
 /**
@@ -8,6 +9,16 @@ import { DRAFT_DECISION_TOPICS } from '../../workflow/draft-spec/spec.js';
  */
 export const AI_NOTICE_VERSION = 2;
 export const AI_DESCRIPTION_LIMITS = { min: 20, max: 8_000 } as const;
+/** A change asked of an existing draft can be short («quita el aviso»). */
+export const AI_REVISION_LIMITS = { min: 5, max: AI_DESCRIPTION_LIMITS.max } as const;
+
+/** What a request asks: a new draft from a description, or a change to the current draft. */
+export const AI_DRAFT_MODES = ['CREATE', 'REVISE'] as const;
+export type AiDraftMode = (typeof AI_DRAFT_MODES)[number];
+/** `ai_jobs.kind`: one per mode. */
+export const AI_TASK_KINDS = ['WORKFLOW_DRAFT', 'WORKFLOW_DRAFT_REVISION'] as const;
+export type AiTaskKind = (typeof AI_TASK_KINDS)[number];
+export const AI_TASK_KIND_OF_MODE: Readonly<Record<AiDraftMode, AiTaskKind>> = { CREATE: 'WORKFLOW_DRAFT', REVISE: 'WORKFLOW_DRAFT_REVISION' };
 
 export const updateAiAssistantSettingsSchema = z
   .object({
@@ -91,11 +102,18 @@ export type AiAvailabilityResponse = z.infer<typeof aiAvailabilityResponseSchema
 
 export const requestAiDraftSchema = z
   .object({
-    description: z.string().trim().min(AI_DESCRIPTION_LIMITS.min).max(AI_DESCRIPTION_LIMITS.max),
+    /** CREATE (the default) replaces the draft with a new one; REVISE changes the current draft as the description asks. */
+    mode: z.enum(AI_DRAFT_MODES).default('CREATE'),
+    /** The process description, or the change asked (REVISE). */
+    description: z.string().trim().max(AI_DESCRIPTION_LIMITS.max),
     /** The revision of the draft the person is looking at: a draft edited since then is not overwritten. */
     revision: z.number().int().min(0),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const min = value.mode === 'REVISE' ? AI_REVISION_LIMITS.min : AI_DESCRIPTION_LIMITS.min;
+    if (value.description.length < min) context.addIssue({ code: 'too_small', origin: 'string', minimum: min, inclusive: true, path: ['description'], message: `Too small: expected at least ${min} characters` });
+  });
 export type RequestAiDraft = z.infer<typeof requestAiDraftSchema>;
 
 export const aiDraftRequestedSchema = z.object({ jobId: z.string() });
@@ -130,6 +148,7 @@ export type AiDraftResult = z.infer<typeof aiDraftResultSchema>;
 
 export const aiJobResponseSchema = z.object({
   id: z.string(),
+  kind: z.enum(AI_TASK_KINDS),
   status: z.enum(AI_JOB_STATUSES),
   stage: z.enum(AI_JOB_STAGES).nullable(),
   /** The round of the stage (1..AI_MAX_ROUNDS), when it has one. */
@@ -164,3 +183,9 @@ export type AiJobHistoryItem = z.infer<typeof aiJobHistoryItemSchema>;
 /** The newest requests of a draft, oldest first (read like a conversation). */
 export const aiJobHistoryResponseSchema = z.object({ jobs: z.array(aiJobHistoryItemSchema) });
 export type AiJobHistoryResponse = z.infer<typeof aiJobHistoryResponseSchema>;
+
+export const draftSpecLossSchema = z.object({ subject: z.enum(DRAFT_LOSS_SUBJECTS), name: z.string(), properties: z.array(z.string()) });
+
+/** `details` of a 422 AI_DRAFT_NOT_REVISABLE: what of the draft a revision would lose. */
+export const aiDraftNotRevisableDetailsSchema = z.object({ losses: z.array(draftSpecLossSchema) });
+export type AiDraftNotRevisableDetails = z.infer<typeof aiDraftNotRevisableDetailsSchema>;

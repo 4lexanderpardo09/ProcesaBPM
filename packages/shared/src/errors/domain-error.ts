@@ -1,5 +1,9 @@
 import type { WorkflowValidation } from '../workflow/problems.js';
 import type { ApproverNotFound } from '../contracts/approvals/types.js';
+import type { DraftSpecLoss } from '../workflow/draft-spec/spec-from-document.js';
+
+/** How many losses an AI_DRAFT_NOT_REVISABLE error lists. */
+export const AI_DRAFT_LOSSES_SHOWN = 30;
 
 export const ERROR_CODES = {
   immutableData: 'IMMUTABLE_DATA',
@@ -95,6 +99,7 @@ export const ERROR_CODES = {
   aiAssistantDisabled: 'AI_ASSISTANT_DISABLED',
   aiJobInProgress: 'AI_JOB_IN_PROGRESS',
   aiDailyLimitReached: 'AI_DAILY_LIMIT_REACHED',
+  aiDraftNotRevisable: 'AI_DRAFT_NOT_REVISABLE',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
@@ -800,5 +805,15 @@ export class AiJobInProgressError extends DomainError {
 export class AiDailyLimitReachedError extends DomainError {
   constructor(readonly resetsAt: string) {
     super(ERROR_CODES.aiDailyLimitReached, 'The organization reached the daily limit of the AI assistant', { details: { resetsAt } });
+  }
+}
+
+/**
+ * A revision rewrites the whole draft from its spec, and this draft holds what the spec cannot carry: revising it
+ * would drop it. `losses` say what (at most 30), so the person can start over or edit it by hand.
+ */
+export class AiDraftNotRevisableError extends DomainError {
+  constructor(readonly losses: readonly DraftSpecLoss[]) {
+    super(ERROR_CODES.aiDraftNotRevisable, 'The draft holds settings an AI revision would lose', { details: { losses: losses.slice(0, AI_DRAFT_LOSSES_SHOWN) } });
   }
 }
