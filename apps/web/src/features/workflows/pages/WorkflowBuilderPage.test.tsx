@@ -673,6 +673,11 @@ describe('«Crear con IA» in the builder', () => {
       ],
       transitions: [{ from: 'inicio', to: 'jefe', label: 'Enviar' }],
     };
+    const measure = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const panel = this.matches('[aria-label="Crear el flujo con IA"]');
+      return { left: panel ? 600 : 0, right: 1000, top: 0, bottom: 600, width: panel ? 400 : 1000, height: 600, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    onTestFinished(() => measure.mockRestore());
     const state = { history: [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1, preview: { steps: [], transitions: [] } })] };
     const realtime = fakeRealtime();
     renderRoute(url, { handlers: aiApi(state), realtime: realtime.client });
@@ -682,7 +687,9 @@ describe('«Crear con IA» in the builder', () => {
 
     state.history = [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1, preview })];
     realtime.fire();
-    expect(await screen.findByText('La IA está armando el flujo… 2 bloques')).toBeInTheDocument();
+    const banner = await screen.findByText('La IA está armando el flujo… 2 bloques');
+    // Centred in the part of the canvas the open panel leaves free (the canvas ends at 1000 px, the panel starts at 600).
+    expect(banner).toHaveStyle({ left: 'calc(50% - 200px)' });
     expect(screen.getByText('Solicitud de anticipo')).toBeInTheDocument();
     expect(screen.getByText('Aprobación del jefe')).toBeInTheDocument();
     expect(within(region).getByText('Míralo armarse en el lienzo.')).toBeInTheDocument();

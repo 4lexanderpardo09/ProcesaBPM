@@ -110,6 +110,13 @@ function savePanelOpen(key: string, open: boolean) {
   }
 }
 
+/** How much of the canvas's right side the open AI panel covers (its width and the gap to the edge); 0 without it. */
+function coveredByPanel(canvas: HTMLElement | null): number {
+  const panel = canvas?.querySelector<HTMLElement>(`.${styles.aiPanel ?? ''}`);
+  if (canvas === null || panel === null || panel === undefined) return 0;
+  return Math.max(0, canvas.getBoundingClientRect().right - panel.getBoundingClientRect().left);
+}
+
 /** For the canvas while it only shows the AI's diagram so far. */
 const ignore = () => undefined;
 
@@ -195,9 +202,14 @@ export function WorkflowBuilder({
   const aiPreview = ai.active?.stage === 'DESIGNING' && ai.active.preview !== null && ai.active.preview.steps.length > 0 ? ai.active.preview : null;
   const previewDoc = useMemo(() => (aiPreview === null ? null : previewDocument(aiPreview)), [aiPreview]);
   const previewBlocks = previewDoc?.steps.length ?? 0;
+  // The open AI panel covers the right of the canvas: the diagram is fitted, and its notice centred, in what is left.
+  const [panelCover, setPanelCover] = useState(0);
   useEffect(() => {
-    if (previewBlocks > 0) window.setTimeout(() => void flow.fitView({ maxZoom: 1, padding: 0.12, duration: 200 }), 0);
-  }, [previewBlocks, flow]);
+    if (previewBlocks === 0) return;
+    const cover = coveredByPanel(canvasRef.current);
+    setPanelCover(cover);
+    window.setTimeout(() => void flow.fitView({ maxZoom: 1, duration: 200, padding: { top: '48px', bottom: '24px', left: '24px', right: `${cover + 24}px` } }), 0);
+  }, [previewBlocks, flow, aiOpen]);
   const changeView = (next: 'canvas' | 'list') => {
     setView(next);
     saveView(next);
@@ -461,7 +473,7 @@ export function WorkflowBuilder({
           {previewDoc !== null ? (
             <>
               <BuilderCanvas key="ai-preview" nameOf={nameOf} doc={previewDoc} selection={null} readOnly problemsOf={NO_PROBLEMS} onSelect={ignore} onChange={ignore} onConnect={ignore} onDropBlock={ignore} />
-              <p className={styles.aiBuilding} role="status">
+              <p className={styles.aiBuilding} role="status" style={{ left: `calc(50% - ${panelCover / 2}px)` }}>
                 {t('builder.ai.preview.banner', { count: previewBlocks })}
               </p>
             </>
