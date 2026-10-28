@@ -103,4 +103,5 @@ export const ERROR_RESPONSES: Readonly<Record<ErrorCode, ErrorResponse>> = {
   [ERROR_CODES.aiAssistantDisabled]: { status: 403, message: 'The AI assistant is not turned on for this organization' },
   [ERROR_CODES.aiJobInProgress]: { status: 409, message: 'The AI assistant is already working on this draft' },
   [ERROR_CODES.aiDailyLimitReached]: { status: 422, message: 'The organization reached the daily limit of the AI assistant' },
+  [ERROR_CODES.aiDraftNotRevisable]: { status: 422, message: 'The draft holds settings an AI revision would lose' },
 };

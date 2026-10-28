@@ -1,4 +1,4 @@
-import type { AiDraftResult, AiJobHistoryItem } from '@procesabpm/shared';
+import type { AiDraftResult, AiJobHistoryItem, RequestAiDraft } from '@procesabpm/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useRealtimeClient, useRealtimeConnected, useRealtimeEvent } from '@/shared/realtime';
@@ -37,7 +37,7 @@ export function useAiDraft(workflowId: string, versionId: string, enabled: boole
   });
 
   const request = useMutation({
-    mutationFn: (body: { description: string; revision: number }) => requestAiDraft(client, workflowId, versionId, body),
+    mutationFn: (body: RequestAiDraft) => requestAiDraft(client, workflowId, versionId, body),
     onSuccess: ({ jobId }) => watch(jobId),
     onSettled: refresh,
   });

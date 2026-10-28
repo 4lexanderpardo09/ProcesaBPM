@@ -172,7 +172,7 @@ function AiComposer({ ai, revision, hasContent, dirty }: { readonly ai: AiDraft;
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!canSend) return;
-    ai.request.mutate({ description: description.trim(), revision }, { onSuccess: () => setDescription('') });
+    ai.request.mutate({ mode: 'CREATE', description: description.trim(), revision }, { onSuccess: () => setDescription('') });
   };
 
   return (

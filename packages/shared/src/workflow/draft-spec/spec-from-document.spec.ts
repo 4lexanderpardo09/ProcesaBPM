@@ -103,6 +103,12 @@ describe('extractDraftSpec', () => {
     expect(JSON.stringify(spec)).not.toMatch(/pos-|grp-|type-|00000000-/);
   });
 
+  it('ignores the site scope where the engine does not use it (blocks not assigned by position)', () => {
+    const doc = stored(translated(advanceSpec()));
+    const sameSite = { ...doc, steps: doc.steps.map((step) => (step.assignmentMode === 'POSITION' ? step : { ...step, siteScope: 'SAME_SITE' as const })) };
+    expect(extractDraftSpec(sameSite, catalog).kind).toBe('spec');
+  });
+
   it('reads an empty draft as empty', () => {
     expect(extractDraftSpec({ steps: [], transitions: [], fields: [], amountRules: [] }, catalog)).toEqual({ kind: 'empty' });
   });

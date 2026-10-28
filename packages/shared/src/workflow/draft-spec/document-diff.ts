@@ -5,6 +5,9 @@ import { plainTextOf } from './rich-text.js';
 import type { DraftSpecLoss } from './spec-from-document.js';
 
 type View = Record<string, unknown>;
+
+/** The engine filters by site only the holders of a position (POSITION, and the positions of a POOL); elsewhere the scope does nothing. */
+const SITE_SCOPED_MODES: ReadonlySet<string> = new Set(['POSITION', 'POOL', 'RANDOM_DISPATCH']);
 type RefOf = (stepId: string | null) => string | null;
 
 /** JSON with object keys sorted: a jsonb column does not keep the key order it was written with. */
@@ -42,6 +45,7 @@ function stepView(step: StepDocument, refOf: RefOf): View {
   const parsed = parseBlockConfig(step.type, config);
   return {
     ...rest,
+    siteScope: SITE_SCOPED_MODES.has(step.assignmentMode) ? step.siteScope : null,
     description: textView(description),
     sameAssigneeStepId: refOf(sameAssigneeStepId),
     candidates: sortedRows(withoutIds(candidates)),

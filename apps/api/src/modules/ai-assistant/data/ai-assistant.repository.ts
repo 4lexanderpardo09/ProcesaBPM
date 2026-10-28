@@ -1,21 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
-import { type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiUsageDay, type AiUsageToday, aiDraftResultSchema } from '@procesabpm/shared';
+import { type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiTaskKind, type AiUsageDay, type AiUsageToday, aiDraftResultSchema } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface NewDraftJob {
+  readonly kind: AiTaskKind;
   readonly tenantId: string;
   readonly requestedById: string;
   readonly workflowId: string;
   readonly versionId: string;
   readonly expectedRevision: number;
+  /** The process description, or the change asked of the current draft. */
   readonly description: string;
   readonly model: string;
 }
 
 const iso = (value: Date | null): string | null => (value === null ? null : value.toISOString());
 
-const JOB_COLUMNS = { id: true, status: true, stage: true, round: true, problems: true, errorCode: true, result: true, createdAt: true, startedAt: true, completedAt: true } as const;
+const JOB_COLUMNS = { id: true, kind: true, status: true, stage: true, round: true, problems: true, errorCode: true, result: true, createdAt: true, startedAt: true, completedAt: true } as const;
 type JobRow = Prisma.AiJobGetPayload<{ select: typeof JOB_COLUMNS }>;
 const PERSON = { select: { user: { select: { firstName: true, lastName: true } } } } as const;
 const fullName = (person: { user: { firstName: string; lastName: string } }): string => `${person.user.firstName} ${person.user.lastName}`.trim();
@@ -27,6 +29,7 @@ const descriptionOf = (input: Prisma.JsonValue): string | null => {
 function jobResponse(job: JobRow): AiJobResponse {
   return {
     id: job.id,
+    kind: job.kind,
     status: job.status,
     stage: job.stage,
     round: job.round,
@@ -69,7 +72,7 @@ export class AiAssistantRepository {
     const created = await tx.aiJob.create({
       data: {
         tenantId: job.tenantId,
-        kind: 'WORKFLOW_DRAFT',
+        kind: job.kind,
         requestedById: job.requestedById,
         workflowId: job.workflowId,
         versionId: job.versionId,

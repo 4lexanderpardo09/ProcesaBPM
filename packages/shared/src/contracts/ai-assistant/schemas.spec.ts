@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { advanceSpec } from '../../workflow/draft-spec/test-fixtures.js';
 import { workflowDraftSpecSchema } from '../../workflow/draft-spec/spec.js';
-import { AI_NOTICE_VERSION, aiDraftResultSchema, aiJobHistoryQuerySchema, updateAiAssistantSettingsSchema } from './schemas.js';
+import { AI_NOTICE_VERSION, aiDraftResultSchema, aiJobHistoryQuerySchema, requestAiDraftSchema, updateAiAssistantSettingsSchema } from './schemas.js';
 
 describe('AI assistant contracts', () => {
   it('the history of a draft brings 20 requests unless asked for up to 50', () => {
@@ -28,5 +28,14 @@ describe('AI assistant contracts', () => {
     const { decisions: _decisions, ...older } = advanceSpec();
     expect(workflowDraftSpecSchema.parse(older).decisions).toEqual([]);
     expect(workflowDraftSpecSchema.safeParse({ ...advanceSpec(), decisions: [{ topic: 'OTHER', text: 'x' }] }).success).toBe(false);
+  });
+
+  it('a request creates a new draft unless it asks to revise the current one, which takes a shorter text', () => {
+    expect(requestAiDraftSchema.parse({ description: 'x'.repeat(20), revision: 1 })).toEqual({ mode: 'CREATE', description: 'x'.repeat(20), revision: 1 });
+    expect(requestAiDraftSchema.safeParse({ description: 'quita el aviso', revision: 1 }).success).toBe(false);
+    expect(requestAiDraftSchema.parse({ mode: 'REVISE', description: '  quita el aviso ', revision: 1 })).toEqual({ mode: 'REVISE', description: 'quita el aviso', revision: 1 });
+    expect(requestAiDraftSchema.safeParse({ mode: 'REVISE', description: 'quit', revision: 1 }).success).toBe(false);
+    expect(requestAiDraftSchema.safeParse({ mode: 'REVISE', description: 'x'.repeat(8_001), revision: 1 }).success).toBe(false);
+    expect(requestAiDraftSchema.safeParse({ mode: 'OTHER', description: 'x'.repeat(20), revision: 1 }).success).toBe(false);
   });
 });

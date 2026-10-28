@@ -1,7 +1,7 @@
 import { type AiDraftOutline, buildDraftToolSchema, checkDraftSpec, type DraftCatalog, type DraftDecision, describeSpecProblems, describeWorkflowProblems, type WorkflowDraftSpec, workflowDraftSpecSchema, type WorkflowVersionDocument } from '@procesabpm/shared';
 import { LlmCallError, type LlmFailureKind, type LlmProvider, type LlmResult, type LlmUsage, NO_USAGE } from '../../../infrastructure/llm/llm-provider.js';
 import { blockingProblems } from '../../workflows/application/draft-document-importer.js';
-import { buildDraftPrompt, DRAFT_TOOL_DESCRIPTION, DRAFT_TOOL_NAME, type DraftCorrection } from '../domain/prompt-builder.js';
+import { buildDraftPrompt, DRAFT_TOOL_DESCRIPTION, DRAFT_TOOL_NAME, type DraftCorrection, type DraftTask } from '../domain/prompt-builder.js';
 
 export type CallOutcome = 'OK' | 'TOOL_NOT_CALLED' | 'INVALID_OUTPUT' | 'PROVIDER_ERROR' | 'RATE_LIMITED' | 'TIMEOUT' | 'ABORTED';
 
@@ -53,7 +53,7 @@ const FAILURE_OUTCOME: Readonly<Record<LlmFailureKind, CallOutcome>> = { TIMEOUT
 const TOOL_NOT_CALLED_PROBLEM = `You answered without calling the tool ${DRAFT_TOOL_NAME}. Call it with the whole draft.`;
 
 /**
- * Asks the model for a workflow draft and corrects it: each round is one call; the answer is checked with the same
+ * Asks the model for a workflow draft (new, or the current one with a change) and corrects it: each round is one call; the answer is checked with the same
  * rules publishing uses, and its problems go back to the model in the next round. It keeps the last draft the
  * database would accept, and stops early once a draft has no problems at all. Pure orchestration: the caller owns the
  * lease, the ledger and the writing of the draft.
@@ -64,7 +64,7 @@ export class DraftDesigner {
     private readonly maxRounds: number,
   ) {}
 
-  async design(description: string, catalog: DraftCatalog, hooks: DesignHooks, signal: AbortSignal): Promise<DesignResult> {
+  async design(task: DraftTask, catalog: DraftCatalog, hooks: DesignHooks, signal: AbortSignal): Promise<DesignResult> {
     const tool = { name: DRAFT_TOOL_NAME, description: DRAFT_TOOL_DESCRIPTION, schema: buildDraftToolSchema(catalog) };
     let correction: DraftCorrection | undefined;
     let best: Candidate | undefined;
@@ -74,7 +74,7 @@ export class DraftDesigner {
       if (signal.aborted || !(await hooks.beforeRound(round))) return { kind: 'interrupted' };
       let result: LlmResult;
       try {
-        result = await this.provider.complete({ ...buildDraftPrompt(description, catalog, correction), tool }, signal);
+        result = await this.provider.complete({ ...buildDraftPrompt(task, catalog, correction), tool }, signal);
       } catch (error) {
         if (!(error instanceof LlmCallError)) throw error;
         await hooks.afterCall({ round, outcome: FAILURE_OUTCOME[error.kind], usage: NO_USAGE, durationMs: error.durationMs, errorCode: error.status === undefined ? error.kind : `HTTP_${error.status}` });

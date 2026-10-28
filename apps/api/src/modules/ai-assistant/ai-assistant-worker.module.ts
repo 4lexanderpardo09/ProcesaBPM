@@ -5,6 +5,7 @@ import { LlmProvider } from '../../infrastructure/llm/llm-provider.js';
 import { WorkflowDraftWriterModule } from '../workflows/workflow-draft-writer.module.js';
 import { AiJobScheduler } from './application/ai-job.scheduler.js';
 import { DraftDesigner } from './application/draft-designer.js';
+import { DraftTaskReader } from './application/draft-task.reader.js';
 import { WorkflowDraftJob } from './application/workflow-draft.job.js';
 import { AiJobClaimsRepository } from './data/ai-job-claims.repository.js';
 import { AiJobWorkRepository } from './data/ai-job-work.repository.js';
@@ -16,6 +17,7 @@ import { AiJobWorkRepository } from './data/ai-job-work.repository.js';
     AiJobClaimsRepository,
     AiJobWorkRepository,
     { provide: DraftDesigner, inject: [LlmProvider, WORKER_SETTINGS], useFactory: (provider: LlmProvider, settings: WorkerSettings) => new DraftDesigner(provider, settings.AI_MAX_ROUNDS) },
+    DraftTaskReader,
     WorkflowDraftJob,
     AiJobScheduler,
   ],

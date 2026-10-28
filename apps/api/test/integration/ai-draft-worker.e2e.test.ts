@@ -209,4 +209,62 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     expect(JSON.stringify(warnings)).not.toContain('anticipo');
     expect(await ledger(org.jobId)).toEqual([]);
   });
+
+  describe('a revision of the current draft', () => {
+    /** An organization whose first request already wrote the advance draft (revision 1), and a revision asked of it. */
+    async function revised(change = 'agrega un aviso al jefe cuando se pague') {
+      const org = await organization();
+      expect(await runJob(org, [advanceSpec()])).toBe('succeeded');
+      const jobId = (await org.admin.post(`${org.base}/ai-draft`, { mode: 'REVISE', description: change, revision: 1 }).expect(202)).body.jobId as string;
+      return { ...org, first: org.jobId, jobId, change };
+    }
+    const withExtraNotice = (): WorkflowDraftSpec => {
+      const spec = advanceSpec();
+      return {
+        ...spec,
+        decisions: [{ topic: 'NOTIFICATIONS', text: 'Agregué un aviso al jefe después del pago.' }],
+        steps: [...spec.steps, { ...spec.steps.find((step) => step.ref === 'aviso')!, ref: 'aviso_jefe', name: 'Avisar al jefe' }],
+        transitions: [...spec.transitions.filter((transition) => transition.from !== 'aviso'), { ...spec.transitions.find((transition) => transition.from === 'aviso')!, to: 'aviso_jefe' }, { ...spec.transitions.find((transition) => transition.from === 'aviso')!, from: 'aviso_jefe' }],
+      };
+    };
+    const kindsInLedger = async (jobId: string) => (await db.owner.query<{ task_kind: string }>('SELECT DISTINCT task_kind FROM ai_usage WHERE job_id = $1', [jobId])).rows.map((row) => row.task_kind);
+
+    it('sends the current draft from the database with the change and the earlier requests, and writes the whole revised draft', async () => {
+      const org = await revised();
+      expect(await runJob(org, [withExtraNotice()])).toBe('succeeded');
+
+      const prompt = provider.requests[0]!;
+      expect(prompt.system).toContain('REVISING AN EXISTING DRAFT');
+      const current = JSON.parse(/<current_draft>\n(.*)\n<\/current_draft>/s.exec(prompt.user)![1]!) as WorkflowDraftSpec;
+      expect(current.steps.map((step) => step.ref)).toContain('aprobacion_del_jefe');
+      expect(current.steps).toHaveLength(advanceSpec().steps.length);
+      expect(JSON.stringify(current)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
+      expect(prompt.user).toContain(`<previous_requests>\n- (applied) ${DESCRIPTION} Changed: ${advanceSpec().decisions.map((decision) => decision.text).join(' ')}\n</previous_requests>`);
+      expect(prompt.user).toContain(`<change_request>\n${org.change}\n</change_request>`);
+
+      expect(await job(org.admin, org.jobId)).toMatchObject({ kind: 'WORKFLOW_DRAFT_REVISION', status: 'SUCCEEDED', result: { revision: 2, decisions: withExtraNotice().decisions } });
+      const version = (await org.admin.get(org.base).expect(200)).body as VersionDetailResponse;
+      expect(version.document.steps.map((step) => step.name)).toContain('Avisar al jefe');
+      expect(version.validation?.errors).toEqual([]);
+      expect(await kindsInLedger(org.jobId)).toEqual(['WORKFLOW_DRAFT_REVISION']);
+      expect(await kindsInLedger(org.first)).toEqual(['WORKFLOW_DRAFT']);
+    });
+
+    it('ends before any paid call when the draft changed, or holds what the spec cannot carry, since it was asked', async () => {
+      const changed = await revised();
+      await db.owner.query('UPDATE workflow_versions SET revision = revision + 1 WHERE id = $1', [changed.base.split('/').at(-1)]);
+      expect(await runJob(changed, [withExtraNotice()])).toBe('failed');
+      expect(await job(changed.admin, changed.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'DRAFT_CHANGED' });
+
+      const lossy = await revised();
+      await db.owner.query(`UPDATE steps SET close_rule = 'ALLOWED' WHERE version_id = $1 AND name = 'Revisión contable'`, [lossy.base.split('/').at(-1)]);
+      expect(await runJob(lossy, [withExtraNotice()])).toBe('failed');
+      expect(await job(lossy.admin, lossy.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'AI_DRAFT_NOT_REVISABLE' });
+
+      expect(provider.requests).toEqual([]);
+      expect(await ledger(changed.jobId)).toEqual([]);
+      expect(await ledger(lossy.jobId)).toEqual([]);
+      expect(((await lossy.admin.get(lossy.base).expect(200)).body as VersionDetailResponse).version.revision).toBe(1);
+    });
+  });
 });

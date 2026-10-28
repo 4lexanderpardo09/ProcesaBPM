@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { AI_TASK_KINDS, type AiTaskKind, aiDraftResultSchema } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { LlmUsage } from '../../../infrastructure/llm/llm-provider.js';
 
 export interface DraftJobInput {
+  readonly kind: AiTaskKind;
+  readonly createdAt: Date;
   readonly requestedById: string;
   readonly workflowId: string;
   readonly versionId: string;
@@ -11,7 +14,18 @@ export interface DraftJobInput {
   readonly enabled: boolean;
 }
 
+/** An earlier request on the same draft, for the context of a revision. */
+export interface PastRequest {
+  readonly kind: AiTaskKind;
+  readonly message: string;
+  /** It changed the draft (SUCCEEDED). */
+  readonly applied: boolean;
+  /** What the model said it decided or changed (empty when not applied). */
+  readonly decisions: readonly string[];
+}
+
 export interface UsageEntry {
+  readonly taskKind: AiTaskKind;
   readonly tenantId: string;
   readonly jobId: string;
   readonly userId: string;
@@ -25,17 +39,38 @@ export interface UsageEntry {
   readonly errorCode: string | null;
 }
 
+const descriptionOf = (input: unknown): string | null => {
+  const description = (input as { description?: unknown } | null)?.description;
+  return typeof description === 'string' ? description : null;
+};
+
 /** What the worker reads and records for one request, inside the tenant's transaction (RLS applies). */
 @Injectable()
 export class AiJobWorkRepository {
   async draftInput(tx: TenantTransaction, tenantId: string, jobId: string): Promise<DraftJobInput | undefined> {
     const job = await tx.aiJob.findUnique({
       where: { tenantId_id: { tenantId, id: jobId } },
-      select: { kind: true, requestedById: true, workflowId: true, versionId: true, expectedRevision: true, input: true, tenant: { select: { aiAssistantEnabled: true } } },
+      select: { kind: true, createdAt: true, requestedById: true, workflowId: true, versionId: true, expectedRevision: true, input: true, tenant: { select: { aiAssistantEnabled: true } } },
     });
-    const description = (job?.input as { description?: unknown } | null)?.description;
-    if (job === null || job.kind !== 'WORKFLOW_DRAFT' || job.workflowId === null || job.versionId === null || job.expectedRevision === null || typeof description !== 'string') return undefined;
-    return { requestedById: job.requestedById, workflowId: job.workflowId, versionId: job.versionId, expectedRevision: job.expectedRevision, description, enabled: job.tenant.aiAssistantEnabled };
+    const description = descriptionOf(job?.input ?? null);
+    if (job === null || !AI_TASK_KINDS.includes(job.kind) || job.workflowId === null || job.versionId === null || job.expectedRevision === null || description === null) return undefined;
+    return { kind: job.kind, createdAt: job.createdAt, requestedById: job.requestedById, workflowId: job.workflowId, versionId: job.versionId, expectedRevision: job.expectedRevision, description, enabled: job.tenant.aiAssistantEnabled };
+  }
+
+  /** The finished requests of a draft made before `before` (newest `limit`, oldest first). */
+  async pastRequests(tx: TenantTransaction, tenantId: string, versionId: string, before: { readonly id: string; readonly createdAt: Date }, limit: number): Promise<PastRequest[]> {
+    const jobs = await tx.aiJob.findMany({
+      where: { tenantId, versionId, status: { in: ['SUCCEEDED', 'FAILED'] }, id: { not: before.id }, createdAt: { lte: before.createdAt } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: { kind: true, status: true, input: true, result: true },
+    });
+    return jobs.reverse().flatMap((job) => {
+      const message = descriptionOf(job.input);
+      if (message === null) return [];
+      const result = job.status === 'SUCCEEDED' ? aiDraftResultSchema.safeParse(job.result) : undefined;
+      return [{ kind: job.kind, message, applied: job.status === 'SUCCEEDED', decisions: result?.success === true ? result.data.decisions.map((decision) => decision.text) : [] }];
+    });
   }
 
   async recordUsage(tx: TenantTransaction, entry: UsageEntry): Promise<void> {
@@ -44,7 +79,7 @@ export class AiJobWorkRepository {
         tenantId: entry.tenantId,
         jobId: entry.jobId,
         userId: entry.userId,
-        taskKind: 'WORKFLOW_DRAFT',
+        taskKind: entry.taskKind,
         provider: entry.provider,
         model: entry.model,
         jobAttempt: entry.jobAttempt,
