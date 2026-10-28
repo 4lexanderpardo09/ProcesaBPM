@@ -87,6 +87,8 @@ enum AnnouncementAudience {
 /// Lifecycle of an organization data export (docs/base-de-datos.md §8.31).
 enum AiTaskKind {
   WORKFLOW_DRAFT
+  /// A change asked of the current draft («Crear con IA» as a chat).
+  WORKFLOW_DRAFT_REVISION
 
   @@map("ai_task_kind")
 }
