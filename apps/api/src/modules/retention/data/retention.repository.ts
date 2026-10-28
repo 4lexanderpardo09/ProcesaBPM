@@ -13,6 +13,7 @@ const PURGE_BATCH: Readonly<Record<TableRetentionStep, (tx: CrossTenantTransacti
   user_tokens: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_user_tokens(${limit}::int) AS deleted`,
   ai_jobs: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_ai_jobs(${limit}::int) AS deleted`,
   ai_usage: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_ai_usage(${limit}::int) AS deleted`,
+  demo_requests: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_demo_requests(${limit}::int) AS deleted`,
   audit_logs: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_audit_logs(${limit}::int) AS deleted`,
   support_sessions: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_support_sessions(${limit}::int) AS deleted`,
   support_access_grants: (tx, limit) => tx.$queryRaw<DeletedRows>`SELECT retention_purge_support_access_grants(${limit}::int) AS deleted`,

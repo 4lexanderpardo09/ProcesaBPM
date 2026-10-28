@@ -32,9 +32,9 @@ describe('architecture', () => {
   });
 
   it('the worker-only modules (outbox dispatcher, mail, account mail, notifications, documents fan-out, data exports, tenant purge, retention and the wait wake-up) are only imported by the worker', () => {
-    const workerOnly = /(outbox-dispatcher\.module|mail\.module|auth-mail\.module|auth-maintenance\.module|notifications-worker\.module|documents-worker\.module|exports-worker\.module|data-exports-worker\.module|tenant-purge\.module|retention\.module)/;
+    const workerOnly = /(outbox-dispatcher\.module|mail\.module|auth-mail\.module|auth-maintenance\.module|notifications-worker\.module|documents-worker\.module|exports-worker\.module|data-exports-worker\.module|demo-requests-worker\.module|tenant-purge\.module|retention\.module)/;
     const importers = files.filter((file) => importsOf(file).some((source) => workerOnly.test(source))).map(posix);
-    expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/data-exports/data-exports-worker.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/engine/wait.module.ts', 'modules/exports/exports-worker.module.ts', 'modules/notifications/notifications-worker.module.ts', 'modules/realtime/realtime-worker.module.ts', 'worker.module.ts']);
+    expect(importers.sort()).toEqual(['modules/auth/auth-mail.module.ts', 'modules/data-exports/data-exports-worker.module.ts', 'modules/demo-requests/demo-requests-worker.module.ts', 'modules/documents/documents-worker.module.ts', 'modules/engine/wait.module.ts', 'modules/exports/exports-worker.module.ts', 'modules/notifications/notifications-worker.module.ts', 'modules/realtime/realtime-worker.module.ts', 'worker.module.ts']);
   });
 
   it('no SQL is built from text: the unsafe raw-query helpers are never used', () => {

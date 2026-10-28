@@ -52,6 +52,7 @@ export class SmtpMailer extends Mailer {
         html: message.html,
         text: message.text,
         messageId: message.messageId,
+        ...(message.replyTo === undefined ? {} : { replyTo: message.replyTo }),
         headers: { 'Auto-Submitted': 'auto-generated' },
       });
     } catch (error) {

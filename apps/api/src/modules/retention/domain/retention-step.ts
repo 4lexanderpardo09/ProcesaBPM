@@ -1,6 +1,6 @@
 /**
  * The retention steps in the order a run takes them: the busy technical tables first, then the AI requests and their
- * token ledger (independent: the ledger has no foreign key to its request), then the trails, then the expired data
+ * token ledger (independent: the ledger has no foreign key to its request), then the website's demo requests, then the trails, then the expired data
  * export archives. The audit rows of a support visit go before the visit, and the visit before its grant (foreign keys). Each step is one database function
  * whose window is fixed in SQL (docs/base-de-datos.md §8.27); the worker only chooses how much to delete per call.
  */
@@ -12,6 +12,7 @@ export const RETENTION_STEPS = [
   'user_tokens',
   'ai_jobs',
   'ai_usage',
+  'demo_requests',
   'audit_logs',
   'support_sessions',
   'support_access_grants',

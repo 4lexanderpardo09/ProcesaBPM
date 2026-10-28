@@ -39,6 +39,9 @@ import { TenantRepository } from './data/tenant.repository.js';
 import { TenantRoleRepository } from './data/tenant-role.repository.js';
 import { PlatformAdminsController } from './http/platform-admins.controller.js';
 import { PlatformAnnouncementsController } from './http/platform-announcements.controller.js';
+import { PlatformDemoRequestsController } from './http/platform-demo-requests.controller.js';
+import { DemoRequestAdminRepository } from './data/demo-request-admin.repository.js';
+import { DemoRequestAdminService } from './application/demo-request-admin.service.js';
 import { PlatformCatalogController } from './http/platform-catalog.controller.js';
 import { PlatformAiUsageController } from './http/platform-ai-usage.controller.js';
 import { PlatformOperationsController } from './http/platform-operations.controller.js';
@@ -65,6 +68,7 @@ import { PlatformUsersController } from './http/platform-users.controller.js';
     PlatformSupportController,
     PlatformDeletionController,
     PlatformUsersController,
+    PlatformDemoRequestsController,
   ],
   providers: [
     PlatformOutboxRepository,
@@ -87,6 +91,8 @@ import { PlatformUsersController } from './http/platform-users.controller.js';
     PlanAdminService,
     AnnouncementAdminRepository,
     AnnouncementAdminService,
+    DemoRequestAdminRepository,
+    DemoRequestAdminService,
     CountryCatalogRepository,
     CountryCatalogService,
     OperationsRepository,

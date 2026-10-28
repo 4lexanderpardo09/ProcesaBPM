@@ -41,6 +41,8 @@ const settingsSchema = z.object({
   MAIL_TRANSPORT: z.enum(['smtp', 'memory']).default('smtp'),
   MAIL_FROM: z.string().min(3).default('ProcesaBPM <no-reply@procesabpm.local>'),
   MAIL_MESSAGE_ID_DOMAIN: z.string().min(3).default('procesabpm.local'),
+  /** Where the website's demo requests are mailed; without it they are only listed in the platform console. */
+  SALES_INBOX_EMAIL: z.preprocess((value) => (value === '' ? undefined : value), z.email().optional()),
   SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: positiveInteger(1025, 65_535),
   SMTP_SECURE: boolean(false),
