@@ -1,7 +1,7 @@
 import type { AiDraftResult } from '@procesabpm/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 import { ApiError } from '@/shared/api';
@@ -10,6 +10,7 @@ import { useApiClient } from '@/shared/session';
 import { Alert, ButtonLink } from '@/shared/ui';
 import { versionDetailQueryOptions } from '../builder/api/builder-api';
 import { WorkflowBuilder } from '../builder/components/WorkflowBuilder';
+import { useFullScreen } from '../builder/hooks/use-full-screen';
 import styles from '../components/Workflows.module.css';
 
 const NOT_FOUND = 404;
@@ -20,6 +21,9 @@ export function WorkflowBuilderPage() {
   const { t } = useTranslation('workflows');
   const detail = useQuery(versionDetailQueryOptions(useApiClient(), workflowId, versionId));
   const [published, setPublished] = useState<number | null>(null);
+  // Full screen lives here, outside the builder, which starts over on every new draft.
+  const fullScreenHost = useRef<HTMLDivElement>(null);
+  const fullScreen = useFullScreen(fullScreenHost);
   /** The draft was rewritten on the server (by the AI or a template): `aiResult` is null for a template. */
   const [replaced, setReplaced] = useState<{ readonly aiResult: AiDraftResult | null; readonly generation: number } | null>(null);
   /** Read the draft again and start the builder over on it. */
@@ -39,7 +43,7 @@ export function WorkflowBuilderPage() {
   }
   if (detail.data === undefined) return <p className={styles.note}>{t('builder.loading')}</p>;
   return (
-    <>
+    <div ref={fullScreenHost} className={fullScreen.active ? styles.fullScreenHost : styles.builderHost}>
       {published !== null && <Alert tone="ok">{t('builder.published', { number: published })}</Alert>}
       {replaced !== null && replaced.aiResult === null && <Alert tone="ok">{t('builder.templateImport.ready')}</Alert>}
       {replaced?.aiResult && <Alert tone="ok">{t('builder.ai.ready')}</Alert>}
@@ -51,9 +55,10 @@ export function WorkflowBuilderPage() {
           onPublished={setPublished}
           onAiDraft={takeReplacement}
           onTemplateImported={() => takeReplacement(null)}
+          fullScreen={fullScreen}
           arrangeOnOpen={replaced !== null}
         />
       </ReactFlowProvider>
-    </>
+    </div>
   );
 }

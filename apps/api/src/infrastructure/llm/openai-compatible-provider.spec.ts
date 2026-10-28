@@ -120,6 +120,16 @@ describe('OpenAiCompatibleProvider (against a local fake server)', () => {
     expect((await provider().complete(request, new AbortController().signal)).answer).toEqual({ kind: 'no_tool_call' });
   });
 
+  it('turns a stream that breaks mid-answer (a chunk that is not JSON) into PROVIDER_ERROR, and skips keep-alive comments', async () => {
+    handler = (_req, _body, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end(`: keep-alive\n\ndata: ${JSON.stringify(piece({ name: 'submit_workflow_draft', arguments: '{"steps": [' }))}\n\ndata: {"choices": [\n\n`);
+    };
+    await expect(provider().complete(request, new AbortController().signal)).rejects.toMatchObject({ kind: 'PROVIDER_ERROR' });
+    handler = stream([piece({ name: 'submit_workflow_draft', arguments: '{"steps": []}' })]);
+    expect((await provider().complete(request, new AbortController().signal)).answer).toEqual({ kind: 'tool_call', arguments: { steps: [] } });
+  });
+
   it('fails every call NOT_CONFIGURED when there is no key', async () => {
     await expect(new UnconfiguredLlmProvider('deepseek', 'deepseek-v4-pro').complete()).rejects.toMatchObject({ kind: 'NOT_CONFIGURED' });
   });

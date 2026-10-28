@@ -19,6 +19,8 @@ import { useRecordNames } from '../hooks/use-record-names';
 import { problemsByElement, problemTarget } from '../lib/problems';
 import { serverOnlyProblems, withServerProblems } from '../lib/server-problems';
 import { useAiDraft } from '../hooks/use-ai-draft';
+import type { FullScreen } from '../hooks/use-full-screen';
+import { previewDocument } from '../lib/ai-preview-doc';
 import { AiAssistantPanel } from './AiAssistantPanel';
 import { TemplateImportButton } from './TemplateImportButton';
 import { AmountRulesDialog } from './AmountRulesDialog';
@@ -90,6 +92,31 @@ function movesAnyStep(doc: WorkflowVersionDocument, positions: ReadonlyMap<strin
   });
 }
 
+/** A side panel (the blocks to add, «Propiedades») the person closed to give the canvas the width; open by default. */
+function readPanelOpen(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) !== 'closed';
+  } catch {
+    return true;
+  }
+}
+
+function savePanelOpen(key: string, open: boolean) {
+  try {
+    if (open) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, 'closed');
+  } catch {
+    // Only a convenience.
+  }
+}
+
+/** For the canvas while it only shows the AI's diagram so far. */
+const ignore = () => undefined;
+
+const PALETTE_KEY = 'procesabpm.builder.palette';
+const INSPECTOR_KEY = 'procesabpm.builder.inspector';
+const NO_PROBLEMS: ReturnType<typeof problemsByElement> = problemsByElement({ errors: [], warnings: [] });
+
 function saveView(view: 'canvas' | 'list') {
   try {
     window.localStorage.setItem(VIEW_KEY, view);
@@ -107,12 +134,15 @@ export function WorkflowBuilder({
   onPublished,
   onAiDraft,
   onTemplateImported,
+  fullScreen,
   arrangeOnOpen = false,
 }: {
   readonly detail: VersionDetail;
   readonly onPublished: (number: number) => void;
   readonly onAiDraft: (result: AiDraftResult) => void;
   readonly onTemplateImported: () => void;
+  /** Held by the page, which outlives the builder: a new draft must not take the screen out of full screen. */
+  readonly fullScreen: FullScreen;
   readonly arrangeOnOpen?: boolean;
 }) {
   const { t } = useTranslation('workflows');
@@ -157,17 +187,17 @@ export function WorkflowBuilder({
     setSelection(shownTab(next) ?? null);
   };
   const [miniMap, setMiniMap] = useState(false);
-  const builderRef = useRef<HTMLDivElement>(null);
-  const [fullScreen, setFullScreen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(() => readPanelOpen(PALETTE_KEY));
+  const [inspectorOpen, setInspectorOpen] = useState(() => readPanelOpen(INSPECTOR_KEY));
+  useEffect(() => savePanelOpen(PALETTE_KEY, paletteOpen), [paletteOpen]);
+  useEffect(() => savePanelOpen(INSPECTOR_KEY, inspectorOpen), [inspectorOpen]);
+  // While the AI designs, the canvas draws what it has written so far (read-only) instead of the draft.
+  const aiPreview = ai.active?.stage === 'DESIGNING' && ai.active.preview !== null && ai.active.preview.steps.length > 0 ? ai.active.preview : null;
+  const previewDoc = useMemo(() => (aiPreview === null ? null : previewDocument(aiPreview)), [aiPreview]);
+  const previewBlocks = previewDoc?.steps.length ?? 0;
   useEffect(() => {
-    const onChange = () => setFullScreen(document.fullscreenElement !== null && document.fullscreenElement === builderRef.current);
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-  const toggleFullScreen = () => {
-    if (document.fullscreenElement !== null) void document.exitFullscreen();
-    else void builderRef.current?.requestFullscreen?.();
-  };
+    if (previewBlocks > 0) window.setTimeout(() => void flow.fitView({ maxZoom: 1, padding: 0.12, duration: 200 }), 0);
+  }, [previewBlocks, flow]);
   const changeView = (next: 'canvas' | 'list') => {
     setView(next);
     saveView(next);
@@ -319,7 +349,7 @@ export function WorkflowBuilder({
   const warnings = validation.warnings.length;
 
   return (
-    <div ref={builderRef} className={fullScreen ? styles.builderFull : styles.builder}>
+    <div className={fullScreen.active ? styles.builderFull : styles.builder}>
       <Breadcrumb
         label={t('builder.breadcrumb')}
         items={[{ label: t('title'), to: paths.workflows }, { label: detail.workflow.name, to: workflowPath(detail.workflow.id) }, { label: t('builder.versionLabel', { number: detail.version.number }) }]}
@@ -405,15 +435,37 @@ export function WorkflowBuilder({
             </Button>
           </>
         )}
-        <Button variant="ghost" aria-pressed={fullScreen} onClick={toggleFullScreen}>
-          {fullScreen ? t('builder.canvas.exitFullScreen') : t('builder.canvas.fullScreen')}
+        {!readOnly && (
+          <Button variant="ghost" aria-pressed={paletteOpen} onClick={() => setPaletteOpen((open) => !open)}>
+            {t('builder.canvas.paletteToggle')}
+          </Button>
+        )}
+        <Button variant="ghost" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen((open) => !open)}>
+          {t('builder.canvas.inspectorToggle')}
+        </Button>
+        <Button variant="ghost" aria-pressed={fullScreen.active} onClick={fullScreen.toggle}>
+          {fullScreen.active ? t('builder.canvas.exitFullScreen') : t('builder.canvas.fullScreen')}
         </Button>
       </div>
 
-      <div className={cx(readOnly ? styles.workspaceReadOnly : styles.workspace, wide && styles.workspaceWide)}>
-        {!readOnly && <BlockPalette onAdd={(type) => addBlock(type)} />}
+      <div
+        className={cx(
+          readOnly ? styles.workspaceReadOnly : styles.workspace,
+          wide && styles.workspaceWide,
+          (readOnly || !paletteOpen) && styles.withoutPalette,
+          !inspectorOpen && styles.withoutInspector,
+        )}
+      >
+        {!readOnly && paletteOpen && <BlockPalette onAdd={(type) => addBlock(type)} />}
         <div ref={canvasRef} className={styles.canvasWrap}>
-          {view === 'list' ? (
+          {previewDoc !== null ? (
+            <>
+              <BuilderCanvas key="ai-preview" nameOf={nameOf} doc={previewDoc} selection={null} readOnly problemsOf={NO_PROBLEMS} onSelect={ignore} onChange={ignore} onConnect={ignore} onDropBlock={ignore} />
+              <p className={styles.aiBuilding} role="status">
+                {t('builder.ai.preview.banner', { count: previewBlocks })}
+              </p>
+            </>
+          ) : view === 'list' ? (
             <StepsTable doc={doc} selectedId={selectedStep?.id} problemsOf={problemsOf} onSelect={(id) => setSelection({ kind: 'step', id })} />
           ) : (
           <BuilderCanvas
@@ -433,7 +485,7 @@ export function WorkflowBuilder({
           {panelOpen && <ProblemsPanel validation={validation} nameOf={problemOwner} onGoTo={goTo} onOpenAmountRules={() => setAmountRulesOpen(true)} onClose={() => setPanelOpen(false)} />}
         </div>
         <SectionsContext.Provider value={sections}>
-        <aside ref={inspectorRef} className={styles.inspector} aria-label={t('builder.inspector.label')}>
+        <aside ref={inspectorRef} className={styles.inspector} aria-label={t('builder.inspector.label')} hidden={!inspectorOpen}>
           {tabs.tabs.length > 0 && (
             <InspectorTabs
               state={tabs}
