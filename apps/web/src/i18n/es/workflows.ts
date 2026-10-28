@@ -363,6 +363,7 @@ export const workflows = {
         DRAFT_GONE: 'El borrador ya no existe o se publicó.',
         AI_DISABLED: 'El asistente de IA se desactivó en la organización.',
         LEASE_EXPIRED: 'La solicitud se interrumpió. Inténtalo de nuevo.',
+        QUEUE_EXPIRED: 'El asistente no alcanzó a atender la solicitud. Inténtalo de nuevo más tarde.',
         UNKNOWN: 'No se pudo armar el borrador. Inténtalo de nuevo.',
       },
     },

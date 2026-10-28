@@ -89,11 +89,21 @@ export class WorkflowDraftJob {
     return 'succeeded';
   }
 
+  /**
+   * Writes a paid call to the ledger. Never throws: if the ledger refuses it, the token counts go to the log (so the
+   * cost can still be reconciled) and the designer goes on; the next lease renewal tells it whether to stop.
+   */
   private async record(claim: AiJobClaim, input: DraftJobInput, call: CallRecord): Promise<void> {
-    await this.runner.withTenant(claim.tenantId, (tx) =>
-      this.work.recordUsage(tx, { tenantId: claim.tenantId, jobId: claim.jobId, userId: input.requestedById, provider: this.provider.name, model: this.provider.model, jobAttempt: claim.attempt, ...call }),
-    );
-    this.log('info', 'ai_job.call', claim, { round: call.round, outcome: call.outcome, errorCode: call.errorCode, promptTokens: call.usage.promptTokens, completionTokens: call.usage.completionTokens, reasoningTokens: call.usage.reasoningTokens, durationMs: call.durationMs });
+    const facts = { round: call.round, outcome: call.outcome, errorCode: call.errorCode, promptTokens: call.usage.promptTokens, cachedPromptTokens: call.usage.cachedPromptTokens, completionTokens: call.usage.completionTokens, reasoningTokens: call.usage.reasoningTokens, durationMs: call.durationMs };
+    try {
+      await this.runner.withTenant(claim.tenantId, (tx) =>
+        this.work.recordUsage(tx, { tenantId: claim.tenantId, jobId: claim.jobId, userId: input.requestedById, provider: this.provider.name, model: this.provider.model, jobAttempt: claim.attempt, ...call }),
+      );
+    } catch (error) {
+      this.log('warn', 'ai_job.usage_not_recorded', claim, { ...facts, provider: this.provider.name, model: this.provider.model, errorName: error instanceof Error ? error.name : typeof error });
+      return;
+    }
+    this.log('info', 'ai_job.call', claim, facts);
   }
 
   private async fail(claim: AiJobClaim, code: string, cause?: unknown): Promise<AiJobOutcome> {

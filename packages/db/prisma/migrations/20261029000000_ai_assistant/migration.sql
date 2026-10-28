@@ -170,18 +170,20 @@ REVOKE ALL ON FUNCTION ai_job_insert_is_fresh() FROM PUBLIC;
 CREATE TRIGGER ai_job_insert_is_fresh BEFORE INSERT ON ai_jobs
   FOR EACH ROW EXECUTE FUNCTION ai_job_insert_is_fresh();
 
--- A ledger row is dated by the database (the daily limit counts by date) and belongs to a request of the same tenant
--- that is running and was made by the member it names.
+-- A ledger row is dated by the database (the daily limit counts by date) and belongs to an attempt that was claimed, of a
+-- request of the same tenant made by the member it names. The request may have ended meanwhile (its lease expired, or
+-- a later attempt finished it) while a paid call was still in flight: that call is recorded all the same.
 CREATE FUNCTION ai_usage_insert_is_valid() RETURNS trigger
   LANGUAGE plpgsql SET search_path = public, pg_temp
   AS $$
   BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM ai_jobs j
-      WHERE j.tenant_id = NEW.tenant_id AND j.id = NEW.job_id AND j.status = 'RUNNING'
+      WHERE j.tenant_id = NEW.tenant_id AND j.id = NEW.job_id AND j.status <> 'PENDING'
+        AND NEW.job_attempt BETWEEN 1 AND j.attempts
         AND j.requested_by_id = NEW.user_id AND j.kind = NEW.task_kind
     ) THEN
-      RAISE EXCEPTION 'a usage row belongs to a running AI request of its member' USING ERRCODE = '23514';
+      RAISE EXCEPTION 'a usage row belongs to a claimed attempt of an AI request of its member' USING ERRCODE = '23514';
     END IF;
     NEW.created_at := now();
     RETURN NEW;
@@ -196,6 +198,12 @@ CREATE TRIGGER ai_usage_insert_is_valid BEFORE INSERT ON ai_usage
 -- ---------------------------------------------------------------------------
 -- Work is done only for an ACTIVE tenant. A request is attempted at most twice: an attempt is several calls to the
 -- provider, each one paid, so a worker that died is retried once and then the request ends LEASE_EXPIRED.
+-- Nothing is left open for good (an open request blocks its draft and keeps the description): each claim first ends
+--   * a RUNNING request that lost its lease on its second attempt, or whose tenant is no longer ACTIVE (it would never
+--     be claimed again): LEASE_EXPIRED;
+--   * a request still PENDING 30 minutes after it was made: QUEUE_EXPIRED. A running worker takes one within seconds
+--     (or after the one ahead, a few minutes); 30 minutes means no worker is there, and the person waiting on screen
+--     has long given up.
 
 CREATE FUNCTION claim_due_ai_jobs(p_limit integer, p_lease interval DEFAULT interval '10 minutes')
   RETURNS TABLE (out_tenant_id uuid, out_job_id uuid, out_claim_token uuid, out_attempt integer)
@@ -207,7 +215,11 @@ CREATE FUNCTION claim_due_ai_jobs(p_limit integer, p_lease interval DEFAULT inte
     END IF;
     UPDATE ai_jobs x
     SET status = 'FAILED', error_code = 'LEASE_EXPIRED', claim_token = NULL, lease_until = NULL, input = NULL, completed_at = now()
-    WHERE x.status = 'RUNNING' AND x.lease_until <= now() AND x.attempts >= 2;
+    WHERE x.status = 'RUNNING' AND x.lease_until <= now()
+      AND (x.attempts >= 2 OR NOT EXISTS (SELECT 1 FROM tenants t WHERE t.id = x.tenant_id AND t.status = 'ACTIVE'));
+    UPDATE ai_jobs x
+    SET status = 'FAILED', error_code = 'QUEUE_EXPIRED', input = NULL, completed_at = now()
+    WHERE x.status = 'PENDING' AND x.created_at <= now() - interval '30 minutes';
 
     RETURN QUERY
     WITH due AS (

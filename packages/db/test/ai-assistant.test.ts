@@ -180,6 +180,32 @@ describe('AI assistant: requests and the token ledger', () => {
       expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'LEASE_EXPIRED', input: null });
     });
 
+    it('ends a request no worker took within 30 minutes QUEUE_EXPIRED, without its description; a younger one waits', async () => {
+      const tenant = await enabledTenant();
+      const [stale, young] = [await request(tenant), await request(tenant)];
+      await db.owner.query(`UPDATE ai_jobs SET created_at = now() - interval '31 minutes' WHERE id = $1`, [stale]);
+      await db.owner.query(`UPDATE ai_jobs SET created_at = now() - interval '29 minutes' WHERE id = $1`, [young]);
+      await db.owner.query(`UPDATE tenants SET status = 'SUSPENDED' WHERE id = $1`, [tenant.tenantId]);
+      await claim();
+      expect(await row(tenant, stale)).toMatchObject({ status: 'FAILED', error_code: 'QUEUE_EXPIRED', input: null, attempts: 0 });
+      expect((await row(tenant, stale)).completed_at).not.toBeNull();
+      expect(await row(tenant, young)).toMatchObject({ status: 'PENDING', error_code: null, input: JSON.parse(INPUT) });
+    });
+
+    it('ends LEASE_EXPIRED a request whose lease ran out after its tenant was suspended, even on its first attempt', async () => {
+      const tenant = await enabledTenant();
+      const id = await request(tenant);
+      const c = (await claimOf(id))!;
+      expect(c.out_attempt).toBe(1);
+      await db.owner.query(`UPDATE tenants SET status = 'SUSPENDED' WHERE id = $1`, [tenant.tenantId]);
+      await claim();
+      expect(await row(tenant, id)).toMatchObject({ status: 'RUNNING' });
+      await expireLease(id);
+      await claim();
+      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED', error_code: 'LEASE_EXPIRED', input: null, claim_token: null, attempts: 1 });
+      expect((await row(tenant, id)).completed_at).not.toBeNull();
+    });
+
     it('is the worker’s only: neither the API role nor the platform role runs it', async () => {
       for (const pool of [db.runtime, db.platform]) {
         expect(await sqlStateOf(() => withoutContext(pool, (c) => c.query('SELECT * FROM claim_due_ai_jobs(1)')))).toBe(SqlState.insufficientPrivilege);
@@ -188,7 +214,7 @@ describe('AI assistant: requests and the token ledger', () => {
   });
 
   describe('the ledger', () => {
-    it('records the calls of a running request, dated by the database, and never changes them', async () => {
+    it('records the calls of a claimed request, dated by the database, and never changes them', async () => {
       const tenant = await enabledTenant();
       const id = await request(tenant);
       expect(await sqlStateOf(() => recordUsage(tenant, id))).toBe(SqlState.checkViolation);
@@ -201,7 +227,28 @@ describe('AI assistant: requests and the token ledger', () => {
         expect(await sqlStateOf(() => withContext(db.worker, { tenantId: tenant.tenantId, userId: '' }, (client) => client.query(sql, [usage.id]))), sql).toBe(SqlState.insufficientPrivilege);
       }
       expect(await finish(c)).toBe(true);
-      expect(await sqlStateOf(() => recordUsage(tenant, id))).toBe(SqlState.checkViolation);
+    });
+
+    it('records a call still in flight when its request ended, for its member and a claimed attempt only', async () => {
+      const tenant = await enabledTenant();
+      const id = await request(tenant);
+      const c = (await claimOf(id))!;
+      expect(await fail(c)).toBe(true);
+      expect(await row(tenant, id)).toMatchObject({ status: 'FAILED' });
+      await recordUsage(tenant, id);
+      const other = await seedMember(db.platform, tenant);
+      expect(await sqlStateOf(() => recordUsage(tenant, id, other))).toBe(SqlState.checkViolation);
+      expect(
+        await sqlStateOf(() =>
+          withContext(db.worker, { tenantId: tenant.tenantId, userId: '' }, (client) =>
+            client.query(
+              `INSERT INTO ai_usage (tenant_id, job_id, user_id, task_kind, provider, model, job_attempt, round, prompt_tokens, cached_prompt_tokens, completion_tokens, reasoning_tokens, duration_ms, outcome)
+               VALUES ($1, $2, $3, 'WORKFLOW_DRAFT', 'openai-compatible', 'deepseek-v4-pro', 2, 1, 1, 0, 1, 0, 1, 'OK')`,
+              [tenant.tenantId, id, tenant.userId],
+            ),
+          ),
+        ),
+      ).toBe(SqlState.checkViolation);
     });
   });
 });

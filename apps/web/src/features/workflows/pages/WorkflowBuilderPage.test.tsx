@@ -498,6 +498,13 @@ describe('«Crear con IA» in the builder', () => {
     expect(within(dialog).getByRole('textbox', { name: /Descripción del proceso/ })).toBeInTheDocument();
   });
 
+  it('says a request nobody took in time expired', async () => {
+    renderRoute(url, { handlers: aiApi([job('FAILED', { errorCode: 'QUEUE_EXPIRED', completedAt: at })]) });
+    const dialog = await openDialog();
+    await describeProcess(dialog);
+    expect(await within(dialog).findByText('El asistente no alcanzó a atender la solicitud. Inténtalo de nuevo más tarde.')).toBeInTheDocument();
+  });
+
   it('explains a refused request, like the daily limit', async () => {
     const refuse: FakeHandler = () => {
       throw new ApiError({ status: 422, code: 'AI_DAILY_LIMIT_REACHED', message: 'x', details: { resetsAt: '2026-10-22T05:00:00.000Z' } });

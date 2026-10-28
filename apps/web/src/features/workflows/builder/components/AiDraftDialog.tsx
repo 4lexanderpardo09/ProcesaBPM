@@ -12,7 +12,7 @@ const REQUEST_ERRORS = ['AI_DAILY_LIMIT_REACHED', 'AI_JOB_IN_PROGRESS', 'STALE_R
 type RequestErrorCode = (typeof REQUEST_ERRORS)[number];
 const isRequestError = (code: string): code is RequestErrorCode => (REQUEST_ERRORS as readonly string[]).includes(code);
 /** Why a request ended without a draft (`ai_jobs.error_code`). */
-const JOB_ERRORS = ['AI_DRAFT_INVALID', 'AI_PROVIDER_FAILED', 'AI_NOT_CONFIGURED', 'DRAFT_CHANGED', 'DRAFT_GONE', 'AI_DISABLED', 'LEASE_EXPIRED'] as const;
+const JOB_ERRORS = ['AI_DRAFT_INVALID', 'AI_PROVIDER_FAILED', 'AI_NOT_CONFIGURED', 'DRAFT_CHANGED', 'DRAFT_GONE', 'AI_DISABLED', 'LEASE_EXPIRED', 'QUEUE_EXPIRED'] as const;
 type JobErrorCode = (typeof JOB_ERRORS)[number] | 'UNKNOWN';
 const jobErrorOf = (code: string | null | undefined): JobErrorCode => ((JOB_ERRORS as readonly string[]).includes(code ?? '') ? (code as JobErrorCode) : 'UNKNOWN');
 

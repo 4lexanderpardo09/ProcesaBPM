@@ -2,12 +2,13 @@ import type { INestApplication } from '@nestjs/common';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { TestDatabase } from '@procesabpm/db/testing/database';
 import { AI_NOTICE_VERSION, type VersionDetailResponse, type WorkflowDraftSpec } from '@procesabpm/shared';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { advanceSpec } from '../../../../packages/shared/src/workflow/draft-spec/test-fixtures.js';
-import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
+import { JsonLogger, LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { LlmCallError, LlmProvider, type LlmRequest, type LlmResult } from '../../src/infrastructure/llm/llm-provider.js';
 import { WorkflowDraftJob } from '../../src/modules/ai-assistant/application/workflow-draft.job.js';
 import type { AiJobClaim } from '../../src/modules/ai-assistant/data/ai-job-claims.repository.js';
+import { AiJobWorkRepository } from '../../src/modules/ai-assistant/data/ai-job-work.repository.js';
 import { WorkerModule } from '../../src/worker.module.js';
 import { adminOf, type ApiClient, connectTestDatabase } from '../support/admin-api.js';
 import { createTestApp } from '../support/create-test-app.js';
@@ -24,9 +25,12 @@ class ScriptedProvider extends LlmProvider {
   readonly model = 'deepseek-v4-pro';
   script: Array<WorkflowDraftSpec | LlmCallError> = [];
   readonly requests: LlmRequest[] = [];
+  /** Runs while a call is in flight (e.g. the request expires meanwhile). */
+  duringCall: (() => Promise<void>) | undefined;
 
   async complete(request: LlmRequest): Promise<LlmResult> {
     this.requests.push(request);
+    await this.duringCall?.();
     const next = this.script.shift();
     if (next === undefined) throw new Error('no scripted answer left');
     if (next instanceof LlmCallError) throw next;
@@ -63,9 +67,10 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     );
     return { tenantId, jobId, claimToken: rows[0]!.claim_token, attempt: 1 };
   }
-  const runJob = async (org: { tenant: { tenantId: string }; jobId: string }, script: ScriptedProvider['script']) => {
+  const runJob = async (org: { tenant: { tenantId: string }; jobId: string }, script: ScriptedProvider['script'], duringCall?: () => Promise<void>) => {
     provider.script = [...script];
     provider.requests.length = 0;
+    provider.duringCall = duringCall;
     return worker.get(WorkflowDraftJob).run(await claim(org.tenant.tenantId, org.jobId));
   };
   const job = async (admin: ApiClient, jobId: string) => (await admin.get(`/ai-jobs/${jobId}`).expect(200)).body;
@@ -137,5 +142,34 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     expect(await ledger(turnedOff.jobId)).toEqual([]);
     expect(provider.requests).toEqual([]);
     expect(await input(turnedOff.jobId)).toBeNull();
+  });
+
+  it('records a paid call that was in flight when the request expired, and leaves the draft alone', async () => {
+    const org = await organization();
+    const expire = async () => {
+      await db.owner.query(`UPDATE ai_jobs SET status = 'FAILED', error_code = 'LEASE_EXPIRED', claim_token = NULL, lease_until = NULL, input = NULL, completed_at = now() WHERE id = $1`, [org.jobId]);
+    };
+    expect(await runJob(org, [advanceSpec()], expire)).toBe('interrupted');
+    expect(await job(org.admin, org.jobId)).toMatchObject({ status: 'FAILED', errorCode: 'LEASE_EXPIRED' });
+    expect(await ledger(org.jobId)).toEqual([{ round: 1, outcome: 'OK', prompt_tokens: 3500, completion_tokens: 9000, reasoning_tokens: 6500, error_code: null, model: 'deepseek-v4-pro' }]);
+    expect(((await org.admin.get(org.base).expect(200)).body as VersionDetailResponse).version.revision).toBe(0);
+  });
+
+  it('logs the token counts of a call the ledger refused, without its content, and still finishes the request', async () => {
+    const org = await organization();
+    const refused = vi.spyOn(worker.get(AiJobWorkRepository), 'recordUsage').mockRejectedValueOnce(new Error('ledger down'));
+    const warned = vi.spyOn(worker.get(JsonLogger), 'warn');
+    let warnings: Array<Parameters<JsonLogger['warn']>> = [];
+    try {
+      expect(await runJob(org, [advanceSpec()])).toBe('succeeded');
+    } finally {
+      warnings = [...warned.mock.calls];
+      refused.mockRestore();
+      warned.mockRestore();
+    }
+    const lost = warnings.find(([message]) => message === 'ai_job.usage_not_recorded');
+    expect(lost?.[1]).toMatchObject({ jobId: org.jobId, round: 1, promptTokens: 3500, completionTokens: 9000, reasoningTokens: 6500, model: 'deepseek-v4-pro' });
+    expect(JSON.stringify(warnings)).not.toContain('anticipo');
+    expect(await ledger(org.jobId)).toEqual([]);
   });
 });

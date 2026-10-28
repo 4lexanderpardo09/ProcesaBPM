@@ -17,7 +17,7 @@ export interface CallRecord {
 export interface DesignHooks {
   /** Before each call (renews the job's lease). `false`: the job is not ours any more, stop. */
   readonly beforeRound: () => Promise<boolean>;
-  /** After each call, answered or not: every call is paid and recorded. */
+  /** After each call, answered or not: every call is paid and recorded. Must not throw: a lost record must not lose the round. */
   readonly afterCall: (call: CallRecord) => Promise<void>;
 }
 
