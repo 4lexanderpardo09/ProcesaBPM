@@ -171,11 +171,20 @@ export function WorkflowBuilder({
     setAnnouncement(t('builder.canvas.arranged'));
     window.setTimeout(() => void flow.fitView({ maxZoom: 1, padding: 0.12, duration: 300 }), 0);
   };
-  // A draft the AI just wrote comes laid out in plain columns: «Ordenar» once, left as an unsaved change.
+  // A draft the AI (or a template) just wrote comes laid out in plain columns: «Ordenar» once and save it, so the
+  // next message to the AI does not wait for a save nobody asked for.
+  const saveArrangement = useRef(false);
   useEffect(() => {
-    if (arrangeOnOpen && !readOnly) arrange();
+    if (!arrangeOnOpen || readOnly) return;
+    saveArrangement.current = true;
+    arrange();
     // Only when the builder opens.
   }, []);
+  useEffect(() => {
+    if (!saveArrangement.current || !dirty) return;
+    saveArrangement.current = false;
+    save.mutate();
+  }, [dirty, save]);
   const navigate = useNavigate();
   // From a version that no longer changes, the way on is the draft: open it, or make one from this version.
   const offerDraft = status !== 'DRAFT' && can('update', 'Workflow');
