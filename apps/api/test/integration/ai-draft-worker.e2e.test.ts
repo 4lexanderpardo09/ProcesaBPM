@@ -100,7 +100,7 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
     expect(await runJob(org, [advanceSpec()])).toBe('succeeded');
 
     const done = await job(org.admin, org.jobId);
-    expect(done).toMatchObject({ status: 'SUCCEEDED', stage: 'WRITING', round: 1, problems: null, errorCode: null, result: { revision: 1, rounds: 1, errors: 0, assumptions: advanceSpec().assumptions } });
+    expect(done).toMatchObject({ status: 'SUCCEEDED', stage: 'WRITING', round: 1, problems: null, errorCode: null, result: { revision: 1, rounds: 1, corrections: 0, errors: 0, assumptions: advanceSpec().assumptions, decisions: advanceSpec().decisions, outline: { steps: 7, approvals: 2, fields: advanceSpec().fields.length, initiators: 0, amountRules: 0 } } });
     const version = (await org.admin.get(org.base).expect(200)).body as VersionDetailResponse;
     expect(version.version.revision).toBe(1);
     expect(version.document.steps).toHaveLength(9);
@@ -126,7 +126,9 @@ describe('«Crear con IA»: the worker turns a request into a draft', () => {
       { stage: 'DESIGNING', round: 1, problems: null },
       { stage: 'DESIGNING', round: 2, problems: null },
     ]);
-    expect((await job(org.admin, org.jobId)).result).toMatchObject({ rounds: 2, errors: 0 });
+    const { result } = await job(org.admin, org.jobId);
+    expect(result).toMatchObject({ rounds: 2, errors: 0 });
+    expect(result!.corrections).toBeGreaterThan(0);
     expect((await ledger(org.jobId)).map((row) => row.round)).toEqual([1, 2]);
     expect(provider.requests[1]!.user).toContain('PEOPLE_BLOCK_WITHOUT_DECISION at step "pago"');
   });

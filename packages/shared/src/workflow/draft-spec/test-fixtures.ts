@@ -43,6 +43,10 @@ export function draftField(step: string, code: string, type: DraftField['type'],
 export function advanceSpec(): WorkflowDraftSpec {
   return {
     assumptions: ['El tope de 5 millones se compara con el total de los gastos.'],
+    decisions: [
+      { topic: 'APPROVALS', text: 'El jefe aprueba primero, como pide la descripción.' },
+      { topic: 'ROUTING', text: 'Los anticipos de más de 5 millones pasan también por gerencia.' },
+    ],
     initiators: [],
     amountRules: [],
     steps: [
@@ -89,6 +93,7 @@ export function advanceSpec(): WorkflowDraftSpec {
 export function travelAdvanceSpec(): WorkflowDraftSpec {
   return {
     assumptions: [],
+    decisions: [],
     steps: [
       draftStep('inicio', 'START', { name: 'Solicitud de anticipo de viaje' }),
       draftStep('gerencia', 'APPROVAL', { name: 'Aprobación de gerencia', assignment: assignment({ mode: 'POSITION', position: 'Gerente general' }) }),

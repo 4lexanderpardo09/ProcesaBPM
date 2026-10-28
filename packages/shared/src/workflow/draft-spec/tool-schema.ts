@@ -4,6 +4,7 @@ import { AMOUNT_RULE_ACTIONS } from '../constants.js';
 import {
   DRAFT_ASSIGNMENT_MODES,
   DRAFT_COLUMN_TYPES,
+  DRAFT_DECISION_TOPICS,
   DRAFT_FIELD_TYPES,
   DRAFT_FORMULA_RESULT_TYPES,
   DRAFT_INITIATOR_KINDS,
@@ -111,5 +112,7 @@ export function buildDraftToolSchema(catalog: DraftCatalog): JsonSchema {
     message: nullable(string),
   });
 
-  return object({ assumptions: array(string), steps: array(step), transitions: array(transition), fields: array(field), initiators: array(initiator), amountRules: array(amountRule) });
+  const decision = object({ topic: enumOf(DRAFT_DECISION_TOPICS), text: string });
+
+  return object({ assumptions: array(string), decisions: array(decision), steps: array(step), transitions: array(transition), fields: array(field), initiators: array(initiator), amountRules: array(amountRule) });
 }

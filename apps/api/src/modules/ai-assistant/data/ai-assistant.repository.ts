@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
-import type { AiDraftResult, AiJobHistoryItem, AiJobResponse, AiJobSummary, AiUsageDay, AiUsageToday } from '@procesabpm/shared';
+import { type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiUsageDay, type AiUsageToday, aiDraftResultSchema } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface NewDraftJob {
@@ -32,7 +32,8 @@ function jobResponse(job: JobRow): AiJobResponse {
     round: job.round,
     problems: job.problems,
     errorCode: job.errorCode,
-    result: job.result as AiDraftResult | null,
+    // Parsed so requests finished before a field existed read with its default.
+    result: job.result === null ? null : aiDraftResultSchema.parse(job.result),
     createdAt: job.createdAt.toISOString(),
     startedAt: iso(job.startedAt),
     completedAt: iso(job.completedAt),
