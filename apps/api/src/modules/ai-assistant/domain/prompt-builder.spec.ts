@@ -15,6 +15,11 @@ describe('buildDraftPrompt', () => {
     for (const entry of [...catalog.positions, ...catalog.groups, ...catalog.approvalTypes]) expect(`${prompt.system}${prompt.user}`).not.toContain(entry.id);
   });
 
+  it('teaches initiators, signature blocks and amount rules', () => {
+    const { system } = buildDraftPrompt(DESCRIPTION, catalog);
+    for (const part of ['- SIGNATURE:', 'initiators', 'amountRules', 'EXTRA_APPROVAL', 'the platform wires it']) expect(system).toContain(part);
+  });
+
   it('says when a list of the catalog is empty', () => {
     expect(buildDraftPrompt(DESCRIPTION, { positions: [], groups: [], approvalTypes: [] }).user).toContain('Positions:\n(none)');
   });
