@@ -1255,38 +1255,73 @@
   font-weight: 600;
 }
 
-/* The diagram the AI has written so far (AiDraftPreview). */
-.aiPreview {
+/* Side panels closed to give the canvas the width (one toggle each; read-only has no palette). */
+.workspace.withoutPalette,
+.workspaceReadOnly {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.workspace.workspaceWide.withoutPalette,
+.workspaceReadOnly.workspaceWide {
+  grid-template-columns: minmax(0, 1fr) min(560px, 45%);
+}
+
+.workspace.withoutInspector,
+.workspace.workspaceWide.withoutInspector {
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.workspace.withoutPalette.withoutInspector,
+.workspace.workspaceWide.withoutPalette.withoutInspector,
+.workspaceReadOnly.withoutInspector,
+.workspaceReadOnly.workspaceWide.withoutInspector {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 1100px) {
+  .workspace.withoutPalette,
+  .workspace.workspaceWide.withoutPalette,
+  .workspaceReadOnly,
+  .workspaceReadOnly.workspaceWide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace.withoutInspector,
+  .workspace.workspaceWide.withoutInspector {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace.withoutPalette,
+  .workspace.withoutInspector,
+  .workspace.workspaceWide.withoutPalette,
+  .workspace.workspaceWide.withoutInspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Over the canvas while it shows what the AI has written so far. */
+.aiBuilding {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-pill);
+  background: var(--accent-50);
+  box-shadow: var(--shadow-sm);
+  color: var(--accent-600);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-.aiPreviewCanvas {
-  height: 220px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
+/* Closed with its toggle: `hidden` loses against the panel's own display. */
+.inspector[hidden] {
+  display: none;
 }
-
-.aiPreviewNode {
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--block-step);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: var(--shadow-xs);
-  color: var(--ink);
-  font-size: 12px;
-  line-height: 1.3;
-  text-align: left;
-}
-
-.aiPreview_START { border-left-color: var(--block-start); }
-.aiPreview_END { border-left-color: var(--block-end); }
-.aiPreview_APPROVAL { border-left-color: var(--block-approval); }
-.aiPreview_SIGNATURE { border-left-color: var(--block-decision); }
-.aiPreview_CONDITION { border-left-color: var(--block-condition); }
-.aiPreview_WAIT { border-left-color: var(--block-wait); }
-.aiPreview_NOTIFICATION { border-left-color: var(--block-notification); }

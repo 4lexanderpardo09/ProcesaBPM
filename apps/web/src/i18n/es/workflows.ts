@@ -398,9 +398,9 @@ export const workflows = {
       tokens_other: '{{formatted}} tokens',
       ready: 'La IA actualizó el borrador. Revísalo antes de publicar: en el panel de IA está lo que decidió y lo que supuso.',
       preview: {
-        caption_one: 'Así va quedando el flujo: {{count}} bloque',
-        caption_other: 'Así va quedando el flujo: {{count}} bloques',
-        listLabel: 'Bloques que la IA lleva escritos',
+        banner_one: 'La IA está armando el flujo… {{count}} bloque',
+        banner_other: 'La IA está armando el flujo… {{count}} bloques',
+        onCanvas: 'Míralo armarse en el lienzo.',
       },
       summary: {
         steps_one: '{{count}} paso',
@@ -615,6 +615,8 @@ export const workflows = {
       miniMap: 'Minimapa del flujo',
       fullScreen: 'Pantalla completa',
       exitFullScreen: 'Salir de pantalla completa',
+      paletteToggle: 'Bloques',
+      inspectorToggle: 'Propiedades',
     },
     sections: { label: 'Secciones del bloque', foldAll: 'Plegar todas', goTo: 'Ir a {{title}}', unfoldAll: 'Desplegar todas' },
     tabs: {

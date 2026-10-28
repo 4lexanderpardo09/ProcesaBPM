@@ -75,6 +75,30 @@ function api(initial: WorkflowVersionDocument = startingDoc(), options: { status
 const outline = () => screen.getByRole('navigation', { name: 'Bloques del flujo' });
 
 describe('workflow builder', () => {
+  it('closes the block palette and «Propiedades» to give the canvas the width, and remembers it in this browser', async () => {
+    onTestFinished(() => window.localStorage.clear());
+    const doc = startingDoc();
+    const first = renderRoute(url, { handlers: api(doc) });
+    await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
+    expect(screen.getByRole('navigation', { name: 'Bloques para agregar' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bloques' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Propiedades' }));
+    expect(screen.queryByRole('navigation', { name: 'Bloques para agregar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Propiedades' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bloques' })).toHaveAttribute('aria-pressed', 'false');
+
+    first.unmount();
+    renderRoute(url, { handlers: api(doc) });
+    await screen.findByRole('heading', { level: 1, name: 'Confirmación de pagos' });
+    expect(screen.queryByRole('navigation', { name: 'Bloques para agregar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Propiedades' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Bloques' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Propiedades' }));
+    expect(screen.getByRole('navigation', { name: 'Bloques para agregar' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Propiedades' })).toBeInTheDocument();
+  });
+
   it('opens blocks as tabs over the inspector, goes back and closes them, and folds sections', async () => {
     const PAY = id(43);
     const doc: WorkflowVersionDocument = {
@@ -641,7 +665,7 @@ describe('«Crear con IA» in the builder', () => {
     expect(second).toHaveTextContent('9.000 tokens');
   });
 
-  it('draws the diagram the AI has written so far while it designs, and nothing before it has a block', async () => {
+  it('builds the diagram on the canvas while the AI designs, and gives the draft back when the request fails', async () => {
     const preview = {
       steps: [
         { ref: 'inicio', type: 'START', name: 'Solicitud de anticipo' },
@@ -654,13 +678,51 @@ describe('«Crear con IA» in the builder', () => {
     renderRoute(url, { handlers: aiApi(state), realtime: realtime.client });
     const region = await openPanel();
     await within(region).findAllByText('La IA está diseñando el flujo (ronda 1)…');
-    expect(within(region).queryByText(/Así va quedando el flujo/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/La IA está armando el flujo/)).not.toBeInTheDocument();
 
     state.history = [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1, preview })];
     realtime.fire();
-    expect(await within(region).findByText('Así va quedando el flujo: 2 bloques')).toBeInTheDocument();
-    const blocks = within(region).getByRole('list', { name: 'Bloques que la IA lleva escritos' });
-    expect(within(blocks).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Inicio: Solicitud de anticipo', 'Aprobación: Aprobación del jefe']);
+    expect(await screen.findByText('La IA está armando el flujo… 2 bloques')).toBeInTheDocument();
+    expect(screen.getByText('Solicitud de anticipo')).toBeInTheDocument();
+    expect(screen.getByText('Aprobación del jefe')).toBeInTheDocument();
+    expect(within(region).getByText('Míralo armarse en el lienzo.')).toBeInTheDocument();
+
+    state.history = [job('FAILED', { errorCode: 'AI_DRAFT_INVALID', startedAt: at, completedAt: at })];
+    realtime.fire();
+    await vi.waitFor(() => expect(screen.queryByText(/La IA está armando el flujo/)).not.toBeInTheDocument());
+    expect(screen.queryByText('Solicitud de anticipo')).not.toBeInTheDocument();
+  });
+
+  it('stays in full screen when the draft from the AI arrives (the builder starts over on it)', async () => {
+    let holder: Element | null = null;
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => holder });
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value(this: HTMLElement) {
+        holder = this;
+        document.dispatchEvent(new Event('fullscreenchange'));
+        return Promise.resolve();
+      },
+    });
+    onTestFinished(() => {
+      Reflect.deleteProperty(document, 'fullscreenElement');
+      Reflect.deleteProperty(HTMLElement.prototype, 'requestFullscreen');
+    });
+    const done = { revision: 1, assumptions: [], decisions: [], outline: null, corrections: 0, rounds: 1, errors: 0, warnings: 0 };
+    const state = { history: [job('RUNNING', { startedAt: at, stage: 'DESIGNING', round: 1 })] };
+    const realtime = fakeRealtime();
+    renderRoute(url, { handlers: aiApi(state, undefined, aiDraftDoc()), realtime: realtime.client });
+    await openPanel();
+    await userEvent.click(screen.getByRole('button', { name: 'Pantalla completa' }));
+    expect(screen.getByRole('button', { name: 'Salir de pantalla completa' })).toBeInTheDocument();
+
+    state.history = [job('SUCCEEDED', { completedAt: at, result: done })];
+    realtime.fire();
+    expect(await screen.findByText(/La IA armó el borrador|La IA actualizó el borrador/)).toBeInTheDocument();
+    expect(holder).not.toBeNull();
+    expect(holder!.isConnected).toBe(true);
+    expect(holder!.contains(screen.getByRole('heading', { level: 1 }))).toBe(true);
+    expect(screen.getByRole('button', { name: 'Salir de pantalla completa' })).toBeInTheDocument();
   });
 
   it('cancels the request in progress', async () => {
