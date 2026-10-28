@@ -1241,3 +1241,16 @@
   justify-content: space-between;
   gap: var(--space-2);
 }
+
+.aiComposerButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Whether a turn asked for a new draft or a change to the current one. */
+.aiKind {
+  color: var(--slate);
+  font-weight: 600;
+}
