@@ -25,6 +25,7 @@ export const RealtimeServerEvent = {
   TicketChanged: 'ticket.changed',
   TicketDocumentGenerated: 'ticket.document_generated',
   TicketAccessLost: 'ticket.access_lost',
+  AiJobChanged: 'ai_job.changed',
   SyncRequired: 'sync.required',
   AuthRequired: 'auth.required',
   SessionEnded: 'session.ended',
@@ -33,6 +34,8 @@ export const RealtimeServerEvent = {
 export const RealtimeClientEvent = {
   TicketSubscribe: 'ticket.subscribe',
   TicketUnsubscribe: 'ticket.unsubscribe',
+  AiDraftSubscribe: 'ai_draft.subscribe',
+  AiDraftUnsubscribe: 'ai_draft.unsubscribe',
   AuthRefresh: 'auth.refresh',
 } as const;
 
@@ -95,6 +98,11 @@ export interface TicketDocumentGeneratedPayload {
 export interface TicketAccessLostPayload {
   readonly ticketId: string;
 }
+/** A request of a followed draft was made, moved or ended: ids only, the client reads it again. */
+export interface AiJobChangedPayload {
+  readonly jobId: string;
+  readonly versionId: string;
+}
 export interface SyncRequiredPayload {
   readonly reason: 'SIGNALS_MAY_BE_LOST';
   readonly delayMs: number;
@@ -111,9 +119,13 @@ const MAX_TOKEN_LENGTH = 4096;
 
 export const ticketSubscribeSchema = z.object({ ticketId: uuidSchema }).strict();
 export type TicketSubscribeBody = z.infer<typeof ticketSubscribeSchema>;
+/** Follows the AI requests of a workflow draft (the builder's «Crear con IA» panel). */
+export const aiDraftSubscribeSchema = z.object({ versionId: uuidSchema }).strict();
+export type AiDraftSubscribeBody = z.infer<typeof aiDraftSubscribeSchema>;
 export const authRefreshSchema = z.object({ token: z.string().min(1).max(MAX_TOKEN_LENGTH) }).strict();
 export type AuthRefreshBody = z.infer<typeof authRefreshSchema>;
 
 export type SubscribeAck = { readonly ok: true; readonly summary: TicketRealtimeSummary } | { readonly ok: false; readonly code: AckErrorCode };
 export type UnsubscribeAck = { readonly ok: true };
+export type AiDraftSubscribeAck = { readonly ok: true } | { readonly ok: false; readonly code: AckErrorCode };
 export type AuthRefreshAck = { readonly ok: true; readonly expiresAt: string } | { readonly ok: false; readonly code: AckErrorCode };
