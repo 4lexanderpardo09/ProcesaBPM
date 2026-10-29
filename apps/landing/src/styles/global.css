@@ -303,3 +303,8 @@ footer .link-btn[hidden] { display: none; }
 .faq details[open] summary::after { content: "–"; }
 .faq details p { color: var(--slate); padding-bottom: 22px; max-width: 46em; }
 @media (max-width: 860px) { .faq .wrap { grid-template-columns: 1fr; padding-block: 72px; } }
+
+/* Legal documents (privacy notice, data-processing policy, terms, data-transfer agreement)
+   read wider than a blog post: more room for their tables and defined terms. */
+.article.legal .wrap { max-width: 920px; }
+.article.legal .legal-draft { max-width: none; }

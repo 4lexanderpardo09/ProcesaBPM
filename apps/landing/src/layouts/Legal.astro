@@ -10,7 +10,7 @@ const { frontmatter } = Astro.props;
 ---
 
 <Base title={frontmatter.title} description={frontmatter.description}>
-  <main class="plain article">
+  <main class="plain article legal">
     <article class="wrap">
       <h1>{frontmatter.title}</h1>
       <p class="meta">Versión {frontmatter.version} · Actualizada el {frontmatter.updated}</p>
