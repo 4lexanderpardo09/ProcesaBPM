@@ -1,0 +1,11 @@
+# Runs procesabpm-backup.service every day at 03:30 in Bogotá, and at the next boot if the server was off then.
+[Unit]
+Description=Daily ProcesaBPM database backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 America/Bogota
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

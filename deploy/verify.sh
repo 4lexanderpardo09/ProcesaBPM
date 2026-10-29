@@ -19,6 +19,8 @@
 #   MAILPIT_URL      the mail catcher, as seen from the compose network (default http://mailpit:8025)
 #   SMOKE_PLAN_CODE  plan of the smoke organization            (default professional)
 #   TEST_IMAGE       tag of the unit test image                (default procesabpm-test-unit)
+#   BACKUP_MARKER    the marker the daily backup leaves; older than BACKUP_MAX_AGE_HOURS (26) only warns
+#                    (default /var/lib/procesabpm-backup/last-success)
 #   WEB_URL          where the web answers; the web container from the host by default. Use the public https address to
 #                    test the reverse proxy too                (default http://127.0.0.1:8080)
 set -uo pipefail
@@ -29,6 +31,8 @@ BASE_URL=${BASE_URL:-http://api:3000}
 WEB_URL=${WEB_URL:-http://127.0.0.1:8080}
 MAILPIT_URL=${MAILPIT_URL:-http://mailpit:8025}
 TEST_IMAGE=${TEST_IMAGE:-procesabpm-test-unit}
+BACKUP_MARKER=${BACKUP_MARKER:-/var/lib/procesabpm-backup/last-success}
+BACKUP_MAX_AGE_HOURS=${BACKUP_MAX_AGE_HOURS:-26}
 run_unit=1
 run_smoke=1
 for argument in "$@"; do
@@ -96,6 +100,20 @@ if [ "$run_smoke" -eq 1 ]; then
   bundle=$(grep -o '/assets/[^"]*\.js' <<<"$index" | head -n 1)
   [ -n "$bundle" ] && curl -fsS --max-time 10 -o /dev/null "$WEB_URL$bundle"
   result "the app's bundle${bundle:+ ($bundle)}" $?
+fi
+
+section "Database backup"
+# The server cannot read the bucket (its role only writes), so the backup leaves a marker after each upload. A stale or
+# missing marker warns without failing the verification: the deployment itself may be fine.
+if [ ! -f "$BACKUP_MARKER" ]; then
+  echo "WARN  no backup recorded yet ($BACKUP_MARKER): see docs/operations/backups.md"
+else
+  age_hours=$(( ($(date +%s) - $(stat -c %Y "$BACKUP_MARKER")) / 3600 ))
+  if [ "$age_hours" -ge "$BACKUP_MAX_AGE_HOURS" ]; then
+    echo "WARN  the newest backup is ${age_hours} h old (more than ${BACKUP_MAX_AGE_HOURS} h): journalctl -u procesabpm-backup.service"
+  else
+    echo "OK    newest backup ${age_hours} h old: $(sed -n 's/^object=//p' "$BACKUP_MARKER")"
+  fi
 fi
 
 section "Disk"
