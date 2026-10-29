@@ -116,6 +116,7 @@ services:
       MFA_ENCRYPTION_KEYS: ${MFA_ENCRYPTION_KEYS:?}   # only the API decrypts the MFA secrets; the worker never gets it
       REALTIME_ALLOWED_ORIGINS: ${REALTIME_ALLOWED_ORIGINS:-${WEB_BASE_URL:?}}   # origins allowed to open a WebSocket (exact, https in production)
       AI_ASSISTANT_AVAILABLE: ${AI_ASSISTANT_AVAILABLE:-false}   # offers «Crear con IA»; each organization still turns it on
+      SES_SNS_TOPIC_ARN: ${SES_SNS_TOPIC_ARN:-}   # SES bounces and complaints (docs/operations/email-bounces.md); empty: endpoint off
       AI_REASONING_MODEL: ${AI_REASONING_MODEL:-deepseek-v4-pro}
       AI_DAILY_JOBS_PER_TENANT: ${AI_DAILY_JOBS_PER_TENANT:-10}
       AI_DAILY_TOKENS_PER_TENANT: ${AI_DAILY_TOKENS_PER_TENANT:-1000000}
