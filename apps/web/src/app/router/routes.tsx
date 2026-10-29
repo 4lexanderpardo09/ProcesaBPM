@@ -6,7 +6,7 @@ import { HomePage } from '@/features/home';
 import { NotificationsPage } from '@/features/notifications';
 import { OrganizationPage } from '@/features/organization';
 import { PeoplePage } from '@/features/people';
-import { AccountsPage, AdminsPage, AiUsagePage, EmailSuppressionsPage, AnnouncementsPage, AuditPage, CountriesPage, OperationsPage, PlansPage, PlatformLayout, SupportVisitScope, TenantPage, TenantsPage } from '@/features/platform';
+import { AccountsPage, AdminsPage, AiUsagePage, DemoRequestsPage, EmailSuppressionsPage, AnnouncementsPage, AuditPage, CountriesPage, OperationsPage, PlansPage, PlatformLayout, SupportVisitScope, TenantPage, TenantsPage } from '@/features/platform';
 import { ProfilePage } from '@/features/profile';
 import { ReportsPage } from '@/features/reports';
 import { SettingsPage } from '@/features/settings';
@@ -92,6 +92,7 @@ export const appRoutes: RouteObject[] = [
       { path: paths.platformCountries, element: <CountriesPage /> },
       { path: paths.platformOperations, element: <OperationsPage /> },
       { path: paths.platformAiUsage, element: <AiUsagePage /> },
+      { path: paths.platformDemoRequests, element: <DemoRequestsPage /> },
       { path: paths.platformEmailSuppressions, element: <EmailSuppressionsPage /> },
       { path: paths.platformAudit, element: <AuditPage /> },
     ],

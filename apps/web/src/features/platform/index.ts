@@ -3,6 +3,7 @@ export { AccountsPage } from './pages/AccountsPage';
 export { AdminsPage } from './pages/AdminsPage';
 export { AiUsagePage } from './pages/AiUsagePage';
 export { EmailSuppressionsPage } from './pages/EmailSuppressionsPage';
+export { DemoRequestsPage } from './pages/DemoRequestsPage';
 export { AnnouncementsPage } from './pages/AnnouncementsPage';
 export { AuditPage } from './pages/AuditPage';
 export { CountriesPage } from './pages/CountriesPage';

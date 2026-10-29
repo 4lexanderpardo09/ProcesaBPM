@@ -9,6 +9,7 @@ import { usePlatformSession, usePlatformSessionState } from '../session/Platform
 import styles from './PlatformLayout.module.css';
 
 const SECTIONS = [
+  [paths.platformDemoRequests, 'demoRequests'],
   [paths.platformAnnouncements, 'announcements'],
   [paths.platformPlans, 'plans'],
   [paths.platformAdmins, 'admins'],
