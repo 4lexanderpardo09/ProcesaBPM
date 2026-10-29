@@ -44,4 +44,20 @@ describe('renderEmail', () => {
     const { action: _action, ...withoutAction } = content;
     expect(renderEmail(withoutAction).html).not.toContain('<a ');
   });
+  it('escapes the label, facts, note and closing lines too, and lists them in the text version', () => {
+    const rich = { ...content, overline: `Aviso ${ATTACK}`, facts: [{ label: 'IP', value: ATTACK, mono: true }], note: `Nota ${ATTACK}`, closing: [`Cierre ${ATTACK}`] };
+    const { html: document, text } = renderEmail(rich);
+    expect(document).not.toContain('<img');
+    expect(document).not.toContain('<script');
+    expect(text).toContain(`IP: ${ATTACK}`);
+    expect(text).toContain(`Nota ${ATTACK}`);
+    expect(text).toContain(`Cierre ${ATTACK}`);
+    expect(text.indexOf('Nota')).toBeLessThan(text.indexOf('Abrir:'));
+    expect(text.indexOf('Abrir:')).toBeLessThan(text.indexOf('Cierre'));
+  });
+  it('colours the note by tone and shows the brand without images', () => {
+    expect(renderEmail({ ...content, note: 'x', tone: 'danger' }).html).toContain('#be123c');
+    expect(renderEmail({ ...content, note: 'x' }).html).toContain('#075985');
+    expect(renderEmail(content).html).toContain('Procesa<span');
+  });
 });

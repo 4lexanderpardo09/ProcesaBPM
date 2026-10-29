@@ -99,7 +99,7 @@ describe('NOTIFICATION blocks: who is told, with which text, through which chann
       const message = mail.mailer.to(await emailOf(member)).find((candidate) => candidate.subject.startsWith('Ticket #') && candidate.text.includes('Compra de sillas'));
       expect(message, 'an e-mail').toBeDefined();
       expect(message!.subject).toBe(notice!.title);
-      expect(message!.html).toContain('<p style="margin:0 0 16px">Asunto: Compra de sillas</p>');
+      expect(message!.html).toMatch(/<p style="[^"]*">Asunto: Compra de sillas<\/p>/);
     }
     expect(await noticesOf(groupBlind, ticket.id)).toEqual([]);
     expect(mail.mailer.to(await emailOf(groupBlind)).some((candidate) => candidate.text.includes('Compra de sillas'))).toBe(false);
@@ -145,7 +145,7 @@ describe('NOTIFICATION blocks: who is told, with which text, through which chann
     const [notice] = await noticesOf(requester, ticket.id);
     expect(notice!.body).toBe('El cambio de turno quedó confirmado: Turno del domingo.\n\nGracias & buen día');
     const message = mail.mailer.to(await emailOf(requester)).find((candidate) => candidate.text.includes('Turno del domingo'));
-    expect(message!.html).toContain('<p style="margin:0 0 16px">El cambio de turno quedó confirmado: Turno del domingo.</p>');
+    expect(message!.html).toMatch(/<p style="[^"]*">El cambio de turno quedó confirmado: Turno del domingo.<\/p>/);
     expect(message!.html).not.toContain('&lt;p&gt;');
     expect(message!.text).not.toContain('<p>');
   });

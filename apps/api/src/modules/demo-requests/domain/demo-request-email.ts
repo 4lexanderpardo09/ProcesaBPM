@@ -17,16 +17,19 @@ export function renderDemoRequestEmail(input: DemoRequestMailInput): { subject: 
   return {
     subject: es.subject,
     ...renderEmail({
+      overline: es.overline,
       title: es.title,
       greeting: es.greeting,
-      paragraphs: [
-        es.who(input.fullName, input.company),
-        es.contact(input.email),
-        es.teamSize(es.teamSizes[input.teamSize]),
-        input.process === null ? es.noProcess : es.process(input.process),
-        es.when(when),
-        es.reply,
+      paragraphs: [es.who(input.fullName, input.company)],
+      facts: [
+        { label: es.labels.name, value: input.fullName },
+        { label: es.labels.company, value: input.company },
+        { label: es.labels.email, value: input.email },
+        { label: es.labels.teamSize, value: es.teamSizes[input.teamSize] },
+        { label: es.labels.process, value: input.process ?? es.noProcess },
+        { label: es.labels.sentAt, value: es.when(when) },
       ],
+      note: es.reply,
       footer: es.footer,
     }),
   };

@@ -1,4 +1,4 @@
-import { renderEmail } from '../../../infrastructure/mail/layout.js';
+import { type EmailFact, renderEmail } from '../../../infrastructure/mail/layout.js';
 import type { MemberSecurityNoticeKind, SecurityNoticeKind } from '../../../infrastructure/outbox/platform-event-types.js';
 import { authMailEs as es } from '../i18n/es.js';
 import { LOGIN_LOCKOUT, MFA_POLICY } from './auth-policy.js';
@@ -17,7 +17,16 @@ export function renderPasswordResetEmail(input: { firstName: string; url: string
   const t = es.passwordReset;
   return {
     subject: t.subject,
-    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.request, t.validity(PASSWORD_RESET_VALIDITY_MINUTES), t.ignore], action: { label: t.action, url: input.url }, footer: es.footerAutomatic }),
+    ...renderEmail({
+      overline: es.overline.account,
+      title: t.title,
+      greeting: t.greeting(input.firstName),
+      paragraphs: [t.request],
+      note: t.validity(PASSWORD_RESET_VALIDITY_MINUTES),
+      action: { label: t.action, url: input.url },
+      closing: [t.ignore],
+      footer: es.footerAutomatic,
+    }),
   };
 }
 
@@ -25,7 +34,17 @@ export function renderInvitationEmail(input: { firstName: string; organization: 
   const t = es.invitation;
   return {
     subject: t.subject,
-    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.invited(input.organization), t.validity(INVITATION_VALIDITY_DAYS), t.ignore], action: { label: t.action, url: input.url }, footer: es.footerAutomatic }),
+    ...renderEmail({
+      overline: es.overline.invitation,
+      title: t.title,
+      greeting: t.greeting(input.firstName),
+      paragraphs: [t.invited(input.organization)],
+      facts: [{ label: es.facts.organization, value: input.organization }],
+      note: t.validity(INVITATION_VALIDITY_DAYS),
+      action: { label: t.action, url: input.url },
+      closing: [t.ignore],
+      footer: es.footerAutomatic,
+    }),
   };
 }
 
@@ -33,7 +52,16 @@ export function renderPlatformAdminInvitationEmail(input: { firstName: string; u
   const t = es.platformAdminInvitation;
   return {
     subject: t.subject,
-    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.invited, t.validity(PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS), t.ignore], action: { label: t.action, url: input.url }, footer: es.footerAutomatic }),
+    ...renderEmail({
+      overline: es.overline.invitation,
+      title: t.title,
+      greeting: t.greeting(input.firstName),
+      paragraphs: [t.invited],
+      note: t.validity(PLATFORM_ADMIN_INVITATION_VALIDITY_DAYS),
+      action: { label: t.action, url: input.url },
+      closing: [t.ignore],
+      footer: es.footerAutomatic,
+    }),
   };
 }
 
@@ -43,7 +71,20 @@ export function renderTenantDeletionEmail(input: { firstName: string; organizati
   const date = input.purgeAfter.toLocaleDateString('es-CO', { dateStyle: 'long', timeZone: 'America/Bogota' });
   return {
     subject: t.subject,
-    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.requested(input.organization), t.deadline(date), t.contact], footer: es.footerAutomatic }),
+    ...renderEmail({
+      overline: es.overline.organization,
+      tone: 'danger',
+      title: t.title,
+      greeting: t.greeting(input.firstName),
+      paragraphs: [t.requested(input.organization)],
+      facts: [
+        { label: es.facts.organization, value: input.organization },
+        { label: es.facts.purgeOn, value: date },
+      ],
+      note: t.deadline(date),
+      closing: [t.contact],
+      footer: es.footerAutomatic,
+    }),
   };
 }
 
@@ -53,7 +94,20 @@ export function renderTenantPurgeReminderEmail(input: { firstName: string; organ
   const date = input.purgeAfter.toLocaleDateString('es-CO', { dateStyle: 'long', timeZone: 'America/Bogota' });
   return {
     subject: t.subject(input.daysLeft),
-    ...renderEmail({ title: t.title, greeting: t.greeting(input.firstName), paragraphs: [t.reminder(input.organization, date), t.lastChance, t.contact], footer: es.footerAutomatic }),
+    ...renderEmail({
+      overline: es.overline.organization,
+      tone: 'danger',
+      title: t.title,
+      greeting: t.greeting(input.firstName),
+      paragraphs: [t.reminder(input.organization, date)],
+      facts: [
+        { label: es.facts.organization, value: input.organization },
+        { label: es.facts.purgeOn, value: date },
+      ],
+      note: t.lastChance,
+      closing: [t.contact],
+      footer: es.footerAutomatic,
+    }),
   };
 }
 
@@ -74,12 +128,23 @@ export interface SecurityNoticeInput {
 /** Says what happened, when and (for a sign-in) from where. No token and no secret. */
 export function renderSecurityNoticeEmail(input: SecurityNoticeInput): RenderedMail {
   const t = es.securityNotice;
-  const paragraphs = [describeSecurityNotice(input.kind), t.when(formatNoticeDate(input.occurredAt, input.timeZone))];
-  if (input.kind === 'PLATFORM_ADMIN_SIGN_IN') paragraphs.push(t.origin(input.origin?.ipAddress ?? t.unknown, input.origin?.userAgent ?? t.unknown));
-  paragraphs.push(t.notYou);
+  const facts: EmailFact[] = [{ label: es.facts.when, value: formatNoticeDate(input.occurredAt, input.timeZone) }];
+  if (input.kind === 'PLATFORM_ADMIN_SIGN_IN') {
+    facts.push({ label: es.facts.ipAddress, value: input.origin?.ipAddress ?? t.unknown, mono: true }, { label: es.facts.browser, value: input.origin?.userAgent ?? t.unknown });
+  }
   return {
     subject: t.subject[input.kind],
-    ...renderEmail({ title: t.subject[input.kind], greeting: t.greeting(input.firstName), paragraphs, action: { label: t.action, url: input.resetUrl }, footer: es.footerAutomatic }),
+    ...renderEmail({
+      overline: es.overline.security,
+      tone: 'warning',
+      title: t.subject[input.kind],
+      greeting: t.greeting(input.firstName),
+      paragraphs: [describeSecurityNotice(input.kind)],
+      facts,
+      note: t.notYou,
+      action: { label: t.action, url: input.resetUrl },
+      footer: es.footerAutomatic,
+    }),
   };
 }
 
@@ -95,10 +160,22 @@ export interface MemberSecurityNoticeInput {
 /** Tells an owner that support changed the security of one of the organization's members. No link: nothing to act on. */
 export function renderMemberSecurityNoticeEmail(input: MemberSecurityNoticeInput): RenderedMail {
   const t = es.memberSecurityNotice;
-  const paragraphs = [t.happened[input.kind](input.memberName, input.organization), es.securityNotice.when(formatNoticeDate(input.occurredAt, input.timeZone)), t.audit, t.unexpected];
   return {
     subject: t.subject[input.kind],
-    ...renderEmail({ title: t.subject[input.kind], greeting: t.greeting(input.firstName), paragraphs, footer: es.footerAutomatic }),
+    ...renderEmail({
+      overline: es.overline.security,
+      tone: 'warning',
+      title: t.subject[input.kind],
+      greeting: t.greeting(input.firstName),
+      paragraphs: [t.happened[input.kind](input.memberName, input.organization), t.audit],
+      facts: [
+        { label: es.facts.member, value: input.memberName },
+        { label: es.facts.organization, value: input.organization },
+        { label: es.facts.when, value: formatNoticeDate(input.occurredAt, input.timeZone) },
+      ],
+      closing: [t.unexpected],
+      footer: es.footerAutomatic,
+    }),
   };
 }
 

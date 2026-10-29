@@ -62,9 +62,14 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
     if (stepId !== undefined && written === undefined) return null;
     const subject = singleLine(written?.subject ?? es.titles[notificationType](ticket.number));
     const content = renderEmail({
+      overline: es.email.overline(ticket.number),
       title: subject,
       greeting: es.email.greeting(recipient.firstName),
-      paragraphs: written === undefined ? [es.email.ticketLine(ticket.title)] : paragraphsOf(written.body),
+      paragraphs: written === undefined ? [] : paragraphsOf(written.body),
+      facts: [
+        { label: es.email.ticketLabel, value: `#${ticket.number}`, mono: true },
+        { label: es.email.subjectLabel, value: ticket.title },
+      ],
       action: { label: es.email.action, url: this.links.ticket(tenantId, ticketId) },
       footer: es.email.why(tenant.name),
     });
