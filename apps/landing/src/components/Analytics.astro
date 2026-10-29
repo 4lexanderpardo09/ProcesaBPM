@@ -9,12 +9,12 @@ const measurementId = import.meta.env.PUBLIC_GA_ID ?? '';
 {
   measurementId !== '' && (
     <>
-      <div class="consent" id="consent" data-ga={measurementId} role="dialog" aria-label="Cookies de medición" hidden>
+      <div class="cookie-banner" id="consent" data-ga={measurementId} role="dialog" aria-label="Cookies de medición" hidden>
         <p>
           Usamos Google Analytics para saber cuántas personas visitan el sitio y qué páginas leen. ¿Lo permites?{' '}
           <a href="/privacidad#medicion">Más información</a>
         </p>
-        <div class="consent-actions">
+        <div class="cookie-banner-actions">
           <button class="btn btn-line" type="button" data-choice="denied">Rechazar</button>
           <button class="btn btn-primary" type="button" data-choice="granted">Aceptar</button>
         </div>

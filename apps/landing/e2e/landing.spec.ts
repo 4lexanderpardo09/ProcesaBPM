@@ -124,6 +124,13 @@ test.describe('search engines and AI assistants', () => {
     await expect(page.getByText('sin instalar nada')).toBeVisible();
   });
 
+  test('the privacy checkbox stays inside the demo form', async ({ page }) => {
+    await page.goto('/#contacto');
+    const checkbox = page.locator('label[for="f-consent"]');
+    expect(await checkbox.evaluate((label) => getComputedStyle(label).position)).toBe('static');
+    expect(await page.locator('.form').evaluate((form, label) => form.contains(label), await checkbox.elementHandle())).toBe(true);
+  });
+
   test('without a measurement id there is no analytics and no banner', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#consent')).toHaveCount(0);
@@ -141,5 +148,16 @@ test.describe('analytics consent', () => {
     await expect(page.locator('#consent')).toBeHidden();
     await page.reload();
     await expect(page.locator('#consent')).toBeHidden();
+  });
+
+  test('the footer reopens the banner to change the choice', async ({ page }) => {
+    await page.goto('/');
+    test.skip((await page.locator('#consent').count()) === 0, 'built without PUBLIC_GA_ID');
+    await page.getByRole('button', { name: 'Rechazar' }).click();
+    await page.getByRole('button', { name: 'Cookies' }).click();
+    await expect(page.locator('#consent')).toBeVisible();
+    await page.getByRole('button', { name: 'Aceptar' }).click();
+    await expect(page.locator('#consent')).toBeHidden();
+    await expect(page.locator('script[src*="googletagmanager"]')).toHaveCount(1);
   });
 });
