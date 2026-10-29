@@ -9,6 +9,7 @@ export * from './dashboard/index.js';
 export * from './datasets/index.js';
 export * from './data-exports/index.js';
 export * from './demo-requests/index.js';
+export * from './email-suppressions/index.js';
 export * from './documents/index.js';
 export * from './exports/index.js';
 export * from './files/index.js';

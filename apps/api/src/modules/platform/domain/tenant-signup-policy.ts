@@ -22,6 +22,7 @@ export const PLATFORM_AUDIT_ACTIONS = {
   adminRevoked: 'platform_admin.revoked',
   userLookedUp: 'user.looked_up',
   demoRequestMarked: 'demo_request.marked',
+  emailSuppressionRemoved: 'email_suppression.removed',
   /** Written by `platform_reset_user_mfa` itself, in the same transaction as the reset. */
   userMfaReset: 'user.mfa_reset',
 } as const;

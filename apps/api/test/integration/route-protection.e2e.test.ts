@@ -27,6 +27,7 @@ const PUBLIC_ROUTES = [
   'POST /auth/password-reset/confirm',
   'POST /auth/invitations/accept',
   'POST /public/demo-requests',
+  'POST /public/email-events/ses',
   'GET /announcements/login',
   'GET /test/public-companies',
 ];
@@ -105,6 +106,8 @@ const PLATFORM_ROUTES = [
   'GET /platform/ai-usage',
   'GET /platform/demo-requests',
   'PUT /platform/demo-requests/:id/status',
+  'GET /platform/email-suppressions',
+  'DELETE /platform/email-suppressions/:id',
   'POST /platform/tenants/:id/support-sessions',
   'DELETE /platform/tenants/:id/support-sessions/:sessionId',
   'POST /platform/tenants/:id/deletion',

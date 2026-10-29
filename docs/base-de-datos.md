@@ -702,6 +702,25 @@ Orden en cada entorno:
 
 ## 13. Decisiones y pendientes
 
+### 8.34 Correos bloqueados por SES (migración `20261030000200_email_suppressions`, 2026-10-29, `feat/ses-bounces`; diseño y revisión con Opus)
+- **`email_suppressions`:** de la plataforma, de ningún tenant, porque una dirección puede ser de personas de varias organizaciones.
+  - Columnas: dirección (recortada y en minúsculas, única), motivo `BOUNCE`/`COMPLAINT`, detalle (tipo y subtipo del rebote o tipo de queja, máximo 200), el último `feedbackId`, número de avisos, fecha del primero y del último.
+  - CHECKs de forma.
+  - Se le quitan todos los permisos a `app_runtime` y `app_worker`.
+- **`record_email_suppression(dirección, motivo, detalle, feedbackId)`** (dueño `app_platform`, `SECURITY DEFINER`, ejecutable por `app_runtime` sin sesión):
+  - el API la llama **después** de verificar la firma de SNS;
+  - normaliza la dirección; si no es válida, falla con 22023;
+  - hace un upsert: el mismo `feedbackId` otra vez no cambia nada y responde `false` (SNS entrega al menos una vez); uno nuevo actualiza motivo y detalle y suma un aviso.
+- **`worker_suppressed_email(dirección)`** (dueño `app_platform`, solo `app_worker`): dice si **una** dirección está bloqueada. El worker nunca puede listar las direcciones.
+  - El worker hereda `app_runtime`, así que también puede llamar `record_email_suppression`, pero no leer ni cambiar la tabla.
+- **La consola** (`app_platform`) las lista y borra. Borrar una deja `email_suppression.removed` en `platform_audit_logs`, con el motivo y el número de avisos, sin la dirección.
+- **Pruebas:** `email-suppressions.test.ts` cubre:
+  - normalización y búsqueda sin importar mayúsculas;
+  - repetición y aviso nuevo;
+  - valores inválidos y recorte;
+  - permisos de cada rol;
+  - CHECKs.
+
 ### 13.1 Decididas (2026-09-30)
 Todas las de `analisis.md` §0.1, más las de la revisión de integridad (`revision-bd.md`, **todas aplicadas**).
 

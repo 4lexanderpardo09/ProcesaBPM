@@ -90,6 +90,13 @@ describe('loadApiConfig / loadWorkerConfig', () => {
     });
   });
 
+  it('takes the SES topic of the bounce endpoint only as an SNS topic ARN, and an empty one as none', () => {
+    const arn = 'arn:aws:sns:us-east-1:123456789012:procesabpm-ses-events';
+    expect(loadApiConfig({ ...valid, SES_SNS_TOPIC_ARN: arn }).SES_SNS_TOPIC_ARN).toBe(arn);
+    expect(loadApiConfig({ ...valid, SES_SNS_TOPIC_ARN: '' }).SES_SNS_TOPIC_ARN).toBeUndefined();
+    expect(() => loadApiConfig({ ...valid, SES_SNS_TOPIC_ARN: 'arn:aws:sqs:us-east-1:123456789012:queue' })).toThrow(/SES_SNS_TOPIC_ARN/);
+  });
+
   it.each([
     ['false', false],
     ['1', 1],

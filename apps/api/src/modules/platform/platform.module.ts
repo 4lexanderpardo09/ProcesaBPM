@@ -40,6 +40,9 @@ import { TenantRoleRepository } from './data/tenant-role.repository.js';
 import { PlatformAdminsController } from './http/platform-admins.controller.js';
 import { PlatformAnnouncementsController } from './http/platform-announcements.controller.js';
 import { PlatformDemoRequestsController } from './http/platform-demo-requests.controller.js';
+import { PlatformEmailSuppressionsController } from './http/platform-email-suppressions.controller.js';
+import { EmailSuppressionAdminRepository } from './data/email-suppression-admin.repository.js';
+import { EmailSuppressionAdminService } from './application/email-suppression-admin.service.js';
 import { DemoRequestAdminRepository } from './data/demo-request-admin.repository.js';
 import { DemoRequestAdminService } from './application/demo-request-admin.service.js';
 import { PlatformCatalogController } from './http/platform-catalog.controller.js';
@@ -69,6 +72,7 @@ import { PlatformUsersController } from './http/platform-users.controller.js';
     PlatformDeletionController,
     PlatformUsersController,
     PlatformDemoRequestsController,
+    PlatformEmailSuppressionsController,
   ],
   providers: [
     PlatformOutboxRepository,
@@ -93,6 +97,8 @@ import { PlatformUsersController } from './http/platform-users.controller.js';
     AnnouncementAdminService,
     DemoRequestAdminRepository,
     DemoRequestAdminService,
+    EmailSuppressionAdminRepository,
+    EmailSuppressionAdminService,
     CountryCatalogRepository,
     CountryCatalogService,
     OperationsRepository,

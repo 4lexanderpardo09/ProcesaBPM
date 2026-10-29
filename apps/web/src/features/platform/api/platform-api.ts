@@ -27,6 +27,8 @@ import {
   tenantDetailSchema,
   tenantListItemSchema,
   tenantStatusResponseSchema,
+  emailSuppressionSummarySchema,
+  type ListEmailSuppressionsQuery,
 } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -46,6 +48,7 @@ export const platformQueryKeys = {
   metrics: () => [...platformQueryKeys.all, 'metrics'] as const,
   aiUsage: (from: string, to: string) => [...platformQueryKeys.all, 'ai-usage', from, to] as const,
   audit: (filters: Partial<ListPlatformAuditQuery>) => [...platformQueryKeys.all, 'audit', filters] as const,
+  emailSuppressions: (filters: Partial<ListEmailSuppressionsQuery>) => [...platformQueryKeys.all, 'email-suppressions', filters] as const,
 };
 
 const query = (values: Readonly<Record<string, string | number | undefined>>) => {
@@ -118,6 +121,18 @@ export function adminsQueryOptions(client: HttpClient) {
 
 export function inviteAdmin(client: HttpClient, body: InvitePlatformAdminRequest) {
   return client.request('/platform/admins', { method: 'POST', body, schema: platformAdminSummarySchema });
+}
+
+export function emailSuppressionsQueryOptions(client: HttpClient, filters: Partial<ListEmailSuppressionsQuery>) {
+  return queryOptions({
+    queryKey: platformQueryKeys.emailSuppressions(filters),
+    queryFn: ({ signal }) => client.request(`/platform/email-suppressions${query({ ...filters })}`, { schema: pageResponseSchema(emailSuppressionSummarySchema), signal }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function removeEmailSuppression(client: HttpClient, id: string) {
+  return client.request(`/platform/email-suppressions/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function revokeAdmin(client: HttpClient, userId: string) {

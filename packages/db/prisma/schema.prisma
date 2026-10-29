@@ -87,6 +87,14 @@ enum DemoTeamSize {
   @@map("demo_team_size")
 }
 
+/// Why the provider told us not to write to an address again.
+enum EmailSuppressionReason {
+  BOUNCE
+  COMPLAINT
+
+  @@map("email_suppression_reason")
+}
+
 enum DemoRequestStatus {
   NEW
   CONTACTED
@@ -587,14 +595,14 @@ model User {
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships     Membership[]
-  refreshSessions RefreshSession[]
-  tokens          UserToken[]
-  consumedAuthTokens ConsumedAuthToken[]
-  mfaBackupCodes     UserMfaBackupCode[]
-  platformAdmin   PlatformAdmin?
-  supportSessions SupportSession[]
-  supportAuditLogs AuditLog[] @relation("SupportActor")
+  memberships         Membership[]
+  refreshSessions     RefreshSession[]
+  tokens              UserToken[]
+  consumedAuthTokens  ConsumedAuthToken[]
+  mfaBackupCodes      UserMfaBackupCode[]
+  platformAdmin       PlatformAdmin?
+  supportSessions     SupportSession[]
+  supportAuditLogs    AuditLog[]          @relation("SupportActor")
   handledDemoRequests DemoRequest[]
 
   @@map("users")
@@ -680,12 +688,12 @@ model PlatformAdmin {
 }
 
 model PlatformAnnouncement {
-  id          String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  id          String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
   type        AnnouncementType
   title       String
   body        String
-  startsAt    DateTime         @map("starts_at") @db.Timestamptz(3)
-  endsAt      DateTime?        @map("ends_at") @db.Timestamptz(3)
+  startsAt    DateTime             @map("starts_at") @db.Timestamptz(3)
+  endsAt      DateTime?            @map("ends_at") @db.Timestamptz(3)
   blocksLogin Boolean              @default(false) @map("blocks_login")
   audience    AnnouncementAudience @default(ALL)
   createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -693,6 +701,26 @@ model PlatformAnnouncement {
   targets PlatformAnnouncementTenant[]
 
   @@map("platform_announcements")
+}
+
+/// An address the e-mail provider (Amazon SES, through SNS) reported as a permanent bounce or a complaint: the worker no
+/// longer writes to it. Platform-only: the API records it through record_email_suppression, the worker asks with
+/// worker_suppressed_email, and the platform console (app_platform) lists and removes them.
+model EmailSuppression {
+  id             String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  /// Stored trimmed and lowercased (CHECK), one row per address.
+  email          String                 @unique
+  reason         EmailSuppressionReason
+  /// What the provider said (bounce type and subtype, or the complaint's feedback type), for the console.
+  detail         String?
+  /// The provider's id of the last notification, to recognize a repeat.
+  lastFeedbackId String?                @map("last_feedback_id")
+  events         Int                    @default(1)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastEventAt    DateTime               @default(now()) @map("last_event_at") @db.Timestamptz(3)
+
+  @@index([lastEventAt])
+  @@map("email_suppressions")
 }
 
 /// A demo requested from the public website. Platform-only: the API inserts it through submit_demo_request, the worker
@@ -738,36 +766,36 @@ model PlatformAnnouncementTenant {
 // ============================================================================
 
 model Tenant {
-  id                String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  slug              String       @unique
-  name              String
-  status            TenantStatus @default(ACTIVE)
-  planId            String       @map("plan_id") @db.Uuid
+  id                    String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  slug                  String       @unique
+  name                  String
+  status                TenantStatus @default(ACTIVE)
+  planId                String       @map("plan_id") @db.Uuid
   /// Members must use two-step verification (changed by an administrator).
-  mfaRequired       Boolean      @default(false) @map("mfa_required")
+  mfaRequired           Boolean      @default(false) @map("mfa_required")
   /// An administrator turned on «Crear con IA», accepting that process descriptions go to the AI provider.
-  aiAssistantEnabled Boolean     @default(false) @map("ai_assistant_enabled")
-  countryCode       String       @map("country_code") @db.Char(2)
-  timeZone          String       @map("time_zone")
-  extraStorageBytes BigInt       @default(0) @map("extra_storage_bytes")
-  dbCluster         String       @default("main") @map("db_cluster")
-  primaryColor      String?      @map("primary_color")
-  logoFileId        String?      @map("logo_file_id") @db.Uuid
-  cancelledAt       DateTime?    @map("cancelled_at") @db.Timestamptz(3)
-  purgeAfter        DateTime?    @map("purge_after") @db.Timestamptz(3)
-  deletionRequestedAt   DateTime? @map("deletion_requested_at") @db.Timestamptz(3)
+  aiAssistantEnabled    Boolean      @default(false) @map("ai_assistant_enabled")
+  countryCode           String       @map("country_code") @db.Char(2)
+  timeZone              String       @map("time_zone")
+  extraStorageBytes     BigInt       @default(0) @map("extra_storage_bytes")
+  dbCluster             String       @default("main") @map("db_cluster")
+  primaryColor          String?      @map("primary_color")
+  logoFileId            String?      @map("logo_file_id") @db.Uuid
+  cancelledAt           DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  purgeAfter            DateTime?    @map("purge_after") @db.Timestamptz(3)
+  deletionRequestedAt   DateTime?    @map("deletion_requested_at") @db.Timestamptz(3)
   /// The platform administrator (a user id; no foreign key, so the tombstone outlives them).
-  deletionRequestedById String?   @map("deletion_requested_by_id") @db.Uuid
-  purgedAt              DateTime? @map("purged_at") @db.Timestamptz(3)
+  deletionRequestedById String?      @map("deletion_requested_by_id") @db.Uuid
+  purgedAt              DateTime?    @map("purged_at") @db.Timestamptz(3)
   /// The worker that claimed the purge holds it until then (a dead worker's claim expires).
-  purgeLeaseUntil       DateTime? @map("purge_lease_until") @db.Timestamptz(3)
-  purgeAttempts         Int       @default(0) @map("purge_attempts")
-  purgeRetryAt          DateTime? @map("purge_retry_at") @db.Timestamptz(3)
-  purgeLastError        String?   @map("purge_last_error")
+  purgeLeaseUntil       DateTime?    @map("purge_lease_until") @db.Timestamptz(3)
+  purgeAttempts         Int          @default(0) @map("purge_attempts")
+  purgeRetryAt          DateTime?    @map("purge_retry_at") @db.Timestamptz(3)
+  purgeLastError        String?      @map("purge_last_error")
   /// Which reminder of the purge went out for the current deletion request: 0 none, 1 the 7-day one, 2 the 1-day one.
-  purgeReminderLevel    Int       @default(0) @map("purge_reminder_level") @db.SmallInt
-  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  purgeReminderLevel    Int          @default(0) @map("purge_reminder_level") @db.SmallInt
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   plan    Plan    @relation(fields: [planId], references: [id])
   country Country @relation(fields: [countryCode], references: [code])
@@ -868,12 +896,12 @@ model Tenant {
 
 /// Storage counter per tenant (see docs/analisis.md §7.4). Reconciled nightly.
 model TenantUsage {
-  tenantId      String   @id @map("tenant_id") @db.Uuid
-  bytesUsed     BigInt   @default(0) @map("bytes_used")
-  bytesReserved BigInt   @default(0) @map("bytes_reserved")
+  tenantId          String   @id @map("tenant_id") @db.Uuid
+  bytesUsed         BigInt   @default(0) @map("bytes_used")
+  bytesReserved     BigInt   @default(0) @map("bytes_reserved")
   /// The highest storage warning already announced (0, 80 or 95 % of the plan's limit): each threshold is announced once.
-  quotaWarningLevel Int  @default(0) @map("quota_warning_level") @db.SmallInt
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  quotaWarningLevel Int      @default(0) @map("quota_warning_level") @db.SmallInt
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -971,8 +999,8 @@ model Membership {
   textTemplates           TextTemplate[]
   textTemplateShares      TextTemplateShare[]
   dataExportsRequested    TenantDataExport[]
-  aiJobsRequested         AiJob[] @relation("AiJobRequestedBy")
-  aiJobsCancelled         AiJob[] @relation("AiJobCancelledBy")
+  aiJobsRequested         AiJob[]                  @relation("AiJobRequestedBy")
+  aiJobsCancelled         AiJob[]                  @relation("AiJobCancelledBy")
   aiUsage                 AiUsage[]
 
   @@id([tenantId, userId])
@@ -1002,16 +1030,16 @@ model MembershipCompany {
 }
 
 model Role {
-  tenantId    String      @map("tenant_id") @db.Uuid
-  id          String      @default(dbgenerated("uuidv7()")) @db.Uuid
-  name        String
-  description String?
-  systemRole  SystemRole? @map("system_role")
-  isAdmin     Boolean     @default(false) @map("is_admin")
-  isActive    Boolean     @default(true) @map("is_active")
+  tenantId           String      @map("tenant_id") @db.Uuid
+  id                 String      @default(dbgenerated("uuidv7()")) @db.Uuid
+  name               String
+  description        String?
+  systemRole         SystemRole? @map("system_role")
+  isAdmin            Boolean     @default(false) @map("is_admin")
+  isActive           Boolean     @default(true) @map("is_active")
   /// Bumped by a trigger on any change of role_permissions; the ability cache is keyed by it.
-  permissionsVersion Int @default(0) @map("permissions_version")
-  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  permissionsVersion Int         @default(0) @map("permissions_version")
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   permissions RolePermission[]
@@ -1143,15 +1171,15 @@ model Position {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  memberships    Membership[]
-  steps          Step[]
-  stepCandidates StepCandidate[]
-  stepInitiators StepInitiator[]
-  stepSigners    StepSigner[]
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships     Membership[]
+  steps           Step[]
+  stepCandidates  StepCandidate[]
+  stepInitiators  StepInitiator[]
+  stepSigners     StepSigner[]
   signerPositions StepSignerPosition[]
-  amountRules    AmountRule[]
-  observers      WorkflowObserver[]
+  amountRules     AmountRule[]
+  observers       WorkflowObserver[]
 
   @@id([tenantId, id])
   @@unique([tenantId, name])
@@ -1323,11 +1351,11 @@ model ApprovalGroupMember {
   membership Membership        @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Cascade)
 
   @@id([tenantId, groupId, userId])
+  @@unique([tenantId, typeId, companyId, userId], map: "approval_members_one_group")
   @@index([tenantId, companyId])
   @@index([tenantId, typeId, groupId])
   @@index([tenantId, typeId])
   @@index([tenantId, userId])
-  @@unique([tenantId, typeId, companyId, userId], map: "approval_members_one_group")
   @@map("approval_group_members")
 }
 
@@ -1693,11 +1721,11 @@ model StepSigner {
   label      String?
   sortOrder  Int        @default(0) @map("sort_order")
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  step       Step        @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: Cascade)
-  membership Membership? @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
-  position   Position?   @relation(fields: [tenantId, positionId], references: [tenantId, id], onDelete: NoAction)
-  tasks      TicketParallelTask[]
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  step           Step                 @relation(fields: [tenantId, stepId], references: [tenantId, id], onDelete: Cascade)
+  membership     Membership?          @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: NoAction)
+  position       Position?            @relation(fields: [tenantId, positionId], references: [tenantId, id], onDelete: NoAction)
+  tasks          TicketParallelTask[]
   extraPositions StepSignerPosition[]
 
   @@id([tenantId, id])
@@ -1746,18 +1774,18 @@ model StepFile {
 /// Edge between two steps of the same version. `condition` holds the automatic
 /// branch rule for CONDITION transitions ([{field, op, value}] evaluated with AND).
 model Transition {
-  tenantId   String         @map("tenant_id") @db.Uuid
-  id         String         @default(dbgenerated("uuidv7()")) @db.Uuid
-  versionId  String         @map("version_id") @db.Uuid
-  fromStepId String         @map("from_step_id") @db.Uuid
-  toStepId   String         @map("to_step_id") @db.Uuid
-  type       TransitionType @default(DECISION)
-  label      String
-  condition  Json?
-  sortOrder  Int            @default(0) @map("sort_order")
-  uiPoints   Json?          @map("ui_points")
+  tenantId        String         @map("tenant_id") @db.Uuid
+  id              String         @default(dbgenerated("uuidv7()")) @db.Uuid
+  versionId       String         @map("version_id") @db.Uuid
+  fromStepId      String         @map("from_step_id") @db.Uuid
+  toStepId        String         @map("to_step_id") @db.Uuid
+  type            TransitionType @default(DECISION)
+  label           String
+  condition       Json?
+  sortOrder       Int            @default(0) @map("sort_order")
+  uiPoints        Json?          @map("ui_points")
   /// A DECISION whose taker must leave a comment saying why (a rejection, a return to correct).
-  requiresComment Boolean   @default(false) @map("requires_comment")
+  requiresComment Boolean        @default(false) @map("requires_comment")
 
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   version  WorkflowVersion @relation(fields: [tenantId, versionId], references: [tenantId, id], onDelete: Cascade)
@@ -1779,21 +1807,21 @@ model Transition {
 /// Dynamic form field. `code` is stable across versions: PDFs, exports and
 /// amount rules reference fields by code, not by id.
 model Field {
-  tenantId   String       @map("tenant_id") @db.Uuid
-  id         String       @default(dbgenerated("uuidv7()")) @db.Uuid
-  versionId  String       @map("version_id") @db.Uuid
-  stepId     String       @map("step_id") @db.Uuid
-  code       String
-  label      String
-  type       FieldType
-  capture    CaptureStage @default(BOTH)
-  isRequired Boolean      @default(false) @map("is_required")
-  isReadOnly Boolean      @default(false) @map("is_read_only")
+  tenantId    String       @map("tenant_id") @db.Uuid
+  id          String       @default(dbgenerated("uuidv7()")) @db.Uuid
+  versionId   String       @map("version_id") @db.Uuid
+  stepId      String       @map("step_id") @db.Uuid
+  code        String
+  label       String
+  type        FieldType
+  capture     CaptureStage @default(BOTH)
+  isRequired  Boolean      @default(false) @map("is_required")
+  isReadOnly  Boolean      @default(false) @map("is_read_only")
   /// Captured once: «Editar datos» never corrects it afterwards (the help desk's campo_inmutable).
-  isImmutable Boolean     @default(false) @map("is_immutable")
-  sortOrder  Int          @default(0) @map("sort_order")
-  config     Json         @default("{}")
-  dataSource Json?        @map("data_source")
+  isImmutable Boolean      @default(false) @map("is_immutable")
+  sortOrder   Int          @default(0) @map("sort_order")
+  config      Json         @default("{}")
+  dataSource  Json?        @map("data_source")
 
   tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   version WorkflowVersion @relation(fields: [tenantId, versionId], references: [tenantId, id], onDelete: Cascade)
@@ -2097,29 +2125,29 @@ model TicketStepVisit {
 /// Reassignment closes the clock and opens a new one; incidents pause it.
 /// The SLA target is a snapshot (sla_value/sla_unit/calendar) taken when it opens.
 model TicketSlaClock {
-  tenantId        String     @map("tenant_id") @db.Uuid
-  id              String     @default(dbgenerated("uuidv7()")) @db.Uuid
-  ticketId        String     @map("ticket_id") @db.Uuid
-  visitId         String     @map("visit_id") @db.Uuid
-  stepId          String     @map("step_id") @db.Uuid
-  loop            Int        @default(1)
-  companyId       String     @map("company_id") @db.Uuid
-  responsibleId   String?    @map("responsible_id") @db.Uuid
-  slaValue        Int?       @map("sla_value")
-  slaUnit         SlaUnit?   @map("sla_unit")
-  calendarId      String?    @map("calendar_id") @db.Uuid
-  startedAt       DateTime   @map("started_at") @db.Timestamptz(3)
-  dueAt           DateTime?  @map("due_at") @db.Timestamptz(3)
-  pausedAt        DateTime?  @map("paused_at") @db.Timestamptz(3)
-  pausedMinutes   Int        @default(0) @map("paused_minutes")
-  completedAt     DateTime?  @map("completed_at") @db.Timestamptz(3)
-  businessMinutes Int?       @map("business_minutes")
-  result          SlaResult?
+  tenantId         String                 @map("tenant_id") @db.Uuid
+  id               String                 @default(dbgenerated("uuidv7()")) @db.Uuid
+  ticketId         String                 @map("ticket_id") @db.Uuid
+  visitId          String                 @map("visit_id") @db.Uuid
+  stepId           String                 @map("step_id") @db.Uuid
+  loop             Int                    @default(1)
+  companyId        String                 @map("company_id") @db.Uuid
+  responsibleId    String?                @map("responsible_id") @db.Uuid
+  slaValue         Int?                   @map("sla_value")
+  slaUnit          SlaUnit?               @map("sla_unit")
+  calendarId       String?                @map("calendar_id") @db.Uuid
+  startedAt        DateTime               @map("started_at") @db.Timestamptz(3)
+  dueAt            DateTime?              @map("due_at") @db.Timestamptz(3)
+  pausedAt         DateTime?              @map("paused_at") @db.Timestamptz(3)
+  pausedMinutes    Int                    @default(0) @map("paused_minutes")
+  completedAt      DateTime?              @map("completed_at") @db.Timestamptz(3)
+  businessMinutes  Int?                   @map("business_minutes")
+  result           SlaResult?
   /// Why it ended; set together with `completedAt`.
   completionReason ClockCompletionReason? @map("completion_reason")
-  alertedAt       DateTime?  @map("alerted_at") @db.Timestamptz(3)
+  alertedAt        DateTime?              @map("alerted_at") @db.Timestamptz(3)
   /// When the person responsible was told that 80 % of the time had gone (SLA_WARNING); each clock warns once.
-  warnedAt        DateTime?  @map("warned_at") @db.Timestamptz(3)
+  warnedAt         DateTime?              @map("warned_at") @db.Timestamptz(3)
 
   tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ticket      Ticket          @relation(fields: [tenantId, ticketId], references: [tenantId, id], onDelete: Cascade)
@@ -2470,19 +2498,19 @@ model PdfImage {
 
 /// PDF uploaded by the customer; fields are placed by coordinates and/or AcroForm names.
 model PdfTemplate {
-  tenantId    String   @map("tenant_id") @db.Uuid
-  id          String   @default(dbgenerated("uuidv7()")) @db.Uuid
-  workflowId  String   @map("workflow_id") @db.Uuid
-  companyId   String?  @map("company_id") @db.Uuid
-  fileId      String   @map("file_id") @db.Uuid
-  name        String
-  pages       Json
-  hasAcroform Boolean  @default(false) @map("has_acroform")
+  tenantId       String   @map("tenant_id") @db.Uuid
+  id             String   @default(dbgenerated("uuidv7()")) @db.Uuid
+  workflowId     String   @map("workflow_id") @db.Uuid
+  companyId      String?  @map("company_id") @db.Uuid
+  fileId         String   @map("file_id") @db.Uuid
+  name           String
+  pages          Json
+  hasAcroform    Boolean  @default(false) @map("has_acroform")
   /// The AcroForm fields found in the PDF when it was registered: `[{name, type, page, rect}]`.
-  acroformFields Json  @default("[]") @map("acroform_fields")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  acroformFields Json     @default("[]") @map("acroform_fields")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant     Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workflow   Workflow               @relation(fields: [tenantId, workflowId], references: [tenantId, id], onDelete: Cascade)
@@ -2581,29 +2609,29 @@ model WorkflowDocument {
 // ============================================================================
 
 model ExportDefinition {
-  tenantId        String          @map("tenant_id") @db.Uuid
-  id              String          @default(dbgenerated("uuidv7()")) @db.Uuid
-  workflowId      String          @map("workflow_id") @db.Uuid
-  companyId       String?         @map("company_id") @db.Uuid
-  name            String
-  format          ExportFormat    @default(XLSX)
-  sheetName       String          @default("Export") @map("sheet_name")
-  delimiter       String          @default(";")
-  trigger         ExportTrigger
-  transitionLabel String?         @map("transition_label")
-  filter          Json?
-  groupBy         String?         @map("group_by")
-  cutoffTime      DateTime        @map("cutoff_time") @db.Time(0)
-  frequency       ExportFrequency @default(DAILY)
+  tenantId         String          @map("tenant_id") @db.Uuid
+  id               String          @default(dbgenerated("uuidv7()")) @db.Uuid
+  workflowId       String          @map("workflow_id") @db.Uuid
+  companyId        String?         @map("company_id") @db.Uuid
+  name             String
+  format           ExportFormat    @default(XLSX)
+  sheetName        String          @default("Export") @map("sheet_name")
+  delimiter        String          @default(";")
+  trigger          ExportTrigger
+  transitionLabel  String?         @map("transition_label")
+  filter           Json?
+  groupBy          String?         @map("group_by")
+  cutoffTime       DateTime        @map("cutoff_time") @db.Time(0)
+  frequency        ExportFrequency @default(DAILY)
   /// WEEKLY: 1 = Monday … 7 = Sunday.
-  weekdays        Int[]           @db.SmallInt
-  monthDay        Int?            @map("month_day") @db.SmallInt
-  intervalDays    Int?            @map("interval_days")
+  weekdays         Int[]           @db.SmallInt
+  monthDay         Int?            @map("month_day") @db.SmallInt
+  intervalDays     Int?            @map("interval_days")
   /// One file per responsible of a step or per value of a column; NULL = one file.
-  separateBy      Json?           @map("separate_by")
-  lastAutoCutoffAt DateTime?      @map("last_auto_cutoff_at") @db.Timestamptz(3)
-  isActive        Boolean         @default(true) @map("is_active")
-  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  separateBy       Json?           @map("separate_by")
+  lastAutoCutoffAt DateTime?       @map("last_auto_cutoff_at") @db.Timestamptz(3)
+  isActive         Boolean         @default(true) @map("is_active")
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workflow Workflow       @relation(fields: [tenantId, workflowId], references: [tenantId, id], onDelete: Cascade)
@@ -2709,17 +2737,17 @@ model ExportLine {
 // ============================================================================
 
 model Notification {
-  tenantId  String           @map("tenant_id") @db.Uuid
-  id        String           @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId    String           @map("user_id") @db.Uuid
-  ticketId  String?          @map("ticket_id") @db.Uuid
-  type      NotificationType
-  title     String
-  body      String
-  readAt    DateTime?        @map("read_at") @db.Timestamptz(3)
-  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenantId      String           @map("tenant_id") @db.Uuid
+  id            String           @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  ticketId      String?          @map("ticket_id") @db.Uuid
+  type          NotificationType
+  title         String
+  body          String
+  readAt        DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   /// The outbox event that produced it: one notification per person per event.
-  sourceEventId String?      @map("source_event_id") @db.Uuid
+  sourceEventId String?          @map("source_event_id") @db.Uuid
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   membership Membership @relation(fields: [tenantId, userId], references: [tenantId, userId], onDelete: Cascade)
@@ -2855,21 +2883,21 @@ model WebhookDelivery {
 }
 
 model AuditLog {
-  tenantId   String   @map("tenant_id") @db.Uuid
-  id         String   @default(dbgenerated("uuidv7()")) @db.Uuid
-  actorId    String?  @map("actor_id") @db.Uuid
-  action     String
-  entityType String   @map("entity_type")
-  entityId   String?  @map("entity_id") @db.Uuid
-  before     Json?
-  after      Json?
-  ipAddress  String?  @map("ip_address")
-  userAgent  String?  @map("user_agent")
-  requestId  String?  @map("request_id")
+  tenantId       String   @map("tenant_id") @db.Uuid
+  id             String   @default(dbgenerated("uuidv7()")) @db.Uuid
+  actorId        String?  @map("actor_id") @db.Uuid
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String?  @map("entity_id") @db.Uuid
+  before         Json?
+  after          Json?
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  requestId      String?  @map("request_id")
   /// A platform administrator acting under a support grant (never a member): both columns are set together, `actor_id` stays empty.
-  supportActorId String? @map("support_actor_id") @db.Uuid
-  supportGrantId String? @map("support_grant_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  supportActorId String?  @map("support_actor_id") @db.Uuid
+  supportGrantId String?  @map("support_grant_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   actor        Membership?         @relation(fields: [tenantId, actorId], references: [tenantId, userId], onDelete: NoAction)
@@ -2970,9 +2998,9 @@ model SupportAccessGrant {
   revokedById String?   @map("revoked_by_id") @db.Uuid
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  grantedBy Membership   @relation("SupportGrantGranter", fields: [tenantId, grantedById], references: [tenantId, userId], onDelete: NoAction)
-  revokedBy Membership?  @relation("SupportGrantRevoker", fields: [tenantId, revokedById], references: [tenantId, userId], onDelete: NoAction)
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  grantedBy Membership       @relation("SupportGrantGranter", fields: [tenantId, grantedById], references: [tenantId, userId], onDelete: NoAction)
+  revokedBy Membership?      @relation("SupportGrantRevoker", fields: [tenantId, revokedById], references: [tenantId, userId], onDelete: NoAction)
   sessions  SupportSession[]
   auditLogs AuditLog[]
 
@@ -2985,16 +3013,16 @@ model SupportAccessGrant {
 
 /// A platform administrator's visit under a grant. Opened only by `platform_open_support_session`.
 model SupportSession {
-  tenantId       String    @map("tenant_id") @db.Uuid
-  id             String    @default(dbgenerated("uuidv7()")) @db.Uuid
-  grantId        String    @map("grant_id") @db.Uuid
-  platformUserId String    @map("platform_user_id") @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  id                String    @default(dbgenerated("uuidv7()")) @db.Uuid
+  grantId           String    @map("grant_id") @db.Uuid
+  platformUserId    String    @map("platform_user_id") @db.Uuid
   /// First and last name of the administrator when the visit opened: members cannot read other people's users rows.
-  platformUserLabel String @map("platform_user_label")
+  platformUserLabel String    @map("platform_user_label")
   /// The platform session (a `refresh_sessions` row) the visit was opened from: ending it ends the visit. No foreign key: history.
-  platformSessionId String @map("platform_session_id") @db.Uuid
-  openedAt       DateTime  @default(now()) @map("opened_at") @db.Timestamptz(3)
-  closedAt       DateTime? @map("closed_at") @db.Timestamptz(3)
+  platformSessionId String    @map("platform_session_id") @db.Uuid
+  openedAt          DateTime  @default(now()) @map("opened_at") @db.Timestamptz(3)
+  closedAt          DateTime? @map("closed_at") @db.Timestamptz(3)
 
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   grant        SupportAccessGrant @relation(fields: [tenantId, grantId], references: [tenantId, id], onDelete: NoAction)
@@ -3043,7 +3071,7 @@ model AiJob {
   startedAt        DateTime?   @map("started_at") @db.Timestamptz(3)
   completedAt      DateTime?   @map("completed_at") @db.Timestamptz(3)
 
-  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   requestedBy Membership  @relation("AiJobRequestedBy", fields: [tenantId, requestedById], references: [tenantId, userId], onDelete: NoAction)
   cancelledBy Membership? @relation("AiJobCancelledBy", fields: [tenantId, cancelledById], references: [tenantId, userId], onDelete: NoAction)
 

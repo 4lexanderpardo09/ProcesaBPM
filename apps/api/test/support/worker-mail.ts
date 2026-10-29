@@ -2,7 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { LOG_WRITER } from '../../src/common/logging/json-logger.js';
 import { InMemoryMailer } from '../../src/infrastructure/mail/in-memory-mailer.js';
 import type { MailMessage } from '../../src/infrastructure/mail/mailer.js';
-import { Mailer } from '../../src/infrastructure/mail/mailer.js';
+import { MAIL_TRANSPORT } from '../../src/infrastructure/mail/mail.module.js';
 import { OutboxDispatcher } from '../../src/infrastructure/outbox/outbox-dispatcher.js';
 import { WorkerModule } from '../../src/worker.module.js';
 import { connectTestDatabase } from './admin-api.js';
@@ -27,7 +27,7 @@ export class MailWorker {
       .useValue(() => undefined)
       .compile();
     await module.init();
-    return new MailWorker(module, module.get(OutboxDispatcher), module.get(Mailer) as InMemoryMailer);
+    return new MailWorker(module, module.get(OutboxDispatcher), module.get(MAIL_TRANSPORT) as InMemoryMailer);
   }
 
   /**

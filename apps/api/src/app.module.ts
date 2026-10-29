@@ -17,6 +17,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { AiAssistantModule } from './modules/ai-assistant/ai-assistant.module.js';
 import { DataExportsModule } from './modules/data-exports/data-exports.module.js';
 import { DemoRequestsModule } from './modules/demo-requests/demo-requests.module.js';
+import { EmailSuppressionsModule } from './modules/email-suppressions/email-suppressions.module.js';
 import { ExportsModule } from './modules/exports/exports.module.js';
 import { CalculatorsModule } from './modules/calculators/calculators.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
@@ -38,7 +39,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module.js';
 import { realtimeEnabledIn } from './config/app-config.js';
 
 @Module({
-  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, TagsModule, TextTemplatesModule, DashboardModule, DatasetsModule, ReportsModule, DataExportsModule, ExportsModule, AiAssistantModule, DemoRequestsModule, ...(realtimeEnabledIn(process.env) ? [RealtimeModule] : [])],
+  imports: [ConfigModule.forEntry('api'), ClockModule, LoggingModule, BackgroundModule, DatabaseModule.forEntry('api'), StorageModule, HealthModule, AuditTrailModule, AuditModule, AuthModule, AuthorizationModule, PlatformModule, OrganizationModule, CatalogModule, IdentityModule, ApprovalsModule, WorkflowsModule, CalculatorsModule, FilesModule, DocumentsModule, NotificationsModule, AnnouncementsModule, SupportAccessModule, TicketsModule, TagsModule, TextTemplatesModule, DashboardModule, DatasetsModule, ReportsModule, DataExportsModule, ExportsModule, AiAssistantModule, DemoRequestsModule, EmailSuppressionsModule, ...(realtimeEnabledIn(process.env) ? [RealtimeModule] : [])],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
 })
 export class AppModule {}

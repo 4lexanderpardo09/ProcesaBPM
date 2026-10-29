@@ -133,6 +133,17 @@ const apiSchema = commonSchema.extend({
   REALTIME_AUTH_GRACE_MS: boundedInteger(10_000, 1_000, 60_000),
   REALTIME_DB_CONCURRENCY: boundedInteger(4, 1, 32),
   REALTIME_SIGNAL_QUEUE_MAX: boundedInteger(10_000, 100, 1_000_000),
+  /**
+   * The SNS topic Amazon SES reports bounces and complaints to (docs/operations/email-bounces.md). Only messages of this
+   * topic are accepted at /api/public/email-events/ses; without it the endpoint does not exist (404).
+   */
+  SES_SNS_TOPIC_ARN: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z
+      .string()
+      .regex(/^arn:aws:sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9_-]{1,256}$/, 'must be an SNS topic ARN such as arn:aws:sns:us-east-1:123456789012:procesabpm-ses-events')
+      .optional(),
+  ),
   /** Whether the platform offers «Crear con IA» (the worker holds the provider key). `false`: hidden everywhere. */
   AI_ASSISTANT_AVAILABLE: booleanFlag(false),
   /** Recorded on each request; the same variable the worker calls the provider with. */
@@ -215,6 +226,7 @@ export type ApiConfig = AppConfig &
     | 'PLATFORM_DATABASE_URL'
     | 'MFA_ENCRYPTION_KEYS'
     | 'REALTIME_ENABLED'
+    | 'SES_SNS_TOPIC_ARN'
     | 'REALTIME_DATABASE_URL'
     | 'REALTIME_ALLOWED_ORIGINS'
     | 'REALTIME_MAX_CONNECTIONS'
