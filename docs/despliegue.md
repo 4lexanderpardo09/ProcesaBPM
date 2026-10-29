@@ -292,7 +292,7 @@ Para las pruebas se usa una cuenta gratuita de AWS. **Ninguna credencial va en e
 Cuando termine la etapa de pruebas, la producción corre en **Contabo**:
 
 - **Servidor:** un VPS con Docker Compose: `api`, `worker`, `web` y PostgreSQL 18 (más el proxy). Los **archivos siguen en AWS S3** (mismo bucket y política de la sección anterior, con claves propias de producción).
-- **Respaldos de PostgreSQL:** `pg_dump` programado (diario) y/o archivado de WAL hacia un bucket S3 **distinto** del de los adjuntos y con versionado y retención; probar la restauración periódicamente. La llave `MFA_ENCRYPTION_KEYS` y los demás secretos se respaldan aparte (§2).
+- **Respaldos de PostgreSQL:** `pg_dump` diario a un bucket S3 **distinto** del de los adjuntos, con versionado y retención, desde un timer de systemd y con un rol que solo escribe. Guía completa, restauración y simulacro: [`operations/backups.md`](operations/backups.md). El archivado de WAL (PITR) queda para después. La llave `MFA_ENCRYPTION_KEYS` y los demás secretos se respaldan aparte (§2).
 - **TLS:** un proxy inverso (**Caddy** o **Traefik**) termina HTTPS con certificados automáticos y reenvía `/api/*` al API y el resto a la web (`deploy/Caddyfile.example`); `TRUST_PROXY=1` (§3).
 - **Firewall:** solo 80/443 (y SSH restringido por IP o clave); la BD y el worker no se exponen; actualizaciones del sistema y hora sincronizada (NTP).
 - **Latencia hacia S3:** la distancia entre Contabo y AWS no afecta a las subidas ni a las descargas, porque el navegador sube y baja **directo** con la URL firmada; el API solo firma y confirma.

@@ -1,0 +1,15 @@
+# Daily database backup to S3 (docs/operations/backups.md). Installed in /etc/systemd/system; started by procesabpm-backup.timer.
+[Unit]
+Description=ProcesaBPM database backup to S3
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Bucket, region, encryption and paths: /etc/procesabpm/backup.env (example: deploy/backup/backup.env.example). No AWS keys:
+# the credentials come from the EC2 instance role.
+EnvironmentFile=/etc/procesabpm/backup.env
+ExecStart=/opt/procesabpm/deploy/backup/procesabpm-backup.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h
