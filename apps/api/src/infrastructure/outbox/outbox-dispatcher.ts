@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { describeError } from '../../common/logging/describe-error.js';
 import { JsonLogger } from '../../common/logging/json-logger.js';
 import { WORKER_SETTINGS, type WorkerSettings } from '../../config/worker-settings.js';
 import { Clock } from '../clock.js';
@@ -24,8 +25,8 @@ type Outcome = 'done' | 'retried' | 'failed' | 'stale';
 
 const EMPTY: DispatchSummary = { claimed: 0, done: 0, retried: 0, failed: 0, stale: 0, full: false };
 
-/** Never carries payload data (addresses, tokens): only the kind of error. */
-function describeError(error: unknown): string {
+/** What is stored on the event: only the kind of error, never payload data (addresses, tokens). The log says more. */
+function errorKind(error: unknown): string {
   const name = error instanceof Error ? error.name : 'Error';
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? `${name}:${code}` : name;
@@ -151,13 +152,13 @@ export class OutboxDispatcher {
     const terminal = isPermanent(error) || isLastAttempt(event.attempt);
     const retryAt = terminal ? null : new Date(this.clock.now().getTime() + retryDelayMs(event.attempt));
     try {
-      const recorded = await this.inScope(source, event, (tx) => this.claims.fail(tx, source, event, describeError(error), retryAt), this.settings.OUTBOX_TX_TIMEOUT_MS);
+      const recorded = await this.inScope(source, event, (tx) => this.claims.fail(tx, source, event, errorKind(error), retryAt), this.settings.OUTBOX_TX_TIMEOUT_MS);
       if (!recorded) {
         this.logger.warn({ message: 'Outbox claim was lost before the failure was recorded', ...where }, 'OutboxDispatcher');
         return 'stale';
       }
     } catch (recordingError) {
-      this.logger.error(recordingError, 'OutboxDispatcher');
+      this.logger.error({ message: 'Could not record the outbox failure', error: describeError(recordingError), ...where }, 'OutboxDispatcher');
     }
     this.logger.warn({ message: terminal ? 'Outbox event failed for good' : 'Outbox event failed and will be retried', error: describeError(error), ...where }, 'OutboxDispatcher');
     return terminal ? 'failed' : 'retried';

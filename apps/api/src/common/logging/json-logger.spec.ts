@@ -66,4 +66,36 @@ describe('JsonLogger', () => {
     logger.fatal('f');
     expect(entries().map((entry) => entry.level)).toEqual(['debug', 'error']);
   });
+
+  it('describes an error with its code and cause, so a worker failure never reads [object Object]', () => {
+    const { logger, entries } = setup();
+    const cause = Object.assign(new Error('Connection terminated unexpectedly'), { code: '57P01' });
+    logger.error(new Error('Could not record the outbox failure', { cause }), 'OutboxDispatcher');
+    expect(entries()[0]).toMatchObject({
+      level: 'error',
+      message: 'Could not record the outbox failure',
+      context: 'OutboxDispatcher',
+      error: { name: 'Error', message: 'Could not record the outbox failure', cause: { message: 'Connection terminated unexpectedly', code: '57P01' } },
+    });
+    expect(entries()[0]!.stack).toContain('Could not record the outbox failure');
+  });
+
+  it('reads a value thrown that is not an Error', () => {
+    const { logger, entries } = setup();
+    logger.error(Object.create({ code: 'ECONNRESET' }) as object, 'OutboxPoller');
+    logger.error(new (class Weird {})(), 'OutboxPoller');
+    for (const entry of entries()) expect(JSON.stringify(entry)).not.toContain('[object Object]');
+  });
+
+  it('takes structured fields given as the message, with their own message, instead of printing [object Object]', () => {
+    const { logger, entries } = setup();
+    logger.warn({ message: 'Outbox event failed and will be retried', eventId: 'e-1', error: 'Error:ETIMEDOUT' }, 'OutboxDispatcher');
+    expect(entries()[0]).toMatchObject({ level: 'warn', message: 'Outbox event failed and will be retried', context: 'OutboxDispatcher', eventId: 'e-1', error: 'Error:ETIMEDOUT' });
+  });
+
+  it('describes an error given after the message', () => {
+    const { logger, entries } = setup();
+    logger.error('Upload failed', Object.assign(new Error('Access Denied'), { code: 'AccessDenied' }), 'Storage');
+    expect(entries()[0]).toMatchObject({ message: 'Upload failed', context: 'Storage', error: { message: 'Access Denied', code: 'AccessDenied' } });
+  });
 });
