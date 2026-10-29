@@ -26,11 +26,16 @@ export const demoRequestSchema = z.object({
 });
 export type DemoRequest = z.infer<typeof demoRequestSchema>;
 
-export const listDemoRequestsQuerySchema = z.object({
-  status: z.enum(DEMO_REQUEST_STATUSES).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(25),
-});
+export const listDemoRequestsQuerySchema = z
+  .object({
+    status: z.enum(DEMO_REQUEST_STATUSES).optional(),
+    /** Received at or after `from` and before `to`. */
+    from: z.iso.datetime({ offset: true }).optional(),
+    to: z.iso.datetime({ offset: true }).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .refine((value) => value.from === undefined || value.to === undefined || new Date(value.to) > new Date(value.from), { path: ['to'], message: 'The end must be after the start' });
 export type ListDemoRequestsQuery = z.infer<typeof listDemoRequestsQuerySchema>;
 
 export const demoRequestSummarySchema = z.object({

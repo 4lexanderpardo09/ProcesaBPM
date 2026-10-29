@@ -38,6 +38,7 @@ export const paths = {
   platformAiUsage: '/platform/ai-usage',
   platformAudit: '/platform/audit',
   platformEmailSuppressions: '/platform/email-suppressions',
+  platformDemoRequests: '/platform/demo-requests',
 } as const;
 
 export function ticketPath(ticketId: string): string {

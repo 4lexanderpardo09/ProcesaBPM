@@ -75,3 +75,32 @@
   padding-left: var(--space-4);
   font-size: 13.5px;
 }
+
+/* A demo request's name opens it (the row does too; the button is what the keyboard reaches). */
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+/* What the person wrote, with its line breaks. */
+.preWrap {
+  white-space: pre-wrap;
+  font-weight: 400;
+}
+
+.mailLink {
+  align-self: center;
+  margin-right: auto;
+  color: var(--accent);
+  font-weight: 600;
+}

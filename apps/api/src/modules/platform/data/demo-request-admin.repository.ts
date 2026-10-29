@@ -45,7 +45,10 @@ const toSummary = (row: Row): DemoRequestSummary => ({
 @Injectable()
 export class DemoRequestAdminRepository {
   async list(tx: PlatformTransaction, query: ListDemoRequestsQuery): Promise<Page<DemoRequestSummary>> {
-    const where = query.status === undefined ? {} : { status: query.status };
+    const where = {
+      ...(query.status === undefined ? {} : { status: query.status }),
+      ...(query.from || query.to ? { createdAt: { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lt: new Date(query.to) } : {}) } } : {}),
+    };
     const [rows, total] = await Promise.all([
       tx.demoRequest.findMany({ where, select: SELECT, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
       tx.demoRequest.count({ where }),

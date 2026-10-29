@@ -29,6 +29,9 @@ import {
   tenantStatusResponseSchema,
   emailSuppressionSummarySchema,
   type ListEmailSuppressionsQuery,
+  demoRequestSummarySchema,
+  type ListDemoRequestsQuery,
+  type MarkDemoRequest,
 } from '@procesabpm/shared';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -49,6 +52,7 @@ export const platformQueryKeys = {
   aiUsage: (from: string, to: string) => [...platformQueryKeys.all, 'ai-usage', from, to] as const,
   audit: (filters: Partial<ListPlatformAuditQuery>) => [...platformQueryKeys.all, 'audit', filters] as const,
   emailSuppressions: (filters: Partial<ListEmailSuppressionsQuery>) => [...platformQueryKeys.all, 'email-suppressions', filters] as const,
+  demoRequests: (filters: Partial<ListDemoRequestsQuery>) => [...platformQueryKeys.all, 'demo-requests', filters] as const,
 };
 
 const query = (values: Readonly<Record<string, string | number | undefined>>) => {
@@ -193,6 +197,18 @@ export function aiUsageQueryOptions(client: HttpClient, from: string, to: string
     queryFn: ({ signal }) => client.request(`/platform/ai-usage${query({ from, to })}`, { schema: platformAiUsageResponseSchema, signal }),
     placeholderData: keepPreviousData,
   });
+}
+
+export function demoRequestsQueryOptions(client: HttpClient, filters: Partial<ListDemoRequestsQuery>) {
+  return queryOptions({
+    queryKey: platformQueryKeys.demoRequests(filters),
+    queryFn: ({ signal }) => client.request(`/platform/demo-requests${query({ ...filters })}`, { schema: pageResponseSchema(demoRequestSummarySchema), signal }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function markDemoRequest(client: HttpClient, id: string, body: MarkDemoRequest) {
+  return client.request(`/platform/demo-requests/${encodeURIComponent(id)}/status`, { method: 'PUT', body, schema: demoRequestSummarySchema });
 }
 
 export function auditQueryOptions(client: HttpClient, filters: Partial<ListPlatformAuditQuery>) {

@@ -91,6 +91,18 @@ describe('demo requests from the website', () => {
     expect(audit.rows.map((row) => row.data)).toEqual([{ id, status: 'CONTACTED' }]);
   });
 
+  it('the console filters them by when they arrived', async () => {
+    const email = address();
+    await submit(form(email)).expect(202);
+    const id = (await stored(email))[0]!.id;
+    await db.owner.query(`UPDATE demo_requests SET created_at = '2026-03-15T12:00:00Z' WHERE id = $1`, [id]);
+    const ids = async (from: string, to: string) =>
+      ((await http().get('/platform/demo-requests').query({ from, to, pageSize: 100 }).set(bearer(adminToken)).expect(200)).body.items as Array<{ id: string }>).map((item) => item.id);
+    expect(await ids('2026-03-15T00:00:00-05:00', '2026-03-16T00:00:00-05:00')).toContain(id);
+    expect(await ids('2026-03-16T00:00:00-05:00', '2026-03-17T00:00:00-05:00')).not.toContain(id);
+    await http().get('/platform/demo-requests').query({ from: '2026-03-16T00:00:00Z', to: '2026-03-15T00:00:00Z' }).set(bearer(adminToken)).expect(400);
+  });
+
   it('an unknown request is 404, and a member of an organization cannot see them', async () => {
     await http().put('/platform/demo-requests/0191f0a0-0000-7000-8000-000000000000/status').set(bearer(adminToken)).send({ status: 'DISCARDED' }).expect(404);
     await http().get('/platform/demo-requests').set(bearer(memberToken)).expect(403);
