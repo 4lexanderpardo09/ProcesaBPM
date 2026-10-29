@@ -28,10 +28,10 @@ describe('profile tools', () => {
   it('saves each notification channel at once, and puts it back when the API refuses', async () => {
     let refuse = false;
     const { fake } = open('/profile?tab=notifications', {
-      '/notifications/preferences': () => [{ type: 'TICKET_ASSIGNED', inApp: true, email: false }],
+      '/notifications/preferences': () => [{ type: 'TICKET_ASSIGNED', inApp: true, email: false, emailLocked: false }],
       '/notifications/preferences/TICKET_ASSIGNED': (options) => {
         if (refuse) throw new ApiError({ status: 500, code: 'INTERNAL', message: 'x' });
-        return { type: 'TICKET_ASSIGNED', ...(options.body as object) };
+        return { type: 'TICKET_ASSIGNED', emailLocked: false, ...(options.body as object) };
       },
       '/notifications/preferences/SLA_OVERDUE': () => {
         refuse = true;
@@ -48,6 +48,22 @@ describe('profile tools', () => {
     const overdue = screen.getByRole('checkbox', { name: 'Un ticket se venció: por correo' });
     await userEvent.click(overdue);
     await vi.waitFor(() => expect(overdue).not.toBeChecked());
+  });
+
+  it('an e-mail the administrator turned off shows unchecked and disabled, with the reason, and the app box still works', async () => {
+    const { fake } = open('/profile?tab=notifications', {
+      '/notifications/preferences': () => [{ type: 'TICKET_CLOSED', inApp: true, email: false, emailLocked: true }],
+      '/notifications/preferences/TICKET_CLOSED': (options) => ({ type: 'TICKET_CLOSED', ...(options.body as object), email: false, emailLocked: true }),
+    });
+
+    const email = await screen.findByRole('checkbox', { name: 'Se cerró un ticket: por correo' });
+    expect(email).toBeDisabled();
+    expect(email).not.toBeChecked();
+    expect(email).toHaveAccessibleDescription('Tu administrador desactivó este correo');
+    expect(screen.getByRole('checkbox', { name: 'Te asignaron un ticket: por correo' })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Se cerró un ticket: en la app' }));
+    await vi.waitFor(() => expect(fake.callsTo('/notifications/preferences/TICKET_CLOSED')[0]?.options.body).toEqual({ inApp: false, email: false }));
   });
 
   it('creates a colored tag and deletes another', async () => {

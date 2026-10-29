@@ -8,6 +8,7 @@ import { RealtimeSignalPublisher } from '../../../infrastructure/realtime/realti
 import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-handler.registry.js';
 import { EmailOutboxRepository } from '../data/email-outbox.repository.js';
 import { NotificationRepository, type NewNotification } from '../data/notification.repository.js';
+import { EmailPolicyRepository } from '../data/email-policy.repository.js';
 import { RecipientRepository } from '../data/recipient.repository.js';
 import { TicketFactsRepository } from '../data/ticket-facts.repository.js';
 import { channelsFor } from '../domain/channels.js';
@@ -48,6 +49,7 @@ export class TicketNotificationHandlers implements OnModuleInit {
     @Inject(OutboxHandlerRegistry) private readonly registry: OutboxHandlerRegistry,
     @Inject(TicketFactsRepository) private readonly facts: TicketFactsRepository,
     @Inject(RecipientRepository) private readonly recipients: RecipientRepository,
+    @Inject(EmailPolicyRepository) private readonly emailPolicies: EmailPolicyRepository,
     @Inject(NotificationRepository) private readonly notifications: NotificationRepository,
     @Inject(EmailOutboxRepository) private readonly emails: EmailOutboxRepository,
     @Inject(TicketReaderFilter) private readonly readers: TicketReaderFilter,
@@ -77,11 +79,12 @@ export class TicketNotificationHandlers implements OnModuleInit {
     const readerIds = new Set(await this.readers.filter(tx, tenantId, payload.ticketId, chosen.map((candidate) => candidate.userId)));
     const recipients = chosen.filter((candidate) => readerIds.has(candidate.userId));
     const stored = await this.recipients.preferences(tx, tenantId, recipients.map((candidate) => candidate.userId), [...new Set(recipients.map((candidate) => candidate.type))]);
+    const policies = await this.emailPolicies.policies(tx, tenantId);
 
     const inApp: NewNotification[] = [];
     const mails: NotificationEmailPayload[] = [];
     for (const recipient of recipients) {
-      const channels = channelsFor(stored, recipient.userId, recipient.type);
+      const channels = channelsFor(stored, recipient.userId, recipient.type, policies);
       if (channels.inApp) inApp.push({ userId: recipient.userId, ticketId: payload.ticketId, type: recipient.type as NotificationTypeValue, sourceEventId: event.id, ...notificationText(recipient.type, ticket) });
       // A suspended organization keeps its in-app notices but sends no e-mail.
       if (channels.email && tenant.active) mails.push({ userId: recipient.userId, notificationType: recipient.type, ticketId: payload.ticketId, sourceEventId: event.id });

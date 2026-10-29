@@ -15,9 +15,10 @@ import { pageWindow } from '../../../common/crud/pagination.js';
 import type { Principal } from '../../../common/auth/principal.js';
 import { Clock } from '../../../infrastructure/clock.js';
 import { TenantContext } from '../../../infrastructure/database/tenant-context.js';
-import { TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { type TenantTransaction, TenantTransactionRunner } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import { EmailPolicyRepository } from '../data/email-policy.repository.js';
 import { NotificationRepository } from '../data/notification.repository.js';
-import { defaultChannels } from '../domain/channels.js';
+import { channelsFor, type EmailPolicies, emailLocked } from '../domain/channels.js';
 
 /** A person's own notifications and preferences: every call is scoped to the caller, in the query and by row-level security. */
 @Injectable()
@@ -25,6 +26,7 @@ export class NotificationsService {
   constructor(
     @Inject(TenantTransactionRunner) private readonly runner: TenantTransactionRunner,
     @Inject(NotificationRepository) private readonly notifications: NotificationRepository,
+    @Inject(EmailPolicyRepository) private readonly emailPolicies: EmailPolicyRepository,
     @Inject(Clock) private readonly clock: Clock,
     @Inject(TenantContext) private readonly context: TenantContext,
   ) {}
@@ -57,16 +59,29 @@ export class NotificationsService {
     return this.runner.withTenantTransaction(async (tx) => ({ updated: await this.notifications.markRead(tx, who.tenantId, who.userId, this.clock.now()) }));
   }
 
-  /** Every type, with the defaults where the person never chose. */
+  /** Every type as it actually arrives: the person's choice, else the organization's default, never e-mail where the organization turned it off. */
   preferences(who: Principal): Promise<NotificationPreferenceResponse[]> {
     return this.runner.withTenantTransaction(async (tx) => {
-      const stored = new Map((await this.notifications.preferences(tx, who.tenantId, who.userId)).map((preference) => [preference.type, preference]));
-      return NOTIFICATION_TYPES.map((type) => stored.get(type) ?? { type, ...defaultChannels(type) });
+      const stored = await this.storedOf(tx, who);
+      const policies = await this.emailPolicies.policies(tx, who.tenantId);
+      return NOTIFICATION_TYPES.map((type) => effective(stored, who.userId, type, policies));
     });
   }
 
-  async savePreference(who: Principal, type: NotificationTypeValue, request: NotificationPreferenceRequest): Promise<NotificationPreferenceResponse> {
-    await this.runner.withTenantTransaction((tx) => this.notifications.savePreference(tx, who.tenantId, who.userId, type, request));
-    return { type, ...request };
+  /** The choice is kept as made (it counts again if the organization turns the e-mail back on); the answer is what arrives now. */
+  savePreference(who: Principal, type: NotificationTypeValue, request: NotificationPreferenceRequest): Promise<NotificationPreferenceResponse> {
+    return this.runner.withTenantTransaction(async (tx) => {
+      await this.notifications.savePreference(tx, who.tenantId, who.userId, type, request);
+      return effective(new Map([[`${who.userId}:${type}`, request]]), who.userId, type, await this.emailPolicies.policies(tx, who.tenantId));
+    });
   }
+
+  private async storedOf(tx: TenantTransaction, who: Principal): Promise<Map<string, { inApp: boolean; email: boolean }>> {
+    const rows = await this.notifications.preferences(tx, who.tenantId, who.userId);
+    return new Map(rows.map((row) => [`${who.userId}:${row.type}`, { inApp: row.inApp, email: row.email }]));
+  }
+}
+
+function effective(stored: ReadonlyMap<string, { inApp: boolean; email: boolean }>, userId: string, type: NotificationTypeValue, policies: EmailPolicies): NotificationPreferenceResponse {
+  return { type, ...channelsFor(stored, userId, type, policies), emailLocked: emailLocked(type, policies) };
 }

@@ -11,7 +11,7 @@ import { RealtimeSignalPublisher } from '../../../infrastructure/realtime/realti
 import { NotificationRepository } from '../data/notification.repository.js';
 import { RecipientRepository } from '../data/recipient.repository.js';
 import { TicketFactsRepository } from '../data/ticket-facts.repository.js';
-import { channelsFor } from '../domain/channels.js';
+import { channelsFor, NO_EMAIL_POLICIES } from '../domain/channels.js';
 import { formatStorageSize } from '../domain/storage-size.js';
 import { notificationsEs as es } from '../i18n/es.js';
 import { STORAGE_QUOTA_EMAIL_EVENT, type StorageQuotaEmail, storageQuotaEmailSchema, type StorageQuotaEvent, storageQuotaEventSchema } from './storage-quota.payload.js';
@@ -47,7 +47,7 @@ export class StorageQuotaNotificationHandlers implements OnModuleInit {
     const administratorIds = await this.recipients.administratorIds(tx, tenantId);
     const stored = await this.recipients.preferences(tx, tenantId, administratorIds, [STORAGE_QUOTA]);
 
-    const inApp = administratorIds.filter((userId) => channelsFor(stored, userId, STORAGE_QUOTA).inApp);
+    const inApp = administratorIds.filter((userId) => channelsFor(stored, userId, STORAGE_QUOTA, NO_EMAIL_POLICIES).inApp);
     if (inApp.length > 0) {
       const title = es.titles.STORAGE_QUOTA();
       await this.notifications.createMany(tx, tenantId, inApp.map((userId) => ({ userId, ticketId: null, type: STORAGE_QUOTA, title, body: bodyOf(event.payload), sourceEventId: event.id })));
@@ -55,7 +55,7 @@ export class StorageQuotaNotificationHandlers implements OnModuleInit {
     }
     if (!tenant.active) return;
     const { level, usedBytes, limitBytes } = event.payload;
-    const mails = administratorIds.filter((userId) => channelsFor(stored, userId, STORAGE_QUOTA).email).map((userId): StorageQuotaEmail => ({ userId, level, usedBytes, limitBytes, sourceEventId: event.id }));
+    const mails = administratorIds.filter((userId) => channelsFor(stored, userId, STORAGE_QUOTA, NO_EMAIL_POLICIES).email).map((userId): StorageQuotaEmail => ({ userId, level, usedBytes, limitBytes, sourceEventId: event.id }));
     if (mails.length > 0) await tx.outboxEvent.createMany({ data: mails.map((payload) => ({ tenantId, type: STORAGE_QUOTA_EMAIL_EVENT, payload })) });
   }
 }
@@ -87,7 +87,7 @@ export class StorageQuotaEmailHandler implements ExternalEffectHandler<StorageQu
     if (tenant === undefined || !tenant.active) return null;
     if (!(await this.recipients.administratorIds(tx, tenantId)).includes(userId)) return null;
     const preferences = await this.recipients.preferences(tx, tenantId, [userId], [STORAGE_QUOTA]);
-    if (!channelsFor(preferences, userId, STORAGE_QUOTA).email) return null;
+    if (!channelsFor(preferences, userId, STORAGE_QUOTA, NO_EMAIL_POLICIES).email) return null;
     const recipient = await this.recipients.mailRecipient(tx, userId);
     if (recipient === undefined) return null;
 

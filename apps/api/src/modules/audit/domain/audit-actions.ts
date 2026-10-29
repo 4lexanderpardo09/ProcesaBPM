@@ -50,6 +50,7 @@ export const AUDIT_ACTIONS = [
   'export_catalog.updated',
   'tenant.security_policy_updated',
   'tenant.ai_assistant_updated',
+  'tenant.notification_email_policy_updated',
   'tenant.logo_updated',
   'tenant.logo_removed',
   'support_access.granted',

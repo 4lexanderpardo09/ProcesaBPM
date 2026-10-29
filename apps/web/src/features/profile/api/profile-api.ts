@@ -85,7 +85,7 @@ export const toolsQueryKeys = {
   directory: ['member-directory'] as const,
 };
 
-const preferenceSchema = z.object({ type: notificationTypeSchema, inApp: z.boolean(), email: z.boolean() });
+const preferenceSchema = z.object({ type: notificationTypeSchema, inApp: z.boolean(), email: z.boolean(), emailLocked: z.boolean() });
 
 /** One row per kind of notification, with both channels. */
 export function preferencesQueryOptions(client: HttpClient) {

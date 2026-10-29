@@ -455,6 +455,15 @@ enum NotificationType {
   @@map("notification_type")
 }
 
+/// What an organization lets a notification type do by e-mail: never, only when the person asks, or unless the person declines.
+enum NotificationEmailPolicy {
+  OFF
+  DEFAULT_OFF
+  DEFAULT_ON
+
+  @@map("notification_email_policy")
+}
+
 /// Where an export column takes its value from (the old plano "origen_tipo").
 enum ExportColumnSource {
   FIELD
@@ -850,6 +859,7 @@ model Tenant {
   ticketStepVisits        TicketStepVisit[]
   stepRuntimeStates       StepRuntimeState[]
   notificationPreferences NotificationPreference[]
+  notificationEmailPolicies NotificationEmailPolicySetting[]
   ticketEvents            TicketEvent[]
   ticketSlaClocks         TicketSlaClock[]
   ticketFieldValues       TicketFieldValue[]
@@ -2773,6 +2783,19 @@ model NotificationPreference {
 
   @@id([tenantId, userId, type])
   @@map("notification_preferences")
+}
+
+/// The organization's e-mail policy per notification type (§8.34). No row = the type's built-in default.
+model NotificationEmailPolicySetting {
+  tenantId  String                  @map("tenant_id") @db.Uuid
+  type      NotificationType
+  policy    NotificationEmailPolicy
+  updatedAt DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, type])
+  @@map("notification_email_policies")
 }
 
 /// Transactional outbox: side effects (PDF, e-mail, websocket, webhooks, exports)

@@ -318,13 +318,14 @@ describe('notifications: fan-out of ticket events, e-mails, preferences and endp
 
     it('preferences list every type with the defaults (e-mail only for assignments and notification blocks), and saving one changes only that type', async () => {
       const fresh = await world.member([grant('read_created')]);
-      const before = (await fresh.client.get('/notifications/preferences').expect(200)).body as Array<{ type: string; inApp: boolean; email: boolean }>;
+      const before = (await fresh.client.get('/notifications/preferences').expect(200)).body as Array<{ type: string; inApp: boolean; email: boolean; emailLocked: boolean }>;
       expect(before).toHaveLength(13);
       expect(before.every((preference) => preference.inApp)).toBe(true);
       expect(before.filter((preference) => preference.email).map((preference) => preference.type)).toEqual(['TICKET_ASSIGNED', 'STORAGE_QUOTA', 'SYSTEM']);
-      expect((await fresh.client.put('/notifications/preferences/TICKET_CLOSED', { inApp: false, email: false }).expect(200)).body).toEqual({ type: 'TICKET_CLOSED', inApp: false, email: false });
+      expect(before.some((preference) => preference.emailLocked)).toBe(false);
+      expect((await fresh.client.put('/notifications/preferences/TICKET_CLOSED', { inApp: false, email: false }).expect(200)).body).toEqual({ type: 'TICKET_CLOSED', inApp: false, email: false, emailLocked: false });
       const after = (await fresh.client.get('/notifications/preferences').expect(200)).body as typeof before;
-      expect(after.filter((preference) => !preference.inApp)).toEqual([{ type: 'TICKET_CLOSED', inApp: false, email: false }]);
+      expect(after.filter((preference) => !preference.inApp)).toEqual([{ type: 'TICKET_CLOSED', inApp: false, email: false, emailLocked: false }]);
       await fresh.client.put('/notifications/preferences/NOPE', { inApp: true, email: true }).expect(400);
       await fresh.client.put('/notifications/preferences/TICKET_CLOSED', { inApp: true }).expect(400);
     });

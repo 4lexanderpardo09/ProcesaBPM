@@ -140,6 +140,7 @@ export const EXPORT_EXCLUDED_TABLES: Readonly<Record<string, string>> = {
   outbox_events: 'Internal work queue of the worker.',
   notifications: 'Copies of what tickets and events already contain, per recipient.',
   notification_preferences: 'Personal settings of each member, not organization data.',
+  notification_email_policies: 'E-mail delivery settings of the organization, not business data; every change is in the audit trail.',
   webhooks: 'Holds the signing secret of each webhook (never exported, not even encrypted).',
   webhook_deliveries: 'Delivery log of the webhooks (payload copies and remote responses).',
   tenant_sequences: 'Internal counters (ticket numbers are in tickets).',

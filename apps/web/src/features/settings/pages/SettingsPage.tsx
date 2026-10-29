@@ -6,6 +6,7 @@ import { PageHeader, Tabs } from '@/shared/ui';
 import { AiAssistantTab } from '../components/AiAssistantTab';
 import { AuditTab } from '../components/AuditTab';
 import { CalculatorsTab } from '../components/CalculatorsTab';
+import { EmailPoliciesTab } from '../components/EmailPoliciesTab';
 import { OrganizationTab } from '../components/OrganizationTab';
 import { SecurityTab } from '../components/SecurityTab';
 import styles from '../components/Settings.module.css';
@@ -16,6 +17,7 @@ const TABS = [
   { value: 'security', action: 'update', subject: 'Setting' },
   { value: 'organization', action: 'update', subject: 'Setting' },
   { value: 'calculators', action: 'update', subject: 'Setting' },
+  { value: 'emails', action: 'update', subject: 'Setting' },
   { value: 'ai', action: 'update', subject: 'Setting' },
   { value: 'support', action: 'manage', subject: 'SupportAccess' },
   { value: 'storage', action: 'read', subject: 'Storage' },
@@ -42,6 +44,7 @@ export function SettingsPage() {
       {current === 'organization' && <OrganizationTab />}
       {current === 'security' && <SecurityTab />}
       {current === 'calculators' && <CalculatorsTab />}
+      {current === 'emails' && <EmailPoliciesTab />}
       {current === 'ai' && <AiAssistantTab />}
       {current === 'support' && <SupportAccessTab />}
       {current === 'storage' && <StorageTab />}

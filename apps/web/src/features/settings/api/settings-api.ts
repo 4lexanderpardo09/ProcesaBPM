@@ -1,4 +1,14 @@
-import { aiAssistantSettingsResponseSchema, aiUsageResponseSchema, auditLogPageSchema, tenantSecuritySettingsResponseSchema, type TenantSecuritySettings, type UpdateAiAssistantSettings } from '@procesabpm/shared';
+import {
+  aiAssistantSettingsResponseSchema,
+  aiUsageResponseSchema,
+  auditLogPageSchema,
+  type EmailPolicyTypeValue,
+  notificationEmailPolicyResponseSchema,
+  type NotificationEmailPolicyValue,
+  tenantSecuritySettingsResponseSchema,
+  type TenantSecuritySettings,
+  type UpdateAiAssistantSettings,
+} from '@procesabpm/shared';
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import type { HttpClient } from '@/shared/api';
@@ -7,6 +17,7 @@ export const settingsQueryKeys = {
   security: ['settings', 'security'] as const,
   aiAssistant: ['settings', 'ai-assistant'] as const,
   aiUsage: ['settings', 'ai-assistant', 'usage'] as const,
+  emailPolicies: ['settings', 'notification-emails'] as const,
   support: ['settings', 'support-access'] as const,
   storage: ['settings', 'storage'] as const,
   calculators: ['settings', 'calculators'] as const,
@@ -28,6 +39,14 @@ export function aiAssistantQueryOptions(client: HttpClient) {
 
 export function saveAiAssistant(client: HttpClient, body: UpdateAiAssistantSettings) {
   return client.request('/settings/ai-assistant', { method: 'PUT', body, schema: aiAssistantSettingsResponseSchema });
+}
+
+export function emailPoliciesQueryOptions(client: HttpClient) {
+  return queryOptions({ queryKey: settingsQueryKeys.emailPolicies, queryFn: ({ signal }) => client.request('/settings/notification-emails', { schema: z.array(notificationEmailPolicyResponseSchema), signal }) });
+}
+
+export function saveEmailPolicy(client: HttpClient, type: EmailPolicyTypeValue, policy: NotificationEmailPolicyValue) {
+  return client.request(`/settings/notification-emails/${type}`, { method: 'PUT', body: { policy }, schema: notificationEmailPolicyResponseSchema });
 }
 
 export function aiUsageQueryOptions(client: HttpClient) {

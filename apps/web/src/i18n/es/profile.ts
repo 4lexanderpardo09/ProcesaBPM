@@ -88,12 +88,13 @@ export const profile = {
   },
   notifications: {
     title: 'Notificaciones',
-    hint: 'Qué avisos te llegan en la aplicación y cuáles por correo. Por defecto, solo las asignaciones llegan también por correo. Cada cambio se guarda al momento.',
+    hint: 'Qué avisos te llegan en la aplicación y cuáles por correo. Por defecto, solo las asignaciones llegan también por correo, salvo que tu organización lo cambie. Cada cambio se guarda al momento.',
     kind: 'Aviso',
     inApp: 'En la app',
     email: 'Por correo',
     inAppNamed: '{{kind}}: en la app',
     emailNamed: '{{kind}}: por correo',
+    emailLocked: 'Tu administrador desactivó este correo',
     types: {
       TICKET_CREATED: 'Se creó un ticket',
       TICKET_ASSIGNED: 'Te asignaron un ticket',
