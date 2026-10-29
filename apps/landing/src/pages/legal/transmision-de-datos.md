@@ -2,8 +2,8 @@
 layout: ../../layouts/Legal.astro
 title: "Contrato de transmisión de datos personales"
 description: "El acuerdo entre cada organización cliente (responsable) y ProcesaBPM (encargado) sobre los datos que la organización carga en la plataforma, con la lista de proveedores."
-version: 1
-updated: "28 de octubre de 2026"
+version: 2
+updated: "29 de octubre de 2026"
 ---
 
 Este contrato hace parte de los [Términos y Condiciones del Servicio](/legal/terminos) y regula el tratamiento que ProcesaBPM hace, por cuenta de cada organización cliente, de los datos personales que esa organización carga en la plataforma. Se celebra en los términos del artículo 2.2.2.25.5.2 del Decreto 1074 de 2015.
@@ -11,7 +11,7 @@ Este contrato hace parte de los [Términos y Condiciones del Servicio](/legal/te
 ## 1. Partes
 
 - **Responsable:** la organización cliente que acepta los términos.
-- **Encargado:** Alexander Pardo, persona natural, quien opera ProcesaBPM.
+- **Encargado:** Jhon Alexander Urbano Pardo, persona natural, quien opera ProcesaBPM.
 
 ## 2. Alcance del tratamiento
 
@@ -44,11 +44,11 @@ El responsable autoriza que el encargado use los siguientes proveedores, que tra
 | Proveedor | País | Para qué | Qué datos |
 |---|---|---|---|
 | Amazon Web Services (AWS) | Estados Unidos (región us-east-1) | Servidores, base de datos, archivos adjuntos y envío de correos (Amazon SES) | Todos los datos de la plataforma |
-| DeepSeek | China | Asistente de IA «Crear con IA», solo si el responsable lo activa | La descripción del proceso o el cambio pedido y el borrador del flujo. No los tickets ni sus datos |
+| Anthropic (Claude) | Estados Unidos | Asistente de IA «Crear con IA», solo si el responsable lo activa | La descripción del proceso o el cambio pedido y el borrador del flujo. No los tickets ni sus datos |
 
 El encargado avisa a los administradores del responsable con 30 días de anticipación antes de agregar o cambiar un proveedor. Si el responsable se opone, puede terminar el servicio sin penalidad.
 
-China no figura entre los países con nivel adecuado de protección que publica la Superintendencia de Industria y Comercio. El responsable que active el asistente de IA acepta esa transmisión, y debe cuidar que en él no se escriban datos personales.
+Estados Unidos figura entre los países con nivel adecuado de protección que publica la Superintendencia de Industria y Comercio. El responsable que active el asistente de IA acepta esa transmisión, y debe cuidar que en él no se escriban datos personales.
 
 ## 7. Duración
 

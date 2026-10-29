@@ -82,7 +82,7 @@ test.describe('blog and legal pages', () => {
 
   test('the privacy notice shows its version, links the full policy and publishes no ID number', async ({ page }) => {
     await page.goto('/privacidad');
-    await expect(page.getByText('Versión 3')).toBeVisible();
+    await expect(page.getByText('Versión 4')).toBeVisible();
     await expect(page.locator('main')).not.toContainText('C.C.');
     await page.getByRole('link', { name: 'Política de Tratamiento de la Información' }).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Política de Tratamiento de la Información');
@@ -94,7 +94,7 @@ test.describe('blog and legal pages', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Términos y Condiciones del Servicio');
     await page.getByRole('link', { name: 'contrato de transmisión de datos' }).first().click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Contrato de transmisión de datos personales');
-    await expect(page.getByText('DeepSeek').first()).toBeVisible();
+    await expect(page.getByText('Anthropic').first()).toBeVisible();
   });
 });
 

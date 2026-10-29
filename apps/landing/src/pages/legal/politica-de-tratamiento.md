@@ -2,17 +2,18 @@
 layout: ../../layouts/Legal.astro
 title: "Política de Tratamiento de la Información"
 description: "Cómo ProcesaBPM recoge, usa, guarda y protege los datos personales, y cómo ejercer tus derechos según la Ley 1581 de 2012."
-version: 1
-updated: "28 de octubre de 2026"
+version: 2
+updated: "29 de octubre de 2026"
 ---
 
 Esta política explica cómo ProcesaBPM trata los datos personales, en cumplimiento de la Ley 1581 de 2012 y del Decreto 1074 de 2015 (que compila el Decreto 1377 de 2013).
 
 ## 1. Responsable
 
-- **Responsable:** Alexander Pardo, persona natural, quien opera ProcesaBPM.
-- **Domicilio:** [ciudad y dirección por confirmar], Colombia.
+- **Responsable:** Jhon Alexander Urbano Pardo, persona natural, quien opera ProcesaBPM.
+- **Domicilio:** Calle 17 #28-10, Popayán, Cauca, Colombia.
 - **Correo para consultas y reclamos:** [alexander.pardo.dev@gmail.com](mailto:alexander.pardo.dev@gmail.com).
+- **Teléfono:** 312 644 8441.
 - **Sitio web:** https://procesabpm.com
 
 ## 2. Dos papeles distintos
@@ -45,9 +46,9 @@ Usamos proveedores que tratan datos por cuenta nuestra (encargados), según sus 
 |---|---|---|
 | Amazon Web Services (AWS) | Estados Unidos | Servidores, base de datos, archivos y envío de correos |
 | Google (Google Analytics) | Estados Unidos | Medición de visitas, solo con consentimiento |
-| DeepSeek | China | Asistente de IA, solo si la organización lo activa y únicamente con el texto que se le escribe |
+| Anthropic (Claude) | Estados Unidos | Asistente de IA, solo si la organización lo activa y únicamente con el texto que se le escribe |
 
-Estados Unidos figura en la lista de países con nivel adecuado de protección de la Superintendencia de Industria y Comercio. China no figura en esa lista: por eso el asistente de IA se activa solo por decisión expresa de cada organización, la plataforma advierte que no se escriban datos de personas en él, y lo que se le envía se limita a la descripción del proceso.
+Estados Unidos figura en la lista de países con nivel adecuado de protección de la Superintendencia de Industria y Comercio, donde están alojados los tres proveedores. Aun así, el asistente de IA se activa solo por decisión expresa de cada organización, la plataforma advierte que no se escriban datos de personas en él, y lo que se le envía se limita a la descripción del proceso.
 
 ## 5. Cuánto tiempo guardamos los datos
 
