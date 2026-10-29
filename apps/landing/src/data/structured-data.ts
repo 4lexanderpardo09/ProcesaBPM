@@ -4,7 +4,7 @@
  */
 const ORG_ID = (site: URL) => new URL('/#organizacion', site).href;
 
-export const CONTACT_EMAIL = 'alexander.pardo.dev@gmail.com';
+export const CONTACT_EMAIL = 'hola@procesabpm.com';
 
 export function organizationLd(site: URL) {
   return {

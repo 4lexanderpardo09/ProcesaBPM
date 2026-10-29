@@ -2,7 +2,7 @@
 layout: ../../layouts/Legal.astro
 title: "Política de Tratamiento de la Información"
 description: "Cómo ProcesaBPM recoge, usa, guarda y protege los datos personales, y cómo ejercer tus derechos según la Ley 1581 de 2012."
-version: 1
+version: 2
 updated: "28 de octubre de 2026"
 ---
 
@@ -12,7 +12,7 @@ Esta política explica cómo ProcesaBPM trata los datos personales, en cumplimie
 
 - **Responsable:** Alexander Pardo, persona natural, quien opera ProcesaBPM.
 - **Domicilio:** [ciudad y dirección por confirmar], Colombia.
-- **Correo para consultas y reclamos:** [alexander.pardo.dev@gmail.com](mailto:alexander.pardo.dev@gmail.com).
+- **Correo para consultas y reclamos:** [privacidad@procesabpm.com](mailto:privacidad@procesabpm.com).
 - **Sitio web:** https://procesabpm.com
 
 ## 2. Dos papeles distintos
@@ -69,7 +69,7 @@ Como titular de los datos, puedes:
 
 ## 7. Cómo ejercerlos
 
-Escribe a [alexander.pardo.dev@gmail.com](mailto:alexander.pardo.dev@gmail.com) con tu nombre, el correo con el que te registraste, lo que pides y, si es un reclamo, los hechos y los documentos que quieras aportar.
+Escribe a [privacidad@procesabpm.com](mailto:privacidad@procesabpm.com) con tu nombre, el correo con el que te registraste, lo que pides y, si es un reclamo, los hechos y los documentos que quieras aportar.
 
 - **Consultas:** respondemos en máximo 10 días hábiles. Si no alcanzamos, te avisamos el motivo y respondemos dentro de los 5 días hábiles siguientes.
 - **Reclamos** (corregir, actualizar, suprimir o revocar): respondemos en máximo 15 días hábiles. Si no alcanzamos, te avisamos el motivo y respondemos dentro de los 8 días hábiles siguientes. Si el reclamo está incompleto, te pedimos lo que falta dentro de los 5 días hábiles siguientes; si no lo completas en 2 meses, entendemos que desististe.

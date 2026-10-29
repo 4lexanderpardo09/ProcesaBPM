@@ -2,7 +2,7 @@
 layout: ../../layouts/Legal.astro
 title: "Términos y Condiciones del Servicio"
 description: "Las reglas para usar ProcesaBPM: cuentas, datos, asistente de IA, firmas electrónicas, pagos, responsabilidad y terminación."
-version: 1
+version: 2
 updated: "28 de octubre de 2026"
 ---
 
@@ -10,7 +10,7 @@ Estos términos regulan el uso de ProcesaBPM, la plataforma para diseñar y ejec
 
 ## 1. Quién presta el servicio
 
-ProcesaBPM lo presta Alexander Pardo, persona natural domiciliada en Colombia ([alexander.pardo.dev@gmail.com](mailto:alexander.pardo.dev@gmail.com)). En estos términos lo llamamos «ProcesaBPM» o «nosotros».
+ProcesaBPM lo presta Alexander Pardo, persona natural domiciliada en Colombia ([privacidad@procesabpm.com](mailto:privacidad@procesabpm.com)). En estos términos lo llamamos «ProcesaBPM» o «nosotros».
 
 ## 2. Definiciones
 
