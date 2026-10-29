@@ -14,6 +14,7 @@ const GLOBAL_TABLES = new Set([
   'platform_outbox_events',
   'platform_announcements',
   'demo_requests',
+  'email_suppressions',
 ]);
 
 describe('tenant isolation (row-level security)', () => {
