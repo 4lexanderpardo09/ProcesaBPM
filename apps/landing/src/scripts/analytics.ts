@@ -35,20 +35,43 @@ function loadGoogleAnalytics(id: string): void {
   w.gtag('config', id, { anonymize_ip: true });
 }
 
+/** Google's measurement cookies (_ga, _ga_<id>) on this site, removed when the visitor takes the consent back. */
+function clearAnalyticsCookies(): void {
+  const domain = window.location.hostname.replace(/^www\./, '');
+  for (const cookie of document.cookie.split(';')) {
+    const name = cookie.split('=')[0]!.trim();
+    if (name !== '_ga' && !name.startsWith('_ga_')) continue;
+    for (const scope of ['', `; domain=${domain}`, `; domain=.${domain}`]) document.cookie = `${name}=; max-age=0; path=/${scope}`;
+  }
+}
+
 export function startAnalytics(): void {
   const banner = document.getElementById('consent');
   const id = banner?.dataset['ga'];
   if (banner === null || id === undefined || id === '') return;
-  const choice = readChoice();
-  if (choice === 'granted') loadGoogleAnalytics(id);
-  if (choice !== null) return;
-  banner.hidden = false;
+  let loaded = false;
+  const load = () => {
+    if (loaded) return;
+    loaded = true;
+    loadGoogleAnalytics(id);
+  };
+  if (readChoice() === 'granted') load();
+  banner.hidden = readChoice() !== null;
   banner.querySelectorAll<HTMLButtonElement>('[data-choice]').forEach((button) =>
     button.addEventListener('click', () => {
       const picked = button.dataset['choice'] === 'granted' ? 'granted' : 'denied';
       saveChoice(picked);
       banner.hidden = true;
-      if (picked === 'granted') loadGoogleAnalytics(id);
+      if (picked === 'granted') load();
+      else clearAnalyticsCookies();
     }),
   );
+  // The footer's «Cookies» button: the choice can be changed (or taken back) at any time.
+  document.querySelectorAll<HTMLButtonElement>('[data-cookie-settings]').forEach((button) => {
+    button.hidden = false;
+    button.addEventListener('click', () => {
+      banner.hidden = false;
+      banner.querySelector<HTMLButtonElement>('[data-choice="granted"]')?.focus();
+    });
+  });
 }
