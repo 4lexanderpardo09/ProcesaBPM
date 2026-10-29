@@ -2,6 +2,7 @@ import { Inject, Injectable, type LoggerService } from '@nestjs/common';
 import type { AppConfig } from '../../config/app-config.js';
 import { APP_CONFIG } from '../../config/tokens.js';
 import { TenantContext } from '../../infrastructure/database/tenant-context.js';
+import { describeError } from './describe-error.js';
 import { RequestContext } from './request-context.js';
 
 export type LogLevel = AppConfig['LOG_LEVEL'];
@@ -53,18 +54,34 @@ export class JsonLogger implements LoggerService {
   private emit(level: LogLevel, message: unknown, optional: readonly unknown[]): void {
     if (SEVERITY[level] < SEVERITY[this.config.LOG_LEVEL]) return;
     const { fields, context, stack } = this.readOptional(optional);
+    const head = this.readMessage(message);
     this.write(
       JSON.stringify({
         time: new Date().toISOString(),
         level,
-        message: message instanceof Error ? message.message : String(message),
+        message: head.message,
         context,
         tenant_id: this.tenantContext.current()?.tenantId,
         request_id: this.requestContext.current()?.requestId,
-        stack: stack ?? (message instanceof Error ? message.stack : undefined),
+        stack: stack ?? head.stack,
+        ...head.fields,
         ...fields,
       }),
     );
+  }
+
+  /**
+   * The first argument: text; an error, described (name, code, cause) with its stack; or structured fields with their own
+   * `message` (`logger.warn({ message: '…', eventId }, 'Context')`). Anything else is described, never `[object Object]`.
+   */
+  private readMessage(message: unknown): { message: string; stack?: string; fields: Record<string, unknown> } {
+    if (typeof message === 'string') return { message, fields: {} };
+    if (message instanceof Error || !isRecord(message)) {
+      const error = describeError(message);
+      return { message: error.message, ...(message instanceof Error && message.stack !== undefined ? { stack: message.stack } : {}), fields: { error } };
+    }
+    const { message: text, ...fields } = message;
+    return { message: typeof text === 'string' ? text : describeError(message).message, fields };
   }
 
   private readOptional(optional: readonly unknown[]): {
@@ -79,6 +96,9 @@ export class JsonLogger implements LoggerService {
       if (typeof item === 'string') {
         if (item.includes('\n    at ')) stack = item;
         else context = item;
+      } else if (item instanceof Error) {
+        fields = { ...fields, error: describeError(item) };
+        stack ??= item.stack;
       } else if (typeof item === 'object' && item !== null) {
         fields = { ...fields, ...item };
       }
@@ -86,3 +106,5 @@ export class JsonLogger implements LoggerService {
     return { fields, context, stack };
   }
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
