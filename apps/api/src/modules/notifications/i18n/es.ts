@@ -18,6 +18,7 @@ export const notificationsEs = {
     SYSTEM: () => 'Aviso de ProcesaBPM',
   } satisfies Record<NotificationTypeValue, (ticketNumber: string) => string>,
   storageQuota: {
+    overline: 'Almacenamiento',
     body: (level: number, used: string, limit: string) =>
       level >= 95
         ? `Tu organización ya usa el ${level} % del almacenamiento de su plan (${used} de ${limit}). Pasado el límite y su margen, no se podrán subir más archivos.`
@@ -28,7 +29,9 @@ export const notificationsEs = {
   },
   email: {
     greeting: (firstName: string) => `Hola ${firstName},`,
-    ticketLine: (title: string) => `Ticket: ${title}`,
+    overline: (n: string) => `Ticket #${n}`,
+    ticketLabel: 'Ticket',
+    subjectLabel: 'Asunto',
     action: 'Ver el ticket',
     why: (organization: string) => `Recibes este correo porque participas en tickets de «${organization}». Puedes cambiar qué avisos recibes en tus preferencias de notificaciones.`,
   },

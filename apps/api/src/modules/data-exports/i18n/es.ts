@@ -30,6 +30,9 @@ export const dataExportsEs = {
   },
   readyMail: {
     subject: 'La exportación de datos de tu organización está lista',
+    overline: 'Exportación de datos',
+    organization: 'Organización',
+    availableUntil: 'Disponible hasta',
     title: 'Tu exportación está lista',
     greeting: (firstName: string) => `Hola ${firstName},`,
     ready: (organization: string) => `La exportación de los datos de la organización «${organization}» que pediste ya está lista.`,

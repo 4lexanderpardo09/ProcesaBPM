@@ -1,13 +1,15 @@
 /** Texts of the account e-mails (Spanish). Subjects never carry names: they show up in lock screens and logs. */
 export const authMailEs = {
-  footerAutomatic: 'Este es un mensaje automático de ProcesaBPM.',
+  footerAutomatic: 'Este es un mensaje automático de ProcesaBPM. Esta dirección no recibe respuestas.',
+  overline: { account: 'Tu cuenta', security: 'Seguridad de la cuenta', invitation: 'Invitación', organization: 'Tu organización' },
+  facts: { organization: 'Organización', when: 'Fecha y hora', ipAddress: 'Dirección IP', browser: 'Navegador', member: 'Miembro', purgeOn: 'Se borra el' },
   passwordReset: {
     subject: 'Restablece tu contraseña de ProcesaBPM',
     title: 'Restablece tu contraseña',
     greeting: (firstName: string) => `Hola ${firstName},`,
     request: 'Recibimos una solicitud para restablecer la contraseña de tu cuenta.',
     validity: (minutes: number) => `El enlace sirve una sola vez y vence en ${minutes} minutos.`,
-    action: 'Restablecer contraseña',
+    action: 'Elegir una contraseña nueva',
     ignore: 'Si no lo solicitaste, ignora este mensaje: tu contraseña no cambiará.',
   },
   platformAdminInvitation: {
@@ -25,7 +27,7 @@ export const authMailEs = {
     greeting: (firstName: string) => `Hola ${firstName},`,
     requested: (organization: string) => `Se solicitó la eliminación de la organización «${organization}». Desde ahora nadie puede ingresar a ella.`,
     deadline: (date: string) => `Si no se cancela, sus datos y archivos se borrarán de forma definitiva el ${date}.`,
-    contact: 'Si necesitas una copia de tus datos o crees que fue un error, responde a este correo o escribe a soporte antes de esa fecha.',
+    contact: 'Si necesitas una copia de tus datos o crees que fue un error, escribe a soporte antes de esa fecha.',
   },
   tenantPurgeReminder: {
     subject: (days: number) => (days === 1 ? 'Mañana se borra tu organización' : `Tu organización se borra en ${days} días`),
@@ -69,8 +71,6 @@ export const authMailEs = {
       MFA_LOCKED: (minutes: number) => `La verificación en dos pasos de tu cuenta se bloqueó durante ${minutes} minutos porque se escribió mal el código varias veces seguidas.`,
       PLATFORM_ADMIN_SIGN_IN: 'Se abrió una sesión en la consola de administración de la plataforma con tu cuenta.',
     },
-    when: (date: string) => `Fecha y hora: ${date}.`,
-    origin: (ipAddress: string, userAgent: string) => `Desde la dirección IP ${ipAddress}, con el navegador «${userAgent}».`,
     unknown: 'desconocido',
     notYou: 'Si no fuiste tú, restablece tu contraseña ya mismo y avisa a soporte o al administrador de tu organización.',
     action: 'Restablecer mi contraseña',
@@ -85,6 +85,6 @@ export const authMailEs = {
         `El equipo de soporte de ProcesaBPM restableció la verificación en dos pasos de ${member} en la organización «${organization}», después de verificar su identidad. Todas sus sesiones se cerraron.`,
     },
     audit: 'El cambio quedó registrado en la auditoría de la organización.',
-    unexpected: 'Si no esperabas este cambio, responde a este correo o escribe a soporte.',
+    unexpected: 'Si no esperabas este cambio, escribe a soporte.',
   },
 } as const;

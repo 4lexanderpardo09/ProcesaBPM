@@ -93,9 +93,12 @@ export class StorageQuotaEmailHandler implements ExternalEffectHandler<StorageQu
 
     const subject = es.titles.STORAGE_QUOTA();
     const content = renderEmail({
+      overline: es.storageQuota.overline,
+      tone: event.payload.level >= 95 ? 'danger' : 'warning',
       title: subject,
       greeting: es.email.greeting(recipient.firstName),
-      paragraphs: [bodyOf(event.payload), es.storageQuota.advice],
+      paragraphs: [bodyOf(event.payload)],
+      note: es.storageQuota.advice,
       action: { label: es.storageQuota.action, url: this.links.storageUsage(tenantId) },
       footer: es.storageQuota.why(tenant.name),
     });

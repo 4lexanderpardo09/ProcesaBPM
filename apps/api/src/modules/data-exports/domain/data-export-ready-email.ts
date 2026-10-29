@@ -17,9 +17,15 @@ export function renderDataExportReadyEmail(input: DataExportReadyInput): Rendere
   return {
     subject: t.subject,
     ...renderEmail({
+      overline: t.overline,
       title: t.title,
       greeting: t.greeting(input.firstName),
-      paragraphs: [t.ready(input.organization), t.expires(formatNoticeDate(input.expiresAt, input.timeZone)), t.how],
+      paragraphs: [t.ready(input.organization)],
+      facts: [
+        { label: t.organization, value: input.organization },
+        { label: t.availableUntil, value: formatNoticeDate(input.expiresAt, input.timeZone) },
+      ],
+      note: t.how,
       action: { label: t.action, url: input.pageUrl },
       footer: authMailEs.footerAutomatic,
     }),
