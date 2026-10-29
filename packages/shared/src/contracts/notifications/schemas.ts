@@ -51,5 +51,32 @@ export interface MarkedReadResponse {
 export interface NotificationPreferenceResponse {
   readonly type: NotificationTypeValue;
   readonly inApp: boolean;
+  /** Whether it arrives by e-mail: always `false` while the organization turned this type's e-mail off. */
   readonly email: boolean;
+  /** The organization turned this type's e-mail off: the person cannot turn it on. */
+  readonly emailLocked: boolean;
 }
+
+/**
+ * What the organization lets a type do by e-mail: never (`OFF`), only to whoever turns it on (`DEFAULT_OFF`) or to
+ * everyone who does not turn it off (`DEFAULT_ON`).
+ */
+export const NOTIFICATION_EMAIL_POLICIES = ['OFF', 'DEFAULT_OFF', 'DEFAULT_ON'] as const;
+export const notificationEmailPolicySchema = z.enum(NOTIFICATION_EMAIL_POLICIES);
+export type NotificationEmailPolicyValue = z.infer<typeof notificationEmailPolicySchema>;
+
+/** The types an administrator governs: the storage warning is the administrators' own alert, not a ticket e-mail. */
+export const EMAIL_POLICY_TYPES = NOTIFICATION_TYPES.filter((type): type is Exclude<NotificationTypeValue, 'STORAGE_QUOTA'> => type !== 'STORAGE_QUOTA');
+export const emailPolicyTypeSchema = z.enum(EMAIL_POLICY_TYPES as [Exclude<NotificationTypeValue, 'STORAGE_QUOTA'>, ...Exclude<NotificationTypeValue, 'STORAGE_QUOTA'>[]]);
+export type EmailPolicyTypeValue = z.infer<typeof emailPolicyTypeSchema>;
+
+export const updateNotificationEmailPolicySchema = z.object({ policy: notificationEmailPolicySchema }).strict();
+export type UpdateNotificationEmailPolicy = z.infer<typeof updateNotificationEmailPolicySchema>;
+
+export const notificationEmailPolicyResponseSchema = z.object({
+  type: emailPolicyTypeSchema,
+  policy: notificationEmailPolicySchema,
+  /** `false` while the organization never chose: `policy` is then the type's built-in default. */
+  chosen: z.boolean(),
+});
+export type NotificationEmailPolicyResponse = z.infer<typeof notificationEmailPolicyResponseSchema>;

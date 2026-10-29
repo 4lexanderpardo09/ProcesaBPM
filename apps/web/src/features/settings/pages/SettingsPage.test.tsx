@@ -73,6 +73,35 @@ describe('SettingsPage', () => {
     expect(await screen.findByRole('button', { name: 'Activar el asistente' })).toBeDisabled();
   });
 
+  it('sets which notices may go out by e-mail, type by type, saving each choice at once', async () => {
+    let rows = ['TICKET_CREATED', 'TICKET_ASSIGNED', 'TICKET_TRANSITIONED', 'TICKET_COMMENTED', 'TICKET_CLOSED', 'TICKET_REOPENED', 'INCIDENT_OPENED', 'INCIDENT_RESOLVED', 'SLA_WARNING', 'SLA_OVERDUE', 'OBSERVER_UPDATE', 'SYSTEM'].map((type) => ({
+      type,
+      policy: type === 'TICKET_ASSIGNED' || type === 'SYSTEM' ? 'DEFAULT_ON' : 'DEFAULT_OFF',
+      chosen: false,
+    }));
+    const { fake } = renderRoute('/settings/emails', {
+      handlers: {
+        '/settings/notification-emails': () => rows,
+        '/settings/notification-emails/TICKET_CLOSED': (options) => {
+          const saved = { type: 'TICKET_CLOSED', policy: (options.body as { policy: string }).policy, chosen: true };
+          rows = rows.map((row) => (row.type === saved.type ? saved : row));
+          return saved;
+        },
+      },
+    });
+
+    const closed = await screen.findByRole('combobox', { name: 'Se cerró un ticket' });
+    expect(closed).toHaveValue('DEFAULT_OFF');
+    expect(closed).toHaveAccessibleDescription(/Valor de fábrica/);
+    expect(screen.getByRole('combobox', { name: 'Te asignaron un ticket' })).toHaveValue('DEFAULT_ON');
+    expect(screen.queryByRole('combobox', { name: 'Espacio de almacenamiento' })).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(closed, 'Nunca por correo');
+    await vi.waitFor(() => expect(fake.callsTo('/settings/notification-emails/TICKET_CLOSED')[0]?.options).toMatchObject({ method: 'PUT', body: { policy: 'OFF' } }));
+    await vi.waitFor(() => expect(screen.getByRole('combobox', { name: 'Se cerró un ticket' })).toHaveValue('OFF'));
+    expect(screen.getByRole('combobox', { name: 'Se cerró un ticket' })).not.toHaveAccessibleDescription(/Valor de fábrica/);
+  });
+
   it('says the AI assistant is not offered when the platform has it off', async () => {
     renderRoute('/settings/ai', { handlers: { '/settings/ai-assistant': () => ({ available: false, enabled: false, noticeVersion: 2, limits: { jobsPerDay: 10, tokensPerDay: 1_000_000 }, today: { jobs: 0, tokens: 0 } }) } });
     expect(await screen.findByText('El asistente de IA todavía no está disponible en la plataforma.')).toBeInTheDocument();
@@ -191,7 +220,7 @@ describe('SettingsPage', () => {
       },
     });
 
-    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad', 'Organización', 'Calculadoras', 'Asistente de IA']);
+    expect((await screen.findAllByRole('tab')).map((tab) => tab.textContent)).toEqual(['Seguridad', 'Organización', 'Calculadoras', 'Correos', 'Asistente de IA']);
     await userEvent.click(await screen.findByRole('checkbox', { name: /Exigir verificación en dos pasos/ }));
     expect(await screen.findByText('Tu rol no puede hacer este cambio.')).toBeInTheDocument();
   });

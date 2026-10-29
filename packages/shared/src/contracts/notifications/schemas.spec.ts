@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listNotificationsQuerySchema, notificationPreferenceRequestSchema, notificationTypeSchema } from './schemas.js';
+import { EMAIL_POLICY_TYPES, emailPolicyTypeSchema, listNotificationsQuerySchema, notificationPreferenceRequestSchema, notificationTypeSchema, updateNotificationEmailPolicySchema } from './schemas.js';
 
 describe('notification contracts', () => {
   it('lists with defaults and reads the unread filter as a boolean', () => {
@@ -14,5 +14,15 @@ describe('notification contracts', () => {
   });
   it('knows the thirteen types of the database enum', () => {
     expect(notificationTypeSchema.options).toHaveLength(13);
+  });
+
+  it('lets an administrator govern every type but the storage warning, with one of the three policies', () => {
+    expect(EMAIL_POLICY_TYPES).not.toContain('STORAGE_QUOTA');
+    expect(EMAIL_POLICY_TYPES).toContain('SYSTEM');
+    expect(emailPolicyTypeSchema.safeParse('STORAGE_QUOTA').success).toBe(false);
+    expect(emailPolicyTypeSchema.safeParse('TICKET_CREATED').success).toBe(true);
+    expect(updateNotificationEmailPolicySchema.safeParse({ policy: 'DEFAULT_OFF' }).success).toBe(true);
+    expect(updateNotificationEmailPolicySchema.safeParse({ policy: 'SOMETIMES' }).success).toBe(false);
+    expect(updateNotificationEmailPolicySchema.safeParse({ policy: 'OFF', extra: 1 }).success).toBe(false);
   });
 });

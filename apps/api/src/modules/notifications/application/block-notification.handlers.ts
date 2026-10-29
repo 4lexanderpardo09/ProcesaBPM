@@ -9,6 +9,7 @@ import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-han
 import { TicketTextRenderer } from '../../documents/application/ticket-text-renderer.js';
 import { EmailOutboxRepository } from '../data/email-outbox.repository.js';
 import { NotificationRepository } from '../data/notification.repository.js';
+import { EmailPolicyRepository } from '../data/email-policy.repository.js';
 import { RecipientRepository } from '../data/recipient.repository.js';
 import { TicketFactsRepository } from '../data/ticket-facts.repository.js';
 import { channelsFor } from '../domain/channels.js';
@@ -35,6 +36,7 @@ export class BlockNotificationHandlers implements OnModuleInit {
     @Inject(OutboxHandlerRegistry) private readonly registry: OutboxHandlerRegistry,
     @Inject(TicketFactsRepository) private readonly facts: TicketFactsRepository,
     @Inject(RecipientRepository) private readonly recipients: RecipientRepository,
+    @Inject(EmailPolicyRepository) private readonly emailPolicies: EmailPolicyRepository,
     @Inject(NotificationRepository) private readonly notifications: NotificationRepository,
     @Inject(EmailOutboxRepository) private readonly emails: EmailOutboxRepository,
     @Inject(TicketReaderFilter) private readonly readers: TicketReaderFilter,
@@ -58,10 +60,11 @@ export class BlockNotificationHandlers implements OnModuleInit {
     const readerIds = await this.readers.filter(tx, tenantId, ticketId, named);
     if (readerIds.length === 0) return;
     const stored = await this.recipients.preferences(tx, tenantId, readerIds, [BLOCK_NOTICE]);
+    const policies = await this.emailPolicies.policies(tx, tenantId);
     const wantsInApp = block.channels.includes('IN_APP');
     const wantsEmail = block.channels.includes('EMAIL') && tenant.active;
 
-    const inApp = readerIds.filter((userId) => wantsInApp && channelsFor(stored, userId, BLOCK_NOTICE).inApp);
+    const inApp = readerIds.filter((userId) => wantsInApp && channelsFor(stored, userId, BLOCK_NOTICE, policies).inApp);
     if (inApp.length > 0) {
       const rendered = await this.texts.render(tx, tenantId, ticketId, [block.subject, notificationBodyText(block.body)], { stepId });
       // The ticket was deleted (tenant purge) after the event was queued: nothing to notify, by e-mail either.
@@ -71,7 +74,7 @@ export class BlockNotificationHandlers implements OnModuleInit {
       // After the commit, tell the open screens of these people (ids only; they read their own counter).
       effects.afterCommit(() => this.realtime.publish([{ v: 1, k: 'notifications', t: tenantId, u: inApp }]));
     }
-    const mails = readerIds.filter((userId) => wantsEmail && channelsFor(stored, userId, BLOCK_NOTICE).email).map((userId): NotificationEmailPayload => ({ userId, notificationType: BLOCK_NOTICE, ticketId, sourceEventId: event.id, stepId }));
+    const mails = readerIds.filter((userId) => wantsEmail && channelsFor(stored, userId, BLOCK_NOTICE, policies).email).map((userId): NotificationEmailPayload => ({ userId, notificationType: BLOCK_NOTICE, ticketId, sourceEventId: event.id, stepId }));
     await this.emails.enqueue(tx, tenantId, mails);
   }
 

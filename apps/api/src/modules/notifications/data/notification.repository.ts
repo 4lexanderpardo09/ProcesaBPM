@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { NotificationType } from '@procesabpm/db';
-import type { NotificationPreferenceResponse, NotificationResponse, NotificationTypeValue } from '@procesabpm/shared';
+import type { NotificationResponse, NotificationTypeValue } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
+import type { Channels } from '../domain/channels.js';
 
 export interface NewNotification {
   readonly userId: string;
@@ -48,9 +49,9 @@ export class NotificationRepository {
     return count;
   }
 
-  async preferences(tx: TenantTransaction, tenantId: string, userId: string): Promise<NotificationPreferenceResponse[]> {
-    const rows = await tx.notificationPreference.findMany({ where: { tenantId, userId }, select: { type: true, inApp: true, email: true } });
-    return rows;
+  /** What the person chose, type by type; the types they never touched are not here. */
+  preferences(tx: TenantTransaction, tenantId: string, userId: string): Promise<Array<Channels & { type: NotificationTypeValue }>> {
+    return tx.notificationPreference.findMany({ where: { tenantId, userId }, select: { type: true, inApp: true, email: true } });
   }
 
   async savePreference(tx: TenantTransaction, tenantId: string, userId: string, type: NotificationTypeValue, channels: { inApp: boolean; email: boolean }): Promise<void> {

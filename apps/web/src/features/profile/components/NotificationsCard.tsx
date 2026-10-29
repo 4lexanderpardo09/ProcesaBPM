@@ -9,10 +9,11 @@ import { ProfileError } from './ProfileError';
 import styles from './Profile.module.css';
 
 type Channels = { readonly inApp: boolean; readonly email: boolean };
-type Preference = Channels & { readonly type: NotificationTypeValue };
+type Preference = Channels & { readonly type: NotificationTypeValue; readonly emailLocked: boolean };
 
 /**
- * Which notifications arrive in the application and which by e-mail, per kind. Each box saves at once.
+ * Which notifications arrive in the application and which by e-mail, per kind. Each box saves at once. An e-mail the
+ * organization turned off shows unchecked and disabled, with the reason.
  */
 export function NotificationsCard() {
   const { t } = useTranslation('profile');
@@ -56,21 +57,33 @@ export function NotificationsCard() {
             </thead>
             <tbody>
               {NOTIFICATION_TYPES.map((type) => {
-                const row = pending.get(type) ?? byType.get(type) ?? { type, inApp: true, email: false };
+                const saved = byType.get(type);
+                const row = pending.get(type) ?? saved ?? { inApp: true, email: false };
+                const locked = saved?.emailLocked ?? false;
                 const label = t(`notifications.types.${type}`);
                 return (
                   <tr key={type}>
                     <th scope="row">{label}</th>
-                    {(['inApp', 'email'] as const).map((channel) => (
-                      <td key={channel}>
-                        <input
-                          type="checkbox"
-                          aria-label={t(channel === 'inApp' ? 'notifications.inAppNamed' : 'notifications.emailNamed', { kind: label })}
-                          checked={row[channel]}
-                          onChange={(event) => change(type, { inApp: row.inApp, email: row.email, [channel]: event.target.checked })}
-                        />
-                      </td>
-                    ))}
+                    {(['inApp', 'email'] as const).map((channel) => {
+                      const disabled = channel === 'email' && locked;
+                      return (
+                        <td key={channel}>
+                          <input
+                            type="checkbox"
+                            aria-label={t(channel === 'inApp' ? 'notifications.inAppNamed' : 'notifications.emailNamed', { kind: label })}
+                            aria-describedby={disabled ? `email-locked-${type}` : undefined}
+                            checked={disabled ? false : row[channel]}
+                            disabled={disabled}
+                            onChange={(event) => change(type, { inApp: row.inApp, email: row.email, [channel]: event.target.checked })}
+                          />
+                          {disabled && (
+                            <span id={`email-locked-${type}`} className={styles.locked}>
+                              {t('notifications.emailLocked')}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}

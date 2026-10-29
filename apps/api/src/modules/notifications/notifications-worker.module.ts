@@ -11,12 +11,13 @@ import { TicketNotificationHandlers } from './application/ticket-notification.ha
 import { TicketReaderFilter } from './application/ticket-reader-filter.js';
 import { EmailOutboxRepository } from './data/email-outbox.repository.js';
 import { NotificationRepository } from './data/notification.repository.js';
+import { EmailPolicyRepository } from './data/email-policy.repository.js';
 import { RecipientRepository } from './data/recipient.repository.js';
 import { TicketFactsRepository } from './data/ticket-facts.repository.js';
 
 /** The worker's side of notifications: turns ticket and storage events into in-app notices and e-mails. Imported by the worker only. */
 @Module({
   imports: [OutboxDispatcherModule, MailModule, TicketAccessModule, RealtimeSignalPublisherModule, DocumentsWorkerModule],
-  providers: [TicketFactsRepository, RecipientRepository, NotificationRepository, EmailOutboxRepository, TicketReaderFilter, TicketNotificationHandlers, BlockNotificationHandlers, NotificationEmailHandler, StorageQuotaNotificationHandlers, StorageQuotaEmailHandler],
+  providers: [TicketFactsRepository, RecipientRepository, EmailPolicyRepository, NotificationRepository, EmailOutboxRepository, TicketReaderFilter, TicketNotificationHandlers, BlockNotificationHandlers, NotificationEmailHandler, StorageQuotaNotificationHandlers, StorageQuotaEmailHandler],
 })
 export class NotificationsWorkerModule {}

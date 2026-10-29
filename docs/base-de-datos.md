@@ -625,6 +625,13 @@ Reglas que el código del API **debe** respetar; la BD rechaza lo que las viola.
 - **Retención:** `retention_purge_demo_requests` (dueño `app_platform`, solo `app_worker`) borra los pedidos 24 meses después de `created_at`, en cualquier estado; paso `demo_requests` de la corrida nocturna (§8.27).
 - **Pruebas:** `demo-requests.test.ts` (normalización, un pedido por correo al día, tope por hora, CHECKs, coherencia del estado, privilegios, lectura del worker, retención) y los casos nuevos de `retention.test.ts` y `schema-conventions.test.ts`.
 
+### 8.35 Política de correo de las notificaciones (migración `20261030000300_notification_email_policies`)
+- **Tabla `notification_email_policies`** (de tenant, `FORCE RLS` con `app_enable_tenant_rls`): PK `(tenant_id, type)`, `policy` (`notification_email_policy`: `OFF`, `DEFAULT_OFF`, `DEFAULT_ON`) y `updated_at` con `set_updated_at`. Sin fila, el tipo conserva su valor de fábrica (`channels.ts`: correo por defecto solo para `TICKET_ASSIGNED`, `SYSTEM` y `STORAGE_QUOTA`). En Prisma `NotificationEmailPolicySetting` / `NotificationEmailPolicy`.
+- **Qué significa:** `OFF`, nadie recibe ese aviso por correo aunque lo haya pedido (el aviso en la app sigue igual); `DEFAULT_OFF`, solo quien lo active en su perfil; `DEFAULT_ON`, todos salvo quien lo apague. La preferencia guardada de cada persona gana sobre el valor por defecto y se conserva mientras el tipo esté en `OFF` (vuelve a contar si se enciende).
+- **Quién:** el API la escribe con el permiso `update:Setting` (auditado como `tenant.notification_email_policy_updated`, con el antes y el después). El worker la lee al repartir el evento y **otra vez antes de enviar cada correo** (`NotificationEmailHandler.prepare`), así que un correo ya encolado no sale si el tipo se apaga. `STORAGE_QUOTA` no se gobierna: es la alerta de los administradores (el API rechaza ese tipo con 400).
+- **Exportación:** en `EXPORT_EXCLUDED_TABLES` (ajuste de entrega de correo, no dato del negocio; los cambios están en la auditoría).
+- **Pruebas:** `notification-email-policies.test.ts` (una por tipo, valor inválido, aislamiento entre tenants para el API y el worker, borrado con el tenant), `channels.spec.ts` y `notification-email-policies.e2e.test.ts`.
+
 ## 9. Catálogo global y semillas
 `src/seed/run.ts` carga, de forma **idempotente** (upsert por llave natural), en cada despliegue:
 

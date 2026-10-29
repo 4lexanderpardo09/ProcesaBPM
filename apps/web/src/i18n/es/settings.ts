@@ -1,8 +1,8 @@
 export const settings = {
   title: 'Ajustes',
-  subtitle: 'La seguridad, el logo, el acceso de soporte, el almacenamiento y la auditoría de la organización.',
+  subtitle: 'La seguridad, el logo, los correos, el acceso de soporte, el almacenamiento y la auditoría de la organización.',
   tabsLabel: 'Secciones de ajustes',
-  tabs: { organization: 'Organización', security: 'Seguridad', calculators: 'Calculadoras', ai: 'Asistente de IA', support: 'Acceso de soporte', storage: 'Almacenamiento', audit: 'Auditoría' },
+  tabs: { organization: 'Organización', security: 'Seguridad', calculators: 'Calculadoras', emails: 'Correos', ai: 'Asistente de IA', support: 'Acceso de soporte', storage: 'Almacenamiento', audit: 'Auditoría' },
   loading: 'Cargando…',
   loadFailed: 'No se pudo cargar. Recarga la página.',
   saving: 'Guardando…',
@@ -10,6 +10,16 @@ export const settings = {
     forbidden: 'Tu rol no puede hacer este cambio.',
     password: 'La contraseña no es correcta.',
     invalid: 'Revisa los datos: el servidor no los aceptó.',
+  },
+  emails: {
+    title: 'Correos de notificaciones',
+    hint: 'Qué avisos de tickets pueden llegar por correo. Cada persona elige los suyos en su perfil, dentro de lo que permitas aquí. Los avisos en la aplicación no cambian. Cada cambio se guarda al momento y queda en la auditoría.',
+    policies: {
+      OFF: 'Nunca por correo',
+      DEFAULT_OFF: 'Solo a quien lo active',
+      DEFAULT_ON: 'A todos, salvo quien lo apague',
+    },
+    builtIn: 'Valor de fábrica',
   },
   organization: {
     logoTitle: 'Logo',
@@ -225,6 +235,7 @@ export const settings = {
       'support_access.revoked': 'Terminó el acceso del soporte',
       'tenant.security_policy_updated': 'Cambió la política de seguridad',
       'tenant.ai_assistant_updated': 'Activó o desactivó el asistente de IA',
+      'tenant.notification_email_policy_updated': 'Cambió qué avisos llegan por correo',
       'tenant.logo_updated': 'Cambió el logo de la organización',
       'tenant.logo_removed': 'Quitó el logo de la organización',
       'user.looked_up': 'Consultó una persona',

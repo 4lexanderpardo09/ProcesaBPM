@@ -11,6 +11,7 @@ import { OutboxHandlerRegistry } from '../../../infrastructure/outbox/outbox-han
 import { TicketTextRenderer } from '../../documents/application/ticket-text-renderer.js';
 import { NOTIFICATION_EMAIL_EVENT } from '../data/email-outbox.repository.js';
 import { channelsFor } from '../domain/channels.js';
+import { EmailPolicyRepository } from '../data/email-policy.repository.js';
 import { RecipientRepository } from '../data/recipient.repository.js';
 import { TicketFactsRepository } from '../data/ticket-facts.repository.js';
 import { notificationsEs as es } from '../i18n/es.js';
@@ -37,6 +38,7 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
     @Inject(WORKER_SETTINGS) private readonly settings: WorkerSettings,
     @Inject(TicketFactsRepository) private readonly facts: TicketFactsRepository,
     @Inject(RecipientRepository) private readonly recipients: RecipientRepository,
+    @Inject(EmailPolicyRepository) private readonly emailPolicies: EmailPolicyRepository,
     @Inject(TicketReaderFilter) private readonly readers: TicketReaderFilter,
     @Inject(TicketTextRenderer) private readonly texts: TicketTextRenderer,
   ) {}
@@ -51,9 +53,10 @@ export class NotificationEmailHandler implements ExternalEffectHandler<Notificat
     const tenant = await this.facts.tenant(tx, tenantId);
     const ticket = await this.facts.ticket(tx, tenantId, ticketId);
     if (tenant === undefined || !tenant.active || ticket === undefined) return null;
-    // Someone who turned e-mail off after the fan-out must not get what was already queued.
+    // Someone who turned e-mail off after the fan-out, or an organization that turned the type's e-mail off, must not
+    // get what was already queued.
     const preferences = await this.recipients.preferences(tx, tenantId, [userId], [notificationType]);
-    if (!channelsFor(preferences, userId, notificationType).email) return null;
+    if (!channelsFor(preferences, userId, notificationType, await this.emailPolicies.policies(tx, tenantId)).email) return null;
     if ((await this.readers.filter(tx, tenantId, ticketId, [userId])).length === 0) return null;
     const recipient = await this.recipients.mailRecipient(tx, userId);
     if (recipient === undefined) return null;
