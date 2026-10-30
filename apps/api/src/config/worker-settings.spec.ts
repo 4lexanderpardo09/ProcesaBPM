@@ -58,8 +58,13 @@ describe('loadWorkerSettings', () => {
     expect(problemsOf({ ...valid, SMTP_USER: '', SMTP_PASSWORD: '' })).toEqual([]);
     expect(problemsOf({ ...valid, SMTP_USER: 'u', SMTP_PASSWORD: '' })).toEqual(['SMTP_USER and SMTP_PASSWORD go together']);
   });
-  it('configures the AI assistant with DeepSeek defaults, no key, and a call that ends inside the job lease', () => {
-    expect(loadWorkerSettings(valid)).toMatchObject({ AI_PROVIDER_NAME: 'deepseek', AI_BASE_URL: 'https://api.deepseek.com/beta', AI_REASONING_MODEL: 'deepseek-v4-pro', AI_STRICT_TOOLS: true, AI_REQUEST_TIMEOUT_MS: 300_000, AI_MAX_ROUNDS: 3 });
+  it('configures the AI assistant with Claude Haiku by default, no key, and a call that ends inside the job lease', () => {
+    expect(loadWorkerSettings(valid)).toMatchObject({ AI_PROVIDER_NAME: 'anthropic', AI_REASONING_MODEL: 'claude-haiku-5-5', AI_EFFORT: 'high', AI_REQUEST_TIMEOUT_MS: 300_000, AI_MAX_ROUNDS: 3 });
+    expect(loadWorkerSettings(valid).AI_BASE_URL).toBeUndefined();
+    expect(loadWorkerSettings({ ...valid, AI_BASE_URL: '' }).AI_BASE_URL).toBeUndefined();
+    // A newer or bigger model is only a variable away.
+    expect(loadWorkerSettings({ ...valid, AI_REASONING_MODEL: 'claude-opus-5-5', AI_EFFORT: 'medium' })).toMatchObject({ AI_REASONING_MODEL: 'claude-opus-5-5', AI_EFFORT: 'medium' });
+    expect(problemsOf({ ...valid, AI_EFFORT: 'huge' })).toEqual([expect.stringContaining('AI_EFFORT')]);
     expect(loadWorkerSettings(valid).AI_API_KEY).toBeUndefined();
     expect(loadWorkerSettings({ ...valid, AI_API_KEY: '' }).AI_API_KEY).toBeUndefined();
     expect(problemsOf({ ...valid, AI_REQUEST_TIMEOUT_MS: String(10 * 60_000) })).toEqual([expect.stringContaining('AI_REQUEST_TIMEOUT_MS')]);
@@ -71,5 +76,9 @@ describe('loadWorkerSettings', () => {
     const production = { ...valid, NODE_ENV: 'production', WEB_BASE_URL: 'https://app.example.com' };
     expect(problemsOf({ ...production, AI_BASE_URL: 'http://llm.internal/v1' })).toEqual(['AI_BASE_URL must be https in production']);
     expect(problemsOf(production)).toEqual([]);
+  });
+  it('wants the URL of an OpenAI-compatible provider', () => {
+    expect(problemsOf({ ...valid, AI_PROVIDER_NAME: 'deepseek' })).toEqual(['AI_BASE_URL is required for an OpenAI-compatible provider']);
+    expect(loadWorkerSettings({ ...valid, AI_PROVIDER_NAME: 'deepseek', AI_BASE_URL: 'https://api.deepseek.com/beta', AI_REASONING_MODEL: 'deepseek-v4-pro' })).toMatchObject({ AI_PROVIDER_NAME: 'deepseek', AI_STRICT_TOOLS: true });
   });
 });

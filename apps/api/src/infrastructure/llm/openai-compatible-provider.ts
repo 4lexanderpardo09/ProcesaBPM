@@ -37,7 +37,7 @@ interface ChatUsage {
 const count = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.round(value) : 0);
 
 /**
- * Chat completions with one tool, over the OpenAI-compatible API that DeepSeek (and others) expose. `tool_choice`
+ * Chat completions with one tool, over the OpenAI-compatible API that DeepSeek and others expose (Claude has its own: AnthropicProvider). `tool_choice`
  * stays `auto`: reasoning models refuse a forced tool, so the prompt asks for it and the caller handles an answer
  * without it. The answer streams (server-sent events), so the caller can follow the tool's arguments as they are
  * written; a server that answers in one piece is read too. The key travels only in the Authorization header; nothing
