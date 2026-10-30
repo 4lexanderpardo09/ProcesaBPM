@@ -11,14 +11,16 @@
 # The Node image is pinned by version and digest: a tag can move, a digest cannot. Update both together.
 ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
 
-# --- Build: install, generate the Prisma client and bundle the TypeScript ---------------------------------------------
-FROM ${NODE_IMAGE} AS build
+# --- Dependencies: the install, from the manifests and the lockfile only ------------------------------------------------
+# Nothing of the source reaches this stage, so it (and the production node_modules taken from it below) is rebuilt only
+# when a dependency changes: a release that only changes code reuses those layers, in the build cache, the registry and
+# the server, instead of shipping ~260 MB of identical files again.
+FROM ${NODE_IMAGE} AS deps
 # Behind a TLS-inspecting proxy, pass its CA: docker build --secret id=extra-ca,src=/path/ca.pem ... (optional; unused otherwise).
 ENV CI=true PNPM_HOME=/pnpm PATH=/pnpm:$PATH NODE_EXTRA_CA_CERTS=/run/secrets/extra-ca
 RUN --mount=type=secret,id=extra-ca,required=false npm install --global --no-fund --no-audit pnpm@11.20.0
 WORKDIR /repo
 
-# Manifests first: the install layer is rebuilt only when dependencies change.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches patches
 COPY apps/api/package.json apps/api/
@@ -27,6 +29,8 @@ COPY packages/migrate/package.json packages/migrate/
 COPY packages/shared/package.json packages/shared/
 RUN --mount=type=secret,id=extra-ca,required=false --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
 
+# --- Build: generate the Prisma client and bundle the TypeScript -------------------------------------------------------
+FROM deps AS build
 COPY tsconfig.base.json ./
 COPY scripts/bundle.mjs scripts/
 COPY apps/api apps/api
@@ -34,7 +38,8 @@ COPY packages packages
 RUN --mount=type=secret,id=extra-ca,required=false pnpm --filter @procesabpm/db generate && pnpm build
 
 # Production dependencies only, installed from the lockfile (workspace packages are bundled, so their copies are dropped).
-FROM build AS deploy-api
+# From `deps`, not `build`: the code is bundled into dist, and node_modules must not change when only the code does.
+FROM deps AS deploy-api
 RUN --mount=type=secret,id=extra-ca,required=false --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm --filter @procesabpm/api --prod --legacy deploy /out/api \
  && rm -rf /out/api/node_modules/@procesabpm
 # `@prisma/client` declares the Prisma CLI as a peer, and the lockfile resolves it, so deploy brings the CLI and its tooling
@@ -46,7 +51,7 @@ RUN cd /out/api/node_modules/.pnpm \
            @types+* typescript@* @typescript+* valibot@* jiti@* \
  && du -sh /out/api/node_modules
 
-FROM build AS deploy-migrate
+FROM deps AS deploy-migrate
 RUN --mount=type=secret,id=extra-ca,required=false --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm --filter @procesabpm/migrate --prod --legacy deploy /out/migrate \
  && cp /out/migrate/node_modules/.pnpm/@prisma+engines@*/node_modules/@prisma/engines/schema-engine-* /out/migrate/schema-engine
 
