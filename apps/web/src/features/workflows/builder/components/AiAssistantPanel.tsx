@@ -1,9 +1,9 @@
-import { AI_DESCRIPTION_LIMITS, AI_JOB_CANCELLED, AI_REVISION_LIMITS, type AiDraftMode, aiDraftNotRevisableDetailsSchema, type AiJobHistoryItem } from '@procesabpm/shared';
+import { AI_DESCRIPTION_LIMITS, AI_JOB_CANCELLED, AI_JOB_STAGES, AI_REVISION_LIMITS, type AiDraftMode, aiDraftNotRevisableDetailsSchema, type AiJobHistoryItem } from '@procesabpm/shared';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, genericErrorMessage } from '@/shared/api';
 import { formatDateTime, formatShortDateTime } from '@/shared/lib/format-date-time';
-import { Alert, Button, TextArea } from '@/shared/ui';
+import { Alert, Button } from '@/shared/ui';
 import { isOpen } from '../api/ai-draft-api';
 import type { AiDraft } from '../hooks/use-ai-draft';
 import { AiDraftLosses } from './AiDraftLosses';
@@ -56,7 +56,13 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
   return (
     <section className={styles.aiPanel} aria-label={t('builder.ai.title')}>
       <header className={styles.panelHeader}>
-        <h2 className={styles.sectionTitle}>{t('builder.ai.title')}</h2>
+        <div className={styles.aiBrand}>
+          <span className={styles.aiAvatar} aria-hidden="true">J</span>
+          <span className={styles.aiBrandText}>
+            <h2 className={styles.aiName}>{t('builder.ai.name')}</h2>
+            <span className={styles.aiTagline}>{t('builder.ai.tagline')}</span>
+          </span>
+        </div>
         <button type="button" className={styles.panelClose} aria-label={t('builder.ai.close')} onClick={onClose}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -65,7 +71,15 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
       </header>
       <div className={styles.aiConversation}>
         {ai.jobs.length === 0 ? (
-          <p className={styles.note}>{ai.loading ? t('builder.ai.loading') : t('builder.ai.intro')}</p>
+          ai.loading ? (
+            <p className={styles.note}>{t('builder.ai.loading')}</p>
+          ) : (
+            <div className={styles.aiEmpty}>
+              <span className={styles.aiEmptyAvatar} aria-hidden="true">J</span>
+              <p className={styles.aiGreeting}>{t('builder.ai.greeting')}</p>
+              <p className={styles.note}>{t('builder.ai.intro')}</p>
+            </div>
+          )
         ) : (
           <ol className={styles.aiHistory} aria-label={t('builder.ai.history')}>
             {ai.jobs.map((job) => (
@@ -118,14 +132,56 @@ function ProgressText({ job }: { readonly job: AiJobHistoryItem }) {
   }
 }
 
+/** The run's four stages as a live stepper: those done, the one in progress with its detail, and what is left. */
+function AiProgressSteps({ job }: { readonly job: AiJobHistoryItem }) {
+  const { t } = useTranslation('workflows');
+  if (job.status === 'PENDING') {
+    return (
+      <div className={styles.aiSteps}>
+        <div className={`${styles.aiStep} ${styles.aiStepNow}`}>
+          <span className={styles.aiStepMark} aria-hidden="true" />
+          <span className={styles.aiStepBody}>
+            <span className={styles.aiStepLabel}>
+              {t('builder.ai.stages.PENDING')}
+              <span className={styles.aiLiveDot} aria-hidden="true" />
+            </span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+  const current = Math.max(0, AI_JOB_STAGES.indexOf(job.stage ?? 'READING'));
+  return (
+    <div className={styles.aiSteps}>
+      {AI_JOB_STAGES.map((stage, index) => {
+        const state = index > current ? 'todo' : index < current ? 'done' : 'now';
+        return (
+          <div key={stage} className={`${styles.aiStep} ${state === 'done' ? styles.aiStepDone : state === 'now' ? styles.aiStepNow : styles.aiStepTodo}`}>
+            <span className={styles.aiStepMark} aria-hidden="true" />
+            <span className={styles.aiStepBody}>
+              <span className={styles.aiStepLabel}>
+                {t(`builder.ai.stageLabels.${stage}`)}
+                {state === 'now' && <span className={styles.aiLiveDot} aria-hidden="true" />}
+              </span>
+              {state === 'now' && (
+                <span className={styles.aiStepDesc}>
+                  <ProgressText job={job} />
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Progress({ job, cancelling, onCancel }: { readonly job: AiJobHistoryItem; readonly cancelling: boolean; readonly onCancel: () => void }) {
   const { t } = useTranslation('workflows');
   const elapsed = useElapsedSeconds(job.startedAt ?? job.createdAt);
   return (
     <>
-      <p className={styles.strong}>
-        <ProgressText job={job} />
-      </p>
+      <AiProgressSteps job={job} />
       <p className={styles.aiMeta}>{t('builder.ai.elapsed', { seconds: elapsed })}</p>
       {job.stage === 'DESIGNING' && job.preview !== null && job.preview.steps.length > 0 && <p className={styles.aiMeta}>{t('builder.ai.preview.onCanvas')}</p>}
       <div>
@@ -185,29 +241,37 @@ function AiComposer({ ai, revision, hasContent, dirty }: { readonly ai: AiDraft;
       {cancelError !== undefined && <Alert tone="danger">{cancelError}</Alert>}
       {dirty && <Alert tone="warn">{t('builder.ai.saveFirst')}</Alert>}
       {!dirty && mode === 'CREATE' && hasContent && ai.active === undefined && <Alert tone="warn">{t('builder.ai.replaces')}</Alert>}
-      <TextArea
-        label={mode === 'REVISE' ? t('builder.ai.revise.label') : t('builder.ai.description')}
-        hint={mode === 'REVISE' ? t('builder.ai.revise.hint', { count: length, max: limits.max }) : t('builder.ai.descriptionHint', { count: length, max: limits.max })}
-        rows={mode === 'REVISE' ? 3 : 4}
-        maxLength={limits.max}
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-        placeholder={mode === 'REVISE' ? t('builder.ai.revise.placeholder') : t('builder.ai.placeholder')}
-      />
-      {mode === 'REVISE' && <p className={styles.aiMeta}>{t('builder.ai.revise.keeps')}</p>}
-      <p className={styles.aiMeta}>{t('builder.ai.privacy')}</p>
-      <div className={styles.aiComposerActions}>
-        <span className={styles.aiMeta}>{ai.remainingToday === 0 ? t('builder.ai.noneLeft') : t('builder.ai.remaining', { count: ai.remainingToday })}</span>
-        <div className={styles.aiComposerButtons}>
-          {hasContent && (
-            <Button variant="ghost" aria-pressed={startOver} onClick={() => setStartOver((current) => !current)}>
-              {startOver ? t('builder.ai.revise.backToChanges') : t('builder.ai.revise.startOver')}
-            </Button>
-          )}
+      <div className={styles.aiComposerBox}>
+        <textarea
+          className={styles.aiComposerInput}
+          aria-label={mode === 'REVISE' ? t('builder.ai.revise.label') : t('builder.ai.description')}
+          rows={mode === 'REVISE' ? 3 : 4}
+          maxLength={limits.max}
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          placeholder={mode === 'REVISE' ? t('builder.ai.revise.placeholder') : t('builder.ai.placeholder')}
+        />
+        <div className={styles.aiComposerBar}>
+          <span className={styles.aiComposerCount}>
+            {length} / {limits.max}
+          </span>
           <Button variant="primary" type="submit" disabled={!canSend}>
             {ai.request.isPending ? t('builder.ai.sending') : mode === 'REVISE' ? t('builder.ai.revise.submit') : t('builder.ai.submit')}
           </Button>
         </div>
+      </div>
+      <details className={styles.aiDetails}>
+        <summary>{t('builder.ai.moreInfo')}</summary>
+        <p className={styles.aiMeta}>{t('builder.ai.privacy')}</p>
+        {mode === 'REVISE' && <p className={styles.aiMeta}>{t('builder.ai.revise.keeps')}</p>}
+      </details>
+      <div className={styles.aiComposerFoot}>
+        <span className={styles.aiMeta}>{ai.remainingToday === 0 ? t('builder.ai.noneLeft') : t('builder.ai.remaining', { count: ai.remainingToday })}</span>
+        {hasContent && (
+          <Button variant="ghost" aria-pressed={startOver} onClick={() => setStartOver((current) => !current)}>
+            {startOver ? t('builder.ai.revise.backToChanges') : t('builder.ai.revise.startOver')}
+          </Button>
+        )}
       </div>
     </form>
   );
