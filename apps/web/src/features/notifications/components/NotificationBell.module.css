@@ -104,3 +104,17 @@
 .all:hover {
   text-decoration: underline;
 }
+
+/* Phones: the bell is not at the screen's edge (the account menu follows it), so a panel aligned to it runs off the left.
+   Hang it from the top bar instead, across the screen. */
+@media (max-width: 640px) {
+  .root {
+    position: static;
+  }
+
+  .panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

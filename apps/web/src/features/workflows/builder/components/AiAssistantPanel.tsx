@@ -58,10 +58,10 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
       <header className={styles.panelHeader}>
         <div className={styles.aiBrand}>
           <span className={styles.aiAvatar} aria-hidden="true">J</span>
-          <span className={styles.aiBrandText}>
+          <div className={styles.aiBrandText}>
             <h2 className={styles.aiName}>{t('builder.ai.name')}</h2>
             <span className={styles.aiTagline}>{t('builder.ai.tagline')}</span>
-          </span>
+          </div>
         </div>
         <button type="button" className={styles.panelClose} aria-label={t('builder.ai.close')} onClick={onClose}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
