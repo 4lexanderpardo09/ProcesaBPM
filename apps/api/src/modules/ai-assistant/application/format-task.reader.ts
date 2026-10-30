@@ -58,10 +58,10 @@ export class FormatTaskReader {
     };
     const check = (design: PdfCanvasDesign): FormatCheck => checker.design(design);
 
-    if (input.kind === 'PDF_FORMAT_DRAFT') return { kind: 'ready', input, catalog, task: { kind: 'create', description: input.description }, check };
+    if (input.kind === 'PDF_FORMAT_DRAFT') return { kind: 'ready', input, catalog, task: { kind: 'create', description: input.description, images: input.images }, check };
     const basis = pdfCanvasDesignSchema.safeParse(input.basis);
     if (!basis.success) return { kind: 'failed', errorCode: 'AI_JOB_INVALID' };
     const history = await this.work.pastFormatRequests(tx, tenantId, input.formatId, { id: jobId, createdAt: input.createdAt }, PAST_TURN_LIMITS.turns);
-    return { kind: 'ready', input, catalog, task: { kind: 'revise', message: input.description, basis: basis.data, history }, check };
+    return { kind: 'ready', input, catalog, task: { kind: 'revise', message: input.description, basis: basis.data, history, images: input.images }, check };
   }
 }

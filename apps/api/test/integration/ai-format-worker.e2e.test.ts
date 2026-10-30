@@ -122,6 +122,19 @@ describe('Jiro in the PDF format designer', () => {
     expect((await org.admin.post(`/workflows/${org.workflowId}/pdf-formats/${blocks.id}/ai-draft`, { description: DESCRIPTION }).expect(422)).body.error.code).toBe('INVALID_STATE');
   });
 
+  it('sends the pictures of a paper format to the model and counts them in the history, without returning them', async () => {
+    const org = await organization();
+    const picture = { mediaType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' };
+    await org.admin.post(`${org.base}/ai-draft`, { description: DESCRIPTION, images: [picture, picture, picture, picture] }).expect(400);
+    const jobId = (await org.admin.post(`${org.base}/ai-draft`, { description: 'Replica este formato tal como está en la foto.', images: [picture] }).expect(202)).body.jobId as string;
+    expect(await run(org.tenant.tenantId, jobId, [answer('{{ticket.title}}')])).toBe('succeeded');
+    expect(provider.requests[0]!.images).toEqual([picture]);
+    expect(provider.requests[0]!.system).toContain('PICTURES OF A PAPER FORMAT');
+    const [done] = await history(org.admin, org.base);
+    expect(done).toMatchObject({ images: 1, status: 'SUCCEEDED' });
+    expect(JSON.stringify(done)).not.toContain(picture.data);
+  });
+
   it('fails FORMAT_GONE without a paid call when the format was deleted meanwhile', async () => {
     const org = await organization();
     const jobId = (await org.admin.post(`${org.base}/ai-draft`, { description: DESCRIPTION }).expect(202)).body.jobId as string;

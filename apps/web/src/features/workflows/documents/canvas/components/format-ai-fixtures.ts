@@ -20,6 +20,7 @@ export function formatJob(over: Partial<AiFormatJob>): AiFormatJob {
     requesterName: 'Ana Gómez',
     cancelledByName: null,
     tokens: 0,
+    images: 0,
     ...over,
   };
 }

@@ -81,6 +81,14 @@ describe('AnthropicProvider (against a local fake Messages API)', () => {
     expect(JSON.stringify(call!.body)).not.toContain(KEY);
   });
 
+  it('puts the pictures before the text of the user message', async () => {
+    handler = stream([start, ...tool(0, 'submit_workflow_draft', ['{}']), ...end('tool_use')]);
+    await provider().complete({ ...request, images: [{ mediaType: 'image/png', data: 'iVBORw0KGgo=' }] }, new AbortController().signal);
+    expect(seen[0]!.body['messages']).toEqual([
+      { role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } }, { type: 'text', text: 'user text' }] },
+    ]);
+  });
+
   it('follows only the asked tool, and takes plain text, a cut-short or declined answer or broken JSON as one without the tool', async () => {
     const heard: string[] = [];
     handler = stream([start, ...tool(0, 'other_tool', ['{"x": 1}']), ...end('tool_use', 5)]);

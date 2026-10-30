@@ -1,5 +1,5 @@
-import { AI_DESCRIPTION_LIMITS, AI_JOB_CANCELLED, AI_REVISION_LIMITS, type AiDraftMode, type AiFormatJob, type AiFormatResult, type PdfCanvasDesign } from '@procesabpm/shared';
-import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { AI_DESCRIPTION_LIMITS, AI_FORMAT_IMAGE_LIMITS, AI_JOB_CANCELLED, AI_REVISION_LIMITS, type AiDraftMode, type AiFormatJob, type AiFormatResult, type PdfCanvasDesign } from '@procesabpm/shared';
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, genericErrorMessage } from '@/shared/api';
 import { formatDateTime, formatShortDateTime } from '@/shared/lib/format-date-time';
@@ -7,6 +7,7 @@ import { Alert, Button } from '@/shared/ui';
 import { isOpen } from '../../../builder/api/ai-draft-api';
 import { AiProgressSteps, ProgressText, useElapsedSeconds } from '../../../builder/components/AiAssistantPanel';
 import builder from '../../../builder/components/Builder.module.css';
+import { type FormatPicture, toFormatPictures } from '../../lib/format-pictures';
 import type { FormatAi } from '../../lib/use-format-ai';
 import styles from './FormatAiPanel.module.css';
 
@@ -95,6 +96,7 @@ function FormatTurn({ job, ai, onApply }: { readonly job: AiFormatJob; readonly 
           <span className={builder.aiKind}>{t(`builder.ai.kinds.${job.kind}`)}</span> · {t('builder.ai.askedBy', { name: job.requesterName, at: formatShortDateTime(job.createdAt) })}
         </p>
         <p className={builder.aiText}>{job.description ?? t('builder.ai.descriptionGone')}</p>
+        {job.images > 0 && <p className={builder.aiMeta}>{t('documents.jiro.withPictures', { count: job.images })}</p>}
       </div>
       <div className={open ? builder.aiAnswerOpen : job.status === 'SUCCEEDED' ? builder.aiAnswerOk : builder.aiAnswerFailed}>
         {open ? <FormatProgress job={job} cancelling={ai.cancel.isPending} onCancel={() => ai.cancel.mutate(job.id)} /> : <FormatOutcome job={job} onApply={onApply} />}
@@ -179,16 +181,43 @@ function FormatComposer({ ai, design }: { readonly ai: FormatAi; readonly design
   const hasContent = design.elements.length > 0;
   const [message, setMessage] = useState('');
   const [startOver, setStartOver] = useState(false);
+  const [pictures, setPictures] = useState<readonly FormatPicture[]>([]);
+  const [preparing, setPreparing] = useState(false);
+  const [pictureError, setPictureError] = useState<string | undefined>(undefined);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const room = AI_FORMAT_IMAGE_LIMITS.count - pictures.length;
   const mode: AiDraftMode = hasContent && !startOver ? 'REVISE' : 'CREATE';
   const limits = mode === 'REVISE' ? AI_REVISION_LIMITS : AI_DESCRIPTION_LIMITS;
   const length = message.trim().length;
   const blocked = ai.active !== undefined || ai.remainingToday === 0;
-  const canSend = !blocked && !ai.request.isPending && length >= limits.min && length <= limits.max;
+  const canSend = !blocked && !preparing && !ai.request.isPending && length >= limits.min && length <= limits.max;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!canSend) return;
-    ai.request.mutate(mode === 'REVISE' ? { mode, description: message.trim(), design } : { mode, description: message.trim() }, { onSuccess: () => setMessage('') });
+    const images = pictures.length === 0 ? {} : { images: pictures.map((picture) => picture.image) };
+    ai.request.mutate(mode === 'REVISE' ? { mode, description: message.trim(), design, ...images } : { mode, description: message.trim(), ...images }, {
+      onSuccess: () => {
+        setMessage('');
+        setPictures([]);
+      },
+    });
+  };
+
+  const attach = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(event.target.files ?? [])];
+    event.target.value = '';
+    if (files.length === 0) return;
+    setPictureError(undefined);
+    setPreparing(true);
+    try {
+      const added = await toFormatPictures(files, room);
+      setPictures((current) => [...current, ...added].slice(0, AI_FORMAT_IMAGE_LIMITS.count));
+    } catch {
+      setPictureError(t('documents.jiro.pictureFailed'));
+    } finally {
+      setPreparing(false);
+    }
   };
 
   const error = ai.request.error;
@@ -201,6 +230,19 @@ function FormatComposer({ ai, design }: { readonly ai: FormatAi; readonly design
       {generic !== undefined && <Alert tone="danger">{'values' in generic ? tCommon(generic.key, generic.values) : tCommon(generic.key)}</Alert>}
       {ai.cancel.error !== null && <Alert tone="danger">{t('builder.ai.cancelFailed')}</Alert>}
       {mode === 'CREATE' && hasContent && ai.active === undefined && <Alert tone="warn">{t('documents.jiro.replaces')}</Alert>}
+      {pictureError !== undefined && <Alert tone="danger">{pictureError}</Alert>}
+      {pictures.length > 0 && (
+        <ul className={styles.pictures}>
+          {pictures.map((picture, index) => (
+            <li key={picture.previewUrl.slice(-40) + String(index)} className={styles.picture}>
+              <img src={picture.previewUrl} alt={t('documents.jiro.picture', { number: index + 1 })} />
+              <button type="button" className={styles.removePicture} aria-label={t('documents.jiro.removePicture', { number: index + 1 })} onClick={() => setPictures((current) => current.filter((_, at) => at !== index))}>
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className={builder.aiComposerBox}>
         <textarea
           className={builder.aiComposerInput}
@@ -209,9 +251,18 @@ function FormatComposer({ ai, design }: { readonly ai: FormatAi; readonly design
           maxLength={limits.max}
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder={mode === 'REVISE' ? t('documents.jiro.revisePlaceholder') : t('documents.jiro.placeholder')}
+          placeholder={pictures.length > 0 ? t('documents.jiro.photoPlaceholder') : mode === 'REVISE' ? t('documents.jiro.revisePlaceholder') : t('documents.jiro.placeholder')}
         />
         <div className={builder.aiComposerBar}>
+          <input ref={fileInput} type="file" accept="image/*,application/pdf" multiple hidden onChange={(event) => void attach(event)} />
+          <Button
+            variant="ghost"
+            disabled={preparing || room <= 0}
+            title={room <= 0 ? t('documents.jiro.picturesFull', { max: AI_FORMAT_IMAGE_LIMITS.count }) : t('documents.jiro.attachHint', { max: AI_FORMAT_IMAGE_LIMITS.count })}
+            onClick={() => fileInput.current?.click()}
+          >
+            {preparing ? t('documents.jiro.preparing') : t('documents.jiro.attach')}
+          </Button>
           <span className={builder.aiComposerCount}>
             {length} / {limits.max}
           </span>

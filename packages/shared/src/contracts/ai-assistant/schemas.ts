@@ -8,9 +8,10 @@ import { DRAFT_DECISION_TOPICS, DRAFT_STEP_TYPES } from '../../workflow/draft-sp
  * The version of the transfer notice an administrator accepts when turning the assistant on (descriptions go to the
  * AI provider, abroad). Raise it when the text changes: turning it on again asks for the new one. An organization
  * already on stays on (the version is checked only when turning it on). 2: descriptions are kept 90 days. 3: the
- * provider is Claude (Anthropic, United States) instead of DeepSeek (China).
+ * provider is Claude (Anthropic, United States) instead of DeepSeek (China). 4: a photo or PDF of a paper format may
+ * go along with a request for a PDF format.
  */
-export const AI_NOTICE_VERSION = 3;
+export const AI_NOTICE_VERSION = 4;
 export const AI_DESCRIPTION_LIMITS = { min: 20, max: 8_000 } as const;
 /** A change asked of an existing draft can be short («quita el aviso»). */
 export const AI_REVISION_LIMITS = { min: 5, max: AI_DESCRIPTION_LIMITS.max } as const;
@@ -214,6 +215,17 @@ export type AiJobHistoryResponse = z.infer<typeof aiJobHistoryResponseSchema>;
 export const aiDraftNotRevisableDetailsSchema = z.object({ losses: z.array(draftSpecLossSchema) });
 export type AiDraftNotRevisableDetails = z.infer<typeof aiDraftNotRevisableDetailsSchema>;
 
+/**
+ * Pictures of a paper format Jiro reproduces: the browser turns photos and PDF pages into JPEG or PNG images, small
+ * enough for the request (the whole body is at most 2 MB) and for the model (about 1 600 tokens each).
+ */
+export const AI_FORMAT_IMAGE_LIMITS = { count: 3, base64Chars: 450_000, longSidePx: 1_568 } as const;
+export const AI_FORMAT_IMAGE_TYPES = ['image/jpeg', 'image/png'] as const;
+export const aiFormatImageSchema = z
+  .object({ mediaType: z.enum(AI_FORMAT_IMAGE_TYPES), data: z.string().min(1).max(AI_FORMAT_IMAGE_LIMITS.base64Chars).regex(/^[A-Za-z0-9+/]+={0,2}$/) })
+  .strict();
+export type AiFormatImage = z.infer<typeof aiFormatImageSchema>;
+
 /** A PDF format designed by Jiro: the design goes to the editor as unsaved changes, and the person saves it. */
 export const requestAiFormatSchema = z
   .object({
@@ -222,6 +234,8 @@ export const requestAiFormatSchema = z
     description: z.string().trim().max(AI_DESCRIPTION_LIMITS.max),
     /** The design on screen (saved or not): what a change starts from. */
     design: pdfCanvasDesignSchema.optional(),
+    /** Photos or pages of a paper format to reproduce (or to take a part from, in a change). */
+    images: z.array(aiFormatImageSchema).max(AI_FORMAT_IMAGE_LIMITS.count).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -245,7 +259,11 @@ export const aiFormatResultSchema = z.object({
 export type AiFormatResult = z.infer<typeof aiFormatResultSchema>;
 
 /** One request in the history of a format. */
-export const aiFormatJobSchema = aiJobHistoryItemSchema.omit({ result: true, preview: true }).extend({ result: aiFormatResultSchema.nullable() });
+export const aiFormatJobSchema = aiJobHistoryItemSchema.omit({ result: true, preview: true }).extend({
+  result: aiFormatResultSchema.nullable(),
+  /** How many pictures of a paper format went with it (the pictures are not sent back). */
+  images: z.number().int().default(0),
+});
 export type AiFormatJob = z.infer<typeof aiFormatJobSchema>;
 
 /** The newest requests of a format, oldest first, and whether another one can be made. */

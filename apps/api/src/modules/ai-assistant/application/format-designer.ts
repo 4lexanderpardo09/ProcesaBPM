@@ -66,7 +66,7 @@ export class FormatDesigner {
       if (signal.aborted || !(await hooks.beforeRound(round))) return { kind: 'interrupted' };
       let result: LlmResult;
       try {
-        result = await this.provider.complete({ ...buildFormatPrompt(task, catalog, correction), tool }, signal);
+        result = await this.provider.complete({ ...buildFormatPrompt(task, catalog, correction), images: task.images, tool }, signal);
       } catch (error) {
         if (!(error instanceof LlmCallError)) throw error;
         await hooks.afterCall({ round, outcome: FAILURE_OUTCOME[error.kind], usage: NO_USAGE, durationMs: error.durationMs, errorCode: error.status === undefined ? error.kind : `HTTP_${error.status}` });

@@ -2,6 +2,11 @@ import { emptyCanvasDesign } from '@procesabpm/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+
+// The browser's canvas and pdf.js are not in jsdom: a picture is whatever the helper hands back.
+vi.mock('../../lib/format-pictures', () => ({
+  toFormatPictures: vi.fn(async (files: File[]) => files.map((file) => ({ image: { mediaType: 'image/jpeg', data: btoa(file.name) }, previewUrl: `data:image/jpeg;base64,${btoa(file.name)}` }))),
+}));
 import { designed, finishedJob, formatAi, formatJob } from './format-ai-fixtures';
 import { FormatAiPanel } from './FormatAiPanel';
 
@@ -32,11 +37,25 @@ describe('FormatAiPanel', () => {
     expect(screen.getByText('Dibujando el formato')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pedir el cambio' })).toBeDisabled();
 
-    rerender(<FormatAiPanel ai={formatAi([finishedJob])} design={designed} onApply={onApply} onClose={vi.fn()} />);
+    rerender(<FormatAiPanel ai={formatAi([{ ...finishedJob, images: 2 }])} design={designed} onApply={onApply} onClose={vi.fn()} />);
+    expect(screen.getByText('2 imágenes adjuntas')).toBeInTheDocument();
     expect(screen.getByText(/Listo: lo puse en el lienzo/)).toBeInTheDocument();
     expect(screen.getByText('Dos firmas abajo: quien entrega y quien recibe.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Volver a poner este formato' }));
     expect(onApply).toHaveBeenCalledWith(finishedJob.result);
+  });
+
+  it('sends the photos of a paper format with the request, and lets one be taken out before', async () => {
+    const mutate = vi.fn();
+    const { container } = render(<FormatAiPanel ai={formatAi([], mutate)} design={{ ...emptyCanvasDesign(), elements: [] }} onApply={vi.fn()} onClose={vi.fn()} />);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await userEvent.upload(input, [new File(['a'], 'hoja1.jpg', { type: 'image/jpeg' }), new File(['b'], 'hoja2.jpg', { type: 'image/jpeg' })]);
+    expect(await screen.findByRole('img', { name: 'Imagen 2' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Quitar la imagen 2' }));
+    expect(screen.queryByRole('img', { name: 'Imagen 2' })).not.toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Descripción del documento' }), 'Replica este formato tal como está en la foto.');
+    await userEvent.click(screen.getByRole('button', { name: 'Diseñar formato' }));
+    expect(mutate).toHaveBeenCalledWith({ mode: 'CREATE', description: 'Replica este formato tal como está en la foto.', images: [{ mediaType: 'image/jpeg', data: btoa('hoja1.jpg') }] }, expect.anything());
   });
 
   it('explains a failed request in terms of formats', () => {

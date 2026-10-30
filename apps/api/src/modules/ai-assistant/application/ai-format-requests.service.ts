@@ -82,9 +82,10 @@ export class AiFormatRequestsService {
           formatId,
           description: body.description,
           ...(body.mode === 'REVISE' && body.design !== undefined ? { basis: body.design } : {}),
+          ...(body.images === undefined ? {} : { images: body.images }),
           model: this.config.AI_REASONING_MODEL,
         });
-        await this.audit.record(tx, { action: 'workflow.ai_format_requested', subjectType: 'Workflow', subjectId: workflowId, after: { formatId, jobId, kind, model: this.config.AI_REASONING_MODEL, inputChars: body.description.length } });
+        await this.audit.record(tx, { action: 'workflow.ai_format_requested', subjectType: 'Workflow', subjectId: workflowId, after: { formatId, jobId, kind, model: this.config.AI_REASONING_MODEL, inputChars: body.description.length, images: body.images?.length ?? 0 } });
         return { jobId };
       });
     } catch (error) {

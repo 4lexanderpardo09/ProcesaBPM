@@ -52,8 +52,8 @@ export const settings = {
     turnOff: 'Desactivar el asistente',
     notice: {
       transfer: 'El asistente usa Claude, de Anthropic, un servicio de inteligencia artificial con servidores en Estados Unidos: la información que se le envía sale del país (transferencia internacional de datos, Ley 1581 de 2012).',
-      sent: 'Se le envía solo la descripción del proceso que alguien escriba y los nombres de los cargos, grupos y tipos de aprobación de la organización.',
-      neverSent: 'Nunca se le envían tickets, archivos, ni datos de las personas. Pide a quienes lo usen que no escriban nombres, cédulas ni otros datos personales en la descripción.',
+      sent: 'Se le envía solo lo que alguien escriba (la descripción de un proceso o de un formato PDF), el formato en pantalla, las fotos o el PDF de un formato en papel que alguien adjunte, y los nombres de los cargos, grupos, tipos de aprobación, campos y pasos de la organización.',
+      neverSent: 'Nunca se le envían tickets, sus archivos ni los datos de las personas. Pide a quienes lo usen que no escriban nombres, cédulas ni otros datos personales en la descripción, y que adjunten formatos en blanco, no diligenciados.',
       kept: 'Las descripciones quedan guardadas 90 días en el historial de cada borrador, visibles solo dentro de la organización para quienes pueden editar flujos; después se borran.',
       accept: 'Leí este aviso y autorizo enviar esa información al proveedor de IA',
     },
