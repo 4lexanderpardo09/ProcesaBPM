@@ -1555,3 +1555,28 @@
   justify-content: space-between;
   gap: var(--space-2);
 }
+
+/* The composer gives way (and scrolls) before the conversation disappears, e.g. with the notes open on a short panel. */
+.aiComposer {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.aiConversation {
+  min-height: 96px;
+}
+
+/* Phones: the canvas is too small to hold the panel, so Jiro takes the whole screen (it has its own close button). */
+@media (max-width: 640px) {
+  .aiPanel {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    width: auto;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border: none;
+    border-radius: 0;
+  }
+}

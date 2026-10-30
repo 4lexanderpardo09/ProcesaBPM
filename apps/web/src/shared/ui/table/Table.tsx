@@ -70,8 +70,8 @@ export function Table<T>({ label, columns, rows, rowKey, empty, loading = false,
               rows.map((row) => (
                 <tr key={rowKey(row)} className={cx(onRowClick !== undefined && styles.clickable)} onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}>
                   {columns.map((column) => (
-                    <td key={column.key} className={cx(styles.cell, column.code === true && styles.code)}>
-                      {column.cell(row)}
+                    <td key={column.key} className={styles.cell} data-label={column.header}>
+                      <div className={cx(styles.value, column.code === true && styles.code)}>{column.cell(row)}</div>
                     </td>
                   ))}
                 </tr>

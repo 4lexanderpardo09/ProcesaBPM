@@ -91,3 +91,71 @@ tbody tr:last-child .cell {
   padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--line);
 }
+
+.value {
+  min-width: 0;
+}
+
+/* Phones: each row becomes a card of «label value» lines, so no column is crushed and nothing scrolls sideways. The
+   headers are dropped (sorting stays on wider screens); each cell names itself through data-label. */
+@media (max-width: 640px) {
+  .scroll {
+    overflow-x: visible;
+  }
+
+  .table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tbody tr {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--line-2);
+  }
+
+  .table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .cell {
+    display: grid;
+    grid-template-columns: minmax(84px, 34%) minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: 3px 0;
+    border-bottom: none;
+  }
+
+  .cell::before {
+    content: attr(data-label);
+    padding-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .cell[data-label=''] {
+    display: block;
+  }
+
+  .cell[data-label='']::before {
+    content: none;
+  }
+
+  .placeholder {
+    padding: var(--space-6) var(--space-4);
+  }
+}

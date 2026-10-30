@@ -54,7 +54,7 @@ export function TicketTable({ tickets, loading, empty, timeZone, footer, sort, d
           {ticket.title}
         </Link>
       ),
-      width: '22%',
+      width: '280px',
       ...sortable('title'),
     },
     ...(field === undefined
