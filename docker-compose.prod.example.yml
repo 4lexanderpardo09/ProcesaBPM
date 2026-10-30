@@ -60,7 +60,7 @@ services:
   # --- One-shot jobs ---------------------------------------------------------------------------------------------------
   # The schema owner applies the migrations. It is the only service that holds that credential.
   migrate:
-    image: procesabpm-migrate:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-}procesabpm-migrate:${IMAGE_TAG:-latest}
     build: { context: ., target: migrate }
     environment:
       DATABASE_URL: postgresql://${DB_OWNER_USER:-procesabpm_owner}:${DB_OWNER_PASSWORD:?}@postgres:5432/procesabpm
@@ -91,7 +91,7 @@ services:
 
   # Loads the global catalog (permissions, plans, countries, holidays). Safe to run on every deployment.
   seed:
-    image: procesabpm-migrate:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-}procesabpm-migrate:${IMAGE_TAG:-latest}
     command: ['node', 'seed/seed.js']
     environment:
       DATABASE_URL: postgresql://procesabpm_platform:${PLATFORM_DB_PASSWORD:?}@postgres:5432/procesabpm
@@ -105,7 +105,7 @@ services:
 
   # --- Long-running services ---------------------------------------------------------------------------------------------
   api:
-    image: procesabpm-api:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-}procesabpm-api:${IMAGE_TAG:-latest}
     build: { context: ., target: api }
     <<: *hardening
     mem_limit: 448m
@@ -135,7 +135,7 @@ services:
   # The web app (static files). The reverse proxy sends /api/* (and the /api/realtime WebSocket) to the API and the rest
   # here, on one origin: the refresh cookie (Path=/api/auth) only works that way. Example Caddyfile: deploy/Caddyfile.example.
   web:
-    image: procesabpm-web:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-}procesabpm-web:${IMAGE_TAG:-latest}
     build: { context: ., target: web }
     <<: *hardening
     mem_limit: 64m
@@ -143,7 +143,7 @@ services:
     ports: ['127.0.0.1:8080:8080']
 
   landing:
-    image: procesabpm-landing:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-}procesabpm-landing:${IMAGE_TAG:-latest}
     build:
       context: .
       target: landing
@@ -157,7 +157,7 @@ services:
     ports: ['127.0.0.1:8081:8080']
 
   worker:
-    image: procesabpm-worker:${IMAGE_TAG:-latest}
+    image: ${IMAGE_PREFIX:-}procesabpm-worker:${IMAGE_TAG:-latest}
     build: { context: ., target: worker }
     <<: *hardening
     mem_limit: 448m

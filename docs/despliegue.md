@@ -297,3 +297,37 @@ Cuando termine la etapa de pruebas, la producción corre en **Contabo**:
 - **Headers de seguridad:** el `Caddyfile.example` manda HSTS (con `includeSubDomains`), `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` y quita `Server` y `X-Powered-By` (el API además hace `app.disable('x-powered-by')`). El `Content-Security-Policy` entra primero como `Content-Security-Policy-Report-Only`: el navegador registra las violaciones en la consola pero no bloquea nada. Obsérvalas una o dos semanas (en la app, el host del almacenamiento S3 debe entrar en `connect-src`/`img-src` por las URL firmadas; en la landing, Google Fonts y, si hay, Google Analytics), agrega lo que falte y recién entonces renombra el header a `Content-Security-Policy` para que empiece a bloquear. `includeSubDomains` obliga a que **todo** subdominio de `procesabpm.com` sirva por HTTPS; `preload` solo cuando estés seguro.
 - **Firewall:** solo 80/443 (y SSH restringido por IP o clave); la BD y el worker no se exponen; actualizaciones del sistema y hora sincronizada (NTP).
 - **Latencia hacia S3:** la distancia entre Contabo y AWS no afecta a las subidas ni a las descargas, porque el navegador sube y baja **directo** con la URL firmada; el API solo firma y confirma.
+
+## 13. Despliegue continuo (main → producción)
+
+Al mergear a `main`, cuando el CI pasa, el workflow **Deploy** (`.github/workflows/deploy.yml`) compila las imágenes de ese commit, las sube a **Amazon ECR** etiquetadas con el commit y, cuando alguien aprueba el entorno **production**, el servidor las despliega con `deploy/deploy.sh` por **AWS Systems Manager** (SSM). El servidor ya no compila nada: descarga, migra, levanta y verifica.
+
+- **Sin SSH ni llaves guardadas:** GitHub entra a AWS con OIDC (un rol que solo puede subir imágenes a `procesabpm-*` y mandar órdenes a la instancia) y el servidor lee del registro con el rol de la instancia.
+- **`deploy/deploy.sh <commit>`:** deja el código en ese commit, descarga sus imágenes, para el worker, migra, levanta todo y corre `deploy/verify.sh --skip-unit` (las unitarias ya pasaron en el CI). Si la verificación falla, **vuelve a la versión anterior** (las migraciones no se deshacen: deben ser compatibles con el código anterior). Si pasa, etiqueta las imágenes como `latest` (un `docker compose up -d` a mano usa esa versión), anota la versión en `.deploy/current` y `.deploy/history`, y **libera el disco** (`docker image prune -af`, `docker builder prune -af`). Una sola a la vez (`flock`).
+- **Volver a una versión anterior:** Actions → Deploy → Run workflow con el commit (o `deploy/deploy.sh <commit>` en el servidor). ECR conserva las últimas 15 (`deploy/aws/ecr-lifecycle-policy.json`).
+- **Costo:** ECR cobra el almacenamiento (US$0,10 por GB al mes; 15 versiones son unos 3–5 GB). Subir, descargar en la misma región y SSM no cuestan; los minutos de Actions entran en el plan.
+
+### Configuración (una vez)
+
+En AWS (reemplaza `ACCOUNT_ID`, `REGION` e `INSTANCE_ID` en los JSON de `deploy/aws/`; no los subas con los valores reales):
+
+1. **ECR:** crea los repositorios `procesabpm-api`, `procesabpm-worker`, `procesabpm-migrate`, `procesabpm-web` y `procesabpm-landing` (privados, en la región del servidor) y ponle a cada uno la regla de `deploy/aws/ecr-lifecycle-policy.json` (Lifecycle policy → JSON).
+2. **OIDC de GitHub:** IAM → Identity providers → Add provider → OpenID Connect, URL `https://token.actions.githubusercontent.com`, audiencia `sts.amazonaws.com`.
+3. **Rol de GitHub:** IAM → Roles → Create role → Custom trust policy con `deploy/aws/github-trust-policy.json`, y como política en línea `deploy/aws/github-deploy-policy.json`. Nómbralo p. ej. `procesabpm-github-deploy`.
+4. **Rol de la instancia:** al rol que ya tiene el EC2 (o a uno nuevo, EC2 → Actions → Security → Modify IAM role) agrégale las políticas administradas `AmazonSSMManagedInstanceCore` y `AmazonEC2ContainerRegistryReadOnly`. En unos minutos la instancia aparece en Systems Manager → Fleet Manager.
+
+En el servidor:
+
+5. El ayudante de credenciales de ECR, para que Docker descargue con el rol de la instancia, sin `docker login`:
+   ```bash
+   sudo apt-get install -y amazon-ecr-credential-helper
+   mkdir -p ~/.docker && echo '{"credHelpers": {"ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com": "ecr-login"}}' > ~/.docker/config.json
+   ```
+6. En el `.env`: `IMAGE_PREFIX=ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/` (con la barra final).
+
+En GitHub (Settings del repositorio):
+
+7. **Secrets and variables → Actions → Variables:** `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN` (el ARN del rol del paso 3), `ECR_REGISTRY` (`ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com`) y `DEPLOY_INSTANCE_ID` (`i-…`). Ninguna es secreta.
+8. **Environments → New environment `production`** → Required reviewers: tú. Así cada despliegue espera tu aprobación (un botón en la ejecución del workflow); quítalo cuando quieras que sea automático.
+
+Primera prueba: Actions → Deploy → Run workflow (sin commit = el último de `main`) y aprueba. El registro del paso «Run deploy/deploy.sh on the server» muestra lo mismo que verías en el servidor.

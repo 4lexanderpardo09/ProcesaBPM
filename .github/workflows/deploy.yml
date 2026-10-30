@@ -1,0 +1,139 @@
+name: Deploy
+
+# Production follows main (docs/despliegue.md §13): once CI passes on a push to main, the images of that commit go to the
+# registry (Amazon ECR) and, after someone approves the «production» environment, the server deploys them through AWS
+# Systems Manager. No SSH and no stored AWS keys: GitHub signs in to AWS with OIDC. «Run workflow» deploys a given commit
+# (or the latest of main) again, e.g. to go back to an earlier release.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit sha to deploy (empty = the latest of main)
+        required: false
+
+# One deployment at a time; a newer one waits instead of cancelling the one running.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  # Repository variables (Settings → Secrets and variables → Actions → Variables): none of them is a secret.
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+
+jobs:
+  publish:
+    name: Publish the images
+    # Skipped until the AWS side is set up (docs/despliegue.md §13), so main keeps a green check meanwhile.
+    if: vars.AWS_DEPLOY_ROLE_ARN != '' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.sha || github.sha }}
+
+      - name: The release
+        id: release
+        run: echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      # The same targets and caches as the «Docker images» job of CI, so these builds mostly reuse its layers.
+      - name: Build and push api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/procesabpm-api:${{ steps.release.outputs.sha }}
+          cache-from: type=gha,scope=images-api
+
+      - name: Build and push worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: worker
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/procesabpm-worker:${{ steps.release.outputs.sha }}
+          cache-from: type=gha,scope=images-worker
+
+      - name: Build and push migrate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrate
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/procesabpm-migrate:${{ steps.release.outputs.sha }}
+          cache-from: type=gha,scope=images-migrate
+
+      - name: Build and push web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/procesabpm-web:${{ steps.release.outputs.sha }}
+          cache-from: type=gha,scope=images-web
+
+      - name: Build and push landing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: landing
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/procesabpm-landing:${{ steps.release.outputs.sha }}
+          cache-from: type=gha,scope=images-landing
+
+  deploy:
+    name: Deploy to the server
+    needs: publish
+    runs-on: ubuntu-latest
+    # Required reviewers on this environment (Settings → Environments) make every deployment wait for an approval.
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Run deploy/deploy.sh on the server
+        env:
+          SHA: ${{ needs.publish.outputs.sha }}
+          INSTANCE_ID: ${{ vars.DEPLOY_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          # As the user that owns the checkout; the commit is checked out first so the script that runs is the new one.
+          script="cd ~/procesabpm && git fetch -q origin && git checkout -q --detach $SHA && deploy/deploy.sh $SHA"
+          jq -n --arg command "runuser -l ubuntu -c '$script'" '{commands: [$command], executionTimeout: ["1500"]}' >params.json
+          id=$(aws ssm send-command --instance-ids "$INSTANCE_ID" --document-name AWS-RunShellScript \
+            --comment "ProcesaBPM ${SHA:0:7}" --parameters file://params.json --query Command.CommandId --output text)
+          echo "SSM command $id"
+          status=Pending
+          for _ in $(seq 1 180); do
+            sleep 10
+            status=$(aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) continue ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text || true
+          aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text >&2 || true
+          echo "Status: $status"
+          [ "$status" = Success ]
