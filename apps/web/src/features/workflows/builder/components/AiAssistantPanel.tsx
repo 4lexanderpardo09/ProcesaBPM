@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, genericErrorMessage } from '@/shared/api';
 import { formatDateTime, formatShortDateTime } from '@/shared/lib/format-date-time';
-import { Alert, Button, TextArea } from '@/shared/ui';
+import { Alert, Button } from '@/shared/ui';
 import { isOpen } from '../api/ai-draft-api';
 import type { AiDraft } from '../hooks/use-ai-draft';
 import { AiDraftLosses } from './AiDraftLosses';
@@ -241,32 +241,37 @@ function AiComposer({ ai, revision, hasContent, dirty }: { readonly ai: AiDraft;
       {cancelError !== undefined && <Alert tone="danger">{cancelError}</Alert>}
       {dirty && <Alert tone="warn">{t('builder.ai.saveFirst')}</Alert>}
       {!dirty && mode === 'CREATE' && hasContent && ai.active === undefined && <Alert tone="warn">{t('builder.ai.replaces')}</Alert>}
-      <TextArea
-        label={mode === 'REVISE' ? t('builder.ai.revise.label') : t('builder.ai.description')}
-        hint={mode === 'REVISE' ? t('builder.ai.revise.hint', { count: length, max: limits.max }) : t('builder.ai.descriptionHint', { count: length, max: limits.max })}
-        rows={mode === 'REVISE' ? 3 : 4}
-        maxLength={limits.max}
-        value={message}
-        onChange={(event) => setMessage(event.target.value)}
-        placeholder={mode === 'REVISE' ? t('builder.ai.revise.placeholder') : t('builder.ai.placeholder')}
-      />
+      <div className={styles.aiComposerBox}>
+        <textarea
+          className={styles.aiComposerInput}
+          aria-label={mode === 'REVISE' ? t('builder.ai.revise.label') : t('builder.ai.description')}
+          rows={mode === 'REVISE' ? 3 : 4}
+          maxLength={limits.max}
+          value={message}
+          onChange={(event) => setMessage(event.target.value)}
+          placeholder={mode === 'REVISE' ? t('builder.ai.revise.placeholder') : t('builder.ai.placeholder')}
+        />
+        <div className={styles.aiComposerBar}>
+          <span className={styles.aiComposerCount}>
+            {length} / {limits.max}
+          </span>
+          <Button variant="primary" type="submit" disabled={!canSend}>
+            {ai.request.isPending ? t('builder.ai.sending') : mode === 'REVISE' ? t('builder.ai.revise.submit') : t('builder.ai.submit')}
+          </Button>
+        </div>
+      </div>
       <details className={styles.aiDetails}>
         <summary>{t('builder.ai.moreInfo')}</summary>
         <p className={styles.aiMeta}>{t('builder.ai.privacy')}</p>
         {mode === 'REVISE' && <p className={styles.aiMeta}>{t('builder.ai.revise.keeps')}</p>}
       </details>
-      <div className={styles.aiComposerActions}>
+      <div className={styles.aiComposerFoot}>
         <span className={styles.aiMeta}>{ai.remainingToday === 0 ? t('builder.ai.noneLeft') : t('builder.ai.remaining', { count: ai.remainingToday })}</span>
-        <div className={styles.aiComposerButtons}>
-          {hasContent && (
-            <Button variant="ghost" aria-pressed={startOver} onClick={() => setStartOver((current) => !current)}>
-              {startOver ? t('builder.ai.revise.backToChanges') : t('builder.ai.revise.startOver')}
-            </Button>
-          )}
-          <Button variant="primary" type="submit" disabled={!canSend}>
-            {ai.request.isPending ? t('builder.ai.sending') : mode === 'REVISE' ? t('builder.ai.revise.submit') : t('builder.ai.submit')}
+        {hasContent && (
+          <Button variant="ghost" aria-pressed={startOver} onClick={() => setStartOver((current) => !current)}>
+            {startOver ? t('builder.ai.revise.backToChanges') : t('builder.ai.revise.startOver')}
           </Button>
-        </div>
+        )}
       </div>
     </form>
   );
