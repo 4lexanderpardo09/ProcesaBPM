@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
-import { type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiTaskKind, type AiUsageDay, type AiUsageToday, aiDraftPreviewSchema, aiDraftResultSchema } from '@procesabpm/shared';
+import { type AiFormatJob, type AiFormatTaskKind, type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiTaskKind, type AiUsageDay, type AiUsageToday, aiDraftPreviewSchema, aiDraftResultSchema, aiFormatResultSchema, isFormatTaskKind, type PdfCanvasDesign } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface NewDraftJob {
@@ -12,6 +12,18 @@ export interface NewDraftJob {
   readonly expectedRevision: number;
   /** The process description, or the change asked of the current draft. */
   readonly description: string;
+  readonly model: string;
+}
+
+export interface NewFormatJob {
+  readonly kind: AiFormatTaskKind;
+  readonly tenantId: string;
+  readonly requestedById: string;
+  readonly workflowId: string;
+  readonly formatId: string;
+  readonly description: string;
+  /** A change: the design on screen it starts from. */
+  readonly basis?: PdfCanvasDesign;
   readonly model: string;
 }
 
@@ -36,8 +48,9 @@ function jobResponse(job: JobRow): AiJobResponse {
     problems: job.problems,
     errorCode: job.errorCode,
     preview: job.preview === null ? null : (aiDraftPreviewSchema.safeParse(job.preview).data ?? null),
-    // Parsed so requests finished before a field existed read with its default.
-    result: job.result === null ? null : aiDraftResultSchema.parse(job.result),
+    // Parsed so requests finished before a field existed read with its default. A format's result (its design) is read
+    // only by the format's own history.
+    result: job.result === null || isFormatTaskKind(job.kind) ? null : aiDraftResultSchema.parse(job.result),
     createdAt: job.createdAt.toISOString(),
     startedAt: iso(job.startedAt),
     completedAt: iso(job.completedAt),
@@ -85,6 +98,51 @@ export class AiAssistantRepository {
       select: { id: true },
     });
     return created.id;
+  }
+
+  async createFormatJob(tx: TenantTransaction, job: NewFormatJob): Promise<string> {
+    const created = await tx.aiJob.create({
+      data: {
+        tenantId: job.tenantId,
+        kind: job.kind,
+        requestedById: job.requestedById,
+        workflowId: job.workflowId,
+        formatId: job.formatId,
+        input: job.basis === undefined ? { description: job.description } : { description: job.description, basis: job.basis },
+        inputChars: job.description.length,
+        model: job.model,
+      },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  async activeJobForFormat(tx: TenantTransaction, tenantId: string, formatId: string): Promise<string | null> {
+    const job = await tx.aiJob.findFirst({ where: { tenantId, formatId, status: { in: ['PENDING', 'RUNNING'] } }, select: { id: true } });
+    return job?.id ?? null;
+  }
+
+  /** The newest requests of a format, with the design each one produced, oldest first. */
+  async formatHistoryOf(tx: TenantTransaction, tenantId: string, formatId: string, limit: number): Promise<AiFormatJob[]> {
+    const jobs = await tx.aiJob.findMany({
+      where: { tenantId, formatId },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: { ...JOB_COLUMNS, input: true, requestedById: true, requestedBy: PERSON, cancelledBy: PERSON },
+    });
+    const tokens = await this.tokensByJob(tx, tenantId, jobs.map((job) => job.id));
+    return jobs.reverse().map((job) => {
+      const { preview: _preview, result: _result, ...response } = jobResponse(job);
+      return {
+        ...response,
+        result: job.result === null ? null : (aiFormatResultSchema.safeParse(job.result).data ?? null),
+        description: descriptionOf(job.input),
+        requestedById: job.requestedById,
+        requesterName: fullName(job.requestedBy),
+        cancelledByName: job.cancelledBy === null ? null : fullName(job.cancelledBy),
+        tokens: tokens.get(job.id) ?? 0,
+      };
+    });
   }
 
   async activeJobFor(tx: TenantTransaction, tenantId: string, versionId: string): Promise<string | null> {

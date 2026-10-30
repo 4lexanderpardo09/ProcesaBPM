@@ -115,6 +115,10 @@ enum AiTaskKind {
   WORKFLOW_DRAFT
   /// A change asked of the current draft («Crear con IA» as a chat).
   WORKFLOW_DRAFT_REVISION
+  /// A PDF format designed from a description (Jiro in the format designer); the design goes back as the result.
+  PDF_FORMAT_DRAFT
+  /// A change asked of the design on screen.
+  PDF_FORMAT_REVISION
 
   @@map("ai_task_kind")
 }
@@ -3073,6 +3077,8 @@ model AiJob {
   /// No foreign key: deleting the draft must not delete the request and its cost; the job then fails with DRAFT_GONE.
   workflowId       String?     @map("workflow_id") @db.Uuid
   versionId        String?     @map("version_id") @db.Uuid
+  /// The PDF format a format request is for (workflow_id is its workflow). No foreign key, as with the draft.
+  formatId         String?     @map("format_id") @db.Uuid
   expectedRevision Int?        @map("expected_revision")
   input            Json?
   inputChars       Int         @map("input_chars")
@@ -3104,6 +3110,8 @@ model AiJob {
   @@index([tenantId, createdAt])
   /// The history of a draft in the builder.
   @@index([tenantId, versionId, createdAt])
+  /// The history of a format in its designer.
+  @@index([tenantId, formatId, createdAt])
   /// Retention: finished requests go 90 days after completed_at (retention_purge_ai_jobs).
   @@index([completedAt])
   @@map("ai_jobs")

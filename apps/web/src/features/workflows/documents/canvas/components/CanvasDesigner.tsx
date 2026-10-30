@@ -17,7 +17,9 @@ import { addSheet, type Alignment, alignElements, createElement, duplicateElemen
 import { type CanvasImages, CanvasImagesContext } from '../lib/canvas-images';
 import { type CanvasProblem, canvasProblems } from '../lib/canvas-problems';
 import { useHistory } from '../lib/use-history';
+import { useFormatAi } from '../../lib/use-format-ai';
 import { CanvasPalette } from './CanvasPalette';
+import { FormatAiPanel } from './FormatAiPanel';
 import { CanvasSheet, type Droppable } from './CanvasSheet';
 import { ElementProperties } from './ElementProperties';
 import { LayersPanel } from './LayersPanel';
@@ -81,6 +83,14 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
   const problems = canvasProblems(design, current, upcoming, { imageIds, positionIds, approvalTypeIds });
   const blocking = problems.filter((problem) => !problem.draftOnly);
   const readOnly = !canEdit;
+  // Jiro: a design it finished is put on the canvas as one undoable, unsaved change.
+  const [jiroOpen, setJiroOpen] = useState(false);
+  const applyJiro = useCallback((result: { readonly design: PdfCanvasDesign }) => {
+    history.change(() => result.design);
+    setSelection([]);
+    setSheet(0);
+  }, [history]);
+  const jiro = useFormatAi(workflowId, format.id, canEdit, applyJiro);
 
   const problemText = (problem: CanvasProblem) => {
     const text = t(`documents.canvas.problems.${problem.code}`, { detail: problem.detail });
@@ -243,6 +253,11 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
               <span className={styles.note} role="status">
                 {save.isPending ? t('saving') : dirty ? t('builder.dirty') : t('documents.designer.saved')}
               </span>
+              {jiro.available && (
+                <Button aria-pressed={jiroOpen} title={t('documents.jiro.openHint')} onClick={() => setJiroOpen((current) => !current)}>
+                  {t('documents.jiro.open')}
+                </Button>
+              )}
               <Button onClick={() => setSettings(true)}>{t('documents.designer.settings.open')}</Button>
               <Button variant="brand" disabled={!canSave} onClick={() => save.mutate(design)}>
                 {t('save')}
@@ -378,6 +393,7 @@ export function CanvasDesigner({ workflowId, format, current, upcoming, breadcru
           <p className={styles.note}>{t('documents.designer.leave')}</p>
         </Dialog>
       )}
+      {jiroOpen && jiro.available && <FormatAiPanel ai={jiro} design={design} onApply={applyJiro} onClose={() => setJiroOpen(false)} />}
     </CanvasImagesContext.Provider>
   );
 }
