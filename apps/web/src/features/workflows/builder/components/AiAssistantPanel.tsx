@@ -1,4 +1,4 @@
-import { AI_DESCRIPTION_LIMITS, AI_JOB_CANCELLED, AI_REVISION_LIMITS, type AiDraftMode, aiDraftNotRevisableDetailsSchema, type AiJobHistoryItem } from '@procesabpm/shared';
+import { AI_DESCRIPTION_LIMITS, AI_JOB_CANCELLED, AI_JOB_STAGES, AI_REVISION_LIMITS, type AiDraftMode, aiDraftNotRevisableDetailsSchema, type AiJobHistoryItem } from '@procesabpm/shared';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ApiError, genericErrorMessage } from '@/shared/api';
@@ -56,7 +56,13 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
   return (
     <section className={styles.aiPanel} aria-label={t('builder.ai.title')}>
       <header className={styles.panelHeader}>
-        <h2 className={styles.sectionTitle}>{t('builder.ai.title')}</h2>
+        <div className={styles.aiBrand}>
+          <span className={styles.aiAvatar} aria-hidden="true">J</span>
+          <span className={styles.aiBrandText}>
+            <h2 className={styles.aiName}>{t('builder.ai.name')}</h2>
+            <span className={styles.aiTagline}>{t('builder.ai.tagline')}</span>
+          </span>
+        </div>
         <button type="button" className={styles.panelClose} aria-label={t('builder.ai.close')} onClick={onClose}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -65,7 +71,15 @@ export function AiAssistantPanel({ ai, revision, hasContent, dirty, onClose }: A
       </header>
       <div className={styles.aiConversation}>
         {ai.jobs.length === 0 ? (
-          <p className={styles.note}>{ai.loading ? t('builder.ai.loading') : t('builder.ai.intro')}</p>
+          ai.loading ? (
+            <p className={styles.note}>{t('builder.ai.loading')}</p>
+          ) : (
+            <div className={styles.aiEmpty}>
+              <span className={styles.aiEmptyAvatar} aria-hidden="true">J</span>
+              <p className={styles.aiGreeting}>{t('builder.ai.greeting')}</p>
+              <p className={styles.note}>{t('builder.ai.intro')}</p>
+            </div>
+          )
         ) : (
           <ol className={styles.aiHistory} aria-label={t('builder.ai.history')}>
             {ai.jobs.map((job) => (
@@ -118,14 +132,56 @@ function ProgressText({ job }: { readonly job: AiJobHistoryItem }) {
   }
 }
 
+/** The run's four stages as a live stepper: those done, the one in progress with its detail, and what is left. */
+function AiProgressSteps({ job }: { readonly job: AiJobHistoryItem }) {
+  const { t } = useTranslation('workflows');
+  if (job.status === 'PENDING') {
+    return (
+      <div className={styles.aiSteps}>
+        <div className={`${styles.aiStep} ${styles.aiStepNow}`}>
+          <span className={styles.aiStepMark} aria-hidden="true" />
+          <span className={styles.aiStepBody}>
+            <span className={styles.aiStepLabel}>
+              {t('builder.ai.stages.PENDING')}
+              <span className={styles.aiLiveDot} aria-hidden="true" />
+            </span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+  const current = Math.max(0, AI_JOB_STAGES.indexOf(job.stage ?? 'READING'));
+  return (
+    <div className={styles.aiSteps}>
+      {AI_JOB_STAGES.map((stage, index) => {
+        const state = index > current ? 'todo' : index < current ? 'done' : 'now';
+        return (
+          <div key={stage} className={`${styles.aiStep} ${state === 'done' ? styles.aiStepDone : state === 'now' ? styles.aiStepNow : styles.aiStepTodo}`}>
+            <span className={styles.aiStepMark} aria-hidden="true" />
+            <span className={styles.aiStepBody}>
+              <span className={styles.aiStepLabel}>
+                {t(`builder.ai.stageLabels.${stage}`)}
+                {state === 'now' && <span className={styles.aiLiveDot} aria-hidden="true" />}
+              </span>
+              {state === 'now' && (
+                <span className={styles.aiStepDesc}>
+                  <ProgressText job={job} />
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Progress({ job, cancelling, onCancel }: { readonly job: AiJobHistoryItem; readonly cancelling: boolean; readonly onCancel: () => void }) {
   const { t } = useTranslation('workflows');
   const elapsed = useElapsedSeconds(job.startedAt ?? job.createdAt);
   return (
     <>
-      <p className={styles.strong}>
-        <ProgressText job={job} />
-      </p>
+      <AiProgressSteps job={job} />
       <p className={styles.aiMeta}>{t('builder.ai.elapsed', { seconds: elapsed })}</p>
       {job.stage === 'DESIGNING' && job.preview !== null && job.preview.steps.length > 0 && <p className={styles.aiMeta}>{t('builder.ai.preview.onCanvas')}</p>}
       <div>
