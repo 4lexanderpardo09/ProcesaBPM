@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Keep the last 15 releases: enough to go back, little to store",
+      "selection": { "tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 15 },
+      "action": { "type": "expire" }
+    }
+  ]
+}

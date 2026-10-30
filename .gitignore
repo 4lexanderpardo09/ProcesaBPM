@@ -9,3 +9,6 @@ storybook-static/
 playwright-report/
 test-results/
 playwright-report-stack/
+
+# Deployment state on the server (deploy/deploy.sh)
+.deploy/

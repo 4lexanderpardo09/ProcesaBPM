@@ -202,8 +202,8 @@ jobs:
       - name: Run the unit tests in the image
         run: docker run --rm --memory 2g --memory-swap 2g procesabpm-test-unit:ci
 
-      - name: Check the verification script
-        run: bash -n deploy/verify.sh
+      - name: Check the verification and deployment scripts
+        run: bash -n deploy/verify.sh && bash -n deploy/deploy.sh
 
       - name: Smoke test
         run: scripts/smoke-images.sh
