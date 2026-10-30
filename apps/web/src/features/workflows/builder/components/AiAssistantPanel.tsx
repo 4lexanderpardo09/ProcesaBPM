@@ -250,8 +250,11 @@ function AiComposer({ ai, revision, hasContent, dirty }: { readonly ai: AiDraft;
         onChange={(event) => setMessage(event.target.value)}
         placeholder={mode === 'REVISE' ? t('builder.ai.revise.placeholder') : t('builder.ai.placeholder')}
       />
-      {mode === 'REVISE' && <p className={styles.aiMeta}>{t('builder.ai.revise.keeps')}</p>}
-      <p className={styles.aiMeta}>{t('builder.ai.privacy')}</p>
+      <details className={styles.aiDetails}>
+        <summary>{t('builder.ai.moreInfo')}</summary>
+        <p className={styles.aiMeta}>{t('builder.ai.privacy')}</p>
+        {mode === 'REVISE' && <p className={styles.aiMeta}>{t('builder.ai.revise.keeps')}</p>}
+      </details>
       <div className={styles.aiComposerActions}>
         <span className={styles.aiMeta}>{ai.remainingToday === 0 ? t('builder.ai.noneLeft') : t('builder.ai.remaining', { count: ai.remainingToday })}</span>
         <div className={styles.aiComposerButtons}>

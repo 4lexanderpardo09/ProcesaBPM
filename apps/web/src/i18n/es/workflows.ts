@@ -354,6 +354,7 @@ export const workflows = {
       descriptionHint: '{{count}} de {{max}} caracteres (mínimo 20).',
       placeholder: 'Ej.: El asesor pide un anticipo de viaje con el destino y una tabla de gastos. Lo aprueba su jefe; si pasa de 5 millones, también gerencia. Contabilidad revisa y puede devolverlo. Tesorería paga y adjunta el comprobante.',
       privacy: 'No escribas nombres, cédulas ni otros datos de personas: la descripción se envía a un proveedor de IA externo y queda 90 días en este historial, visible para quienes editan flujos en la organización.',
+      moreInfo: 'Cómo funciona y privacidad',
       descriptionGone: 'La descripción de esta solicitud ya no se guarda.',
       askedBy: '{{name}} · {{at}}',
       kinds: {
