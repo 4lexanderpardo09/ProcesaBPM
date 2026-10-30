@@ -147,7 +147,7 @@ const apiSchema = commonSchema.extend({
   /** Whether the platform offers «Crear con IA» (the worker holds the provider key). `false`: hidden everywhere. */
   AI_ASSISTANT_AVAILABLE: booleanFlag(false),
   /** Recorded on each request; the same variable the worker calls the provider with. */
-  AI_REASONING_MODEL: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/).default('deepseek-v4-pro'),
+  AI_REASONING_MODEL: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/).default('claude-haiku-5-5'),
   /** Per organization and day (in its time zone): requests, and tokens the provider counted. */
   AI_DAILY_JOBS_PER_TENANT: boundedInteger(10, 1, 1_000),
   AI_DAILY_TOKENS_PER_TENANT: boundedInteger(1_000_000, 1_000, 100_000_000),

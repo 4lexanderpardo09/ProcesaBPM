@@ -84,7 +84,7 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       expect((await admin.get(`/ai-assistant/availability?versionId=${draft.versionId}`).expect(200)).body).toEqual({ available: true, remainingJobsToday: 2, activeJobId: jobId });
       expect((await ask(admin, draft.base).expect(409)).body.error.code).toBe('AI_JOB_IN_PROGRESS');
       const [audit] = await auditRows(tenant.tenantId, 'workflow.ai_draft_requested');
-      expect(audit).toEqual({ entity_id: draft.workflowId, after: { versionId: draft.versionId, jobId, kind: 'WORKFLOW_DRAFT', model: 'deepseek-v4-pro', inputChars: DESCRIPTION.length } });
+      expect(audit).toEqual({ entity_id: draft.workflowId, after: { versionId: draft.versionId, jobId, kind: 'WORKFLOW_DRAFT', model: 'claude-haiku-5-5', inputChars: DESCRIPTION.length } });
       expect(JSON.stringify(audit)).not.toContain('anticipo');
     });
 
@@ -109,7 +109,7 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       expect((await admin.get('/settings/ai-assistant').expect(200)).body.today).toEqual({ jobs: 3, tokens: 0 });
       const usage = (await admin.get('/settings/ai-assistant/usage').expect(200)).body;
       expect(usage.recentJobs).toHaveLength(3);
-      expect(usage.recentJobs[0]).toMatchObject({ status: 'PENDING', model: 'deepseek-v4-pro', tokens: 0 });
+      expect(usage.recentJobs[0]).toMatchObject({ status: 'PENDING', model: 'claude-haiku-5-5', tokens: 0 });
       expect(usage.recentJobs[0].requesterName.length).toBeGreaterThan(0);
     });
 
@@ -177,7 +177,7 @@ describe('AI assistant API: the switch, the requests and the daily limit', () =>
       expect((await admin.get(`${draft.base}/ai-jobs`).expect(200)).body.jobs).toEqual([expect.objectContaining({ id: jobId, kind: 'WORKFLOW_DRAFT_REVISION', description: 'quita' })]);
       expect((await revise(admin, draft.base).expect(409)).body.error.code).toBe('AI_JOB_IN_PROGRESS');
       const [audit] = await auditRows(tenant.tenantId, 'workflow.ai_draft_requested');
-      expect(audit.after).toEqual({ versionId: draft.versionId, jobId, kind: 'WORKFLOW_DRAFT_REVISION', model: 'deepseek-v4-pro', inputChars: 5 });
+      expect(audit.after).toEqual({ versionId: draft.versionId, jobId, kind: 'WORKFLOW_DRAFT_REVISION', model: 'claude-haiku-5-5', inputChars: 5 });
     });
 
     it('are taken when the draft has settings the spec does not show (the worker keeps them where the AI changes nothing)', async () => {

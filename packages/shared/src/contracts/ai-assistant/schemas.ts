@@ -5,9 +5,10 @@ import { DRAFT_DECISION_TOPICS, DRAFT_STEP_TYPES } from '../../workflow/draft-sp
 /**
  * The version of the transfer notice an administrator accepts when turning the assistant on (descriptions go to the
  * AI provider, abroad). Raise it when the text changes: turning it on again asks for the new one. An organization
- * already on stays on (the version is checked only when turning it on). 2: descriptions are kept 90 days.
+ * already on stays on (the version is checked only when turning it on). 2: descriptions are kept 90 days. 3: the
+ * provider is Claude (Anthropic, United States) instead of DeepSeek (China).
  */
-export const AI_NOTICE_VERSION = 2;
+export const AI_NOTICE_VERSION = 3;
 export const AI_DESCRIPTION_LIMITS = { min: 20, max: 8_000 } as const;
 /** A change asked of an existing draft can be short («quita el aviso»). */
 export const AI_REVISION_LIMITS = { min: 5, max: AI_DESCRIPTION_LIMITS.max } as const;

@@ -1,5 +1,6 @@
 import { PDF_LIMITS } from '@procesabpm/shared';
 import { z } from 'zod';
+import { AI_EFFORTS, ANTHROPIC } from '../infrastructure/llm/anthropic-provider.js';
 import { MULTIPART_MAX_PARTS, MULTIPART_PART_BYTES } from '../infrastructure/storage/s3-multipart-write.js';
 import { ConfigError } from './app-config.js';
 
@@ -67,14 +68,20 @@ const settingsSchema = z.object({
   DATA_EXPORT_MAX_RUN_MS: positiveInteger(4 * HOUR_MS, 24 * HOUR_MS),
   /** Size cap of one export archive (decision B16: 100 GiB); past it the export fails (EXPORT_TOO_LARGE). */
   DATA_EXPORT_MAX_BYTES: positiveInteger(100 * GIB, MAX_MULTIPART_OBJECT_BYTES),
-  /** The AI assistant's provider (an OpenAI-compatible chat API). Without a key, its requests fail AI_NOT_CONFIGURED. */
-  AI_PROVIDER_NAME: z.string().regex(/^[a-z0-9-]{1,40}$/).default('deepseek'),
-  AI_BASE_URL: httpUrl.default('https://api.deepseek.com/beta'),
+  /**
+   * The AI assistant's provider: `anthropic` (Claude, through its own API) or the name of any OpenAI-compatible chat
+   * API, which then needs AI_BASE_URL. Without a key, its requests fail AI_NOT_CONFIGURED.
+   */
+  AI_PROVIDER_NAME: z.string().regex(/^[a-z0-9-]{1,40}$/).default('anthropic'),
+  /** Up to the version prefix for an OpenAI-compatible provider; for anthropic only to go through a proxy. Empty: unset. */
+  AI_BASE_URL: z.preprocess((value) => (value === '' ? undefined : value), httpUrl.optional()),
   /** Empty means not configured, so the compose file can pass it through unset. */
   AI_API_KEY: z.preprocess((value) => (value === '' ? undefined : value), z.string().min(20).optional()),
-  /** The model that designs workflows (a reasoning model: slow, but it gets the structure right). */
-  AI_REASONING_MODEL: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/).default('deepseek-v4-pro'),
-  /** Strict tool calling (the provider enforces the JSON Schema of the answer). */
+  /** The model that designs: any of the provider's, so a newer one is a change here (claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5…). */
+  AI_REASONING_MODEL: z.string().regex(/^[A-Za-z0-9._:/-]{1,100}$/).default('claude-haiku-5-5'),
+  /** How much Claude thinks before answering (anthropic only): more is slower and spends more tokens. */
+  AI_EFFORT: z.enum(AI_EFFORTS).default('high'),
+  /** Strict tool calling (the provider enforces the JSON Schema of the answer); OpenAI-compatible providers only. */
   AI_STRICT_TOOLS: boolean(true),
   /** One call to the provider; must end inside the job's lease. */
   AI_REQUEST_TIMEOUT_MS: positiveInteger(300_000, AI_MAX_REQUEST_TIMEOUT_MS),
@@ -108,7 +115,8 @@ export function loadWorkerSettings(env: Readonly<Record<string, string | undefin
     if (waves * (data.OUTBOX_TX_TIMEOUT_MS + effects) > MAX_BATCH_PROCESSING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS (plus the realtime signals after commit) would outlive the claim lease');
     else if (waves * (data.OUTBOX_TX_TIMEOUT_MS + data.PDF_RENDER_TIMEOUT_MS + effects) > MAX_BATCH_WITH_RENDERING_MS) problems.push('OUTBOX_BATCH_SIZE / OUTBOX_CONCURRENCY waves of OUTBOX_TX_TIMEOUT_MS plus PDF_RENDER_TIMEOUT_MS (plus the realtime signals after commit) would outlive the claim lease');
     if ((data.SMTP_USER === undefined) !== (data.SMTP_PASSWORD === undefined)) problems.push('SMTP_USER and SMTP_PASSWORD go together');
-    if (data.NODE_ENV === 'production' && !data.AI_BASE_URL.startsWith('https://')) problems.push('AI_BASE_URL must be https in production');
+    if (data.AI_PROVIDER_NAME !== ANTHROPIC && data.AI_BASE_URL === undefined) problems.push('AI_BASE_URL is required for an OpenAI-compatible provider');
+    if (data.NODE_ENV === 'production' && data.AI_BASE_URL !== undefined && !data.AI_BASE_URL.startsWith('https://')) problems.push('AI_BASE_URL must be https in production');
     if (data.AI_API_KEY !== undefined && /change-me/i.test(data.AI_API_KEY)) problems.push('AI_API_KEY still has the example value');
   }
   if (problems.length > 0 || !result.success) throw new ConfigError(problems);

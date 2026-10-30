@@ -124,7 +124,7 @@ services:
       REALTIME_ALLOWED_ORIGINS: ${REALTIME_ALLOWED_ORIGINS:-${WEB_BASE_URL:?}}   # origins allowed to open a WebSocket (exact, https in production)
       AI_ASSISTANT_AVAILABLE: ${AI_ASSISTANT_AVAILABLE:-false}   # offers «Crear con IA»; each organization still turns it on
       SES_SNS_TOPIC_ARN: ${SES_SNS_TOPIC_ARN:-}   # SES bounces and complaints (docs/operations/email-bounces.md); empty: endpoint off
-      AI_REASONING_MODEL: ${AI_REASONING_MODEL:-deepseek-v4-pro}
+      AI_REASONING_MODEL: ${AI_REASONING_MODEL:-claude-haiku-5-5}
       AI_DAILY_JOBS_PER_TENANT: ${AI_DAILY_JOBS_PER_TENANT:-10}
       AI_DAILY_TOKENS_PER_TENANT: ${AI_DAILY_TOKENS_PER_TENANT:-1000000}
       # STORAGE_PUBLIC_ENDPOINT: https://files.example.com   # only when browsers reach the storage at another address
@@ -181,9 +181,13 @@ services:
       # The SMTP login of the provider (Amazon SES: the SMTP credentials, not the IAM user). Both or none; empty: no login (Mailpit).
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      AI_API_KEY: ${AI_API_KEY:-}   # only the worker calls the AI provider; empty: requests end AI_NOT_CONFIGURED
-      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com/beta}
-      AI_REASONING_MODEL: ${AI_REASONING_MODEL:-deepseek-v4-pro}
+      # Only the worker calls the AI provider. anthropic: Claude, with its API key; empty: requests end AI_NOT_CONFIGURED.
+      AI_PROVIDER_NAME: ${AI_PROVIDER_NAME:-anthropic}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}   # only for an OpenAI-compatible provider (or a proxy)
+      # Any model of the provider: claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5 or a newer one. Same value as the api's.
+      AI_REASONING_MODEL: ${AI_REASONING_MODEL:-claude-haiku-5-5}
+      AI_EFFORT: ${AI_EFFORT:-high}   # low, medium, high, xhigh or max: how much Claude thinks before answering
     depends_on:
       seed: { condition: service_completed_successfully }
     # A batch of events in flight finishes (or is released) on SIGTERM; give it longer than OUTBOX_TX_TIMEOUT_MS.
