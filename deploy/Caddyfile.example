@@ -16,11 +16,17 @@ www.example.com, example.com {
 	}
 
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Report-only first (docs/despliegue.md): the browser logs violations to the console but blocks nothing. Watch for a
+		# week, add any real source, then rename the header to Content-Security-Policy to enforce. Google Analytics loads only
+		# after consent, so its domains appear here; Google Fonts needs fonts.googleapis.com (CSS) and fonts.gstatic.com (files).
+		Content-Security-Policy-Report-Only "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: https://www.google-analytics.com; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com"
 		-Server
+		-X-Powered-By
 	}
 }
 
@@ -39,10 +45,15 @@ app.example.com {
 	}
 
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Report-only first (see the landing block). The app is a React SPA on one origin; it also uploads/downloads files to
+		# the S3-compatible storage with presigned URLs, so when enforcing, add that storage host to connect-src and img-src.
+		Content-Security-Policy-Report-Only "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; connect-src 'self'"
 		-Server
+		-X-Powered-By
 	}
 }

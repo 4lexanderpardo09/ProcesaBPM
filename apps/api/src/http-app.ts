@@ -11,6 +11,8 @@ export type HttpAppSettings = Pick<ApiConfig, 'TRUST_PROXY' | 'REALTIME_ENABLED'
 
 /** HTTP (and WebSocket) settings shared by `main.ts` and the end-to-end tests. Must run before `app.init()`. */
 export function configureHttpApp(app: NestExpressApplication, config: HttpAppSettings): void {
+  // Express announces itself with X-Powered-By; remove it so responses do not advertise the framework.
+  app.disable('x-powered-by');
   app.set('trust proxy', config.TRUST_PROXY);
   // Every route, health checks included: the proxy forwards one prefix to the API (see API_PREFIX).
   app.setGlobalPrefix(API_PREFIX);
