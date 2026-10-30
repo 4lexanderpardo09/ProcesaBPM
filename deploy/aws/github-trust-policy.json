@@ -9,8 +9,8 @@
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
           "token.actions.githubusercontent.com:sub": [
-            "repo:4lexanderpardo09/ProcesaBPM:ref:refs/heads/main",
-            "repo:4lexanderpardo09/ProcesaBPM:environment:production"
+            "repo:4lexanderpardo09@46363413/ProcesaBPM@1398764562:ref:refs/heads/main",
+            "repo:4lexanderpardo09@46363413/ProcesaBPM@1398764562:environment:production"
           ]
         }
       }
