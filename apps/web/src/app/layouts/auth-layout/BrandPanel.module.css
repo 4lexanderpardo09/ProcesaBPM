@@ -1,11 +1,46 @@
+/* The logo stays at the top and the pitch sits centred in the rest, fitting the window's height so the sign-in page
+   never scrolls: on a wide panel the text and the sample workflow go side by side, on a narrower one they stack and
+   the drawing shrinks. */
 .panel {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: calc(var(--space-6) * 2);
-  padding: calc(var(--space-6) * 2);
+  align-items: center;
+  gap: clamp(20px, 4.5vh, 48px);
+  padding: clamp(32px, 6vh, 72px) clamp(32px, 5vw, 80px);
   background: var(--navy);
   color: var(--on-navy);
+}
+
+.brand {
+  align-self: stretch;
+}
+
+.inner {
+  display: grid;
+  grid-template-areas:
+    'copy'
+    'art';
+  gap: clamp(20px, 4.5vh, 48px) 72px;
+  width: 100%;
+  max-width: 980px;
+  margin-block: auto;
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 4vh, 40px);
+  grid-area: copy;
+}
+
+.art {
+  display: flex;
+  grid-area: art;
+}
+
+.art svg {
+  max-height: 32vh;
 }
 
 .pitch {
@@ -41,6 +76,34 @@
 .check {
   flex: none;
   color: var(--accent-line);
+}
+
+@container (min-width: 880px) {
+  .inner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+    grid-template-areas: 'copy art';
+    align-items: center;
+  }
+
+  .pitch {
+    max-width: 560px;
+  }
+
+  .headline {
+    font-size: clamp(30px, 2.6vw, 42px);
+    line-height: 1.15;
+  }
+
+  .art svg {
+    max-height: 56vh;
+  }
+}
+
+/* A short window keeps the words and drops the drawing. */
+@media (max-height: 600px) {
+  .art {
+    display: none;
+  }
 }
 
 @media (max-width: 899px) {
