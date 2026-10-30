@@ -60,7 +60,7 @@ export class AnthropicProvider extends LlmProvider {
           model: this.options.model,
           max_tokens: MAX_OUTPUT_TOKENS,
           system: [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }],
-          messages: [{ role: 'user', content: request.user }],
+          messages: [{ role: 'user', content: userContent(request) }],
           tools: [{ name: request.tool.name, description: request.tool.description, input_schema: request.tool.schema as Anthropic.Tool.InputSchema, eager_input_streaming: true }],
           tool_choice: { type: 'auto' },
           thinking: { type: 'adaptive' },
@@ -108,6 +108,12 @@ export class AnthropicProvider extends LlmProvider {
     const call = [...blocks.values()].find((block) => block.name === request.tool.name);
     return { answer: answerOf(call?.input, stopReason), usage, durationMs: elapsed(), delivery: { contentType: 'text/event-stream', streamed: true, ...facts } };
   }
+}
+
+/** The user message: the pictures first (Claude reads them best that way), then the text. */
+function userContent(request: LlmRequest): string | Anthropic.ContentBlockParam[] {
+  if (request.images === undefined || request.images.length === 0) return request.user;
+  return [...request.images.map((image): Anthropic.ImageBlockParam => ({ type: 'image', source: { type: 'base64', media_type: image.mediaType, data: image.data } })), { type: 'text', text: request.user }];
 }
 
 /** The tool's input, unless the answer was cut short (out of tokens, or declined): a partial draft is no draft. */

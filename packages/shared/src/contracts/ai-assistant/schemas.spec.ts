@@ -12,8 +12,8 @@ describe('AI assistant contracts', () => {
     expect(aiJobHistoryQuerySchema.safeParse({ limit: 5, other: 1 }).success).toBe(false);
   });
 
-  it('turning the assistant on needs the current notice (the one that names Anthropic, in the United States)', () => {
-    expect(AI_NOTICE_VERSION).toBe(3);
+  it('turning the assistant on needs the current notice (the one that says pictures of a paper format may be sent)', () => {
+    expect(AI_NOTICE_VERSION).toBe(4);
     expect(updateAiAssistantSettingsSchema.safeParse({ enabled: true, acceptedNoticeVersion: 1 }).success).toBe(false);
     expect(updateAiAssistantSettingsSchema.safeParse({ enabled: true, acceptedNoticeVersion: AI_NOTICE_VERSION }).success).toBe(true);
     expect(updateAiAssistantSettingsSchema.safeParse({ enabled: false }).success).toBe(true);

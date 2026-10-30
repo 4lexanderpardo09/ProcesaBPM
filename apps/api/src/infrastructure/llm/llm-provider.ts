@@ -5,9 +5,17 @@ export interface LlmTool {
   readonly schema: Readonly<Record<string, unknown>>;
 }
 
+/** A picture that goes with the user message (base64, no data: prefix). */
+export interface LlmImage {
+  readonly mediaType: 'image/jpeg' | 'image/png';
+  readonly data: string;
+}
+
 export interface LlmRequest {
   readonly system: string;
   readonly user: string;
+  /** Shown to the model before the user message. */
+  readonly images?: readonly LlmImage[];
   readonly tool: LlmTool;
 }
 

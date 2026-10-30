@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AI_TASK_KINDS, type AiFormatTaskKind, type AiTaskKind, aiDraftResultSchema, aiFormatResultSchema, isFormatTaskKind } from '@procesabpm/shared';
+import { AI_TASK_KINDS, type AiFormatImage, aiFormatImageSchema, type AiFormatTaskKind, type AiTaskKind, aiDraftResultSchema, aiFormatResultSchema, isFormatTaskKind } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 import type { LlmUsage } from '../../../infrastructure/llm/llm-provider.js';
 
@@ -24,6 +24,8 @@ export interface FormatJobInput {
   readonly description: string;
   /** Stored JSON: parsed with the canvas schema before it is used. */
   readonly basis: unknown;
+  /** Pictures of a paper format (the ones that still read as such). */
+  readonly images: readonly AiFormatImage[];
   readonly enabled: boolean;
 }
 
@@ -82,8 +84,9 @@ export class AiJobWorkRepository {
     });
     const description = descriptionOf(job?.input ?? null);
     if (job === null || !isFormatTaskKind(job.kind) || job.workflowId === null || job.formatId === null || description === null) return undefined;
-    const basis = (job.input as { basis?: unknown } | null)?.basis ?? null;
-    return { kind: job.kind, createdAt: job.createdAt, requestedById: job.requestedById, workflowId: job.workflowId, formatId: job.formatId, description, basis, enabled: job.tenant.aiAssistantEnabled };
+    const stored = job.input as { basis?: unknown; images?: unknown } | null;
+    const images = Array.isArray(stored?.images) ? stored.images.flatMap((image) => aiFormatImageSchema.safeParse(image).data ?? []) : [];
+    return { kind: job.kind, createdAt: job.createdAt, requestedById: job.requestedById, workflowId: job.workflowId, formatId: job.formatId, description, basis: stored?.basis ?? null, images, enabled: job.tenant.aiAssistantEnabled };
   }
 
   /** The finished requests of a format made before `before` (newest `limit`, oldest first). */

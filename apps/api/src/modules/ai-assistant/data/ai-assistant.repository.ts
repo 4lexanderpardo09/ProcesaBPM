@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@procesabpm/db';
-import { type AiFormatJob, type AiFormatTaskKind, type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiTaskKind, type AiUsageDay, type AiUsageToday, aiDraftPreviewSchema, aiDraftResultSchema, aiFormatResultSchema, isFormatTaskKind, type PdfCanvasDesign } from '@procesabpm/shared';
+import { type AiFormatImage, type AiFormatJob, type AiFormatTaskKind, type AiJobHistoryItem, type AiJobResponse, type AiJobSummary, type AiTaskKind, type AiUsageDay, type AiUsageToday, aiDraftPreviewSchema, aiDraftResultSchema, aiFormatResultSchema, isFormatTaskKind, type PdfCanvasDesign } from '@procesabpm/shared';
 import type { TenantTransaction } from '../../../infrastructure/database/tenant-transaction-runner.js';
 
 export interface NewDraftJob {
@@ -24,6 +24,8 @@ export interface NewFormatJob {
   readonly description: string;
   /** A change: the design on screen it starts from. */
   readonly basis?: PdfCanvasDesign;
+  /** Pictures of a paper format to reproduce. */
+  readonly images?: readonly AiFormatImage[];
   readonly model: string;
 }
 
@@ -36,6 +38,11 @@ const fullName = (person: { user: { firstName: string; lastName: string } }): st
 const descriptionOf = (input: Prisma.JsonValue): string | null => {
   const description = (input as { description?: unknown } | null)?.description;
   return typeof description === 'string' ? description : null;
+};
+
+const imagesOf = (input: Prisma.JsonValue): number => {
+  const images = (input as { images?: unknown } | null)?.images;
+  return Array.isArray(images) ? images.length : 0;
 };
 
 function jobResponse(job: JobRow): AiJobResponse {
@@ -108,7 +115,7 @@ export class AiAssistantRepository {
         requestedById: job.requestedById,
         workflowId: job.workflowId,
         formatId: job.formatId,
-        input: job.basis === undefined ? { description: job.description } : { description: job.description, basis: job.basis },
+        input: { description: job.description, ...(job.basis === undefined ? {} : { basis: job.basis }), ...(job.images === undefined || job.images.length === 0 ? {} : { images: job.images.map((image) => ({ ...image })) }) },
         inputChars: job.description.length,
         model: job.model,
       },
@@ -136,6 +143,7 @@ export class AiAssistantRepository {
       return {
         ...response,
         result: job.result === null ? null : (aiFormatResultSchema.safeParse(job.result).data ?? null),
+        images: imagesOf(job.input),
         description: descriptionOf(job.input),
         requestedById: job.requestedById,
         requesterName: fullName(job.requestedBy),

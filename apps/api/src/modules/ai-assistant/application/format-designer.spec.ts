@@ -35,7 +35,7 @@ describe('FormatDesigner', () => {
   it('stops at the first format without errors, with the defaults filled in', async () => {
     const { provider, requests } = scripted(answer('{{field.TOTAL|currency}}'));
     const calls: string[] = [];
-    const result = await new FormatDesigner(provider, 3).design({ kind: 'create', description: 'Un comprobante con el total' }, catalog, check, hooks(calls), new AbortController().signal);
+    const result = await new FormatDesigner(provider, 3).design({ kind: 'create', description: 'Un comprobante con el total', images: [] }, catalog, check, hooks(calls), new AbortController().signal);
     expect(result).toMatchObject({ kind: 'format', rounds: 1, corrections: 0, errors: 0 });
     expect(result.kind === 'format' && result.spec.design.elements[0]).toMatchObject({ id: 'e1', sheet: 0, style: { font: 'HELVETICA' } });
     expect(calls).toEqual(['OK']);
@@ -47,7 +47,7 @@ describe('FormatDesigner', () => {
   it('sends the problems back, corrects them in the next round, and records every call', async () => {
     const { provider, requests } = scripted({ answer: { kind: 'no_tool_call' }, usage, durationMs: 5 }, answer('{{field.NOPE}}'), answer('{{field.TOTAL}}'));
     const calls: string[] = [];
-    const result = await new FormatDesigner(provider, 3).design({ kind: 'create', description: 'Un comprobante con el total' }, catalog, check, hooks(calls), new AbortController().signal);
+    const result = await new FormatDesigner(provider, 3).design({ kind: 'create', description: 'Un comprobante con el total', images: [] }, catalog, check, hooks(calls), new AbortController().signal);
     expect(result).toMatchObject({ kind: 'format', rounds: 3, errors: 0 });
     expect(calls).toEqual(['TOOL_NOT_CALLED', 'OK', 'OK']);
     expect(requests[1]!.user).toContain('without calling the tool submit_pdf_format');
@@ -55,25 +55,37 @@ describe('FormatDesigner', () => {
   });
 
   it('keeps the best format when the rounds run out, and fails only when nothing usable came back', async () => {
-    const left = await new FormatDesigner(scripted(answer('{{field.NOPE}}'), answer('{{field.NOPE}}')).provider, 2).design({ kind: 'create', description: 'x'.repeat(20) }, catalog, check, hooks([]), new AbortController().signal);
+    const left = await new FormatDesigner(scripted(answer('{{field.NOPE}}'), answer('{{field.NOPE}}')).provider, 2).design({ kind: 'create', description: 'x'.repeat(20), images: [] }, catalog, check, hooks([]), new AbortController().signal);
     expect(left).toMatchObject({ kind: 'format', rounds: 2, errors: 1 });
-    const invalid = await new FormatDesigner(scripted({ answer: { kind: 'tool_call', arguments: { design: 'nope' } }, usage, durationMs: 5 }).provider, 1).design({ kind: 'create', description: 'x'.repeat(20) }, catalog, check, hooks([]), new AbortController().signal);
+    const invalid = await new FormatDesigner(scripted({ answer: { kind: 'tool_call', arguments: { design: 'nope' } }, usage, durationMs: 5 }).provider, 1).design({ kind: 'create', description: 'x'.repeat(20), images: [] }, catalog, check, hooks([]), new AbortController().signal);
     expect(invalid).toEqual({ kind: 'failed', errorCode: 'AI_DRAFT_INVALID' });
-    const down = await new FormatDesigner(scripted(new LlmCallError('TIMEOUT', 5)).provider, 1).design({ kind: 'create', description: 'x'.repeat(20) }, catalog, check, hooks([]), new AbortController().signal);
+    const down = await new FormatDesigner(scripted(new LlmCallError('TIMEOUT', 5)).provider, 1).design({ kind: 'create', description: 'x'.repeat(20), images: [] }, catalog, check, hooks([]), new AbortController().signal);
     expect(down).toEqual({ kind: 'failed', errorCode: 'AI_PROVIDER_FAILED' });
-    const off = await new FormatDesigner(scripted(new LlmCallError('NOT_CONFIGURED', 0)).provider, 3).design({ kind: 'create', description: 'x'.repeat(20) }, catalog, check, hooks([]), new AbortController().signal);
+    const off = await new FormatDesigner(scripted(new LlmCallError('NOT_CONFIGURED', 0)).provider, 3).design({ kind: 'create', description: 'x'.repeat(20), images: [] }, catalog, check, hooks([]), new AbortController().signal);
     expect(off).toEqual({ kind: 'failed', errorCode: 'AI_NOT_CONFIGURED' });
   });
 
   it('sends a change with the format on screen and the earlier requests, and stops when the request is no longer ours', async () => {
     const basis = { version: 2, page: { size: 'LETTER', orientation: 'PORTRAIT', marginBottom: 15 }, sheets: [{ name: '', condition: '' }], calculations: [], elements: [] } as PdfCanvasDesign;
     const { provider, requests } = scripted(answer('{{field.TOTAL}}'));
-    await new FormatDesigner(provider, 3).design({ kind: 'revise', message: 'Agrega el total', basis, history: [{ message: 'Un comprobante', applied: true, decisions: [] }] }, catalog, check, hooks([]), new AbortController().signal);
+    await new FormatDesigner(provider, 3).design({ kind: 'revise', message: 'Agrega el total', basis, history: [{ message: 'Un comprobante', applied: true, decisions: [] }], images: [] }, catalog, check, hooks([]), new AbortController().signal);
     expect(requests[0]!.user).toContain('<current_format>');
     expect(requests[0]!.user).toContain('- (applied) Un comprobante');
     expect(requests[0]!.system).toContain('CHANGING THE FORMAT ON SCREEN');
-    const stopped = await new FormatDesigner(scripted(answer('x')).provider, 3).design({ kind: 'create', description: 'x'.repeat(20) }, catalog, check, { ...hooks([]), beforeRound: async () => false }, new AbortController().signal);
+    const stopped = await new FormatDesigner(scripted(answer('x')).provider, 3).design({ kind: 'create', description: 'x'.repeat(20), images: [] }, catalog, check, { ...hooks([]), beforeRound: async () => false }, new AbortController().signal);
     expect(stopped).toEqual({ kind: 'interrupted' });
+  });
+
+  it('sends the pictures of a paper format along, with the rules to reproduce it', async () => {
+    const { provider, requests } = scripted(answer('{{field.TOTAL}}'));
+    const picture = { mediaType: 'image/jpeg' as const, data: 'AAAA' };
+    await new FormatDesigner(provider, 3).design({ kind: 'create', description: 'Replica este formato', images: [picture] }, catalog, check, hooks([]), new AbortController().signal);
+    expect(requests[0]!.images).toEqual([picture]);
+    expect(requests[0]!.system).toContain('PICTURES OF A PAPER FORMAT');
+    expect(requests[0]!.user).toContain('1 picture(s) of a paper format');
+    const { provider: plain, requests: plainRequests } = scripted(answer('{{field.TOTAL}}'));
+    await new FormatDesigner(plain, 3).design({ kind: 'create', description: 'Sin fotos', images: [] }, catalog, check, hooks([]), new AbortController().signal);
+    expect(plainRequests[0]!.system).not.toContain('PICTURES OF A PAPER FORMAT');
   });
 
   it('describes problems with a hint the model can act on', () => {

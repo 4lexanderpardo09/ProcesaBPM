@@ -41,7 +41,7 @@ describe('SettingsPage', () => {
 
   it('turns the AI assistant on only after the transfer notice is accepted, and shows what it costs', async () => {
     let enabled = false;
-    const settings = () => ({ available: true, enabled, noticeVersion: 3, limits: { jobsPerDay: 10, tokensPerDay: 1_000_000 }, today: { jobs: 2, tokens: 24_500 } });
+    const settings = () => ({ available: true, enabled, noticeVersion: 4, limits: { jobsPerDay: 10, tokensPerDay: 1_000_000 }, today: { jobs: 2, tokens: 24_500 } });
     const { fake } = renderRoute('/settings/ai', {
       handlers: {
         '/settings/ai-assistant': (options) => {
@@ -61,7 +61,7 @@ describe('SettingsPage', () => {
     expect(turnOn).toBeDisabled();
     await userEvent.click(screen.getByRole('checkbox', { name: /Leí este aviso/ }));
     await userEvent.click(turnOn);
-    await vi.waitFor(() => expect(fake.calls.find((call) => call.path === '/settings/ai-assistant' && call.options.method === 'PUT')?.options.body).toEqual({ enabled: true, acceptedNoticeVersion: 3 }));
+    await vi.waitFor(() => expect(fake.calls.find((call) => call.path === '/settings/ai-assistant' && call.options.method === 'PUT')?.options.body).toEqual({ enabled: true, acceptedNoticeVersion: 4 }));
     expect(await screen.findByText('Hoy: 2 de 10 solicitudes · 24.500 de 1.000.000 tokens.')).toBeInTheDocument();
     expect(screen.getByText('Activado')).toBeInTheDocument();
     expect(screen.getByText(/quedan guardadas 90 días/)).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('SettingsPage', () => {
   });
 
   it('says the AI assistant is not offered when the platform has it off', async () => {
-    renderRoute('/settings/ai', { handlers: { '/settings/ai-assistant': () => ({ available: false, enabled: false, noticeVersion: 3, limits: { jobsPerDay: 10, tokensPerDay: 1_000_000 }, today: { jobs: 0, tokens: 0 } }) } });
+    renderRoute('/settings/ai', { handlers: { '/settings/ai-assistant': () => ({ available: false, enabled: false, noticeVersion: 4, limits: { jobsPerDay: 10, tokensPerDay: 1_000_000 }, today: { jobs: 0, tokens: 0 } }) } });
     expect(await screen.findByText('El asistente de IA todavía no está disponible en la plataforma.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Activar el asistente' })).not.toBeInTheDocument();
   });

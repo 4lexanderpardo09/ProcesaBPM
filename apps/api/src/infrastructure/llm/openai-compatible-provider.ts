@@ -72,7 +72,7 @@ export class OpenAiCompatibleProvider extends LlmProvider {
           model: this.options.model,
           messages: [
             { role: 'system', content: request.system },
-            { role: 'user', content: request.user },
+            { role: 'user', content: userContent(request) },
           ],
           tools: [{ type: 'function', function: { name: request.tool.name, description: request.tool.description, strict: this.options.strictTools, parameters: request.tool.schema } }],
           tool_choice: 'auto',
@@ -158,6 +158,12 @@ async function readStream(
   }
   lines(pending + decoder.decode());
   return { body: { choices: [{ message: { tool_calls: calls.map((call) => ({ function: call })) } }], ...(usage === undefined ? {} : { usage }) }, facts };
+}
+
+/** The user message, with the pictures as data URLs when there are any (only vision models take them). */
+function userContent(request: LlmRequest): string | Array<Record<string, unknown>> {
+  if (request.images === undefined || request.images.length === 0) return request.user;
+  return [...request.images.map((image) => ({ type: 'image_url', image_url: { url: `data:${image.mediaType};base64,${image.data}` } })), { type: 'text', text: request.user }];
 }
 
 function usageOf(body: ChatCompletion): LlmUsage {
