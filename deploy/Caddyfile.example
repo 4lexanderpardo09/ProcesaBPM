@@ -4,6 +4,18 @@
 #
 # The public website (apps/landing) lives on its own host. Its demo form posts to /api/public/*, the only part of the API
 # it reaches; the rest of the API stays on the app's host.
+# Global options: connection timeouts so a slow client cannot hold a connection open indefinitely (slowloris). idle is
+# kept at 2m because the realtime WebSocket pings every 25s + 20s grace; a shorter idle would drop live connections.
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+			idle 2m
+		}
+	}
+}
+
 www.example.com, example.com {
 	encode zstd gzip
 
