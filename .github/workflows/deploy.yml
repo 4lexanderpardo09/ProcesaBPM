@@ -54,10 +54,26 @@ jobs:
 
       - uses: aws-actions/amazon-ecr-login@v2
 
+      # Tags are immutable in the registry: a release already pushed (e.g. deployed again to go back to it) is not built
+      # nor pushed again.
+      - name: Which images are missing
+        id: missing
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          for image in api worker migrate web landing; do
+            if aws ecr describe-images --repository-name "procesabpm-$image" --image-ids imageTag="$SHA" >/dev/null 2>&1; then
+              echo "$image=false" >>"$GITHUB_OUTPUT"; echo "procesabpm-$image:${SHA:0:7} is already in the registry"
+            else
+              echo "$image=true" >>"$GITHUB_OUTPUT"
+            fi
+          done
+
       - uses: docker/setup-buildx-action@v3
 
       # The same targets and caches as the «Docker images» job of CI, so these builds mostly reuse its layers.
       - name: Build and push api
+        if: steps.missing.outputs.api == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -67,6 +83,7 @@ jobs:
           cache-from: type=gha,scope=images-api
 
       - name: Build and push worker
+        if: steps.missing.outputs.worker == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -76,6 +93,7 @@ jobs:
           cache-from: type=gha,scope=images-worker
 
       - name: Build and push migrate
+        if: steps.missing.outputs.migrate == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -85,6 +103,7 @@ jobs:
           cache-from: type=gha,scope=images-migrate
 
       - name: Build and push web
+        if: steps.missing.outputs.web == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -94,6 +113,7 @@ jobs:
           cache-from: type=gha,scope=images-web
 
       - name: Build and push landing
+        if: steps.missing.outputs.landing == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .

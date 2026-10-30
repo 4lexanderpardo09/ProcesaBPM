@@ -311,7 +311,7 @@ Al mergear a `main`, cuando el CI pasa, el workflow **Deploy** (`.github/workflo
 
 En AWS (reemplaza `ACCOUNT_ID`, `REGION` e `INSTANCE_ID` en los JSON de `deploy/aws/`; no los subas con los valores reales):
 
-1. **ECR:** crea los repositorios `procesabpm-api`, `procesabpm-worker`, `procesabpm-migrate`, `procesabpm-web` y `procesabpm-landing` (privados, en la región del servidor) y ponle a cada uno la regla de `deploy/aws/ecr-lifecycle-policy.json` (Lifecycle policy → JSON).
+1. **ECR:** crea los repositorios `procesabpm-api`, `procesabpm-worker`, `procesabpm-migrate`, `procesabpm-web` y `procesabpm-landing` (privados, en la región del servidor, **etiquetas inmutables**: una versión publicada no se puede reemplazar; el workflow no vuelve a subir una que ya está) y ponle a cada uno la regla de `deploy/aws/ecr-lifecycle-policy.json` (Lifecycle policy → JSON).
 2. **OIDC de GitHub:** IAM → Identity providers → Add provider → OpenID Connect, URL `https://token.actions.githubusercontent.com`, audiencia `sts.amazonaws.com`.
 3. **Rol de GitHub:** IAM → Roles → Create role → Custom trust policy con `deploy/aws/github-trust-policy.json`, y como política en línea `deploy/aws/github-deploy-policy.json`. Nómbralo p. ej. `procesabpm-github-deploy`.
 4. **Rol de la instancia:** al rol que ya tiene el EC2 (o a uno nuevo, EC2 → Actions → Security → Modify IAM role) agrégale las políticas administradas `AmazonSSMManagedInstanceCore` y `AmazonEC2ContainerRegistryReadOnly`. En unos minutos la instancia aparece en Systems Manager → Fleet Manager.
