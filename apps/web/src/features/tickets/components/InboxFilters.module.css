@@ -12,7 +12,13 @@
   grid-column: span 2;
 }
 
+/* Phones: one filter per line; two 170px columns would leave the search box half the screen. */
 @media (max-width: 600px) {
+  .filters,
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .search {
     grid-column: auto;
   }
