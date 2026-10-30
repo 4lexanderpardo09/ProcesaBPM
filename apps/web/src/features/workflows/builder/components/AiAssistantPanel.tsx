@@ -19,7 +19,7 @@ const JOB_ERRORS = ['AI_DRAFT_INVALID', 'AI_PROVIDER_FAILED', 'AI_NOT_CONFIGURED
 type JobErrorCode = (typeof JOB_ERRORS)[number] | 'UNKNOWN';
 const jobErrorOf = (code: string | null): JobErrorCode => ((JOB_ERRORS as readonly string[]).includes(code ?? '') ? (code as JobErrorCode) : 'UNKNOWN');
 
-function useElapsedSeconds(since: string | undefined): number {
+export function useElapsedSeconds(since: string | undefined): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (since === undefined) return undefined;
@@ -117,24 +117,33 @@ function AiRequest({ job, ai, latest }: { readonly job: AiJobHistoryItem; readon
   );
 }
 
-function ProgressText({ job }: { readonly job: AiJobHistoryItem }) {
+/** Where a request stands, for the stepper and for screen readers. */
+export type AiJobProgressView = Pick<AiJobHistoryItem, 'status' | 'stage' | 'round' | 'problems'>;
+
+/** What Jiro is making: the stage texts name it (a workflow draft in the builder, a PDF format in the designer). */
+export type AiSubject = 'workflow' | 'format';
+const STAGE_TEXTS = { workflow: 'builder.ai', format: 'documents.jiro' } as const;
+
+export function ProgressText({ job, subject = 'workflow' }: { readonly job: AiJobProgressView; readonly subject?: AiSubject }) {
   const { t } = useTranslation('workflows');
-  if (job.status === 'PENDING') return <>{t('builder.ai.stages.PENDING')}</>;
+  const at = STAGE_TEXTS[subject];
+  if (job.status === 'PENDING') return <>{t(`${at}.stages.PENDING`)}</>;
   switch (job.stage) {
     case 'DESIGNING':
-      return <>{t('builder.ai.stages.DESIGNING', { round: job.round ?? 1 })}</>;
+      return <>{t(`${at}.stages.DESIGNING`, { round: job.round ?? 1 })}</>;
     case 'REVIEWING':
-      return <>{t('builder.ai.stages.REVIEWING', { round: job.round ?? 1, count: job.problems ?? 0 })}</>;
+      return <>{t(`${at}.stages.REVIEWING`, { round: job.round ?? 1, count: job.problems ?? 0 })}</>;
     case 'WRITING':
-      return <>{t('builder.ai.stages.WRITING')}</>;
+      return <>{t(`${at}.stages.WRITING`)}</>;
     default:
-      return <>{t('builder.ai.stages.READING')}</>;
+      return <>{t(`${at}.stages.READING`)}</>;
   }
 }
 
 /** The run's four stages as a live stepper: those done, the one in progress with its detail, and what is left. */
-function AiProgressSteps({ job }: { readonly job: AiJobHistoryItem }) {
+export function AiProgressSteps({ job, subject = 'workflow' }: { readonly job: AiJobProgressView; readonly subject?: AiSubject }) {
   const { t } = useTranslation('workflows');
+  const at = STAGE_TEXTS[subject];
   if (job.status === 'PENDING') {
     return (
       <div className={styles.aiSteps}>
@@ -142,7 +151,7 @@ function AiProgressSteps({ job }: { readonly job: AiJobHistoryItem }) {
           <span className={styles.aiStepMark} aria-hidden="true" />
           <span className={styles.aiStepBody}>
             <span className={styles.aiStepLabel}>
-              {t('builder.ai.stages.PENDING')}
+              {t(`${at}.stages.PENDING`)}
               <span className={styles.aiLiveDot} aria-hidden="true" />
             </span>
           </span>
@@ -160,12 +169,12 @@ function AiProgressSteps({ job }: { readonly job: AiJobHistoryItem }) {
             <span className={styles.aiStepMark} aria-hidden="true" />
             <span className={styles.aiStepBody}>
               <span className={styles.aiStepLabel}>
-                {t(`builder.ai.stageLabels.${stage}`)}
+                {t(`${at}.stageLabels.${stage}`)}
                 {state === 'now' && <span className={styles.aiLiveDot} aria-hidden="true" />}
               </span>
               {state === 'now' && (
                 <span className={styles.aiStepDesc}>
-                  <ProgressText job={job} />
+                  <ProgressText job={job} subject={subject} />
                 </span>
               )}
             </span>

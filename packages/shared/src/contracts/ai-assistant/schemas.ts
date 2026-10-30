@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { formatDecisionSchema } from '../../pdf/ai-format-spec.js';
+import { pdfCanvasDesignSchema } from '../../pdf/canvas-schema.js';
 import { DRAFT_LOSS_SUBJECTS } from '../../workflow/draft-spec/spec-from-document.js';
 import { DRAFT_DECISION_TOPICS, DRAFT_STEP_TYPES } from '../../workflow/draft-spec/spec.js';
 
@@ -16,10 +18,16 @@ export const AI_REVISION_LIMITS = { min: 5, max: AI_DESCRIPTION_LIMITS.max } as 
 /** What a request asks: a new draft from a description, or a change to the current draft. */
 export const AI_DRAFT_MODES = ['CREATE', 'REVISE'] as const;
 export type AiDraftMode = (typeof AI_DRAFT_MODES)[number];
-/** `ai_jobs.kind`: one per mode. */
-export const AI_TASK_KINDS = ['WORKFLOW_DRAFT', 'WORKFLOW_DRAFT_REVISION'] as const;
+/** `ai_jobs.kind`: one per mode, for a workflow draft and for a PDF format. */
+export const AI_WORKFLOW_TASK_KINDS = ['WORKFLOW_DRAFT', 'WORKFLOW_DRAFT_REVISION'] as const;
+export const AI_FORMAT_TASK_KINDS = ['PDF_FORMAT_DRAFT', 'PDF_FORMAT_REVISION'] as const;
+export const AI_TASK_KINDS = [...AI_WORKFLOW_TASK_KINDS, ...AI_FORMAT_TASK_KINDS] as const;
 export type AiTaskKind = (typeof AI_TASK_KINDS)[number];
-export const AI_TASK_KIND_OF_MODE: Readonly<Record<AiDraftMode, AiTaskKind>> = { CREATE: 'WORKFLOW_DRAFT', REVISE: 'WORKFLOW_DRAFT_REVISION' };
+export type AiWorkflowTaskKind = (typeof AI_WORKFLOW_TASK_KINDS)[number];
+export type AiFormatTaskKind = (typeof AI_FORMAT_TASK_KINDS)[number];
+export const AI_TASK_KIND_OF_MODE: Readonly<Record<AiDraftMode, AiWorkflowTaskKind>> = { CREATE: 'WORKFLOW_DRAFT', REVISE: 'WORKFLOW_DRAFT_REVISION' };
+export const AI_FORMAT_TASK_KIND_OF_MODE: Readonly<Record<AiDraftMode, AiFormatTaskKind>> = { CREATE: 'PDF_FORMAT_DRAFT', REVISE: 'PDF_FORMAT_REVISION' };
+export const isFormatTaskKind = (kind: AiTaskKind): kind is AiFormatTaskKind => (AI_FORMAT_TASK_KINDS as readonly string[]).includes(kind);
 
 export const updateAiAssistantSettingsSchema = z
   .object({
@@ -170,6 +178,7 @@ export const aiJobResponseSchema = z.object({
   /** Problems found in the answer of that round (REVIEWING). */
   problems: z.number().int().nullable(),
   errorCode: z.string().nullable(),
+  /** A workflow draft's summary; null for a PDF format (its own history carries the design: `aiFormatJobSchema`). */
   result: aiDraftResultSchema.nullable(),
   /** While the model writes a round: the blocks and connections it has finished so far (`draftPreviewOf`). */
   preview: aiDraftPreviewSchema.nullable().default(null),
@@ -204,3 +213,41 @@ export type AiJobHistoryResponse = z.infer<typeof aiJobHistoryResponseSchema>;
 /** `details` of a 422 AI_DRAFT_NOT_REVISABLE: what of the draft a revision would lose. */
 export const aiDraftNotRevisableDetailsSchema = z.object({ losses: z.array(draftSpecLossSchema) });
 export type AiDraftNotRevisableDetails = z.infer<typeof aiDraftNotRevisableDetailsSchema>;
+
+/** A PDF format designed by Jiro: the design goes to the editor as unsaved changes, and the person saves it. */
+export const requestAiFormatSchema = z
+  .object({
+    /** CREATE draws a new format for the description; REVISE changes `design` as the description asks. */
+    mode: z.enum(AI_DRAFT_MODES).default('CREATE'),
+    description: z.string().trim().max(AI_DESCRIPTION_LIMITS.max),
+    /** The design on screen (saved or not): what a change starts from. */
+    design: pdfCanvasDesignSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const min = value.mode === 'REVISE' ? AI_REVISION_LIMITS.min : AI_DESCRIPTION_LIMITS.min;
+    if (value.description.length < min) context.addIssue({ code: 'too_small', origin: 'string', minimum: min, inclusive: true, path: ['description'], message: `Too small: expected at least ${min} characters` });
+    if (value.mode === 'REVISE' && value.design === undefined) context.addIssue({ code: 'custom', path: ['design'], message: 'A change needs the design it starts from' });
+  });
+export type RequestAiFormat = z.infer<typeof requestAiFormatSchema>;
+
+export const aiFormatResultSchema = z.object({
+  design: pdfCanvasDesignSchema,
+  assumptions: z.array(z.string()),
+  decisions: z.array(formatDecisionSchema),
+  /** Problems the review found in earlier answers and sent back to the model. */
+  corrections: z.number().int(),
+  rounds: z.number().int(),
+  /** Problems left for the person to fix before saving (against the published version: they block the save). */
+  errors: z.number().int(),
+  warnings: z.number().int(),
+});
+export type AiFormatResult = z.infer<typeof aiFormatResultSchema>;
+
+/** One request in the history of a format. */
+export const aiFormatJobSchema = aiJobHistoryItemSchema.omit({ result: true, preview: true }).extend({ result: aiFormatResultSchema.nullable() });
+export type AiFormatJob = z.infer<typeof aiFormatJobSchema>;
+
+/** The newest requests of a format, oldest first, and whether another one can be made. */
+export const aiFormatHistoryResponseSchema = z.object({ jobs: z.array(aiFormatJobSchema) });
+export type AiFormatHistoryResponse = z.infer<typeof aiFormatHistoryResponseSchema>;

@@ -10,20 +10,28 @@ export function BrandPanel() {
   const { t } = useTranslation('auth');
   return (
     <aside className={styles.panel}>
-      <Logo tone="dark" />
-      <div className={styles.pitch}>
-        <p className={`text-display ${styles.headline}`}>{t('brand.headline')}</p>
-        <p className={styles.summary}>{t('brand.summary')}</p>
+      <div className={styles.brand}>
+        <Logo tone="dark" />
       </div>
-      <FlowIllustration />
-      <ul className={styles.highlights}>
-        {highlights.map((key) => (
-          <li key={key} className={styles.highlight}>
-            <CheckIcon size={16} className={styles.check} />
-            {t(`brand.highlights.${key}`)}
-          </li>
-        ))}
-      </ul>
+      <div className={styles.inner}>
+        <div className={styles.copy}>
+          <div className={styles.pitch}>
+            <p className={`text-display ${styles.headline}`}>{t('brand.headline')}</p>
+            <p className={styles.summary}>{t('brand.summary')}</p>
+          </div>
+          <ul className={styles.highlights}>
+            {highlights.map((key) => (
+              <li key={key} className={styles.highlight}>
+                <CheckIcon size={16} className={styles.check} />
+                {t(`brand.highlights.${key}`)}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className={styles.art}>
+          <FlowIllustration />
+        </div>
+      </div>
     </aside>
   );
 }

@@ -6,3 +6,4 @@ export * from './limits.js';
 export * from './mapping-schema.js';
 export * from './sample-values.js';
 export * from './validate-pdf-sources.js';
+export * from './ai-format-spec.js';

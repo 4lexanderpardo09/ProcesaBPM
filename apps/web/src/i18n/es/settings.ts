@@ -243,6 +243,7 @@ export const settings = {
       'workflow.updated': 'Editó un flujo',
       'workflow.version_published': 'Publicó una versión de un flujo',
       'workflow.ai_draft_requested': 'Pidió un borrador de flujo a la IA',
+      'workflow.ai_format_requested': 'Pidió a Jiro un formato PDF',
       'workflow.ai_draft_cancelled': 'Canceló una solicitud de borrador a la IA',
     },
   },
