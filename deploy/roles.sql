@@ -33,6 +33,13 @@ ALTER ROLE procesabpm_worker SET role = 'app_worker';
 ALTER ROLE procesabpm_platform PASSWORD :'platform_password';
 ALTER ROLE procesabpm_platform SET role = 'app_platform';
 
+-- statement_timeout: a single SQL statement that runs longer is aborted, so one pathological or abusive query cannot
+-- pin the database (security review, DoS). Per-role defaults, applied at connection; tune up if a legitimate query hits
+-- it. The worker is left uncapped on purpose: its background jobs (retention purge, SLA sweeps) can run long single
+-- statements, and it is internal, not a public entry point.
+ALTER ROLE procesabpm_api SET statement_timeout = '30s';
+ALTER ROLE procesabpm_platform SET statement_timeout = '60s';
+
 -- NOLOGIN owner roles (docs/base-de-datos.md §6.3). The migrations create them and give them their objects and privileges
 -- (the only source of those privileges); this re-asserts what must never change on them, in case someone did by hand:
 -- they cannot log in, do not bypass row-level security, and nobody is a member of them. Every membership is revoked
