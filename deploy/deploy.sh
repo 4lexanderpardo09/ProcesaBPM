@@ -49,6 +49,19 @@ start() {
   compose stop worker
   compose run --rm migrate
   compose up -d --no-build --remove-orphans
+  wait_healthy
+}
+
+# The API answers its health check some seconds after it starts (start period 30 s): verifying before that fails a good release.
+wait_healthy() {
+  local container
+  container=$(compose ps -q api)
+  for _ in $(seq 1 60); do
+    [ "$(docker inspect --format '{{.State.Health.Status}}' "$container" 2>/dev/null)" = healthy ] && return 0
+    sleep 3
+  done
+  echo "The API did not report healthy within 3 minutes." >&2
+  return 1
 }
 
 verify() {
