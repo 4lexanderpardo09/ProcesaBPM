@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { type AiDraftResult, type DraftPreview, type DraftSpecLoss, ImmutableDataError, NotFoundError, StaleRevisionError } from '@procesabpm/shared';
+import { type AiDraftResult, type DraftPreview, type DraftSpecLoss, ImmutableDataError, isFormatTaskKind, NotFoundError, StaleRevisionError } from '@procesabpm/shared';
 import { JsonLogger } from '../../../common/logging/json-logger.js';
 import { WorkerTransactionRunner } from '../../../infrastructure/database/worker-transaction-runner.js';
 import { type LlmDelivery, LlmProvider } from '../../../infrastructure/llm/llm-provider.js';
@@ -8,14 +8,15 @@ import { type AiJobClaim, AiJobClaimsRepository, type AiJobProgress } from '../d
 import { AiJobWorkRepository, type DraftJobInput } from '../data/ai-job-work.repository.js';
 import { type CallRecord, DraftDesigner } from './draft-designer.js';
 import { DraftTaskReader } from './draft-task.reader.js';
+import { AI_JOB_LEASE_MINUTES, type AiJobOutcome } from './ai-job-lease.js';
+import { FormatDraftJob } from './format-draft.job.js';
 
-/** The lease of a running request; renewed before every call, so a call (at most 9 minutes) always ends inside it. */
-export const AI_JOB_LEASE_MINUTES = 10;
+export { AI_JOB_LEASE_MINUTES, type AiJobOutcome } from './ai-job-lease.js';
+
 /** One request at a time per worker process: each one is minutes of paid calls. */
 export const AI_JOBS_PER_RUN = 1;
 const NOT_STOPPED: AbortSignal = new AbortController().signal;
 
-export type AiJobOutcome = 'succeeded' | 'failed' | 'interrupted';
 
 class ClaimLostError extends Error {
   constructor() {
@@ -41,6 +42,7 @@ export class WorkflowDraftJob {
     @Inject(DraftDesigner) private readonly designer: DraftDesigner,
     @Inject(LlmProvider) private readonly provider: LlmProvider,
     @Inject(JsonLogger) private readonly logger: JsonLogger,
+    @Inject(FormatDraftJob) private readonly formats: FormatDraftJob,
   ) {}
 
   async runOnce(stop: AbortSignal = NOT_STOPPED): Promise<{ claimed: number; succeeded: number; failed: number }> {
@@ -49,11 +51,17 @@ export class WorkflowDraftJob {
     let succeeded = 0;
     let failed = 0;
     for (const claim of claims) {
-      const outcome = await this.run(claim, stop);
+      const outcome = await this.dispatch(claim, stop);
       if (outcome === 'succeeded') succeeded += 1;
       if (outcome === 'failed') failed += 1;
     }
     return { claimed: claims.length, succeeded, failed };
+  }
+
+  /** A format request goes to its own job; a workflow draft is done here. */
+  private async dispatch(claim: AiJobClaim, stop: AbortSignal): Promise<AiJobOutcome> {
+    const kind = await this.runner.withTenant(claim.tenantId, (tx) => this.work.kindOf(tx, claim.tenantId, claim.jobId));
+    return kind !== undefined && isFormatTaskKind(kind) ? this.formats.run(claim, stop) : this.run(claim, stop);
   }
 
   async run(claim: AiJobClaim, stop: AbortSignal = NOT_STOPPED): Promise<AiJobOutcome> {
